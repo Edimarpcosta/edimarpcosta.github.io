@@ -18,60 +18,55 @@
   <button style="position: absolute; top: 0; right: 0;"
     onclick="window.open('https://edimarpcosta.github.io/eangenon/')">"ONLINE"</button>
     <script>
-      $(document).ready(function() {
-  // Carregar o arquivo JSON
-  $.getJSON("data.json", function(data) {
-    // Adicionar evento de clique para o botão de busca
-    $("#submit-button").on("click", async function(e) {
-      e.preventDefault();
-      var search = $("#search").val().toLowerCase();
-      search = search.split("/");
-      // Exibir sugestões ao clicar no botão "Procurar"
-      $("#results").empty();
+     $(document).ready(function() {
+        // Carregar o arquivo JSON
+        $.getJSON("data.json", function(data) {
+          // Adicionar evento de clique para o botão de busca
+          $("#submit-button").on("click", function(e) {
+            e.preventDefault();
+            var search = $("#search").val().toLowerCase();
+            search = search.split("/");
+            // Exibir sugestões ao clicar no botão "Procurar"
+            $("#results").empty();
+            var i = 0;
+            function loadImage() {
+              if (i >= data.length) {
+                return;
+              }
+              var item = data[i];
+              var match = false;
+              for(var j = 0; j < search.length; j++) {
+                if (item.COD.toLowerCase().includes(search[j]) || item.Descricao.toLowerCase().includes(search[j]) || item.EAN.toLowerCase().includes(search[j])) {
+                  match = true;
+                  break;
+                }
+              }
 
-      // Iterar sobre cada item
-      for (let i = 0; i < data.length; i++) {
-        let item = data[i];
-        let match = false;
-
-        // Verificar se o item corresponde à pesquisa
-        for (let j = 0; j < search.length; j++) {
-          if (item.COD.toLowerCase().includes(search[j]) || item.Descricao.toLowerCase().includes(search[j]) || item.EAN.toLowerCase().includes(search[j])) {
-            match = true;
-            break;
-          }
-        }
-
-        // Se o item corresponder à pesquisa, tentar carregar a imagem
-        if (match) {
-          let imagemUrl;
-          try {
-            let result = await $.getJSON("https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/" + item.COD);
-            imagemUrl = result.images[0].imageUrl;
-          } catch (error) {
-            // Se houver erro ao carregar a imagem, usar imagem padrão
-            imagemUrl = "images/default.jpg";
-          }
-
-          // Adicionar item na lista de resultados
-          $("#results").append(`
-            <div class="result">
-              <p>Descrição: ${item.Descricao}</p>
-              <p>Código: ${item.COD}</p>
-              <p>EAN: ${item.EAN}</p>
-              <div class="ean-barcode">
-                <svg id="barcode-${i}" class="barcode"></svg>
-                              </div>
-                              <img src="${imagemUrl}" alt="Imagem do produto">
-            </div>
-          `);
-          JsBarcode("#barcode-" + i, item.EAN);
-        }
-      }
-    });
-  });
-});
-
+              if(match) {
+                $("#results").append(`
+                  <div class="result">
+                    <p>Descrição: ${item.Descricao}</p>
+                    <p>Código: ${item.COD}</p>
+                    <p>EAN: ${item.EAN}</p>
+                    <div class="ean-barcode">
+                      <svg id="barcode-${i}" class="barcode"></svg>
+                    </div>
+                  </div>
+                `);
+                JsBarcode("#barcode-" + i, item.EAN);
+                $.getJSON("https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/" + item.COD, function(json) {
+                  $("#results").find(".result").eq(i).append(`<img src="${json.images[0].imageUrl}" />`);
+                }).fail(function() {
+                  console.log("Failed to load image for item " + item.COD);
+                });
+              }
+              i++;
+              setTimeout(loadImage, 200);
+            }
+            loadImage();
+          });
+        });
+      });
   </script>
   <style>
     .result {
