@@ -7,39 +7,35 @@
   <body>
     <h1>Leitor de QR Code</h1>
     <video id="preview" style="width:100%;max-width:500px;"></video>
-    <table id="qrcodes">
-      <thead>
-        <tr>
-          <th>Link</th>
-        </tr>
-      </thead>
-      <tbody>
-      </tbody>
-    </table>
-    <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+    <div id="result"></div>
+    <div id="qr-link-frame" style="position: fixed; bottom: 0; left: 0; width: 100%; height: 100px; background-color: #f2f2f2;">
+      <p style="margin: 0; padding: 10px;"><a id="qr-link" href="#" target="_blank"></a></p>
+    </div>
+    <script src="https://unpkg.com/@zxing/library@0.18.5"></script>
     <script>
-      let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
-      scanner.addListener('scan', function (content) {
-        addQRCode(content);
-      });
-      Instascan.Camera.getCameras().then(function (cameras) {
-        if (cameras.length > 0) {
-          scanner.start(cameras[0]);
-        } else {
-          console.error('No cameras found.');
-        }
-      }).catch(function (e) {
-        console.error(e);
-      });
+      const video = document.getElementById('preview');
+      const resultContainer = document.getElementById('result');
+      const codeReader = new ZXing.BrowserQRCodeReader();
 
-      function addQRCode(content) {
-        let tbody = document.querySelector('#qrcodes tbody');
-        let tr = document.createElement('tr');
-        let td = document.createElement('td');
-        td.innerText = content;
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-      }
+      codeReader.getVideoInputDevices()
+        .then(videoInputDevices => {
+          const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back'));
+          if (rearCamera) {
+            codeReader.decodeFromVideoDevice(rearCamera.deviceId, 'preview', (result, err) => {
+              if (result) {
+                const qrLink = document.getElementById('qr-link');
+                qrLink.setAttribute('href', result.text);
+                qrLink.innerText = result.text;
+              }
+              if (err && !(err instanceof ZXing.NotFoundException)) {
+                console.error(err);
+              }
+            });
+          } else {
+            alert('Câmera traseira não encontrada!');
+          }
+        })
+        .catch(err => console.error(err));
     </script>
   </body>
 </html>
