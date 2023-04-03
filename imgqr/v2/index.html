@@ -5,42 +5,56 @@
     <title>Leitor de QR Code</title>
     <style>
       #preview {
-        max-height: 80vh;
-        width: 100%;
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
       }
-      #preview-container {
-        position: relative;
-        width: 100%;
-        height: 0;
-        padding-bottom: 56.25%;
-        margin-top: 20px;
-      }
+
       #result {
-        margin-top: 20px;
+        margin-top: 1em;
+      }
+
+      #result table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      #result th,
+      #result td {
+        text-align: left;
+        padding: 0.5em;
+        border: 1px solid #ddd;
+      }
+
+      #result th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+
+      #result td:last-child {
+        word-break: break-all;
       }
     </style>
   </head>
   <body>
     <h1>Leitor de QR Code</h1>
-    <div id="preview-container">
-      <video id="preview"></video>
-    </div>
-    <div id="table-container">
-      <table id="qrTable">
-        <tr>
-          <th>QR Code</th>
-          <th>Data/Hora</th>
-        </tr>
+    <video id="preview" playsinline></video>
+    <div id="result">
+      <table>
+        <thead>
+          <tr>
+            <th>Data e Hora</th>
+            <th>QR Code</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
       </table>
     </div>
-    <div id="result"></div>
     <script src="https://unpkg.com/@zxing/library@0.18.5"></script>
     <script>
       const video = document.getElementById('preview');
-      const resultContainer = document.getElementById('result');
-      const qrTable = document.getElementById('qrTable');
+      const resultContainer = document.querySelector('#result tbody');
       const codeReader = new ZXing.BrowserQRCodeReader();
-      const qrHistory = [];
 
       codeReader.getVideoInputDevices()
         .then(videoInputDevices => {
@@ -48,16 +62,15 @@
           if (rearCamera) {
             codeReader.decodeFromVideoDevice(rearCamera.deviceId, 'preview', (result, err) => {
               if (result) {
-                resultContainer.innerHTML = `<a href="${result.text}" target="_blank">${result.text}</a>`;
-                qrHistory.push({text: result.text, date: new Date().toLocaleString()});
-                const tableRow = document.createElement('tr');
-                const qrDataCell = document.createElement('td');
-                const dateCell = document.createElement('td');
-                qrDataCell.innerText = result.text;
-                dateCell.innerText = new Date().toLocaleString();
-                tableRow.appendChild(qrDataCell);
-                tableRow.appendChild(dateCell);
-                qrTable.appendChild(tableRow);
+                const tr = document.createElement('tr');
+                const dateTd = document.createElement('td');
+                const qrCodeTd = document.createElement('td');
+                const now = new Date();
+                dateTd.textContent = now.toLocaleString();
+                qrCodeTd.innerHTML = `<a href="${result.text}" target="_blank">${result.text}</a>`;
+                tr.appendChild(dateTd);
+                tr.appendChild(qrCodeTd);
+                resultContainer.insertBefore(tr, resultContainer.firstChild);
               }
               if (err && !(err instanceof ZXing.NotFoundException)) {
                 console.error(err);
