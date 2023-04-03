@@ -3,19 +3,34 @@
   <head>
     <meta charset="UTF-8">
     <title>Leitor de QR Code</title>
+    <style>
+      #preview {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        min-height: 300px;
+      }
+    </style>
   </head>
   <body>
     <h1>Leitor de QR Code</h1>
-    <video id="preview" style="width:100%;max-width:500px;"></video>
+    <video id="preview"></video>
     <div id="result"></div>
-    <div id="qr-link-frame" style="position: fixed; bottom: 0; left: 0; width: 100%; height: 100px; background-color: #f2f2f2;">
-      <p style="margin: 0; padding: 10px;"><a id="qr-link" href="#" target="_blank"></a></p>
-    </div>
+    <table id="qrTable">
+      <tr>
+        <th>QR Code</th>
+        <th>Data/Hora</th>
+      </tr>
+    </table>
     <script src="https://unpkg.com/@zxing/library@0.18.5"></script>
     <script>
       const video = document.getElementById('preview');
       const resultContainer = document.getElementById('result');
+      const qrTable = document.getElementById('qrTable');
       const codeReader = new ZXing.BrowserQRCodeReader();
+      const qrHistory = [];
 
       codeReader.getVideoInputDevices()
         .then(videoInputDevices => {
@@ -23,9 +38,16 @@
           if (rearCamera) {
             codeReader.decodeFromVideoDevice(rearCamera.deviceId, 'preview', (result, err) => {
               if (result) {
-                const qrLink = document.getElementById('qr-link');
-                qrLink.setAttribute('href', result.text);
-                qrLink.innerText = result.text;
+                resultContainer.innerHTML = `<a href="${result.text}" target="_blank">${result.text}</a>`;
+                qrHistory.push({text: result.text, date: new Date().toLocaleString()});
+                const tableRow = document.createElement('tr');
+                const qrDataCell = document.createElement('td');
+                const dateCell = document.createElement('td');
+                qrDataCell.innerText = result.text;
+                dateCell.innerText = new Date().toLocaleString();
+                tableRow.appendChild(qrDataCell);
+                tableRow.appendChild(dateCell);
+                qrTable.appendChild(tableRow);
               }
               if (err && !(err instanceof ZXing.NotFoundException)) {
                 console.error(err);
