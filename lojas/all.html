@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Lojas Cobasi</title>
+</head>
+
+<body>
+    <h1>Lojas Cobasi</h1>
+
+    <label for="busca">Buscar lojas:</label>
+    <input type="text" id="busca">
+    <button id="pesquisar">Pesquisar</button>
+
+    <div id="lojas"></div>
+
+    <script>
+        // Faz uma requisição AJAX à API e recebe o JSON
+        fetch('https://api.allorigins.win/raw?url=https://lojas-api.cobasi.com.br/api/lojas')
+            .then(response => response.json())
+            .then(data => {
+                // Cria um elemento HTML para cada loja no JSON
+                const lojas = data.map(loja => {
+                    // Extrai os dados relevantes do JSON para cada loja
+                    const { name, description, lat, lng, address, number, district, city, state, zipcode, shopPhone, spetPhone, image, cobasiId, cnpj } = loja;
+
+                    // Cria um elemento HTML para representar a loja
+                    const lojaElement = document.createElement('div');
+                    lojaElement.id = cobasiId;
+                    lojaElement.innerHTML = `
+            <h2>${name}</h2>
+            <p>${description}</p>
+            <p>Endereço: ${address}, ${number} - ${district}, ${city} - ${state}, ${zipcode}</p>
+            <p>Telefone: ${shopPhone} / ${spetPhone}</p>
+            <p>ID da filial: ${cobasiId}</p>
+  <p>CNPJ: ${cnpj}</p>
+            <img src="${image}" alt="${name}" width="200">
+            <button class="ver-no-mapa" data-lat="${lat}" data-lng="${lng}">Ver no mapa</button>
+          `;
+
+                    return lojaElement;
+                });
+
+                // Adiciona os elementos HTML das lojas à página
+                const lojasContainer = document.getElementById('lojas');
+                lojas.forEach(loja => lojasContainer.appendChild(loja));
+
+                // Obtém os botões de "Ver no mapa" e adiciona um evento de clique para cada um
+                const botoesVerNoMapa = document.querySelectorAll('.ver-no-mapa');
+                botoesVerNoMapa.forEach(botao => {
+                    botao.addEventListener('click', () => {
+                        // Obtém a latitude e longitude da loja correspondente
+                        const lat = botao.dataset.lat;
+                        const lng = botao.dataset.lng;
+
+                        // Cria a URL do Google Maps com a localização da loja
+                        const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+                        // Abre o Google Maps em uma nova aba
+                        window.open(url, '_blank');
+                    });
+                });
+
+                // Obtém o botão de pesquisa e adiciona um evento de clique
+                const botaoPesquisar = document.getElementById('pesquisar');
+                botaoPesquisar.addEventListener('click', () => {
+                    // Obtém o valor do campo de busca
+                    const termoBusca = document.getElementById('busca').value.toLowerCase();
+
+                    // Obtém todos os elementos HTML das lojas
+                    const elementosLojas = document.querySelectorAll('#lojas > div');
+                    // Filtra os elementos HTML das lojas que correspondem ao termo de busca
+                    elementosLojas.forEach(elementoLoja => {
+                        const nomeLoja = elementoLoja.querySelector('h2').textContent.toLowerCase();
+                        const enderecoLoja = elementoLoja.querySelector('p:nth-of-type(2)').textContent.toLowerCase();
+                        const numeroLoja = elementoLoja.querySelector('p:nth-of-type(2)').textContent.match(/\d+/)[0];
+                        const cidadeLoja = elementoLoja.querySelector('p:nth-of-type(2)').textContent.split(',')[1].toLowerCase();
+                        const estadoLoja = elementoLoja.querySelector('p:nth-of-type(2)').textContent.split(',')[2].toLowerCase();
+                        const cepLoja = elementoLoja.querySelector('p:nth-of-type(2)').textContent.split(',')[3].trim().toLowerCase();
+                        const filialLoja = elementoLoja.id.replace(/^0+/, '');
+
+                        if (nomeLoja.includes(termoBusca) || enderecoLoja.includes(termoBusca) || numeroLoja.includes(termoBusca) || cidadeLoja.includes(termoBusca) || estadoLoja.includes(termoBusca) || cepLoja.includes(termoBusca) || filialLoja.includes(termoBusca)) {
+                            elementoLoja.style.display = 'block';
+                        } else {
+                            elementoLoja.style.display = 'none';
+                        }
+                    });
+                });
+            })
+            .catch(error => console.error(error));
+    </script>
+</body>
+
+</html>
