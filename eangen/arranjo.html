@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Carrinho de Compras</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+  </head>
+  <body>
+    <h1>Carrinho de Compras</h1>
+    <div id="search-bar">
+      <label for="search">Procurar por código, descrição ou EAN:</label>
+      <input type="text" id="search" name="search">
+      <button type="submit" id="submit-button">Procurar</button>
+    </div>
+    <div id="results"></div>
+    <div id="cart-list">
+      <h2>Carrinhos:</h2>
+      <div id="cart-buttons"></div>
+    </div>
+    <div id="cart-details"></div>
+    <script>
+      $(document).ready(function() {
+        var carts = {};
+        var currentCart = null;
+        // Carregar o arquivo JSON
+        $.getJSON("data.json", function(data) {
+          // Adicionar evento de clique para o botão de busca
+          $("#submit-button").on("click", function(e) {
+            e.preventDefault();
+            var search = $("#search").val().toLowerCase();
+            search = search.split("/");
+            // Exibir sugestões ao clicar no botão "Procurar"
+            $("#results").empty();
+            $.each(data, function(i, item) {
+              var match = false;
+              for(var j = 0; j < search.length; j++) {
+                if (item.COD.toLowerCase().includes(search[j]) || item.Descricao.toLowerCase().includes(search[j]) || item.EAN.toLowerCase().includes(search[j])) {
+                  match = true;
+                  break;
+                }
+              }
+              if(match) {
+                $("#results").append(`
+                  <div class="result">
+                    <p>Descrição: ${item.Descricao}</p>
+                    <p>Código: ${item.COD}</p>
+                    <p>EAN: ${item.EAN}</p>
+                    <div class="ean-barcode">
+                      <svg id="barcode-${i}" class="barcode"></svg>
+                    </div>
+                    <button class="add-to-cart" data-id="${item.EAN}">Adicionar ao Carrinho</button>
+                  </div>
+                `);
+                JsBarcode("#barcode-" + i, item.EAN);
+              }
+            });
+            // Adicionar evento de clique para os botões "Adicionar ao Carrinho"
+            $(".add-to-cart").on("click", function(e) {
+              var id = $(this).data("id");
+              if (!carts[currentCart]) {
+                carts[currentCart] = {};
+              }
+              if (!carts[currentCart][id]) {
+                carts[currentCart][id] = {name: "", quantity: 0, unitPrice: 0};
+              }
+              carts[currentCart][id].name = $(this).parent().find("p:eq(0)").text().replace("Descrição: ", "");
+              carts[currentCart][id].quantity++;
+              carts[currentCart][id].unitPrice = parseFloat($(this).parent().find("p:eq(2)").text().replace("EAN: ", ""));
+              showCartDetails(currentCart);
+            });
+          });
+        });
+        // Addicionar evento de clique para os botões de carrinho
+$("#cart-buttons").on("click", ".cart-button", function() {
+currentCart = $(this).data("id");
+showCartDetails(currentCart);
+});
+
+    // Função para mostrar os detalhes do carrinho atual
+    function showCartDetails(cartId) {
+      var cartDetails = $("#cart-details");
+      cartDetails.empty();
+      if (!carts[cartId]) {
+        cartDetails.append("<p>Carrinho vazio.</p>");
+        return;
+      }
+      cartDetails.append(`<h2>Carrinho ${cartId}:</h2>`);
+      var cartTotal = 0;
+      $.each(carts[cartId], function(id, item) {
+        cartTotal += item.quantity * item.unitPrice;
+        cartDetails.append(`
+          <div class="cart-item">
+            <p>Descrição: ${item.name}</p>
+            <p>Quantidade: ${item.quantity}</p>
+            <p>Preço Unitário: R$${item.unitPrice.toFixed(2)}</p>
+            <button class="remove-from-cart" data-id="${id}">Remover</button>
+          </div>
+        `);
+      });
+      cartDetails.append(`<p>Total: R$${cartTotal.toFixed(2)}</p>`);
+      cartDetails.append(`
+        <div id="checkout">
+          <button id="checkout-button">Finalizar Compra</button>
+        </div>
+      `);
+      // Adicionar evento de clique para os botões "Remover"
+      $(".remove-from-cart").on("click", function() {
+        var id = $(this).data("id");
+        delete carts[cartId][id];
+        showCartDetails(cartId);
+      });
+      // Adicionar evento de clique para o botão "Finalizar Compra"
+      $("#checkout-button").on("click", function() {
+        alert("Compra finalizada com sucesso!");
+        carts[currentCart] = {};
+        showCartDetails(currentCart);
+      });
+    }
+
+    // Adicionar os botões de carrinho
+    for (var i = 1; i <= 3; i++) {
+      $("#cart-buttons").append(`<button class="cart-button" data-id="${i}">Carrinho ${i}</button>`);
+    }
+  });
+</script>
+
+  </body>
+</html>
