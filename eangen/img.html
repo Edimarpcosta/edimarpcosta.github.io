@@ -1,81 +1,156 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Busca de produtos parcial por EAN/COD/Descrição</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
-  </head>
-  <body>
-    <h1>Busca de produtos parcial por EAN/COD/Descrição + Imagem</h1>
-    <form>
-      <label for="search">Procurar por código, descrição ou EAN:</label>
-      <input type="text" id="search" name="search">
-      <button type="submit" id="submit-button">Procurar</button>
-    </form>
-    <div id="results"></div>
-    <button style="position: absolute; top: 0; right: 0;" onclick="window.open('https://edimarpcosta.github.io/eangenon/')">ONLINE</button>
-    <script>
-     $(document).ready(function() {
-  // Carregar o arquivo JSON
-  $.getJSON("data.json", function(data) {
-    // Adicionar evento de clique para o botão de busca
-    $("#submit-button").on("click", function(e) {
-      e.preventDefault();
-      var search = $("#search").val().toLowerCase();
-      var keywords = search.split(" ");
-      // Exibir sugestões ao clicar no botão "Procurar"
-      $("#results").empty();
-      $.each(data, function(i, item) {
-        var match = true;
-        for (var j = 0; j < keywords.length; j++) {
-          if (
-            !(
-              item.COD.toLowerCase().includes(keywords[j]) ||
-              item.Descricao.toLowerCase().includes(keywords[j]) ||
-              item.EAN.toLowerCase().includes(keywords[j])
-            )
-          ) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          $("#results").append(`
-            <div class="result">
-              <p>Descrição: ${item.Descricao}</p>
-              <p>Código: ${item.COD}</p>
-              <p>EAN: ${item.EAN}</p>
-              <div class="ean-barcode">
-                <svg id="barcode-${i}" class="barcode"></svg>
-              </div>
-              <button onclick="getImages('${item.COD}')">Ver imagens</button>
-              <div class="imagens" data-codigo="${item.COD}"></div>
-            </div>
-          `);
-          JsBarcode("#barcode-" + i, item.EAN);
-        }
+
+<head>
+  <title>Busca de Produtos v2 + ean</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+  <style>
+    /* estilo para tornar a página responsiva */
+    form {
+      width: 60%;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    #search {
+      width: 70%;
+      padding: 10px;
+      font-size: 16px;
+    }
+
+    #submit-button {
+      width: 30%;
+      padding: 10px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    #results {
+      width: 60%;
+      margin: 0 auto;
+    }
+
+    .result {
+      border: 1px solid #ddd;
+      margin-bottom: 20px;
+      padding: 10px;
+    }
+
+    .ean-barcode {
+      margin-top: 10px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .imagens {
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* regra de mídia para telas menores */
+    @media only screen and (max-width: 600px) {
+      form {
+        width: 100%;
+      }
+
+      #search {
+        width: 70%;
+      }
+
+      #submit-button {
+        width: 30%;
+      }
+
+      .result {
+        width: 90%;
+      }
+
+      #results {
+        width: 90%;
+      }
+
+      button {
+        position: static;
+        display: block;
+        margin: 10px auto;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>>Busca de produtos parcial por EAN/COD/Descrição + Image</h1>
+  <form>
+    <label for="search">Procurar por código, descrição ou EAN:</label>
+    <br>
+    <input type="text" id="search" size="100" name="search">
+    <br>
+    <button type="submit" id="submit-button">Procurar</button>
+  </form>
+  <div id="results"></div>
+  <button onclick="window.open('https://edimarpcosta.github.io/eangenon/')"
+    style="position: absolute; top: 0; right: 0;">ONLINE</button>
+  <script type="text/javascript">
+    $(document).ready(function () {
+      // Carregar o arquivo JSON
+      $.getJSON("http://localhost:3000/produtos", function (data) {
+        // Adicionar evento de clique para o botão de busca
+        $("#submit-button").on("click", function (e) {
+          e.preventDefault();
+          const search = $("#search").val().toLowerCase();
+          const keywords = search.split(" ");
+          // Exibir sugestões ao clicar no botão "Procurar"
+          $("#results").empty();
+          let html = "";
+          $.each(data, function (i, item) {
+            let match = true;
+            for (let j = 0; j < keywords.length; j++) {
+              if (!(item.COD.toLowerCase().includes(keywords[j]) || item.Descricao.toLowerCase().includes(keywords[j]) ||
+                item.EAN.toLowerCase().includes(keywords[j]))) {
+                match = false;
+                break;
+              }
+            }
+            if (match) {
+              // construir o HTML usando uma única aspa dupla
+              html += `<div class="result"> <p>Descrição: ${item.Descricao}</p> <p>Código: ${item.COD}</p> <p>EAN: ${item.EAN}</p> <div class="ean-barcode"> <svg id="barcode-${i}" class="barcode"></svg> </div> <button onclick="getImages('${item.COD}')">Ver imagens</button> <div class="imagens" data-codigo="${item.COD}"></div> </div>`;
+
+            }
+          });
+          // Adicionar o HTML construído ao elemento results
+          $("#results").append(html);
+          // Gerar os códigos de barras usando a biblioteca JsBarcode
+          $(".barcode").each(function (i, el) {
+            JsBarcode(el, data[i].EAN);
+          });
+        });
       });
     });
-  });
-});
-
-
-
-
-// Função para fazer a requisição das imagens ao endpoint e exibi-las
-function getImages(codigo) {
-  $.getJSON(`https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/${codigo}`, function(data) {
-    var imagens = data.images;
-    var imagensHtml = "";
-    for(var i = 0; i < imagens.length; i++) {
-      imagensHtml += `<img src="${imagens[i].imageUrl}" alt="Imagem ${i+1}">`;
+    // Função para fazer a requisição das imagens ao endpoint e exibi-las
+    function getImages(codigo) {
+      $.getJSON(`https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/${codigo}`, function (data) {
+        var imagens = data.images;
+        var imagensHtml = "";
+        for (var i = 0; i < imagens.length; i++) {
+          imagensHtml += `<img src="${imagens[i].imageUrl}" alt="Imagem ${i + 1}">`;
+        }
+        $(`[data-codigo="${codigo}"]`).html(imagensHtml);
+      });
     }
-    $(`[data-codigo="${codigo}"]`).html(imagensHtml);
-  });
-}
 
-
-</script>
+  </script>
 
 </body>
+
 </html>
