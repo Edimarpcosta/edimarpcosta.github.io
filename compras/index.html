@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Consumir API</title>
+  <style>
+    /* Estilos omitidos para brevidade */
+    .registro-item {
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+
+    .registro-item-header {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .registro-item-button {
+      margin-top: 5px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      cursor: pointer;
+      font-size: 12px;
+      transition-duration: 0.4s;
+    }
+
+    .registro-item-button:hover {
+      background-color: #45a049;
+    }
+
+    .registro-item-produtos {
+      display: none;
+      margin-top: 10px;
+      padding-left: 20px;
+      border-left: 2px solid #ccc;
+    }
+
+    .registro-item-produto {
+      margin-bottom: 5px;
+    }
+
+    .produto-imagem {
+      display: none;
+    }
+  </style>
+
+  <script>
+    function consumirAPI() {
+      var cpf = document.getElementById("cpf").value;
+      var fromDate = document.getElementById("fromDate").value;
+      var toDate = document.getElementById("toDate").value;
+
+      var url = "https://mkt.cobasi.com.br/amigo_cobasi/compras/" + cpf;
+      var data = "page=1&date-from=" + fromDate + "&date-to=" + toDate;
+
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+      xhr.setRequestHeader("Accept", "application/json, text/plain; q=0.9, text/html;q=0.8");
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          var response = xhr.responseText;
+          var data = JSON.parse(response);
+          mostrarDados(data);
+        }
+      };
+      xhr.send(data);
+    }
+
+    function mostrarDados(data) {
+      var lista = document.getElementById("lista-dados");
+      lista.innerHTML = ""; // Limpar lista antes de atualizar
+
+      if (data && data.registro && data.registro.length > 0) {
+        // Ordenar por data de movimento (da mais recente para a mais antiga)
+        data.registro.sort(function(a, b) {
+          var dateA = new Date(a.cupomDataMovimento);
+          var dateB = new Date(b.cupomDataMovimento);
+          return dateB - dateA;
+        });
+
+        for (var i = 0; i < data.registro.length; i++) {
+          var registro = data.registro[i];
+
+          var registroItem = document.createElement("div");
+          registroItem.classList.add("registro-item");
+
+          var registroItemHeader = document.createElement("div");
+          registroItemHeader.classList.add("registro-item-header");
+          var dataMovimento = new Date(registro.cupomDataMovimento);
+          registroItemHeader.innerHTML = "Data do Movimento: " + formatDate(dataMovimento) +
+                                         "<br>Cupom ID: " + registro.cupomId +
+                                         "<br>CPF: " + registro.cupomIdentificacao +
+                                         "<br>Loja: " + registro.cupomLojaNome +
+                                         "<br>Número do PDV: " + registro.cupomNumeroPdv +
+                                         "<br>Número do Cupom: " + registro.cupomNumeroCupom +
+                                         "<br>Valor do Cupom: " + registro.cupomValorCupom;
+
+          var registroItemButton = document.createElement("button");
+          registroItemButton.classList.add("registro-item-button");
+          registroItemButton.textContent = "Ver produtos da compra";
+          registroItemButton.onclick = function() {
+            this.nextElementSibling.style.display = "block";
+          };
+
+          var registroItemProdutos = document.createElement("div");
+          registroItemProdutos.classList.add("registro-item-produtos");
+
+          for (var j = 0; j < registro.item.length; j++) {
+            var item = registro.item[j];
+            var registroItemProduto = document.createElement("div");
+            registroItemProduto.classList.add("registro-item-produto");
+            registroItemProduto.innerHTML = "<strong>Produto:</strong> " + item.produtoNome +
+                                            "<br><strong>EAN:</strong> " + item.produtoEAN +
+                                            "<br><strong>Código Base:</strong> " + item.produtoCodigoBase +
+                                            "<br><strong>Quantidade:</strong> " + item.itemQuantidade +
+                                            "<br><strong>Valor Total:</strong> " + item.itemValorTotal +
+                                            "<br><button class='produto-imagem' onclick='mostrarImagem(this, \"" + item.produtoCodigoBase + "\")'>Ver imagem</button>" +
+                                            "<img class='produto-imagem' src='' alt='Imagem do produto'>";
+
+            registroItemProdutos.appendChild(registroItemProduto);
+          }
+
+          registroItem.appendChild(registroItemHeader);
+          registroItem.appendChild(registroItemButton);
+          registroItem.appendChild(registroItemProdutos);
+          lista.appendChild(registroItem);
+        }
+      } else {
+        var mensagemItem = document.createElement("div");
+        mensagemItem.innerHTML = "Nenhum dado encontrado.";
+        lista.appendChild(mensagemItem);
+      }
+    }
+
+    function expandirCompras() {
+      var botoes = document.getElementsByClassName("registro-item-button");
+      for (var i = 0; i < botoes.length; i++) {
+        var button = botoes[i];
+        button.nextElementSibling.style.display = "block";
+      }
+    }
+
+    function formatDate(date) {
+      var day = date.getDate();
+      var month = date.getMonth() + 1;
+      var year = date.getFullYear();
+      return (day < 10 ? "0" : "") + day + "/" + (month < 10 ? "0" : "") + month + "/" + year;
+    }
+
+    function verificarSenha() {
+      var senhaInserida = prompt("Digite a senha:");
+
+      if (senhaInserida === "123@Cobasi") {
+        // Senha correta, mostrar a página
+        document.getElementById("main-content").style.display = "block";
+      } else {
+        // Senha incorreta, exibir mensagem de erro
+        alert("Senha incorreta. Acesso negado.");
+      }
+    }
+
+    function mostrarImagem(button, codigoBase) {
+      var apiUrl = "https://mid-back.cobasi.com.br/catalog/skus/" + codigoBase;
+
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", apiUrl, true);
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          var response = xhr.responseText;
+          var data = JSON.parse(response);
+          var imageUrl = data.imageUrl;
+
+          var imgElement = button.parentNode.querySelector("img");
+          imgElement.src = imageUrl;
+          imgElement.style.display = "block";
+        }
+      };
+      xhr.send();
+    }
+
+    // Verificar a senha ao carregar a página
+    window.addEventListener("DOMContentLoaded", verificarSenha);
+  </script>
+</head>
+<body>
+  <div id="main-content" style="display: none;">
+    <label for="cpf">CPF:</label>
+    <input type="text" id="cpf"><br>
+    <label for="fromDate">Data de início:</label>
+    <input type="date" id="fromDate"><br>
+    <label for="toDate">Data de término:</label>
+    <input type="date" id="toDate"><br>
+    <button onclick="consumirAPI()">Buscar</button>
+    <button onclick="expandirCompras()">Expandir todas as compras</button>
+
+    <h2>Dados da API:</h2>
+    <div id="lista-dados">
+      <!-- Os dados da API serão adicionados aqui dinamicamente -->
+    </div>
+  </div>
+</body>
+</html>
