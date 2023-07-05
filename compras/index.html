@@ -1,298 +1,317 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>Consumir API</title>
-  <style>
-    /* Estilos omitidos para brevidade */
-    .registro-item {
-      margin-bottom: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      background-color: #f9f9f9;
-    }
-
-    .registro-item-header {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-
-    .registro-item-button {
-      margin-top: 5px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      text-align: center;
-      text-decoration: none;
-      display: inline-block;
-      cursor: pointer;
-      font-size: 12px;
-      transition-duration: 0.4s;
-    }
-
-    .registro-item-button:hover {
-      background-color: #45a049;
-    }
-
-    .registro-item-produtos {
-      display: none;
-      margin-top: 10px;
-      padding-left: 20px;
-      border-left: 2px solid #ccc;
-    }
-
-    .registro-item-produto {
-      margin-bottom: 5px;
-    }
-
-    .produto-imagem {
-      display: none;
-    }
-  </style>
-
-  <script>
-    function consumirAPI() {
-      var cpf = document.getElementById("cpf").value;
-      var fromDate = document.getElementById("fromDate").value;
-      var toDate = document.getElementById("toDate").value;
-
-      var url = "https://mkt.cobasi.com.br/amigo_cobasi/compras/" + cpf;
-      var data = "page=1&date-from=" + fromDate + "&date-to=" + toDate;
-
-      var xhr = new XMLHttpRequest();
-      xhr.open("POST", url, true);
-      xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-      xhr.setRequestHeader("Accept", "application/json, text/plain; q=0.9, text/html;q=0.8");
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-          var response = xhr.responseText;
-          var data = JSON.parse(response);
-          mostrarDados(data);
+    <title>Consumir API</title>
+    <style>
+        /* Estilos omitidos para brevidade */
+        .registro-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
         }
-      };
-      xhr.send(data);
-    }
 
-    function mostrarDados(data) {
-      var lista = document.getElementById("lista-dados");
-      lista.innerHTML = ""; // Limpar lista antes de atualizar
-
-      if (data && data.registro && data.registro.length > 0) {
-        // Ordenar por data de movimento (da mais recente para a mais antiga)
-        data.registro.sort(function(a, b) {
-          var dateA = new Date(a.cupomDataMovimento);
-          var dateB = new Date(b.cupomDataMovimento);
-          return dateB - dateA;
-        });
-
-        for (var i = 0; i < data.registro.length; i++) {
-          var registro = data.registro[i];
-
-          var registroItem = document.createElement("div");
-          registroItem.classList.add("registro-item");
-
-          var registroItemHeader = document.createElement("div");
-          registroItemHeader.classList.add("registro-item-header");
-          var dataMovimento = new Date(registro.cupomDataMovimento);
-          registroItemHeader.innerHTML = "Data do Movimento: " + formatDate(dataMovimento) +
-                                         "<br>Cupom ID: " + registro.cupomId +
-                                         "<br>CPF: " + registro.cupomIdentificacao +
-                                         "<br>Loja: " + registro.cupomLojaNome +
-                                         "<br>Número do PDV: " + registro.cupomNumeroPdv +
-                                         "<br>Número do Cupom: " + registro.cupomNumeroCupom +
-                                         "<br>Valor do Cupom: " + registro.cupomValorCupom;
-
-          var registroItemButton = document.createElement("button");
-          registroItemButton.classList.add("registro-item-button");
-          registroItemButton.textContent = "Ver produtos da compra";
-          registroItemButton.onclick = function() {
-            this.nextElementSibling.style.display = "block";
-          };
-
-          var registroItemProdutos = document.createElement("div");
-          registroItemProdutos.classList.add("registro-item-produtos");
-
-          for (var j = 0; j < registro.item.length; j++) {
-            var item = registro.item[j];
-            var registroItemProduto = document.createElement("div");
-            registroItemProduto.classList.add("registro-item-produto");
-            registroItemProduto.innerHTML = "<strong>Produto:</strong> " + item.produtoNome +
-                                            "<br><strong>EAN:</strong> " + item.produtoEAN +
-                                            "<br><strong>Código Base:</strong> " + item.produtoCodigoBase +
-                                            "<br><strong>Quantidade:</strong> " + item.itemQuantidade +
-                                            "<br><strong>Valor Total:</strong> " + item.itemValorTotal +
-                                            "<br><button class='produto-imagem-button' onclick='mostrarImagem(this, \"" + item.produtoCodigoBase + "\")'>Ver imagem</button>" +
-                                            "<img class='produto-imagem' src='' alt='" + item.produtoNome + "'>"
-
-            registroItemProdutos.appendChild(registroItemProduto);
-          }
-
-          registroItem.appendChild(registroItemHeader);
-          registroItem.appendChild(registroItemButton);
-          registroItem.appendChild(registroItemProdutos);
-          lista.appendChild(registroItem);
+        .registro-item-header {
+            font-weight: bold;
+            margin-bottom: 5px;
         }
-      } else {
-        var mensagemItem = document.createElement("div");
-        mensagemItem.innerHTML = "Nenhum dado encontrado.";
-        lista.appendChild(mensagemItem);
-      }
-    }
 
-    function expandirCompras() {
-      var botoes = document.getElementsByClassName("registro-item-button");
-      for (var i = 0; i < botoes.length; i++) {
-        var button = botoes[i];
-        button.nextElementSibling.style.display = "block";
-      }
-    }
-
-    function formatDate(date) {
-      var day = date.getDate();
-      var month = date.getMonth() + 1;
-      var year = date.getFullYear();
-      return (day < 10 ? "0" : "") + day + "/" + (month < 10 ? "0" : "") + month + "/" + year;
-    }
-
-    function verificarSenha() {
-      var senhaInserida = prompt("Digite a senha:");
-
-      if (senhaInserida === "123@Cobasi") {
-        // Senha correta, mostrar a página
-        document.getElementById("main-content").style.display = "block";
-      } else {
-        // Senha incorreta, exibir mensagem de erro
-        alert("Senha incorreta. Acesso negado.");
-      }
-    }
-
-    function mostrarImagem(button, codigoBase) {
-      var apiUrl = "https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/" + codigoBase;
-
-      fetch(apiUrl)
-        .then(function(response) {
-          if (response.ok) {
-            return response.json();
-          } else {
-            throw new Error("Erro ao carregar a imagem: " + response.status);
-          }
-        })
-        .then(function(data) {
-          var imagemElement = button.parentNode.querySelector(".produto-imagem");
-          if (data.images[0].imageUrl) {
-            imagemElement.src = data.images[0].imageUrl;
-            imagemElement.style.display = "block";
-          } else {
-            throw new Error("Imagem do produto não encontrada.");
-          }
-        })
-        .catch(function(error) {
-          console.log(error);
-        });
-    }
-
-    function verPontos() {
-        var cpf = document.getElementById("cpf").value;
-      var xhr = new XMLHttpRequest();
-      var url = "https://mkt.cobasi.com.br/amigo_cobasi/saldo/" + cpf;
-      
-      xhr.open("GET", url, true);
-      xhr.setRequestHeader("Content-Type", "application/json");
-      
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-          var response = xhr.responseText;
-          var data = JSON.parse(response);
-          mostrarPontos(data);
+        .registro-item-button {
+            margin-top: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 12px;
+            transition-duration: 0.4s;
         }
-      };
-      
-      xhr.send();
-    }
 
-    function mostrarPontos(data) {
-      var pontosElement = document.getElementById("pontos");
-      
-      if (data && data.clienteSaldoPontos) {
-        pontosElement.innerHTML = "Pontos: " + data.clienteSaldoPontos;
-      } else {
-        pontosElement.innerHTML = "Pontos não encontrados.";
-      }
-    }
-
-    //
-
-    function expirando() {
-        var cpf = document.getElementById("cpf").value;
-      var xhr = new XMLHttpRequest();
-      var url = "https://mkt.cobasi.com.br/amigo_cobasi/expirar/" + cpf;
-      
-      xhr.open("GET", url, true);
-      xhr.setRequestHeader("Content-Type", "application/json");
-      
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-          var response = xhr.responseText;
-          var data = JSON.parse(response);
-          expirar(data);
+        .registro-item-button:hover {
+            background-color: #45a049;
         }
-      };
-      
-      xhr.send();
-    }
 
-    
-    function expirar(data) {
-  var expiraElement = document.getElementById("expira");
+        .registro-item-produtos {
+            display: none;
+            margin-top: 10px;
+            padding-left: 20px;
+            border-left: 2px solid #ccc;
+        }
 
-  if (data && data.registro && data.registro.length > 0) {
-    var expiracao = data.registro.map(function(item) {
-      var dataMovimento = new Date(item.expiracaoDataMovimento);
-      var dia = String(dataMovimento.getDate()).padStart(2, "0");
-      var mes = String(dataMovimento.getMonth() + 1).padStart(2, "0");
-      var ano = dataMovimento.getFullYear();
-      var dataFormatada = dia + "/" + mes + "/" + ano;
+        .registro-item-produto {
+            margin-bottom: 5px;
+        }
 
-      return "Ordem: " + item.expiracaoOrdem +
-        ", Data: " + dataFormatada +
-        ", Total de Pontos: " + item.expiracaoTotalPontos ;
-    });
-
-    expiraElement.innerHTML = expiracao.join("<br>");
-  } else {
-    expiraElement.innerHTML = "Pontos não encontrados.";
-  }
-}
+        .produto-imagem {
+            display: none;
+        }
+    </style>
+    <script>
 
 
+        function consumirAPI() {
+            var cpf = document.getElementById("cpf").value;
+            var fromDate = document.getElementById("fromDate").value;
+            var toDate = document.getElementById("toDate").value;
 
-  </script>
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/compras/" + cpf;
+            var data = "page=1&date-from=" + fromDate + "&date-to=" + toDate;
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.setRequestHeader("Accept", "application/json, text/plain; q=0.9, text/html;q=0.8");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = xhr.responseText;
+                    var data = JSON.parse(response);
+                    mostrarDados(data);
+                }
+            };
+            xhr.send(data);
+        }
+
+        function mostrarDados(data) {
+            var lista = document.getElementById("lista-dados");
+            lista.innerHTML = ""; // Limpar lista antes de atualizar
+
+            if (data && data.registro && data.registro.length > 0) {
+                // Ordenar por data de movimento (da mais recente para a mais antiga)
+                data.registro.sort(function (a, b) {
+                    var dateA = new Date(a.cupomDataMovimento);
+                    var dateB = new Date(b.cupomDataMovimento);
+                    return dateB - dateA;
+                });
+
+                for (var i = 0; i < data.registro.length; i++) {
+                    var registro = data.registro[i];
+
+                    var registroItem = document.createElement("div");
+                    registroItem.classList.add("registro-item");
+
+                    var registroItemHeader = document.createElement("div");
+                    registroItemHeader.classList.add("registro-item-header");
+                    var dataMovimento = new Date(registro.cupomDataMovimento);
+                    registroItemHeader.innerHTML = "Data do Movimento: " + formatDate(dataMovimento) +
+                        "<br>Cupom ID: " + registro.cupomId +
+                        "<br>CPF: " + registro.cupomIdentificacao +
+                        "<br>Loja: " + registro.cupomLojaNome +
+                        "<br>Número do PDV: " + registro.cupomNumeroPdv +
+                        "<br>Número do Cupom: " + registro.cupomNumeroCupom +
+                        "<br>Valor do Cupom: " + registro.cupomValorCupom;
+
+                    var registroItemButton = document.createElement("button");
+                    registroItemButton.classList.add("registro-item-button");
+                    registroItemButton.textContent = "Ver produtos da compra";
+                    registroItemButton.onclick = function () {
+                        this.nextElementSibling.style.display = "block";
+                    };
+
+                    var registroItemProdutos = document.createElement("div");
+                    registroItemProdutos.classList.add("registro-item-produtos");
+
+                    for (var j = 0; j < registro.item.length; j++) {
+
+                        var item = registro.item[j];
+                        var registroItemProduto = document.createElement("div");
+                        registroItemProduto.classList.add("registro-item-produto");
+                        registroItemProduto.innerHTML = "<strong>Produto:</strong> " + item.produtoNome +
+                            "<br><strong>EAN:</strong> " + item.produtoEAN +
+                            "<br><strong>Código Base:</strong> " + item.produtoCodigoBase +
+                            "<br><strong>Quantidade:</strong> " + item.itemQuantidade +
+                            "<br><strong>Valor Total:</strong> " + item.itemValorTotal +
+                            "<br><button class='produto-imagem-button' onclick='mostrarImagem(this, \"" + item.produtoCodigoBase + "\")'>Ver imagem</button>" +
+                            // "<button class="produto-imagem-button" onclick="mostrarImagem(this, '${item.produtoCodigoBase}')">Ver imagem</button>"+
+
+                            "<img class='produto-imagem' src='' alt='" + item.produtoNome + "'>"
+
+                        registroItemProdutos.appendChild(registroItemProduto);
+                    }
+
+                    registroItem.appendChild(registroItemHeader);
+                    registroItem.appendChild(registroItemButton);
+                    registroItem.appendChild(registroItemProdutos);
+                    lista.appendChild(registroItem);
+                }
+            } else {
+                var mensagemItem = document.createElement("div");
+                mensagemItem.innerHTML = "Nenhum dado encontrado.";
+                lista.appendChild(mensagemItem);
+            }
+        }
+
+        function expandirCompras() {
+            var botoes = document.getElementsByClassName("registro-item-button");
+            for (var i = 0; i < botoes.length; i++) {
+                var button = botoes[i];
+                button.nextElementSibling.style.display = "block";
+            }
+        }
+
+        function formatDate(date) {
+            var day = date.getDate();
+            var month = date.getMonth() + 1;
+            var year = date.getFullYear();
+            return (day < 10 ? "0" : "") + day + "/" + (month < 10 ? "0" : "") + month + "/" + year;
+        }
+
+        function verificarSenha() {
+            var senhaInserida = prompt("Digite a senha:");
+
+            if (senhaInserida === "123@Cobasi") {
+                // Senha correta, mostrar a página
+                document.getElementById("main-content").style.display = "block";
+            } else {
+                // Senha incorreta, exibir mensagem de erro
+                alert("Senha incorreta. Acesso negado.");
+            }
+        }
+
+        var imagemVisivel = false;
+
+        function mostrarImagem(button, codigoBase) {
+            var apiUrl = "https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/" + codigoBase;
+
+            fetch(apiUrl)
+                .then(function (response) {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error("Erro ao carregar a imagem: " + response.status);
+                    }
+                })
+                .then(function (data) {
+                    var imagemElement = button.parentNode.querySelector(".produto-imagem");
+                    if (data.images && data.images[0] && data.images[0].imageUrl) {
+                        if (imagemElement.style.display === "none") {
+                            imagemElement.style.display = "block";
+                            button.textContent = "Esconder imagem"; // Atualiza o texto do botão
+                        } else {
+                            imagemElement.style.display = "none";
+                            button.textContent = "Ver imagem"; // Atualiza o texto do botão
+                        }
+                        imagemElement.src = data.images[0].imageUrl;
+                    } else {
+                        throw new Error("Imagem do produto não encontrada.");
+                    }
+                })
+                .catch(function (error) {
+                    console.log(error);
+                });
+        }
+
+
+
+
+        function verPontos() {
+            var cpf = document.getElementById("cpf").value;
+            var xhr = new XMLHttpRequest();
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/saldo/" + cpf;
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = xhr.responseText;
+                    var data = JSON.parse(response);
+                    mostrarPontos(data);
+                }
+            };
+
+            xhr.send();
+        }
+
+        function mostrarPontos(data) {
+            var pontosElement = document.getElementById("pontos");
+
+            if (data && data.clienteSaldoPontos) {
+                pontosElement.innerHTML = "Pontos: " + data.clienteSaldoPontos;
+            } else {
+                pontosElement.innerHTML = "Pontos não encontrados.";
+            }
+        }
+
+        function expirando() {
+            var cpf = document.getElementById("cpf").value;
+            var xhr = new XMLHttpRequest();
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/expirar/" + cpf;
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = xhr.responseText;
+                    var data = JSON.parse(response);
+                    expirar(data);
+                }
+            };
+
+            xhr.send();
+        }
+
+
+        function expirar(data) {
+            var expiraElement = document.getElementById("expira");
+
+            if (data && data.registro && data.registro.length > 0) {
+                var expiracao = data.registro.map(function (item) {
+                    var dataMovimento = new Date(item.expiracaoDataMovimento);
+                    var dia = String(dataMovimento.getDate() + 1).padStart(2, "0");
+                    var mes = String(dataMovimento.getMonth() + 1).padStart(2, "0");
+                    var ano = dataMovimento.getFullYear();
+                    //var dataFormatada = formatDate(dataMovimento);
+                    var dataFormatada = dia + "/" + mes + "/" + ano;
+
+
+                    return "Ordem: " + item.expiracaoOrdem +
+                        ", Data: " + dataFormatada +
+                        ", Total de Pontos: " + item.expiracaoTotalPontos;
+                });
+
+                expiraElement.innerHTML = expiracao.join("<br>");
+            } else {
+                expiraElement.innerHTML = "Pontos não encontrados.";
+            }
+        }
+
+
+
+    </script>
 </head>
-<body>
-  <h1>Consumir API</h1>
-  <div id="main-content" style="display: none;">
-    <label for="cpf">CPF:</label>
-    <input type="text" id="cpf">
-    <br>
-    <label for="fromDate">De:</label>
-    <input type="date" id="fromDate">
-    <br>
-    <label for="toDate">Até:</label>
-    <input type="date" id="toDate">
-    <br>
-    <button onclick="consumirAPI()">Consultar</button>
-    <br>
-    <button onclick="expandirCompras()">Expandir todas as compras</button>
-    <br>
-    <button onclick="verPontos()">Ver Pontos</button>
-    <button onclick="expirando()">A expirar</button>
-    <div id="pontos"></div>
-    <div id="expira"></div>
-    <div id="lista-dados"></div>
-  </div>
 
-  <script>
-    verificarSenha();
-  </script>
+<body>
+    <h1>Consumir API</h1>
+    <div id="main-content" style="display: none;">
+        <label for="cpf">CPF:</label>
+        <input type="text" id="cpf">
+        <br>
+        <label for="fromDate">De:</label>
+        <input type="date" id="fromDate">
+        <br>
+        <label for="toDate">Até:</label>
+        <input type="date" id="toDate">
+        <br>
+        <button onclick="consumirAPI()">Consultar</button>
+        <br>
+        <button onclick="expandirCompras()">Expandir todas as compras</button>
+        <br>
+        <button onclick="verPontos()">Ver Pontos</button>
+        <br>
+        <button onclick="expirando()">Expiração de pontos</button>
+        <br>
+        <h2 id="pontos"></h2>
+        <h2 id="expira"></h2>
+        <div id="lista-dados"></div>
+    </div>
+    <script>
+        verificarSenha();
+    </script>
 </body>
+
 </html>
