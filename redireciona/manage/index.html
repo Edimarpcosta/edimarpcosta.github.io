@@ -65,7 +65,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
     <script>
         // Configurações do Firebase
-        var firebaseConfig = {
+       var firebaseConfig = {
                         apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
             authDomain: "redireciona-bf04a.firebaseapp.com",
             databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
@@ -83,7 +83,7 @@
         var rootRef = firebase.database().ref();
 
         function cadastrarNo() {
-            // Lógica para cadastrar um nó no banco de dados
+            // Lógica para cadastrar ou atualizar um nó no banco de dados
             var caminho = document.getElementById("caminho").value;
             var url = document.getElementById("url").value;
             var senha = document.getElementById("senha").value;
@@ -91,19 +91,42 @@
             // Verifica se o usuário está autenticado
             var user = firebase.auth().currentUser;
             if (user) {
-                // Cadastra o nó com a hierarquia desejada
-                database.ref(caminho).set({
-                    url: url,
-                    senha: senha
-                })
-                .then(function() {
-                    alert("Nó cadastrado com sucesso!");
-                })
-                .catch(function(error) {
-                    alert("Erro ao cadastrar o nó: " + error.message);
+                // Verifica se o nó já existe
+                rootRef.child(caminho).once('value', function(snapshot) {
+                    if (snapshot.exists()) {
+                        // Atualiza apenas os campos preenchidos
+                        var updates = {};
+                        if (url !== "") {
+                            updates['url'] = url;
+                        }
+                        if (senha !== "") {
+                            updates['senha'] = senha;
+                        }
+
+                        // Executa as atualizações
+                        rootRef.child(caminho).update(updates)
+                            .then(function() {
+                                alert("Nó atualizado com sucesso!");
+                            })
+                            .catch(function(error) {
+                                alert("Erro ao atualizar o nó: " + error.message);
+                            });
+                    } else {
+                        // Cadastra o novo nó
+                        rootRef.child(caminho).set({
+                            url: url,
+                            senha: senha
+                        })
+                        .then(function() {
+                            alert("Nó cadastrado com sucesso!");
+                        })
+                        .catch(function(error) {
+                            alert("Erro ao cadastrar o nó: " + error.message);
+                        });
+                    }
                 });
             } else {
-                alert("É necessário fazer login para cadastrar um nó.");
+                alert("É necessário fazer login para cadastrar ou atualizar um nó.");
             }
         }
 
@@ -162,7 +185,7 @@
             <label for="senha">Senha:</label>
             <input type="password" id="senha">
         </div>
-        <button onclick="cadastrarNo()">Cadastrar</button>
+        <button onclick="cadastrarNo()">Cadastrar/Atualizar</button>
     </div>
 
     <h2>Lista de Nós Cadastrados</h2>
