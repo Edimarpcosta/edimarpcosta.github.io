@@ -2,13 +2,71 @@
 <html>
 <head>
     <title>Cadastro de Links</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .nos-list {
+            margin-top: 20px;
+            padding: 0;
+            list-style: none;
+        }
+
+        .nos-list li {
+            margin-bottom: 5px;
+        }
+    </style>
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-auth.js"></script>
     <script>
         // Configurações do Firebase
         var firebaseConfig = {
-            apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
+                        apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
             authDomain: "redireciona-bf04a.firebaseapp.com",
             databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
             projectId: "redireciona-bf04a",
@@ -20,10 +78,12 @@
 
         // Inicializa o Firebase
         firebase.initializeApp(firebaseConfig);
-        var database = firebase.database();
 
-        // Função para cadastrar um novo nó
+        // Referência para o nó raiz do banco de dados
+        var rootRef = firebase.database().ref();
+
         function cadastrarNo() {
+            // Lógica para cadastrar um nó no banco de dados
             var caminho = document.getElementById("caminho").value;
             var url = document.getElementById("url").value;
             var senha = document.getElementById("senha").value;
@@ -47,66 +107,71 @@
             }
         }
 
-        // Função para listar os nós já cadastrados
         function listarNos() {
-            var nosRef = database.ref();
-
-            nosRef.once('value', function(snapshot) {
+            // Obtém a referência para todos os nós
+            rootRef.once('value', function(snapshot) {
                 var nos = snapshot.val();
-                var nosList = document.getElementById("nos-list");
 
-                // Limpa a lista antes de preenchê-la novamente
-                nosList.innerHTML = "";
+                // Limpa a lista de nós
+                var nosList = document.getElementById('nos-list');
+                nosList.innerHTML = '';
 
-                for (var caminho in nos) {
-                    var url = nos[caminho].url;
-                    var senha = nos[caminho].senha;
-
-                    // Cria um elemento <li> para cada nó cadastrado
-                    var li = document.createElement("li");
-                    li.textContent = "Caminho: " + caminho + ", URL: " + url + ", Senha: " + senha;
-
-                    // Adiciona o elemento <li> à lista
-                    nosList.appendChild(li);
-                }
+                // Itera sobre os nós e exibe na lista
+                Object.keys(nos).forEach(function(caminho) {
+                    listarNosRecursivamente(caminho, nos[caminho]);
+                });
             });
         }
 
-        // Função para fazer login com o Google
-        function loginGoogle() {
-            var provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth().signInWithPopup(provider)
-                .then(function(result) {
-                    alert("Login realizado com sucesso!");
-                })
-                .catch(function(error) {
-                    alert("Erro ao fazer login: " + error.message);
+        function listarNosRecursivamente(caminho, no) {
+            // Obtém a referência para a lista de nós
+            var nosList = document.getElementById('nos-list');
+
+            // Cria um item de lista para o caminho
+            var listItem = document.createElement('li');
+            listItem.textContent = caminho;
+
+            // Adiciona o item de lista à lista de nós
+            nosList.appendChild(listItem);
+
+            // Verifica se o nó tem filhos
+            if (typeof no === 'object') {
+                // Itera sobre os filhos e chama a função recursivamente
+                Object.keys(no).forEach(function(filho) {
+                    var caminhoFilho = caminho + '/' + filho;
+                    var noFilho = no[filho];
+                    listarNosRecursivamente(caminhoFilho, noFilho);
                 });
+            }
         }
     </script>
 </head>
 <body>
     <h1>Cadastro de Links</h1>
 
-    <button onclick="loginGoogle()">Fazer Login com o Google</button>
-
-    <h2>Cadastrar Nó</h2>
-    <label for="caminho">Caminho:</label>
-    <input type="text" id="caminho">
-    <label for="url">URL:</label>
-    <input type="text" id="url">
-    <label for="senha">Senha:</label>
-    <input type="password" id="senha">
-    <button onclick="cadastrarNo()">Cadastrar</button>
+    <div class="form-container">
+        <div class="form-group">
+            <label for="caminho">Caminho:</label>
+            <input type="text" id="caminho">
+        </div>
+        <div class="form-group">
+            <label for="url">URL:</label>
+            <input type="text" id="url">
+        </div>
+        <div class="form-group">
+            <label for="senha">Senha:</label>
+            <input type="password" id="senha">
+        </div>
+        <button onclick="cadastrarNo()">Cadastrar</button>
+    </div>
 
     <h2>Lista de Nós Cadastrados</h2>
-    <ul id="nos-list"></ul>
-
-    <button onclick="listarNos()">Listar Nós</button>
+    <ul class="nos-list" id="nos-list"></ul>
 
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-analytics.js"></script>
     <script>
         firebase.analytics();
+        listarNos();
     </script>
 </body>
 </html>
