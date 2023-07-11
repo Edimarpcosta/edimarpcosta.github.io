@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Consumir API</title>
+    <style>
+        /* Estilos gerais */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 14px;
+            transition-duration: 0.4s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .registro-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+
+        .registro-item-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .registro-item-button {
+            margin-top: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 12px;
+            transition-duration: 0.4s;
+        }
+
+        .registro-item-button:hover {
+            background-color: #45a049;
+        }
+
+        .registro-item-produtos {
+            display: none;
+            margin-top: 10px;
+            padding-left: 20px;
+            border-left: 2px solid #ccc;
+        }
+
+        .registro-item-produto {
+            margin-bottom: 5px;
+        }
+
+        .produto-imagem {
+            display: none;
+        }
+
+        .progress-container {
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .progress-container progress {
+            width: 100%;
+            height: 20px;
+        }
+
+        .progress-container .progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 100%;
+            background-color: #4CAF50;
+            transition-duration: 0.4s;
+        }
+
+        /* Estilos para dispositivos móveis */
+        @media only screen and (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+    <script>
+        function consumirAPI() {
+            var cpf = document.getElementById("cpf").value;
+            var fromDate = document.getElementById("fromDate").value;
+            var toDate = document.getElementById("toDate").value;
+
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/compras/" + cpf;
+            var data = "page=1&date-from=" + fromDate + "&date-to=" + toDate;
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.setRequestHeader("Accept", "application/json, text/plain; q=0.9, text/html;q=0.8");
+
+            var progressContainer = document.getElementById("progress-container");
+            var progressBar = document.getElementById("progress-bar");
+            progressBar.style.width = "0";
+            progressContainer.style.display = "block";
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    progressContainer.style.display = "none";
+                    if (xhr.status === 200) {
+                        var response = xhr.responseText;
+                        var data = JSON.parse(response);
+                        mostrarDados(data);
+                    } else {
+                        alert("Erro ao consultar API: " + xhr.status);
+                    }
+                }
+            };
+            xhr.send(data);
+        }
+
+        function mostrarDados(data) {
+            var lista = document.getElementById("lista-dados");
+            lista.innerHTML = ""; // Limpar lista antes de atualizar
+
+            if (data && data.registro && data.registro.length > 0) {
+                // Ordenar por data de movimento (da mais recente para a mais antiga)
+                data.registro.sort(function (a, b) {
+                    var dateA = new Date(a.cupomDataMovimento);
+                    var dateB = new Date(b.cupomDataMovimento);
+                    return dateB - dateA;
+                });
+
+                for (var i = 0; i < data.registro.length; i++) {
+                    var registro = data.registro[i];
+
+                    var registroItem = document.createElement("div");
+                    registroItem.classList.add("registro-item");
+
+                    var registroItemHeader = document.createElement("div");
+                    registroItemHeader.classList.add("registro-item-header");
+                    var dataMovimento = new Date(registro.cupomDataMovimento);
+                    registroItemHeader.innerHTML = "Data do Movimento: " + formatDate(dataMovimento) +
+                        "<br>Cupom ID: " + registro.cupomId +
+                        "<br>CPF: " + registro.cupomIdentificacao +
+                        "<br>Loja: " + registro.cupomLojaNome +
+                        "<br>Número do PDV: " + registro.cupomNumeroPdv +
+                        "<br>Número do Cupom: " + registro.cupomNumeroCupom +
+                        "<br>Valor do Cupom: " + registro.cupomValorCupom;
+
+                    var registroItemButton = document.createElement("button");
+                    registroItemButton.classList.add("registro-item-button");
+                    registroItemButton.textContent = "Ver produtos da compra";
+                    registroItemButton.onclick = function () {
+                        this.nextElementSibling.style.display = "block";
+                    };
+
+                    var registroItemProdutos = document.createElement("div");
+                    registroItemProdutos.classList.add("registro-item-produtos");
+
+                    for (var j = 0; j < registro.item.length; j++) {
+
+                        var item = registro.item[j];
+                        var registroItemProduto = document.createElement("div");
+                        registroItemProduto.classList.add("registro-item-produto");
+                        registroItemProduto.innerHTML = "<strong>Produto:</strong> " + item.produtoNome +
+                            "<br><strong>EAN:</strong> " + item.produtoEAN +
+                            "<br><strong>Código Base:</strong> " + item.produtoCodigoBase +
+                            "<br><strong>Quantidade:</strong> " + item.itemQuantidade +
+                            "<br><strong>Valor Total:</strong> " + item.itemValorTotal +
+                            "<br><button class='produto-imagem-button' onclick='mostrarImagem(this, \"" + item.produtoCodigoBase + "\")'>Ver imagem</button>" +
+                            "<img class='produto-imagem' src='' alt='" + item.produtoNome + "'>"
+
+                        registroItemProdutos.appendChild(registroItemProduto);
+                    }
+
+                    registroItem.appendChild(registroItemHeader);
+                    registroItem.appendChild(registroItemButton);
+                    registroItem.appendChild(registroItemProdutos);
+                    lista.appendChild(registroItem);
+                }
+            } else {
+                var mensagemItem = document.createElement("div");
+                mensagemItem.innerHTML = "Nenhum dado encontrado.";
+                lista.appendChild(mensagemItem);
+            }
+        }
+
+        function expandirCompras() {
+            var botoes = document.getElementsByClassName("registro-item-button");
+            for (var i = 0; i < botoes.length; i++) {
+                var button = botoes[i];
+                button.nextElementSibling.style.display = "block";
+            }
+        }
+
+        function formatDate(date) {
+            var day = date.getDate();
+            var month = date.getMonth() + 1;
+            var year = date.getFullYear();
+            return (day < 10 ? "0" : "") + day + "/" + (month < 10 ? "0" : "") + month + "/" + year;
+        }
+
+        function verificarSenha() {
+            var senhaInserida = prompt("Digite a senha:");
+
+            if (senhaInserida === "123@Cobasi") {
+                // Senha correta, mostrar a página
+                document.getElementById("main-content").style.display = "block";
+            } else {
+                // Senha incorreta, exibir mensagem de erro
+                alert("Senha incorreta. Acesso negado.");
+            }
+        }
+
+        function mostrarImagem(button, codigoBase) {
+            var apiUrl = "https://api.allorigins.win/raw?url=https://mid-back.cobasi.com.br/catalog/skus/" + codigoBase;
+
+            fetch(apiUrl)
+                .then(function (response) {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error("Erro ao carregar a imagem: " + response.status);
+                    }
+                })
+                .then(function (data) {
+                    var imagemElement = button.parentNode.querySelector(".produto-imagem");
+                    if (data.images && data.images[0] && data.images[0].imageUrl) {
+                        if (imagemElement.style.display === "block") {
+                            imagemElement.style.display = "none";
+                            button.textContent = "Ver imagem"; // Atualiza o texto do botão
+                        } else {
+                            imagemElement.style.display = "block";
+                            button.textContent = "Esconder imagem"; // Atualiza o texto do botão
+                        }
+                        imagemElement.src = data.images[0].imageUrl;
+                    } else {
+                        // Imagem não encontrada
+                        imagemElement.style.display = "none";
+                        button.textContent = "Não encontrado"; // Atualiza o texto do botão
+                    }
+                })
+                .catch(function (error) {
+                    console.log(error);
+                });
+        }
+
+        function verPontos() {
+            var cpf = document.getElementById("cpf").value;
+            var xhr = new XMLHttpRequest();
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/saldo/" + cpf;
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = xhr.responseText;
+                    var data = JSON.parse(response);
+                    mostrarPontos(data);
+                }
+            };
+
+            xhr.send();
+        }
+
+        function mostrarPontos(data) {
+            var pontosElement = document.getElementById("pontos");
+
+            if (data && data.clienteSaldoPontos) {
+                pontosElement.innerHTML = "Pontos: " + data.clienteSaldoPontos;
+            } else {
+                pontosElement.innerHTML = "Pontos não encontrados.";
+            }
+        }
+
+        function expirando() {
+            var cpf = document.getElementById("cpf").value;
+            var xhr = new XMLHttpRequest();
+            var url = "https://mkt.cobasi.com.br/amigo_cobasi/expirar/" + cpf;
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = xhr.responseText;
+                    var data = JSON.parse(response);
+                    expirar(data);
+                }
+            };
+
+            xhr.send();
+        }
+
+        function expirar(data) {
+            var expiraElement = document.getElementById("expira");
+
+            if (data && data.registro && data.registro.length > 0) {
+                var expiracao = data.registro.map(function (item) {
+                    var dataMovimento = new Date(item.expiracaoDataMovimento);
+                    var dia = String(dataMovimento.getDate() + 1).padStart(2, "0");
+                    var mes = String(dataMovimento.getMonth() + 1).padStart(2, "0");
+                    var ano = dataMovimento.getFullYear();
+                    var dataFormatada = dia + "/" + mes + "/" + ano;
+
+                    return "" + dataFormatada +
+                        ", expira: " + item.expiracaoTotalPontos;
+                });
+
+                expiraElement.innerHTML = expiracao.join("<br>");
+            } else {
+                expiraElement.innerHTML = "Pontos não encontrados.";
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                consumirAPI();
+            }
+        }
+
+        function showProgressBar() {
+            var progressBar = document.getElementById("progress-bar");
+            progressBar.style.width = "0";
+            var progressContainer = document.getElementById("progress-container");
+            progressContainer.style.display = "block";
+
+            var width = 1;
+            var progressInterval = setInterval(function () {
+                if (width >= 100) {
+                    clearInterval(progressInterval);
+                    progressContainer.style.display = "none";
+                } else {
+                    width++;
+                    progressBar.style.width = width + "%";
+                }
+            }, 10);
+        }
+
+        document.getElementById("cpf").addEventListener("keypress", handleKeyPress);
+    </script>
+</head>
+
+<body>
+    <h1>Consumir API</h1>
+    <div class="container" id="main-content" style="display: none;">
+        <div class="form-group">
+            <label for="cpf">CPF:</label>
+            <input type="text" id="cpf" autofocus>
+        </div>
+        <div class="form-group">
+            <label for="fromDate">De:</label>
+            <input type="date" id="fromDate">
+        </div>
+        <div class="form-group">
+            <label for="toDate">Até:</label>
+            <input type="date" id="toDate">
+        </div>
+        <button onclick="consumirAPI()">Consultar</button>
+        <div class="progress-container" id="progress-container" style="display: none;">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <button onclick="expandirCompras()">Expandir todas as compras</button>
+        <button onclick="verPontos()">Ver Pontos</button>
+        <button onclick="expirando()">Expiração de pontos</button>
+        <h2 id="pontos"></h2>
+        <h2 id="expira"></h2>
+        <div id="lista-dados"></div>
+    </div>
+    <script>
+        verificarSenha();
+    </script>
+</body>
+
+</html>
