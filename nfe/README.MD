@@ -1,7 +1,6 @@
 # Baixar NFe Danfe PDF e XML via Chave
 
- PDF NFe e XML via Chave + download auto url/?chave=suachave&dowload=pdf
-`url/?chave=sua_chave&download=pdf` Se `chave=suachave` pega dados nfe, Se `download=xml` baixa xml, Se `download=pdf` baixa pdf
+PDF NFe e XML via Chave + download automático através da URL `url/?chave=suachave&dowload=pdf` ou `url/?chave=sua_chave&download=pdf`. Se `chave=suachave`, pega os dados da NFe. Se `download=xml`, baixa o XML. Se `download=pdf`, baixa o PDF.
 
 Este é um projeto simples em HTML que permite baixar o PDF e XML de uma Nota Fiscal Eletrônica (NFe) usando a chave de acesso. Além disso, o projeto inclui a funcionalidade de preencher automaticamente o campo de chave através dos parâmetros da URL e baixar automaticamente o PDF ou XML, conforme a configuração dos parâmetros da URL.
 
@@ -19,7 +18,7 @@ Este é um projeto simples em HTML que permite baixar o PDF e XML de uma Nota Fi
 
 2. O campo `chaveInput` será preenchido automaticamente com a chave da NFe.
 
-3. Caso o parâmetro `download` seja `true`, o PDF será baixado automaticamente. Caso o parâmetro `download` seja `pdf`, o PDF será baixado automaticamente. Caso o parâmetro `download` seja `xml`, o XML será baixado automaticamente.
+3. Caso o parâmetro `download` seja `true`, o PDF e XML será baixado automaticamente. Caso o parâmetro `download` seja `pdf`, o PDF será baixado automaticamente. Caso o parâmetro `download` seja `xml`, o XML será baixado automaticamente.
 
 4. Se desejar apenas visualizar os dados da NFe, clique no botão "Dados NFe". Os dados JSON da NFe serão exibidos na caixa de texto abaixo.
 
