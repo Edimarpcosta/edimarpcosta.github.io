@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Baixar NFe Danfe via Chave e Baixar XML Chave NFe</title>
+</head>
+<body>
+    <h1>Baixar NFe Danfe PDF e XML via Chave</h1>
+    <input type="text" size="50" id="chaveInput" placeholder="Digite a Chave..." />
+    <button onclick="postRequestPDF()">Baixar NFe PDF (Chave)</button>
+    <button onclick="postRequestXML()">Baixar XML (Chave)</button>
+    <script>
+        // Função para baixar o PDF
+        async function postRequestPDF() {
+            const chave = document.getElementById('chaveInput').value;
+
+            // Verifica se a chave foi digitada
+            if (!chave) {
+                alert('Digite a chave antes de prosseguir.');
+                return;
+            }
+
+            try {
+                // Primeira requisição para a API de busca de dados
+                const buscanfe = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/data/APIAPP/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json, text/plain; q=0.9, text/html;q=0.8,',
+                        'Accept-Charset': 'utf-8, *;q=0.8',
+                        'User-Agent': 'Embarcadero URI Client/1.0, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+                    },
+                    body: JSON.stringify(chave)
+                });
+
+                const resultBuscanfe = await buscanfe.json();
+                //console.log('Resultado da API de busca de dados:', resultBuscanfe); // Verificar o resultado da primeira API no console
+
+                if (!resultBuscanfe || resultBuscanfe.error) {
+                    throw new Error('Erro ao buscar dados da API.');
+                }
+
+                // Segunda requisição para a API de obtenção do PDF
+                const response = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/danfepdf/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json, text/plain; q=0.9, text/html;q=0.8,',
+                        'Accept-Charset': 'utf-8, *;q=0.8',
+                        'User-Agent': 'Embarcadero URI Client/1.0, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+                    },
+                    body: JSON.stringify(chave)
+                });
+
+                const result = await response.json();
+                //console.log('Resultado da API de obtenção do PDF:', result); // Verificar o resultado da segunda API no console
+
+                downloadPDF(result, `${chave}.pdf`);
+
+            } catch (error) {
+                console.error(error);
+                alert('Ocorreu um erro ao converter o PDF. Verifique se a chave e os dados da API estão corretos.');
+            }
+        }
+
+        function downloadPDF(base64PDF, fileName) {
+            // Decodifica o dado Base64 para uma sequência binária
+            const binaryData = atob(base64PDF);
+
+            // Converte a sequência binária em um array de bytes
+            const bytes = new Uint8Array(binaryData.length);
+            for (let i = 0; i < binaryData.length; i++) {
+                bytes[i] = binaryData.charCodeAt(i);
+            }
+
+            // Cria um objeto Blob a partir do array de bytes
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+
+            // Cria um URL temporário para o objeto Blob
+            const url = URL.createObjectURL(blob);
+
+            // Cria um link e simula um clique para iniciar o download do PDF
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName; // Defina o nome do arquivo PDF a ser baixado
+            a.click();
+
+            // Libera o URL temporário
+            URL.revokeObjectURL(url);
+        }
+
+        // Função para baixar o XML
+        async function postRequestXML() {
+            const chave = document.getElementById('chaveInput').value;
+
+            // Verifica se a chave foi digitada
+            if (!chave) {
+                alert('Digite a chave antes de prosseguir.');
+                return;
+            }
+
+            try {
+                // Primeira requisição para a API de busca de dados
+                const buscanfe = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/data/APIAPP/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json, text/plain; q=0.9, text/html;q=0.8,',
+                        'Accept-Charset': 'utf-8, *;q=0.8',
+                        'User-Agent': 'Embarcadero URI Client/1.0, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+                    },
+                    body: JSON.stringify(chave)
+                });
+
+                const resultBuscanfe = await buscanfe.json();
+                //console.log('Resultado da API de busca de dados:', resultBuscanfe); // Verificar o resultado da primeira API no console
+
+                if (!resultBuscanfe || resultBuscanfe.error) {
+                    throw new Error('Erro ao buscar dados da API.');
+                }
+
+                esperarNFE = await fetchXMLData(chave);
+
+              
+            } catch (error) {
+                console.error(error);
+                alert('Ocorreu um erro ao baixar o XML. Verifique se a chave e os dados da API estão corretos.');
+            }
+        }
+
+        async function fetchXMLData(chave) {
+            try {
+                // Requisição para a API de obtenção do XML
+                const responseXML = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=UTF-8',
+                        'Accept': '*/*',
+                        'Accept-Charset': 'utf-8, *;q=0.8',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Host': 'ws.meudanfe.com',
+                        'Referer': 'https://meudanfe.com.br/',
+                        'User-Agent': 'Embarcadero URI Client/1.0, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+                        'sec-ch-ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
+                        'sec-ch-ua-platform': 'Windows',
+                        'sec-ch-ua-mobile': '?0',
+                        'origin': 'https://meudanfe.com.br',
+                        'sec-fetch-site': 'cross-site',
+                        'sec-fetch-mode': 'cors',
+                        'sec-fetch-dest': 'empty',
+                        'Content-Length': 44
+                    },
+                    body: chave
+                });
+
+                if (!responseXML.ok) {
+                    throw new Error('Erro ao obter o XML da API.');
+                }
+
+                const xmlData = await responseXML.text();
+                downloadXML(xmlData, `${chave}.xml`); // Baixar o XML com o nome do arquivo como "[chave].xml"
+
+            } catch (error) {
+                console.error(error);
+                return null;
+            }
+        }
+
+        function downloadXML(xmlData, fileName) {
+            // Cria um objeto Blob a partir do XML
+            const blob = new Blob([xmlData], { type: 'application/xml' });
+
+            // Cria um URL temporário para o objeto Blob
+            const url = URL.createObjectURL(blob);
+
+            // Cria um link e simula um clique para iniciar o download do XML
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+
+            // Libera o URL temporário
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
