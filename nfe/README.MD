@@ -15,7 +15,7 @@ Este é um projeto simples em HTML que permite baixar o PDF e XML de uma Nota Fi
 
 ## Como usar
 
-1. Abra o link do projeto com a chave da NFe na URL, por exemplo: `https://edimarpcosta.github.io/nfe/?chave=suachave&download=true`. O parâmetro `chave` deve conter a chave de acesso da NFe que deseja consultar.
+1. Abra o link do projeto com a chave da NFe na URL, por exemplo: `https://edimarpcosta.github.io/nfe/?chave=suachave&download=pdf`. O parâmetro `chave` deve conter a chave de acesso da NFe que deseja consultar.
 
 2. O campo `chaveInput` será preenchido automaticamente com a chave da NFe.
 
