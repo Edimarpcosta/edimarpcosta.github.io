@@ -18,7 +18,7 @@ Este é um projeto simples em HTML que permite baixar o PDF e XML de uma Nota Fi
 
 2. O campo `chaveInput` será preenchido automaticamente com a chave da NFe.
 
-3. Caso o parâmetro `download` seja `true`, o PDF e XML será baixado automaticamente. Caso o parâmetro `download` seja `pdf`, o PDF será baixado automaticamente. Caso o parâmetro `download` seja `xml`, o XML será baixado automaticamente.
+3. Caso o parâmetro `download` seja `true`, o PDF e XML serão baixados automaticamente. Caso o parâmetro `download` seja `pdf`, o PDF será baixado automaticamente. Caso o parâmetro `download` seja `xml`, o XML será baixado automaticamente.
 
 4. Se desejar apenas visualizar os dados da NFe, clique no botão "Dados NFe". Os dados JSON da NFe serão exibidos na caixa de texto abaixo.
 
