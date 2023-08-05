@@ -1,65 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mapa com Marcadores</title>
-    <style>
-        /* Definir a altura da div 'map' para ocupar 100% da altura da janela */
-        html, body, #map {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-    </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-DrT5T0rhqjO7y4Y47w5cRPyKBrqLYpN09p0yJGvVrF0=" crossorigin="anonymous"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc&callback=initMap" async defer></script>
-    <script>
-        var map;
+  <title>Mapa com Marcadores</title>
+  <style>
+    /* Definir a altura da div 'map' para ocupar 100% da altura da janela */
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc&callback=initMap" async defer></script>
+  <script>
+    var map;
 
-        function initMap() {
-            var geocoder = new google.maps.Geocoder();
-            var infowindows = [];
+    function initMap() {
+      var geocoder = new google.maps.Geocoder();
+      var infowindows = [];
 
-            map = new google.maps.Map(document.getElementById('map'), {
-                center: { lat: -22.480796, lng: -47.451883 },
-                zoom: 14
-            });
+      map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: -22.480796, lng: -47.451883 },
+        zoom: 14
+      });
 
-            $.getJSON('https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/main/ameripan/cli/cli.json', function (data) {
-                data.forEach(function (location) {
-                    geocoder.geocode({ 'address': location.address }, function (results, status) {
-                        if (status === 'OK') {
-                            var marker = new google.maps.Marker({
-                                map: map,
-                                position: results[0].geometry.location,
-                                title: location.name
-                            });
+      // Inicializar o Firebase com sua configuração
+      const firebaseConfig = {
+        apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
+  authDomain: "redireciona-bf04a.firebaseapp.com",
+  databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
+  projectId: "redireciona-bf04a",
+  storageBucket: "redireciona-bf04a.appspot.com",
+  messagingSenderId: "95966901521",
+  appId: "1:95966901521:web:2d0b8b20dbb1c356d688b0",
+  measurementId: "G-Z3LV16X6Y4"
+      };
 
-                            var infowindow = new google.maps.InfoWindow({
-                                content: location.name + "<br>" + location.address
-                            });
+      firebase.initializeApp(firebaseConfig);
 
-                            marker.addListener('click', function () {
-                                closeInfoWindows();
-                                infowindow.open(map, marker);
-                            });
+      const locationsRef = firebase.database().ref('locations');
 
-                            infowindows.push(infowindow);
-                        } else {
-                            console.log('Geocode was not successful for the following reason: ' + status);
-                        }
-                    });
-                });
-            });
+      var bounds = new google.maps.LatLngBounds(); // Cria um objeto para guardar os limites do mapa
 
-            function closeInfoWindows() {
-                infowindows.forEach(function (window) {
-                    window.close();
-                });
+      locationsRef.on('value', (snapshot) => {
+        snapshot.forEach((locationSnapshot) => {
+          var location = locationSnapshot.val(); // Acessar os valores dos nós
+
+          geocoder.geocode({ 'address': location.address }, function (results, status) {
+            if (status === 'OK') {
+              var marker = new google.maps.Marker({
+                map: map,
+                position: results[0].geometry.location,
+                title: location.name,
+              });
+
+              var infowindow = new google.maps.InfoWindow({
+                content: location.name + "<br>" + location.address
+              });
+
+              marker.addListener('click', function () {
+                closeInfoWindows();
+                infowindow.open(map, marker);
+              });
+
+              infowindows.push(infowindow);
+
+              // Expande os limites do mapa para incluir a posição do marcador
+              bounds.extend(results[0].geometry.location);
+            } else {
+              console.log('Geocode was not successful for the following reason: ' + status);
             }
-        }
-    </script>
+
+            // Ajusta o zoom e a posição do mapa para que todos os marcadores fiquem visíveis
+            map.fitBounds(bounds);
+          });
+        });
+      });
+
+      function closeInfoWindows() {
+        infowindows.forEach(function (window) {
+          window.close();
+        });
+      }
+    }
+  </script>
 </head>
 <body>
-    <div id="map"></div>
+  <div id="map"></div>
 </body>
 </html>
