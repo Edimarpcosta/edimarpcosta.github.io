@@ -15,10 +15,15 @@
   <div id="map"></div>
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc&callback=initMap" async defer></script>
+  <!-- Inclua "libraries=places" no link de carregamento da API do Google Maps -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc&libraries=places&callback=initMap" async defer></script>
   <script>
     var map;
     var infowindows = [];
+    var markers = []; // Lista de marcadores
+    var selectedMarkers = []; // Lista de marcadores selecionados
+    var directionsRenderer;
+    var locationsRef; // Variável para armazenar a referência ao banco de dados do Firebase
 
     function initMap() {
       var geocoder = new google.maps.Geocoder();
@@ -28,8 +33,10 @@
         zoom: 14
       });
 
-      // Inicializar o Firebase com sua configuração
-      const firebaseConfig = {
+      directionsRenderer = new google.maps.DirectionsRenderer(); // Adiciona um objeto DirectionsRenderer para exibir a rota no mapa
+
+      // Configuração do Firebase
+      var firebaseConfig = {
         apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
   authDomain: "redireciona-bf04a.firebaseapp.com",
   databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
@@ -39,14 +46,20 @@
   appId: "1:95966901521:web:2d0b8b20dbb1c356d688b0",
   measurementId: "G-Z3LV16X6Y4"
       };
-
+      // Inicializar o Firebase
       firebase.initializeApp(firebaseConfig);
 
-      const locationsRef = firebase.database().ref('locations');
+      // Referência ao banco de dados do Firebase
+      locationsRef = firebase.database().ref('locations');
 
       var bounds = new google.maps.LatLngBounds(); // Cria um objeto para guardar os limites do mapa
 
       locationsRef.on('value', (snapshot) => {
+        markers.forEach(marker => {
+          marker.setMap(null); // Limpa os marcadores do mapa antes de atualizar
+        });
+        markers = []; // Limpa a lista de marcadores antes de atualizar
+
         snapshot.forEach((locationSnapshot) => {
           var location = locationSnapshot.val(); // Acessar os valores dos nós
 
@@ -59,43 +72,80 @@
               });
 
               var infowindow = new google.maps.InfoWindow({
-                content: location.name + "<br>" + location.address + "<br><button onclick='openAddressInBrowser(\"" + location.address + "\")'>Navegar</button>"
+                content: location.name + "<br>" + location.address + "<br><button onclick='openAddressInBrowser(\"" + location.address + "\")'>Navegar</button>" + "<br><button onclick='toggleMarker(" + markers.length + ")'>Selecionar</button>"
               });
+
+              marker.infowindow = infowindow; // Armazena a referência ao infowindow no marcador
+              markers.push(marker); // Adiciona o marcador à lista de marcadores
 
               // Abre o infowindow automaticamente quando o marcador é adicionado ao mapa
               infowindow.open(map, marker);
 
-              marker.addListener('click', function () {
-                closeInfoWindows();
-                infowindow.open(map, marker);
-              });
-
-              infowindows.push(infowindow);
-
               // Expande os limites do mapa para incluir a posição do marcador
               bounds.extend(results[0].geometry.location);
-            } else {
-              console.log('Geocode was not successful for the following reason: ' + status);
             }
-
-            // Ajusta o zoom e a posição do mapa para que todos os marcadores fiquem visíveis
-            map.fitBounds(bounds);
           });
         });
+
+        // Ajusta o zoom e a posição do mapa para exibir todos os marcadores
+        map.fitBounds(bounds);
       });
 
-      function closeInfoWindows() {
-        infowindows.forEach(function (window) {
-          window.close();
-        });
+      directionsRenderer.setMap(map); // Define o mapa para o DirectionsRenderer
+    }
+
+    function toggleMarker(index) {
+      var marker = markers[index];
+      var infowindow = marker.infowindow;
+      var markerIndex = selectedMarkers.indexOf(marker);
+
+      if (markerIndex === -1) {
+        selectedMarkers.push(marker);
+        marker.setAnimation(google.maps.Animation.BOUNCE);
+      } else {
+        selectedMarkers.splice(markerIndex, 1);
+        marker.setAnimation(null);
       }
     }
 
+    function calculateAndDisplayRoute() {
+      // Verifica se existem pelo menos dois marcadores selecionados
+      if (selectedMarkers.length < 2) {
+        window.alert('Selecione pelo menos dois marcadores para traçar a rota.');
+        return;
+      }
+
+      var directionsService = new google.maps.DirectionsService();
+      var waypoints = selectedMarkers.slice(1, -1).map(marker => {
+        return {
+          location: marker.getPosition(),
+          stopover: true
+        };
+      });
+
+      var request = {
+        origin: selectedMarkers[0].getPosition(),
+        destination: selectedMarkers[selectedMarkers.length - 1].getPosition(),
+        waypoints: waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+      };
+
+      directionsService.route(request, function (response, status) {
+        if (status === google.maps.DirectionsStatus.OK) {
+          directionsRenderer.setDirections(response); // Exibe a rota no mapa usando o DirectionsRenderer
+        } else {
+          console.log('Directions request failed due to ' + status);
+        }
+      });
+    }
+
     function openAddressInBrowser(address) {
-      var encodedAddress = encodeURI(address);
+      var encodedAddress = encodeURIComponent(address); // Atualização: Usar encodeURIComponent
       var mapLink = "https://www.google.com/maps/search/?api=1&query=" + encodedAddress;
       window.open(mapLink, '_blank');
     }
   </script>
+  <!-- Botão "Iniciar Rota" -->
+  <button onclick="calculateAndDisplayRoute()">Iniciar Rota</button>
 </body>
 </html>
