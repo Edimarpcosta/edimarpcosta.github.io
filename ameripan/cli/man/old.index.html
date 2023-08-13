@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Manutenção de Endereços</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      width: 80%;
+      margin: 0 auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #ccc;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    button {
+      background-color: #e6bc02;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 5px; /* Espaçamento entre os botões */
+    }
+    button.edit {
+      background-color: #3498db;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+    }
+    
+    /* Alinha os botões horizontalmente */
+    .actions-buttons {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Alinha o botão "Ver Mapa" à direita */
+    .map-button {
+      margin-left: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Manutenção de Endereços</h1>
+    <input type="text" id="name" placeholder="Nome">
+    <input type="text" id="address" placeholder="Endereço">
+    <button onclick="cadastrarEndereco()">Cadastrar</button>
+    <button class="map-button" onclick="window.open('https://edimarpcosta.github.io/ameripan/cli/mobile')">Ver Mapa</button>
+    <table>
+      <tr>
+        <th>Nome</th>
+        <th>Endereço</th>
+        <th>Ações</th>
+      </tr>
+    </table>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
+  <script>
+    // O restante do seu código JavaScript
+    const firebaseConfig = {
+        apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
+  authDomain: "redireciona-bf04a.firebaseapp.com",
+  databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
+  projectId: "redireciona-bf04a",
+  storageBucket: "redireciona-bf04a.appspot.com",
+  messagingSenderId: "95966901521",
+  appId: "1:95966901521:web:2d0b8b20dbb1c356d688b0",
+  measurementId: "G-Z3LV16X6Y4"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const locationsRef = firebase.database().ref('locations');
+    const table = document.querySelector('table');
+
+    // Função para listar os endereços no Firebase e exibir na tabela
+    function listarEnderecos() {
+      locationsRef.once('value', (snapshot) => {
+        table.innerHTML = `
+          <tr>
+            <th>Nome</th>
+            <th>Endereço</th>
+            <th>Ações</th>
+          </tr>
+        `;
+        snapshot.forEach((childSnapshot) => {
+          const endereco = childSnapshot.val();
+          const row = `
+            <tr>
+              <td>${endereco.name}</td>
+              <td>${endereco.address}</td>
+              <td class="actions-buttons">
+                <button class="edit" onclick="editarEndereco('${childSnapshot.key}', '${endereco.name}', '${endereco.address}')">Editar</button>
+                <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
+                <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
+                <button onclick="excluirEndereco('${childSnapshot.key}')">Excluir</button>
+                </td>
+            </tr>
+          `;
+          table.insertAdjacentHTML('beforeend', row);
+        });
+      });
+    }
+
+    // Função para cadastrar um novo endereço
+    function cadastrarEndereco() {
+      const name = document.getElementById('name').value;
+      const address = document.getElementById('address').value;
+
+      if (name && address) {
+        const formattedName = name.replace(/\s+/g, '-'); // Substituir espaços por hifens
+        locationsRef.child(formattedName).set({
+          name: formattedName,
+          address
+        });
+        document.getElementById('name').value = '';
+        document.getElementById('address').value = '';
+        listarEnderecos();
+      } else {
+        alert('Por favor, preencha o nome e o endereço.');
+      }
+    }
+
+    // Função para excluir um endereço
+    function excluirEndereco(key) {
+      const confirmacao = window.confirm('Tem certeza que deseja excluir este endereço?');
+      if (confirmacao) {
+        locationsRef.child(key).remove();
+        listarEnderecos();
+      }
+    }
+
+    // Função para editar um endereço
+    function editarEndereco(key, name, address) {
+      const newName = prompt('Novo nome:', name);
+      const newAddress = prompt('Novo endereço:', address);
+      if (newName !== null && newAddress !== null) {
+        locationsRef.child(key).set({
+          name: newName,
+          address: newAddress
+        });
+        listarEnderecos();
+      }
+    }
+
+    // Função para navegar no Waze
+    function navegarNoWaze(address) {
+     // const wazeUrl = `https://www.waze.com/ul?ll=${encodeURIComponent(address)}&navigate=yes`;
+       const wazeUrl = ` https://waze.com/ul?q=${encodeURIComponent(address)}`;
+      window.open(wazeUrl, '_blank');
+    }
+
+    // Função para navegar no Google Maps
+    function navegarNoGoogleMaps(address) {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+      window.open(mapsUrl, '_blank');
+    }
+
+    // Inicializa a listagem de endereços ao carregar a página
+    listarEnderecos();
+  </script>
+</body>
+</html>
