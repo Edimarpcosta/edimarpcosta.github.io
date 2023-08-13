@@ -3,6 +3,7 @@
 <head>
   <title>Manutenção de Endereços</title>
   <style>
+    /* ... Your existing styles ... */
     body {
       font-family: Arial, sans-serif;
     }
@@ -60,12 +61,14 @@
     <h1>Manutenção de Endereços</h1>
     <input type="text" id="name" placeholder="Nome">
     <input type="text" id="address" placeholder="Endereço">
+    <input type="text" id="city" placeholder="Cidade"> <!-- Added the City field -->
     <button onclick="cadastrarEndereco()">Cadastrar</button>
     <button class="map-button" onclick="window.open('https://edimarpcosta.github.io/ameripan/cli/mobile')">Ver Mapa</button>
     <table>
       <tr>
         <th>Nome</th>
         <th>Endereço</th>
+        <th>Cidade</th> <!-- Added the City column header -->
         <th>Ações</th>
       </tr>
     </table>
@@ -74,8 +77,8 @@
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
   <script>
-    // O restante do seu código JavaScript
-    const firebaseConfig = {
+  // O restante do seu código JavaScript
+  const firebaseConfig = {
         apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
   authDomain: "redireciona-bf04a.firebaseapp.com",
   databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
@@ -88,57 +91,86 @@
 
     firebase.initializeApp(firebaseConfig);
 
-    const locationsRef = firebase.database().ref('locations');
+    const locationsRef = firebase.database().ref('locations2');
     const table = document.querySelector('table');
 
     // Função para listar os endereços no Firebase e exibir na tabela
     function listarEnderecos() {
-      locationsRef.once('value', (snapshot) => {
-        table.innerHTML = `
-          <tr>
-            <th>Nome</th>
-            <th>Endereço</th>
-            <th>Ações</th>
-          </tr>
-        `;
-        snapshot.forEach((childSnapshot) => {
-          const endereco = childSnapshot.val();
-          const row = `
-            <tr>
-              <td>${endereco.name}</td>
-              <td>${endereco.address}</td>
-              <td class="actions-buttons">
-                <button class="edit" onclick="editarEndereco('${childSnapshot.key}', '${endereco.name}', '${endereco.address}')">Editar</button>
-                <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
-                <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
-                <button onclick="excluirEndereco('${childSnapshot.key}')">Excluir</button>
-                </td>
-            </tr>
-          `;
-          table.insertAdjacentHTML('beforeend', row);
+  locationsRef.once('value', (snapshot) => {
+    const enderecos = [];
+    snapshot.forEach((childSnapshot) => {
+      const endereco = childSnapshot.val();
+      if (endereco.city) { // Verifica se o campo city está definido
+        const formattedCity = endereco.city
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .replace(/^(.)|\s(.)/g, ($1) => $1.toUpperCase());
+
+        enderecos.push({
+          key: childSnapshot.key,
+          name: endereco.name,
+          address: endereco.address,
+          city: formattedCity
         });
-      });
-    }
+      }
+    });
+
+    // Sort the enderecos array by city
+    enderecos.sort((a, b) => a.city.localeCompare(b.city));
+
+    table.innerHTML = `
+      <tr>
+        <th>Nome</th>
+        <th>Endereço</th>
+        <th>Cidade</th>
+        <th>Ações</th>
+      </tr>
+    `;
+    enderecos.forEach((endereco) => {
+      const row = `
+        <tr>
+          <td>${endereco.name}</td>
+          <td>${endereco.address}</td>
+          <td>${endereco.city}</td>
+          <td class="actions-buttons">
+            <button class="edit" onclick="editarEndereco('${endereco.key}', '${endereco.name}', '${endereco.address}')">Editar</button>
+            <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
+            <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
+            <button onclick="excluirEndereco('${endereco.key}')">Excluir</button>
+            </td>
+        </tr>
+      `;
+      table.insertAdjacentHTML('beforeend', row);
+    });
+  });
+}
+
+
+
 
     // Função para cadastrar um novo endereço
     function cadastrarEndereco() {
       const name = document.getElementById('name').value;
       const address = document.getElementById('address').value;
+      const city = document.getElementById('city').value; // Added city value
 
-      if (name && address) {
+      if (name && address && city) { // Check if city is also provided
         const formattedName = name.replace(/\s+/g, '-'); // Substituir espaços por hifens
         locationsRef.child(formattedName).set({
           name: formattedName,
-          address
+          address,
+          city // Add the city to the data being stored
         });
         document.getElementById('name').value = '';
         document.getElementById('address').value = '';
+        document.getElementById('city').value = ''; // Clear city input
         listarEnderecos();
       } else {
-        alert('Por favor, preencha o nome e o endereço.');
+        alert('Por favor, preencha o nome, endereço e cidade.');
       }
     }
 
+    // ... Your existing JavaScript code ...
     // Função para excluir um endereço
     function excluirEndereco(key) {
       const confirmacao = window.confirm('Tem certeza que deseja excluir este endereço?');
@@ -176,6 +208,7 @@
 
     // Inicializa a listagem de endereços ao carregar a página
     listarEnderecos();
+
   </script>
 </body>
 </html>
