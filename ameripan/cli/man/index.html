@@ -3,7 +3,7 @@
 <head>
   <title>Manutenção de Endereços</title>
   <style>
-    /* ... Your existing styles ... */
+    /* ... Seus estilos existentes ... */
     body {
       font-family: Arial, sans-serif;
     }
@@ -61,14 +61,14 @@
     <h1>Manutenção de Endereços</h1>
     <input type="text" id="name" placeholder="Nome">
     <input type="text" id="address" placeholder="Endereço" onblur="preencherCidade()">
-    <input type="text" id="city" placeholder="Cidade"> <!-- Added the City field -->
+    <input type="text" id="city" placeholder="Cidade">
     <button onclick="cadastrarEndereco()">Cadastrar</button>
     <button class="map-button" onclick="window.open('https://edimarpcosta.github.io/ameripan/cli/mobile')">Ver Mapa</button>
     <table>
       <tr>
         <th>Nome</th>
         <th>Endereço</th>
-        <th>Cidade</th> <!-- Added the City column header -->
+        <th>Cidade</th>
         <th>Ações</th>
       </tr>
     </table>
@@ -77,8 +77,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
   <script>
-  // O restante do seu código JavaScript
-  const firebaseConfig = {
+    const firebaseConfig = {
         apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
   authDomain: "redireciona-bf04a.firebaseapp.com",
   databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
@@ -91,76 +90,78 @@
 
     firebase.initializeApp(firebaseConfig);
 
+    const allowedCharacters = /^[a-zA-Z0-9\s\-_()]+$/;
+
     const locationsRef = firebase.database().ref('locations');
     const table = document.querySelector('table');
 
-    // Função para listar os endereços no Firebase e exibir na tabela
     function listarEnderecos() {
-  locationsRef.once('value', (snapshot) => {
-    const enderecos = [];
-    snapshot.forEach((childSnapshot) => {
-      const endereco = childSnapshot.val();
-      if (endereco.city) { // Verifica se o campo city está definido
-        const formattedCity = endereco.city
-          .toLowerCase()
-          .replace(/\s+/g, ' ')
-          .replace(/^(.)|\s(.)/g, ($1) => $1.toUpperCase());
+      locationsRef.once('value', (snapshot) => {
+        const enderecos = [];
+        snapshot.forEach((childSnapshot) => {
+          const endereco = childSnapshot.val();
+          if (endereco.city) {
+            const formattedCity = endereco.city.toLowerCase().replace(/\s+/g, ' ').replace(/^(.)|\s(.)/g, ($1) => $1.toUpperCase());
 
-        enderecos.push({
-          key: childSnapshot.key,
-          name: endereco.name,
-          address: endereco.address,
-          city: formattedCity
+            enderecos.push({
+              key: childSnapshot.key,
+              name: endereco.name,
+              address: endereco.address,
+              city: formattedCity
+            });
+          }
         });
-      }
-    });
 
-    // Sort the enderecos array by city
-    enderecos.sort((a, b) => a.city.localeCompare(b.city));
+        enderecos.sort((a, b) => a.city.localeCompare(b.city));
 
-    table.innerHTML = `
-      <tr>
-        <th>Nome</th>
-        <th>Endereço</th>
-        <th>Cidade</th>
-        <th>Ações</th>
-      </tr>
-    `;
-    enderecos.forEach((endereco) => {
-      const row = `
-        <tr>
-          <td>${endereco.name}</td>
-          <td>${endereco.address}</td>
-          <td>${endereco.city}</td>
-          <td class="actions-buttons">
-            <button class="edit" onclick="editarEndereco('${endereco.key}', '${endereco.name}', '${endereco.address}', '${endereco.city}')">Editar</button>
-            <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
-            <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
-            <button onclick="excluirEndereco('${endereco.key}')">Excluir</button>
-            </td>
-        </tr>
-      `;
-      table.insertAdjacentHTML('beforeend', row);
-    });
-  });
-}
+        table.innerHTML = `
+          <tr>
+            <th>Nome</th>
+            <th>Endereço</th>
+            <th>Cidade</th>
+            <th>Ações</th>
+          </tr>
+        `;
+        enderecos.forEach((endereco) => {
+          const row = `
+            <tr>
+              <td>${endereco.name}</td>
+              <td>${endereco.address}</td>
+              <td>${endereco.city}</td>
+              <td class="actions-buttons">
+                <button class="edit" onclick="editarEndereco('${endereco.key}', '${endereco.name}', '${endereco.address}', '${endereco.city}')">Editar</button>
+                <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
+                <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
+                <button onclick="excluirEndereco('${endereco.key}')">Excluir</button>
+              </td>
+            </tr>
+          `;
+          table.insertAdjacentHTML('beforeend', row);
+        });
+      });
+    }
 
-// Função para cadastrar um novo endereço
-function cadastrarEndereco() {
+    function cadastrarEndereco() {
   const name = document.getElementById('name').value;
   const address = document.getElementById('address').value;
-  const city = document.getElementById('city').value; // Added city value
+  const city = document.getElementById('city').value;
 
-  // Expressão regular para permitir apenas letras, números, espaços, hífens e underline
-  const allowedCharacters = /^[a-zA-Z0-9\s\-_]+$/;
+  const extractedNumber = extractNumberFromName(name);
 
   if (name && address && city && allowedCharacters.test(name)) {
-    const formattedName = name.replace(/\s+/g, ' '); // Substituir espaços por hifens
-    locationsRef.child(formattedName).set({
-      name: formattedName,
-      address,
-      city // Add the city to the data being stored
-    });
+    const existingName = verificarNumeroExistente(extractedNumber);
+    if (existingName) {
+      alert(`Número já cadastrado em outro endereço: ${existingName}`);
+      return;
+    }
+
+    const novoEndereco = {
+      name: name,
+      address: address,
+      city: city
+    };
+
+    locationsRef.push(novoEndereco);
     document.getElementById('name').value = '';
     document.getElementById('address').value = '';
     document.getElementById('city').value = ''; // Clear city input
@@ -172,11 +173,59 @@ function cadastrarEndereco() {
   }
 }
 
-// ... Seu código posterior ...
+    function verificarEInserirEndereco(name, address, city, extractedNumber) {
+      const existingName = verificarNumeroExistente(extractedNumber);
 
+      if (existingName && existingName === name) {
+        alert(`Número já cadastrado no endereço: ${existingName}`);
+        return;
+      }
 
-    // ... Your existing JavaScript code ...
-    // Função para excluir um endereço
+      const novoEndereco = {
+        name: name,
+        address: address,
+        city: city
+      };
+
+      locationsRef.push(novoEndereco);
+      listarEnderecos();
+    }
+
+    function verificarNumeroExistente(number) {
+      const rows = table.querySelectorAll('tr:not(:first-child)');
+      for (const row of rows) {
+        const nameColumn = row.querySelector('td:nth-child(1)');
+        const name = nameColumn.textContent;
+
+        const extractedNumber = extractNumberFromName(name);
+
+        if (extractedNumber === number) {
+          return name;
+        }
+      }
+      return null;
+    }
+
+    function extractNumberFromName(name) {
+      const matches = name.match(/\d+/);
+      return matches ? matches[0] : null;
+    }
+
+    function editarEndereco(key, name, address, city) {
+      const newName = prompt('Novo nome:', name);
+      const newAddress = prompt('Novo endereço:', address);
+      const newCity = prompt('Nova cidade:', city);
+
+      if (newName !== null && newAddress !== null && newCity !== null) {
+        locationsRef.child(key).set({
+          name: newName,
+          address: newAddress,
+          city: newCity
+        });
+        listarEnderecos();
+      }
+    }
+
     function excluirEndereco(key) {
       const confirmacao = window.confirm('Tem certeza que deseja excluir este endereço?');
       if (confirmacao) {
@@ -185,57 +234,30 @@ function cadastrarEndereco() {
       }
     }
 
-   // ... Seu código anterior ...
-
-// Função para editar um endereço
-function editarEndereco(key, name, address, city) {
-  const newName = prompt('Novo nome:', name);
-  const newAddress = prompt('Novo endereço:', address);
-  const newCity = prompt('Nova cidade:', city);
-  
-  if (newName !== null && newAddress !== null && newCity !== null) {
-    locationsRef.child(key).set({
-      name: newName,
-      address: newAddress,
-      city: newCity
-    });
-    listarEnderecos();
-  }
-}
-
-// ... Seu código posterior ...
-
-
-    // Função para navegar no Waze
     function navegarNoWaze(address) {
-     // const wazeUrl = `https://www.waze.com/ul?ll=${encodeURIComponent(address)}&navigate=yes`;
-       const wazeUrl = ` https://waze.com/ul?q=${encodeURIComponent(address)}`;
+      const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
       window.open(wazeUrl, '_blank');
     }
 
-    // Função para navegar no Google Maps
     function navegarNoGoogleMaps(address) {
       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
       window.open(mapsUrl, '_blank');
     }
-  // Função para preencher a cidade automaticamente com base no endereço
-function preencherCidade() {
-  const addressInput = document.getElementById('address');
-  const cityInput = document.getElementById('city');
 
-  const addressValue = addressInput.value;
-  const lastCommaIndex = addressValue.lastIndexOf(',');
-  const secondLastCommaIndex = addressValue.lastIndexOf(',', lastCommaIndex - 1);
+    function preencherCidade() {
+      const addressInput = document.getElementById('address');
+      const cityInput = document.getElementById('city');
 
-  if (secondLastCommaIndex !== -1) {
-    const cityAndState = addressValue.substring(secondLastCommaIndex + 1).trim();
-    cityInput.value = cityAndState;
-  }
-}
+      const addressValue = addressInput.value;
+      const lastCommaIndex = addressValue.lastIndexOf(',');
+      const secondLastCommaIndex = addressValue.lastIndexOf(',', lastCommaIndex - 1);
 
+      if (secondLastCommaIndex !== -1) {
+        const cityAndState = addressValue.substring(secondLastCommaIndex + 1).trim();
+        cityInput.value = cityAndState;
+      }
+    }
 
-
-    // Inicializa a listagem de endereços ao carregar a página
     listarEnderecos();
 
   </script>
