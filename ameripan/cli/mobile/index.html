@@ -39,6 +39,8 @@
   <!-- Inclua "libraries=places" no link de carregamento da API do Google Maps -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc&libraries=places&callback=initMap" async defer></script>
   <script>
+    var infoWindowsHidden = false;
+
     var map;
     var infowindows = [];
     var markers = []; // Lista de marcadores
@@ -94,7 +96,8 @@
               });
 
               var infowindow = new google.maps.InfoWindow({
-                content: location.name + "<br>" + location.address + "<br><button onclick='openAddressInBrowser(\"" + location.address + "\")'>Navegar</button>"
+                content: location.name + "<br>" + location.address + "<br><button onclick='openAddressInBrowser(\"" + location.address + "\")'>Navegar</button>",
+                marker: marker // Armazena a referência ao marcador
               });
 
               marker.infowindow = infowindow; // Armazena a referência ao infowindow no marcador
@@ -130,9 +133,15 @@
       if (markerIndex === -1) {
         selectedMarkers.push(marker);
         marker.setAnimation(google.maps.Animation.BOUNCE);
+        if (infoWindowsHidden) {
+          infowindow.open(map, marker);
+        }
       } else {
         selectedMarkers.splice(markerIndex, 1);
         marker.setAnimation(null);
+        if (infoWindowsHidden) {
+          infowindow.close();
+        }
       }
     }
 
@@ -195,9 +204,20 @@
     }
 
     function toggleInfoWindowsVisibility() {
-      infowindows.forEach((infowindow) => {
-        infowindow.setMap(infowindow.getMap() ? null : map);
-      });
+      if (!infoWindowsHidden) {
+        infowindows.forEach((infowindow) => {
+          infowindow.close(); // Fechar as InfoWindows
+        });
+        infoWindowsHidden = true;
+      } else {
+        infowindows.forEach((infowindow) => {
+          var marker = infowindow.marker;
+          var position = marker.getPosition();
+          marker.setPosition(new google.maps.LatLng(position.lat() + 0.000001, position.lng())); // Movendo o marcador ligeiramente para redesenhar
+          infowindow.open(map, marker); // Abrir a InfoWindow novamente
+        });
+        infoWindowsHidden = false;
+      }
     }
   </script>
 
