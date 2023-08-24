@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscar Dados CNPJ</title>
+    <style>
+        /* Estilos gerais */
+        body {
+            font-family: 'Arial', sans-serif;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        /* Estilos para o campo de entrada e botão */
+        #cnpjInput, button {
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Estilos para a tabela */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+
+        /* Estilos responsivos */
+        @media (max-width: 600px) {
+            #cnpjInput, button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Campo de entrada para o CNPJ e botão -->
+<input type="text" id="cnpjInput" placeholder="Insira o CNPJ">
+<button onclick="buscarCNPJ()">Buscar</button>
+
+<!-- Tabela para exibir os dados -->
+<table id="cnpjTable">
+    <thead>
+        <tr>
+            <th>Chave</th>
+            <th>Valor</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Os dados serão inseridos aqui -->
+    </tbody>
+</table>
+
+<script>
+// ... [restante do código JavaScript]
+function buscarCNPJ() {
+    var cnpj = document.getElementById('cnpjInput').value;
+    cnpj = formatCNPJ(cnpj); // Formata o CNPJ
+    getDadosCNPJ(cnpj);
+}
+
+function formatCNPJ(cnpj) {
+    // Transforma em string, garante que todos os caracteres sejam números e preenche com zeros à esquerda até ter 14 dígitos.
+    return String(cnpj).replace(/\D/g, '').padStart(14, '0');
+}
+
+function getDadosCNPJ(cnpj) {
+    var url = "https://brasilapi.com.br/api/cnpj/v1/" + cnpj;
+
+    // Faz a requisição para a API
+    fetch(url, {
+        method: 'GET',
+    })
+    .then(response => {
+        if (response.status === 200) {
+            return response.json();
+        } else {
+            throw new Error("Erro ao buscar CNPJ");
+        }
+    })
+    .then(data => {
+        var result = [];
+        for (var key in data) {
+            if (data.hasOwnProperty(key)) {
+                if (key === "qsa" || key === "cnaes_secundarios") {
+                    for (var i = 0; i < data[key].length; i++) {
+                        for (var subKey in data[key][i]) {
+                            if (data[key][i].hasOwnProperty(subKey)) {
+                                result.push([key + "_" + subKey + "_" + (i+1), data[key][i][subKey]]);
+                            }
+                        }
+                    }
+                } else {
+                    result.push([key, data[key]]);
+                }
+            }
+        }
+        exibirDados(result);
+    })
+    .catch(error => {
+        console.error([["Erro", error.toString()]]);
+        exibirDados([["Erro", error.toString()]]);
+    });
+}
+
+function exibirDados(dados) {
+    var tabela = document.getElementById('cnpjTable').getElementsByTagName('tbody')[0];
+    tabela.innerHTML = ''; // Limpa a tabela
+
+    for (var i = 0; i < dados.length; i++) {
+        var novaLinha = tabela.insertRow(tabela.length);
+        for (var j = 0; j < dados[i].length; j++) {
+            var cell = novaLinha.insertCell(j);
+            cell.innerHTML = dados[i][j];
+        }
+    }
+}
+</script>
+
+</body>
+</html>
