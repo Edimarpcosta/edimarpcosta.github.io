@@ -1,1 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrinho de Compras</title>
+    <style> body {
+        font-family: 'Arial', sans-serif;
+        padding: 20px;
+        background-color: #f5f5f5;
+    }
 
+    .container {
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 20px;
+    }
+
+    @media (min-width: 768px) {
+        .container {
+            flex-direction: row;
+            justify-content: space-between;
+        }
+    }
+
+    .products,
+    .cart {
+        padding: 20px;
+        border-radius: 5px;
+        background-color: #ffffff;
+        box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    ul {
+        list-style-type: none;
+        padding: 0;
+    }
+
+    li {
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    li:last-child {
+        border-bottom: none;
+    }
+
+    button {
+        padding: 10px 15px;
+        background-color: #007BFF;
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    button:hover {
+        background-color: #0056b3;
+    }
+
+    input[type="text"] {
+        padding: 10px;
+        margin-right: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+        border-color: #007BFF;
+    }
+    </style>
+</head>
+<body>
+    <input type="text" id="filter" placeholder="Filtrar por código ou descrição">
+    <input type="text" id="codCliente" placeholder="Digite o CodCliente">
+    <button onclick="loadData()">Carregar Dados</button>
+    <!-- Campos para inserção manual do produto -->
+    <!-- <input type="text" id="manualProductCode" placeholder="Código do Produto"> -->
+
+    <input type="text" id="manualProductDescription" placeholder="Descrição do Produto">
+    <button onclick="addManualProduct()">Adicionar Produto Manualmente</button>
+
+    <div class="container">
+        <div class="products">
+            <h2>PRODUTOS MAIS COMPRADOS POR VOCÊ</h2>
+            <ul id="product-list"></ul>
+        </div>
+        <div class="cart">
+            <h2>Seu Carrinho</h2>
+            <button onclick="checkout()">Enviar WhatsApp</button>
+            <ul id="cart-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const spreadsheetId = "1Y8-N0EBSVE3cUTUVj4_NiXNYJzdPRcFyzPJqTQ3heVs";
+        const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc";
+        const cart = [];
+        let allProducts = [];
+
+        function addManualProduct() {
+    const manualDescription = document.getElementById('manualProductDescription').value.trim();
+
+    if (manualDescription) {
+        // Cria um código a partir da descrição (isso é apenas uma solução temporária)
+        const manualCode = manualDescription.replace(/[^a-zA-Z0-9]/g, "").substr(0, 5).toUpperCase();
+
+        const existingProduct = cart.find(p => p.code === manualCode);
+        if (existingProduct) {
+            existingProduct.quantity += 1;
+        } else {
+            const product = {
+                code: manualCode,
+                description: manualDescription,
+                quantity: 1
+            };
+            cart.push(product);
+        }
+        updateCart();
+    } else {
+        alert("Por favor, insira a descrição do produto.");
+    }
+}
+
+
+        function getURLParameter(name) {
+            return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+        }
+
+        function loadData() {
+            const range = document.getElementById('codCliente').value;
+            listData(range);
+        }
+
+        function filterProducts() {
+            const filterValue = document.getElementById('filter').value.toLowerCase();
+            const filteredProducts = allProducts.filter(p => 
+                p.code.toLowerCase().includes(filterValue) ||
+                p.description.toLowerCase().includes(filterValue)
+            );
+
+            document.getElementById('product-list').innerHTML = filteredProducts.map(p => 
+                `<li data-code="${p.code}">${p.code} - ${p.description} <button onclick="addToCart('${p.code}')">+</button></li>`
+            ).join('');
+        }
+
+        function listData(range) {
+            var url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Erro na solicitação à API do Google Sheets.");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    allProducts = data.values.map(row => ({
+                        code: row[0], 
+                        description: row.slice(1).join(' ')
+                    }));
+                    filterProducts();
+                })
+                .catch(error => {
+                    console.error("Erro ao obter dados:", error);
+                });
+        }
+
+        function addToCart(code) {
+    const productEl = document.querySelector(`[data-code="${code}"]`);
+    const existingProduct = cart.find(p => p.code === code);
+
+    if (existingProduct) {
+        existingProduct.quantity += 1;
+    } else {
+        if (productEl) {
+            const fullDescription = productEl.textContent.trim().split('+')[0].trim().split(' - ').slice(1).join(' - ');
+            const product = {
+                code: productEl.getAttribute('data-code'),
+                description: fullDescription,
+                quantity: 1
+            };
+            cart.push(product);
+        } else {
+            alert("Produto não encontrado.");
+        }
+    }
+    updateCart();
+}
+
+
+        function updateCart() {
+    document.getElementById('cart-list').innerHTML = cart.map(p => 
+        `<li>
+            ${p.quantity}x ${p.code} - ${p.description} 
+            <button onclick="subtractFromCart('${p.code}')">-</button>
+            <button onclick="addToCart('${p.code}')">+</button>
+        </li>`
+    ).join('');
+}
+
+function subtractFromCart(code) {
+    const productInCart = cart.find(p => p.code === code);
+    if (productInCart) {
+        productInCart.quantity -= 1;
+        if (productInCart.quantity <= 0) {
+            const index = cart.indexOf(productInCart);
+            if (index > -1) {
+                cart.splice(index, 1);
+            }
+        }
+        updateCart();
+    }
+}
+
+
+        function checkout() {
+            const message = cart.map(p => 
+                `${p.quantity} x ${p.code} - ${p.description}`
+            ).join('%0A');
+
+            window.open(`https://wa.me/5519987121005?text=Bom%20dia%20Edimar,%20segue%20pedido:%0A${message}`);
+        }
+
+        document.getElementById('filter').addEventListener('input', filterProducts);
+
+        const codFromURL = getURLParameter('cod');
+        if (codFromURL) {
+            document.getElementById('codCliente').value = codFromURL;
+            loadData();
+        }
+    </script>
+</body>
+</html>
