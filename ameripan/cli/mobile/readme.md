@@ -1,4 +1,3 @@
-README.md
 Mapa com Marcadores
 Este projeto fornece uma interface de usuário para visualizar um mapa com marcadores e realizar várias operações relacionadas a esses marcadores, como traçar rotas, pesquisar marcadores específicos e visualizar informações sobre locais específicos.
 
