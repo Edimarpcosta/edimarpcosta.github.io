@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Produtos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .categoria {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            border-bottom: 2px solid #333;
+        }
+        .produto {
+            display: inline-block;
+            width: 200px;
+            margin: 10px;
+            text-align: center;
+        }
+        img {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            cursor: pointer;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        function zoomImage(imgSrc) {
+            let overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0,0,0,0.7)';
+            overlay.style.display = 'flex';
+            overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center';
+            overlay.style.zIndex = '1000';
+            overlay.onclick = function() {
+                document.body.removeChild(overlay);
+            }
+
+            let zoomedImg = document.createElement('img');
+            zoomedImg.src = imgSrc;
+            zoomedImg.style.width = '90%';
+            zoomedImg.style.height = '90%';
+            zoomedImg.style.objectFit = 'contain';
+
+            overlay.appendChild(zoomedImg);
+            document.body.appendChild(overlay);
+        }
+
+        function loadCSV() {
+            Papa.parse('ameripan.csv', {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    let data = results.data;
+                    let ordem_categorias = ["sorveteria", "acaiteria", "guloseimas"];
+                    let categorias_unicas = [...new Set(data.map(item => item.categoria))].filter(cat => !ordem_categorias.includes(cat));
+                    categorias_unicas = ordem_categorias.concat(categorias_unicas);
+
+                    categorias_unicas.forEach(categoria => {
+                        let container = document.createElement('div');
+                        container.innerHTML = `<div class='categoria'>${categoria.charAt(0).toUpperCase() + categoria.slice(1)}</div>`;
+                        let produtos_categoria = data.filter(item => item.categoria === categoria);
+                        produtos_categoria.forEach(produto => {
+                            container.innerHTML += `
+                                <div class="produto">
+                                    <img src="${produto.img}" alt="${produto.marca}" onclick="zoomImage('${produto.img}')">
+                                    <div>${produto.sku}</div>
+                                    <div>${produto.marca}</div>
+                                </div>
+                            `;
+                        });
+                        document.body.appendChild(container);
+                    });
+                }
+            });
+        }
+
+        window.onload = loadCSV;
+    </script>
+</head>
+<body>
+</body>
+</html>
