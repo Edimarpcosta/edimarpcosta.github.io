@@ -1,306 +1,319 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>Manutenção de Endereços</title>
-  <style>
-    /* ... Seus estilos existentes ... */
-    body {
-      font-family: Arial, sans-serif;
-    }
-    .container {
-      width: 80%;
-      margin: 0 auto;
-      padding: 20px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 8px;
-      text-align: left;
-      border-bottom: 1px solid #ccc;
-    }
-    th {
-      background-color: #f2f2f2;
-    }
-    button {
-      background-color: #e6bc02;
-      color: #fff;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-right: 5px; /* Espaçamento entre os botões */
-    }
-    button.edit {
-      background-color: #3498db;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 8px;
-    }
-    
-    /* Alinha os botões horizontalmente */
-    .actions-buttons {
-      display: flex;
-      align-items: center;
-    }
-
-    /* Alinha o botão "Ver Mapa" à direita */
-    .map-button {
-      margin-left: auto;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Manutenção de Endereços</h1>
-    <input type="text" id="name" placeholder="Nome">
-    <input type="text" id="address" placeholder="Endereço" onblur="preencherCidade()">
-    <input type="text" id="city" placeholder="Cidade">
-    <button onclick="cadastrarEndereco()">Cadastrar</button>
-    <button class="map-button" onclick="window.open('https://edimarpcosta.github.io/ameripan/cli/mobile')">Ver Mapa</button>
-    <button onclick="exportarJSON()">Exportar JSON</button>
-    <button onclick="exportarCSV()">Exportar CSV</button>
-    <table>
-      <tr>
-        <th>Nome</th>
-        <th>Endereço</th>
-        <th>Cidade</th>
-        <th>Ações</th>
-      </tr>
-    </table>
-  </div>
-
-  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
-  <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
-  authDomain: "redireciona-bf04a.firebaseapp.com",
-  databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
-  projectId: "redireciona-bf04a",
-  storageBucket: "redireciona-bf04a.appspot.com",
-  messagingSenderId: "95966901521",
-  appId: "1:95966901521:web:2d0b8b20dbb1c356d688b0",
-  measurementId: "G-Z3LV16X6Y4"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-
-    const allowedCharacters = /^[a-zA-Z0-9\s\-_()]+$/;
-
-    const locationsRef = firebase.database().ref('locations');
-    const table = document.querySelector('table');
-
-    function listarEnderecos() {
-      locationsRef.once('value', (snapshot) => {
-        const enderecos = [];
-        snapshot.forEach((childSnapshot) => {
-          const endereco = childSnapshot.val();
-          if (endereco.city) {
-            const formattedCity = endereco.city.toLowerCase().replace(/\s+/g, ' ').replace(/^(.)|\s(.)/g, ($1) => $1.toUpperCase());
-
-            enderecos.push({
-              key: childSnapshot.key,
-              name: endereco.name,
-              address: endereco.address,
-              city: formattedCity
-            });
-          }
-        });
-
-        enderecos.sort((a, b) => a.city.localeCompare(b.city));
-
-        table.innerHTML = `
-          <tr>
-            <th>Nome</th>
-            <th>Endereço</th>
-            <th>Cidade</th>
-            <th>Ações</th>
-          </tr>
-        `;
-        enderecos.forEach((endereco) => {
-          const row = `
-            <tr>
-              <td>${endereco.name}</td>
-              <td>${endereco.address}</td>
-              <td>${endereco.city}</td>
-              <td class="actions-buttons">
-                <button class="edit" onclick="editarEndereco('${endereco.key}', '${endereco.name}', '${endereco.address}', '${endereco.city}')">Editar</button>
-                <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
-                <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
-                <button onclick="excluirEndereco('${endereco.key}')">Excluir</button>
-              </td>
-            </tr>
-          `;
-          table.insertAdjacentHTML('beforeend', row);
-        });
-      });
-    }
-
-    function cadastrarEndereco() {
-  const name = document.getElementById('name').value;
-  const address = document.getElementById('address').value;
-  const city = document.getElementById('city').value;
-
-  const extractedNumber = extractNumberFromName(name);
-
-  if (name && address && city && allowedCharacters.test(name)) {
-    const existingName = verificarNumeroExistente(extractedNumber);
-    if (existingName) {
-      alert(`Número já cadastrado em outro endereço: ${existingName}`);
-      return;
-    }
-
-    const novoEndereco = {
-      name: name,
-      address: address,
-      city: city
-    };
-
-    locationsRef.push(novoEndereco);
-    document.getElementById('name').value = '';
-    document.getElementById('address').value = '';
-    document.getElementById('city').value = ''; // Clear city input
-    listarEnderecos();
-  } else if (!allowedCharacters.test(name)) {
-    alert('O campo "Nome" só permite letras, números, espaços, hífens e underline.');
-  } else {
-    alert('Por favor, preencha o nome, endereço e cidade.');
-  }
-}
-
-    function verificarEInserirEndereco(name, address, city, extractedNumber) {
-      const existingName = verificarNumeroExistente(extractedNumber);
-
-      if (existingName && existingName === name) {
-        alert(`Número já cadastrado no endereço: ${existingName}`);
-        return;
-      }
-
-      const novoEndereco = {
-        name: name,
-        address: address,
-        city: city
-      };
-
-      locationsRef.push(novoEndereco);
-      listarEnderecos();
-    }
-
-    function verificarNumeroExistente(number) {
-      const rows = table.querySelectorAll('tr:not(:first-child)');
-      for (const row of rows) {
-        const nameColumn = row.querySelector('td:nth-child(1)');
-        const name = nameColumn.textContent;
-
-        const extractedNumber = extractNumberFromName(name);
-
-        if (extractedNumber === number) {
-          return name;
+    <title>Manutenção de Endereços</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
         }
-      }
-      return null;
-    }
 
-    function extractNumberFromName(name) {
-      const matches = name.match(/\d+/);
-      return matches ? matches[0] : null;
-    }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
 
-    function editarEndereco(key, name, address, city) {
-      const newName = prompt('Novo nome:', name);
-      const newAddress = prompt('Novo endereço:', address);
-      const newCity = prompt('Nova cidade:', city);
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
 
-      if (newName !== null && newAddress !== null && newCity !== null) {
-        locationsRef.child(key).set({
-          name: newName,
-          address: newAddress,
-          city: newCity
-        });
-        listarEnderecos();
-      }
-    }
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ccc;
+        }
 
-    function excluirEndereco(key) {
-      const confirmacao = window.confirm('Tem certeza que deseja excluir este endereço?');
-      if (confirmacao) {
-        locationsRef.child(key).remove();
-        listarEnderecos();
-      }
-    }
+        th {
+            background-color: #f2f2f2;
+        }
 
-    function navegarNoWaze(address) {
-      const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
-      window.open(wazeUrl, '_blank');
-    }
+        button {
+            background-color: #e6bc02;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
 
-    function navegarNoGoogleMaps(address) {
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-      window.open(mapsUrl, '_blank');
-    }
+        button.edit {
+            background-color: #3498db;
+        }
 
-    function preencherCidade() {
-      const addressInput = document.getElementById('address');
-      const cityInput = document.getElementById('city');
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+        }
 
-      const addressValue = addressInput.value;
-      const lastCommaIndex = addressValue.lastIndexOf(',');
-      const secondLastCommaIndex = addressValue.lastIndexOf(',', lastCommaIndex - 1);
+        .actions-buttons {
+            display: flex;
+            align-items: center;
+        }
 
-      if (secondLastCommaIndex !== -1) {
-        const cityAndState = addressValue.substring(secondLastCommaIndex + 1).trim();
-        cityInput.value = cityAndState;
-      }
-    }
+        .map-button {
+            margin-left: auto;
+        }
+    </style>
+</head>
 
-    function exportarJSON() {
-      locationsRef.once('value', (snapshot) => {
-        const enderecos = {};
-        snapshot.forEach((childSnapshot) => {
-          const endereco = childSnapshot.val();
-          enderecos[endereco.name] = {
-            name: endereco.name,
-            address: endereco.address,
-            city: endereco.city
-          };
-        });
-        const json = JSON.stringify(enderecos, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'enderecos.json';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-    }
+<body>
+    <div class="container">
+        <h1>Manutenção de Endereços</h1>
+        <input type="text" id="name" placeholder="Nome">
+        <input type="text" id="address" placeholder="Endereço" onblur="preencherCidade()">
+        <input type="text" id="city" placeholder="Cidade">
+        <button onclick="cadastrarEndereco()">Cadastrar</button>
+        <button class="map-button" onclick="window.open('https://edimarpcosta.github.io/ameripan/cli/mobile')">Ver
+            Mapa</button>
+        <button onclick="exportarJSON()">Exportar JSON</button>
+        <button onclick="exportarCSV()">Exportar CSV</button>
+        <input type="text" id="search" placeholder="Pesquisar cliente..." oninput="pesquisarCliente()">
 
-    function exportarCSV() {
-      locationsRef.once('value', (snapshot) => {
-        let csv = 'Nome;Endereço;Cidade\n';
-        snapshot.forEach((childSnapshot) => {
-          const endereco = childSnapshot.val();
-          csv += `${endereco.name};${endereco.address};${endereco.city}\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'enderecos.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-    }
+        <table>
+            <tr>
+                <th>Nome</th>
+                <th>Endereço</th>
+                <th>Cidade</th>
+                <th>Ações</th>
+            </tr>
+        </table>
+    </div>
 
-    listarEnderecos();
+    <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAdUfTSjOesN3a_7ajFa1BAJjIass9h6L0",
+            authDomain: "redireciona-bf04a.firebaseapp.com",
+            databaseURL: "https://redireciona-bf04a-default-rtdb.firebaseio.com",
+            projectId: "redireciona-bf04a",
+            storageBucket: "redireciona-bf04a.appspot.com",
+            messagingSenderId: "95966901521",
+            appId: "1:95966901521:web:2d0b8b20dbb1c356d688b0",
+            measurementId: "G-Z3LV16X6Y4"
+        };
 
-  </script>
+        firebase.initializeApp(firebaseConfig);
+
+        const allowedCharacters = /^[a-zA-Z0-9\s\-_()]+$/;
+        const locationsRef = firebase.database().ref('locations');
+        const table = document.querySelector('table');
+
+        function listarEnderecos(searchTerm = '') {
+            locationsRef.once('value', (snapshot) => {
+                const enderecos = [];
+                snapshot.forEach((childSnapshot) => {
+                    const endereco = childSnapshot.val();
+                    if (endereco.city && (!searchTerm || endereco.name.toLowerCase().includes(searchTerm))) {
+                        const formattedCity = endereco.city.toLowerCase().replace(/\s+/g, ' ').replace(/^(.)|\s(.)/g, ($1) => $1.toUpperCase());
+
+                        enderecos.push({
+                            key: childSnapshot.key,
+                            name: endereco.name,
+                            address: endereco.address,
+                            city: formattedCity
+                        });
+                    }
+                });
+
+                table.innerHTML = `
+                <tr>
+                    <th>Nome</th>
+                    <th>Endereço</th>
+                    <th>Cidade</th>
+                    <th>Ações</th>
+                </tr>
+            `;
+
+                enderecos.forEach((endereco) => {
+                    const row = `
+                    <tr>
+                        <td>${endereco.name}</td>
+                        <td>${endereco.address}</td>
+                        <td>${endereco.city}</td>
+                        <td class="actions-buttons">
+                            <button class="edit" onclick="editarEndereco('${endereco.key}', '${endereco.name}', '${endereco.address}', '${endereco.city}')">Editar</button>
+                            <button onclick="navegarNoWaze('${endereco.address}')">Waze</button>
+                            <button onclick="navegarNoGoogleMaps('${endereco.address}')">Maps</button>
+                            <button onclick="excluirEndereco('${endereco.key}')">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+                    table.insertAdjacentHTML('beforeend', row);
+                });
+            });
+        }
+
+        function pesquisarCliente() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            listarEnderecos(searchTerm);
+        }
+
+        function cadastrarEndereco() {
+            const name = document.getElementById('name').value;
+            const address = document.getElementById('address').value;
+            const city = document.getElementById('city').value;
+
+            const extractedNumber = extractNumberFromName(name);
+
+            if (name && address && city && allowedCharacters.test(name)) {
+                const existingName = verificarNumeroExistente(extractedNumber);
+                if (existingName) {
+                    alert(`Número já cadastrado em outro endereço: ${existingName}`);
+                    return;
+                }
+
+                const novoEndereco = {
+                    name: name,
+                    address: address,
+                    city: city
+                };
+
+                locationsRef.push(novoEndereco);
+                document.getElementById('name').value = '';
+                document.getElementById('address').value = '';
+                document.getElementById('city').value = ''; // Clear city input
+                listarEnderecos();
+            } else if (!allowedCharacters.test(name)) {
+                alert('O campo "Nome" só permite letras, números, espaços, hífens e underline.');
+            } else {
+                alert('Por favor, preencha o nome, endereço e cidade.');
+            }
+        }
+
+        function verificarEInserirEndereco(name, address, city, extractedNumber) {
+            const existingName = verificarNumeroExistente(extractedNumber);
+
+            if (existingName && existingName === name) {
+                alert(`Número já cadastrado no endereço: ${existingName}`);
+                return;
+            }
+
+            const novoEndereco = {
+                name: name,
+                address: address,
+                city: city
+            };
+
+            locationsRef.push(novoEndereco);
+            listarEnderecos();
+        }
+
+        function verificarNumeroExistente(number) {
+            const rows = table.querySelectorAll('tr:not(:first-child)');
+            for (const row of rows) {
+                const nameColumn = row.querySelector('td:nth-child(1)');
+                const name = nameColumn.textContent;
+
+                const extractedNumber = extractNumberFromName(name);
+
+                if (extractedNumber === number) {
+                    return name;
+                }
+            }
+            return null;
+        }
+
+        function extractNumberFromName(name) {
+            const matches = name.match(/\d+/);
+            return matches ? matches[0] : null;
+        }
+
+        function editarEndereco(key, name, address, city) {
+            const newName = prompt('Novo nome:', name);
+            const newAddress = prompt('Novo endereço:', address);
+            const newCity = prompt('Nova cidade:', city);
+
+            if (newName !== null && newAddress !== null && newCity !== null) {
+                locationsRef.child(key).set({
+                    name: newName,
+                    address: newAddress,
+                    city: newCity
+                });
+                listarEnderecos();
+            }
+        }
+
+        function excluirEndereco(key) {
+            const confirmacao = window.confirm('Tem certeza que deseja excluir este endereço?');
+            if (confirmacao) {
+                locationsRef.child(key).remove();
+                listarEnderecos();
+            }
+        }
+
+        function navegarNoWaze(address) {
+            const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
+            window.open(wazeUrl, '_blank');
+        }
+
+        function navegarNoGoogleMaps(address) {
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+            window.open(mapsUrl, '_blank');
+        }
+
+        function preencherCidade() {
+            const addressInput = document.getElementById('address');
+            const cityInput = document.getElementById('city');
+
+            const addressValue = addressInput.value;
+            const lastCommaIndex = addressValue.lastIndexOf(',');
+            const secondLastCommaIndex = addressValue.lastIndexOf(',', lastCommaIndex - 1);
+
+            if (secondLastCommaIndex !== -1) {
+                const cityAndState = addressValue.substring(secondLastCommaIndex + 1).trim();
+                cityInput.value = cityAndState;
+            }
+        }
+
+        function exportarJSON() {
+            locationsRef.once('value', (snapshot) => {
+                const enderecos = {};
+                snapshot.forEach((childSnapshot) => {
+                    const endereco = childSnapshot.val();
+                    enderecos[endereco.name] = {
+                        name: endereco.name,
+                        address: endereco.address,
+                        city: endereco.city
+                    };
+                });
+                const json = JSON.stringify(enderecos, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'enderecos.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        function exportarCSV() {
+            locationsRef.once('value', (snapshot) => {
+                let csv = 'Nome;Endereço;Cidade\n';
+                snapshot.forEach((childSnapshot) => {
+                    const endereco = childSnapshot.val();
+                    csv += `${endereco.name};${endereco.address};${endereco.city}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'enderecos.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        listarEnderecos(); // Chama a função listarEnderecos quando a página é carregada
+
+    </script>
 </body>
+
 </html>
