@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<html>
+
 <head>
     <title>Mapa com Marcadores</title>
     <style>
@@ -12,6 +12,7 @@
             margin: 0;
             padding: 0;
         }
+
         /* Estilo para os botões */
         button {
             display: block;
@@ -24,6 +25,7 @@
             cursor: pointer;
             border-radius: 8px;
         }
+
         /* Ajustes para telas menores */
         @media screen and (max-width: 600px) {
             button {
@@ -31,6 +33,7 @@
                 font-size: 14px;
             }
         }
+
         /* Estilos para organizar os botões em layout de colunas */
         .button-container {
             display: flex;
@@ -38,6 +41,7 @@
             align-items: center;
             margin-top: 10px;
         }
+
         .button-row {
             display: flex;
             justify-content: space-between;
@@ -45,8 +49,9 @@
         }
     </style>
 </head>
+
 <body>
-    <div id="map"></div>
+        <div id="map"></div>
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
     <!-- Inclua "libraries=places" no link de carregamento da API do Google Maps -->
@@ -62,6 +67,19 @@
         var selectedMarkers = [];
         var directionsRenderer;
         var locationsRef;
+        var lastPosition = null;
+        var watchId;
+
+
+        var navigationIcon = {
+            path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+            scale: 5,
+            fillColor: "#0000FF",
+            fillOpacity: 0.8,
+            strokeWeight: 2,
+            rotation: 0 // inicialmente definido como 0
+        };
+
         function initMap() {
             var geocoder = new google.maps.Geocoder();
             map = new google.maps.Map(document.getElementById('map'), {
@@ -214,6 +232,7 @@
         //112255
         function showMyLocation() {
             if (navigator.geolocation) {
+                // Primeiro, obtenha a posição atual
                 navigator.geolocation.getCurrentPosition(function (position) {
                     var myLocation = {
                         lat: position.coords.latitude,
@@ -221,13 +240,49 @@
                     };
                     myLocationMarker.setPosition(myLocation);
                     map.setCenter(myLocation);
-                    map.setZoom(14);
+                    map.setZoom(16);
                     var infowindow = new google.maps.InfoWindow({
                         content: 'Meu Local'
                     });
                     myLocationMarker.addListener('click', function () {
                         infowindow.open(map, myLocationMarker);
                     });
+
+                    // Adiciona animação ao marcador
+                    myLocationMarker.setAnimation(google.maps.Animation.BOUNCE);
+
+                    // Adiciona o marcador "myLocationMarker" à lista de marcadores selecionados
+                    if (selectedMarkers.indexOf(myLocationMarker) === -1) {
+                        selectedMarkers.push(myLocationMarker);
+                    }
+
+                    // Inicie o rastreamento em tempo real
+                    lastPosition = myLocation;
+                    watchId = navigator.geolocation.watchPosition(function (position) {
+                        var currentPosition = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        myLocationMarker.setPosition(currentPosition);
+                        map.setCenter(currentPosition);  // Ajusta o centro do mapa para a localização atual
+
+                        // Calcule a rotação para o ícone de navegação
+                        if (lastPosition) {
+                            var deltaY = currentPosition.lat - lastPosition.lat;
+                            var deltaX = currentPosition.lng - lastPosition.lng;
+                            var angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+                            navigationIcon.rotation = angle;
+                            myLocationMarker.setIcon(navigationIcon);
+                        }
+                        lastPosition = currentPosition;
+                    }, function (error) {
+                        alert('Erro ao obter localização em tempo real: ' + error.message);
+                    }, {
+                        enableHighAccuracy: true,
+                        maximumAge: 1000,
+                        timeout: 60000
+                    });
+
                 }, function () {
                     alert('Não foi possível obter a sua localização.');
                 });
@@ -235,30 +290,74 @@
                 alert('Seu navegador não suporta geolocalização.');
             }
         }
+
+
+        function stopRealTimeLocation() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        }
         function calculateRouteToClosestMarkers() {
-      if (selectedMarkers.length === 0) {
-        window.alert('Selecione pelo menos um marcador como endereço de partida.');
-        return;
-      }
-      var startLocation = selectedMarkers[0].getPosition();
-      var maxDistance = 7000;
-      var closestMarkers = markers.filter(function (marker) {
-        var distanceToMarker = google.maps.geometry.spherical.computeDistanceBetween(startLocation, marker.getPosition());
-        return distanceToMarker <= maxDistance && marker !== selectedMarkers[0];
-      });
-      if (closestMarkers.length === 0) {
-        window.alert('Nenhum marcador próximo encontrado.');
-        return;
-      }
-      selectedMarkers = [selectedMarkers[0]];
-      var count = Math.min(closestMarkers.length, 23);
-      for (var i = 0; i < count; i++) {
-        var marker = closestMarkers[i];
-        selectedMarkers.push(marker);
-        marker.setAnimation(google.maps.Animation.BOUNCE);
-      }
-      calculateAndDisplayRoute();
+            if (selectedMarkers.length === 0) {
+                window.alert('Selecione pelo menos um marcador como endereço de partida.');
+                return;
+            }
+            var startLocation = selectedMarkers[0].getPosition();
+            var maxDistance = 7000;
+            var closestMarkers = markers.filter(function (marker) {
+                var distanceToMarker = google.maps.geometry.spherical.computeDistanceBetween(startLocation, marker.getPosition());
+                return distanceToMarker <= maxDistance && marker !== selectedMarkers[0];
+            });
+            if (closestMarkers.length === 0) {
+                window.alert('Nenhum marcador próximo encontrado.');
+                return;
+            }
+            selectedMarkers = [selectedMarkers[0]];
+            var count = Math.min(closestMarkers.length, 23);
+            for (var i = 0; i < count; i++) {
+                var marker = closestMarkers[i];
+                selectedMarkers.push(marker);
+                marker.setAnimation(google.maps.Animation.BOUNCE);
+            }
+            calculateAndDisplayRoute();
+        }
+
+        function searchMarker() {
+            var searchText = document.getElementById('searchInput').value.toLowerCase();
+            for (var i = 0; i < markers.length; i++) {
+                var marker = markers[i];
+                if (marker.title.toLowerCase().includes(searchText)) {
+                    map.setCenter(marker.getPosition());
+                    map.setZoom(18); // Ajuste o nível de zoom conforme necessário
+                    marker.infowindow.open(map, marker);
+                    break;
+                }
+            }
+        }
+        function createRouteByCodes() {
+    var codes = document.getElementById('searchInput').value.split('/');
+    selectedMarkers = []; // Limpa os marcadores selecionados
+
+    // Para cada código, encontre o marcador correspondente
+    for (var i = 0; i < codes.length; i++) {
+        var code = codes[i].trim();
+        for (var j = 0; j < markers.length; j++) {
+            var marker = markers[j];
+            if (marker.title.startsWith(code + '-')) {
+                selectedMarkers.push(marker);
+                marker.setAnimation(google.maps.Animation.BOUNCE);
+                break;
+            }
+        }
     }
+
+    // Se pelo menos dois marcadores foram selecionados, crie a rota
+    if (selectedMarkers.length >= 2) {
+        calculateAndDisplayRoute();
+    } else {
+        window.alert('Não foi possível encontrar marcadores suficientes para os códigos fornecidos.');
+    }
+}
     </script>
     <!-- Botões organizados para layout de colunas -->
     <div class="button-container">
@@ -270,8 +369,13 @@
         <div class="button-row">
             <button onclick="openRouteInGoogleMaps()">Rota Maps</button>
             <button onclick="openRouteInWaze()">Rota Waze</button>
-            <button onclick="calculateRouteToClosestMarkers()">Rotas Prox.</button>
+             <!--<button onclick="calculateRouteToClosestMarkers()">Rotas Prox.</button>-->
+
+            <input type="text" id="searchInput" placeholder="Pesquisar marcador...">
+         <button onclick="searchMarker()">Pesquisar</button>
+         <button onclick="createRouteByCodes()">Rota Cod</button>
         </div>
     </div>
 </body>
+
 </html>
