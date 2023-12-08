@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
 
@@ -188,10 +189,16 @@
             }
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    
 
 </head>
 
 <body>
+
+
 
     <input type="text" id="codCliente" placeholder="Digite o CodCliente" size="10">
     <button onclick="viewAllProducts()">Ver Todos os Produtos</button>
@@ -220,10 +227,7 @@
         <button onclick="closeImageModal()"
             style="position:absolute; top:10px; right:10px; background-color:#ad0b0b; padding:5px 10px; border:none; border-radius:5px; cursor:pointer;">Fechar</button>
 
-
     </div>
-
-
 
     <div class="container">
         <div class="products">
@@ -235,18 +239,13 @@
             <h2>Seu Carrinho 🛒</h2>
             <button onclick="checkout()" aria-label="Enviar pedido via WhatsApp">Enviar WhatsApp</button>
             <button onclick="generatePDF()">Gerar PDF</button>
+            <button id="GerarImagem">PDF Imagens</button>
             <button onclick="clearCart()" id="clearCartButton">Limpar Carrinho</button>
             <ul id="cart-list"></ul>
         </div>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
-
-
-
     <script>
+
         const spreadsheetId = "1Y8-N0EBSVE3cUTUVj4_NiXNYJzdPRcFyzPJqTQ3heVs";
         const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc";
         let cart = [];
@@ -264,6 +263,12 @@
 
             pdf.save("carrinho.pdf");
         }
+
+
+        // ... Outras funções existentes ...
+
+
+
 
 
 
@@ -536,13 +541,77 @@
         }
 
 
+        function generatePDFWithImages() {
+            //
+            if (!window.jspdf) {
+        console.error("A biblioteca jsPDF não foi carregada.");
+        return;
+    }
+
+    // Criando um novo documento PDF em paisagem
+    const pdf = new window.jspdf.jsPDF({
+        orientation: 'landscape', // Definindo a orientação como paisagem
+        unit: 'mm', // Unidade de medida, pode ser 'mm', 'cm', 'in'
+        format: 'a4' // Formato do papel, pode ser 'a4', 'a3', etc.
+    });
+
+    let yPos = 20;
+            //
+
+            const loadImage = (url) => {
+    return new Promise((resolve) => {
+        const image = new Image();
+        image.src = url;
+        image.onload = () => resolve(image);
+        image.onerror = () => resolve(null); // Resolve com null em caso de erro
+    });
+};
+
+
+const addProductToPDF = async (product, imageUrl) => {
+    const image = await loadImage(imageUrl);
+    if (image) {
+        pdf.addImage(image, 'JPEG', 10, yPos, 70, 70); // Adiciona a imagem se ela foi carregada com sucesso
+    }
+    pdf.text(`${product.quantity}x ${product.code} - ${product.description}`, 70, yPos + 25);
+    yPos += 60;
+
+    if (yPos >= 260) {
+        pdf.addPage();
+        yPos = 20;
+    }
+};
+
+
+    const generate = async () => {
+        const cartItems = document.querySelectorAll('#cart-list .cart-item');
+        for (const item of cartItems) {
+            const img = item.querySelector('img');
+            const imageUrl = img.src;
+            const product = {
+                code: img.alt.split(' ')[0], // Ajuste conforme a estrutura do alt
+                description: img.alt.split(' ').slice(1).join(' '),
+                quantity: parseInt(item.querySelector('div').textContent.split('x')[0].trim())
+            };
+            await addProductToPDF(product, imageUrl);
+        }
+        pdf.save('carrinho_com_imagens.pdf');
+    };
+
+    generate().catch(error => console.error('Erro ao carregar imagens:', error));
+}
+
+document.getElementById('GerarImagem').addEventListener('click', generatePDFWithImages);
+
+// ... Resto do seu script ...
+
+
         // Carregar o carrinho do localStorage quando a página for carregada
         const savedCart = localStorage.getItem('savedCart');
         if (savedCart) {
             cart = JSON.parse(savedCart);
             updateCart();
         }
-
     </script>
 </body>
 
