@@ -272,10 +272,6 @@
         // ... Outras funções existentes ...
 
 
-
-
-
-
         function addManualProduct() {
             const manualDescription = document.getElementById('manualProductDescription').value.trim();
 
@@ -577,17 +573,42 @@
 
 const addProductToPDF = async (product, imageUrl) => {
     const image = await loadImage(imageUrl);
-    if (image) {
-        pdf.addImage(image, 'JPEG', -10, yPos, 70, 70); // Adiciona a imagem se ela foi carregada com sucesso
-    }
-    pdf.text(`${product.quantity}x ${product.code} - ${product.description}`, 45, yPos + 25);
-    yPos += 60;
+    const maxWidth = 150; // Largura máxima para o texto ao lado da imagem
+    const description = `${product.quantity}x ${product.code} - ${product.description}`;
+    const descriptionLines = pdf.splitTextToSize(description, maxWidth);
 
-    if (yPos >= 260) {
+    // Altura máxima disponível por produto para manter 5 produtos por página
+    const maxHeightPerProduct = 300 / 5; // 270 é a altura útil da página
+
+    // Calcula a altura total do bloco de texto
+    const textBlockHeight = descriptionLines.length * 7;
+    const imageHeight = 70;
+    const totalBlockHeight = Math.max(textBlockHeight, imageHeight);
+
+    // Verifica se precisa de nova página antes de adicionar imagem e texto
+    if (yPos + totalBlockHeight > 300) { // Verifica se o próximo produto cabe na página atual
         pdf.addPage();
-        yPos = -10;
+        yPos = -10; // Reseta yPos para o topo da nova página
     }
+
+    if (image) {
+        pdf.addImage(image, 'JPEG', -13, yPos, 70, 70); // Adiciona a imagem
+    }
+
+    // Ajusta posição y para o texto, alinhando com a imagem
+    let textYPos = yPos + 20; // Alinha o texto no meio da imagem
+
+    // Renderiza cada linha do texto
+    descriptionLines.forEach(line => {
+        pdf.text(line, 50, textYPos); // Ajusta posição x do texto
+        textYPos += 7; // Espaçamento entre as linhas
+    });
+
+    yPos += maxHeightPerProduct; // Avança yPos para o próximo produto, considerando o espaço para 5 produtos por página
 };
+
+
+
 
 
     const generate = async () => {
