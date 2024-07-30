@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrinho de Compras</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+        }
+
+        .products,
+        .cart {
+            padding: 20px;
+            border-radius: 5px;
+            background-color: #ffffff;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .cart-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .cart-item img {
+            margin-right: 10px;
+        }
+
+        .cart li {
+            font-size: 12px;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            padding: 10px 0;
+            border-bottom: 1px solid #ce1b1b;
+        }
+
+        li:last-child {
+            border-bottom: none;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #007BFF;
+        }
+
+        .products li {
+            font-size: 14px;
+        }
+
+        #imageModal>div {
+            position: relative;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 95vw;
+            height: 95vh;
+        }
+
+        #zoomedImage {
+            display: block;
+            max-width: 100%;
+            max-height: 95vh;
+        }
+
+        #clearCartButton,
+        .subtractButton {
+            background-color: #d9534f;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #clearCartButton:hover,
+        .subtractButton:hover {
+            background-color: #c9302c;
+        }
+
+        #productInfo {
+            position: absolute;
+            bottom: 135px !important;
+            left: 0;
+            right: 0;
+            background-color: rgba(255, 255, 255, 0.8) !important;
+            color: #d81637 !important;
+            font-size: 8 !important;
+            padding: 5px;
+            text-align: center;
+            text-shadow: none !important;
+        }
+
+        @media (min-width: 768px) {
+            #productInfo {
+                bottom: 75px !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+</head>
+
+<body>
+    <input type="text" id="codCliente" placeholder="Digite o CodCliente" size="10">
+    <button onclick="viewAllProducts()">Ver Todos os Produtos</button>
+    <button onclick="viewMyProducts()">Ver Meus Produtos</button>
+    <button onclick="loadData()">Ver Produtos</button>
+    <input type="text" id="manualProductDescription" placeholder="Descrição do Produto">
+    <button onclick="addManualProduct()">Ad. Manual</button>
+
+    <div id="imageModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center; z-index:1000;">
+        <div style="position: relative;">
+            <img id="zoomedImage" src="" alt="imagem zoom" style="max-width:80%; max-height:80%;">
+            <div id="productInfo"></div>
+        </div>
+        <button onclick="shareImage()"
+            style="position:absolute; bottom:10px; left:10px; background-color:#05470e; padding:5px 10px; border:none; border-radius:5px; cursor:pointer;">Compartilhar</button>
+        <button onclick="shareToWhatsApp()"
+            style="position:absolute; bottom:10px; right:10px; background-color:#05470e; padding:5px 10px; border:none; border-radius:5px; cursor:pointer;">Compartilhar
+            no WhatsApp</button>
+        <button onclick="closeImageModal()"
+            style="position:absolute; top:10px; right:10px; background-color:#ad0b0b; padding:5px 10px; border:none; border-radius:5px; cursor:pointer;">Fechar</button>
+    </div>
+
+    <div class="container">
+        <div class="products">
+            <h2>PRODUTOS MAIS COMPRADOS POR VOCÊ</h2>
+            <input type="text" id="filter" placeholder="🔍 Ex: algemx*pista" size="50" aria-label="Filtrar produtos">
+            <ul id="product-list"></ul>
+        </div>
+        <div class="cart">
+            <h2>Seu Carrinho 🛒</h2>
+            <button onclick="checkout()" aria-label="Enviar pedido via WhatsApp">Enviar WhatsApp</button>
+            <button onclick="generatePDF()">Gerar PDF</button>
+            <button id="GerarImagem">PDF Imagens</button>
+            <button onclick="clearCart()" id="clearCartButton">Limpar Carrinho</button>
+            <label>
+                <input type="checkbox" id="orientacaoPaisagem" />
+                Gerar PDF em Paisagem
+            </label>
+            <ul id="cart-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const spreadsheetId = "1Y8-N0EBSVE3cUTUVj4_NiXNYJzdPRcFyzPJqTQ3heVs";
+        const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc";
+        let cart = [];
+        let allProducts = [];
+
+        function generatePDF() {
+            const pdf = new window.jspdf.jsPDF();
+            cart.forEach((product, index) => {
+                const yPos = 20 + (index * 10);
+                const productText = `${product.quantity}x ${product.code} - ${product.description}`;
+                pdf.text(productText, 10, yPos);
+            });
+            pdf.save("carrinho.pdf");
+        }
+
+        function addManualProduct() {
+            const manualDescription = document.getElementById('manualProductDescription').value.trim();
+            if (manualDescription) {
+                const manualCode = manualDescription.replace(/[^a-zA-Z0-9]/g, "").substr(0, 5).toUpperCase();
+                const existingProduct = cart.find(p => p.code === manualCode);
+                if (existingProduct) {
+                    existingProduct.quantity += 1;
+                } else {
+                    const product = {
+                        code: manualCode,
+                        description: manualDescription,
+                        quantity: 1
+                    };
+                    cart.push(product);
+                }
+                updateCart();
+            } else {
+                alert("Por favor, insira a descrição do produto.");
+            }
+        }
+
+        function getURLParameter(name) {
+            return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [, ""])[1].replace(/\+/g, '%20')) || null;
+        }
+
+        function loadData() {
+            const range = document.getElementById('codCliente').value;
+            listData(range);
+        }
+
+        function filterProducts() {
+            const filterValue = document.getElementById('filter').value.toLowerCase();
+            const regexPattern = filterValue.split('*').join('.*');
+            const regex = new RegExp(regexPattern, 'i');
+            const filteredProducts = allProducts.filter(p =>
+                regex.test(p.code) || regex.test(p.description)
+            );
+            document.getElementById('product-list').innerHTML = filteredProducts.map(p =>
+                `<li data-code="${p.code}"><span onclick="openImageModal('${p.code}')">${p.code}</span> - ${p.description} <button onclick="addToCart('${p.code}')">+</button></li>`
+            ).join('');
+        }
+
+        function listData(range) {
+            var url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Erro na solicitação à API do Google Sheets.");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    allProducts = data.values.map(row => ({
+                        code: row[0],
+                        description: row.slice(1).join(' ')
+                    }));
+                    filterProducts();
+                })
+                .catch(error => {
+                    console.error("Erro ao obter dados:", error);
+                });
+        }
+
+        function addToCart(code) {
+            const productEl = document.querySelector(`[data-code="${code}"]`);
+            const existingProduct = cart.find(p => p.code === code);
+            if (existingProduct) {
+                existingProduct.quantity += 1;
+            } else {
+                if (productEl) {
+                    const fullDescription = productEl.textContent.trim().split('+')[0].trim().split(' - ').slice(1).join(' - ');
+                    const product = {
+                        code: productEl.getAttribute('data-code'),
+                        description: fullDescription,
+                        quantity: 1
+                    };
+                    cart.push(product);
+                } else {
+                    alert("Produto não encontrado.");
+                }
+            }
+            updateCart();
+        }
+
+        function updateCart() {
+            document.getElementById('cart-list').innerHTML = cart.map(p =>
+                `<li class="cart-item">
+                    <img src="https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/main/ameripan/img/${p.code}.jpg" alt="${p.code + " " + p.description}" width="150" height="150" onclick="openImageModal('${p.code}')"> 
+                    <div>
+                        ${p.quantity}x ${p.code} - ${p.description} 
+                        <button onclick="addToCart('${p.code}')">+</button>
+                        <button onclick="subtractFromCart('${p.code}')" class="subtractButton">-</button>
+                    </div>
+                </li>`
+            ).join('');
+            localStorage.setItem('savedCart', JSON.stringify(cart));
+        }
+
+        function subtractFromCart(code) {
+            const productInCart = cart.find(p => p.code === code);
+            if (productInCart) {
+                productInCart.quantity -= 1;
+                if (productInCart.quantity <= 0) {
+                    const index = cart.indexOf(productInCart);
+                    if (index > -1) {
+                        cart.splice(index, 1);
+                    }
+                }
+                updateCart();
+            }
+        }
+
+        function clearCart() {
+            const userConfirmation = confirm("Deseja realmente limpar o carrinho?");
+            if (userConfirmation) {
+                cart.length = 0;
+                localStorage.removeItem('savedCart');
+                updateCart();
+            }
+        }
+
+        function openImageModal(code) {
+            const modal = document.getElementById('imageModal');
+            const zoomedImage = document.getElementById('zoomedImage');
+            const productInfo = document.getElementById('productInfo');
+            zoomedImage.src = `https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/main/ameripan/img/${code}.jpg`;
+            zoomedImage.alt = code;
+            const product = allProducts.find(p => p.code === code);
+            const productDescription = product ? product.description : '';
+            productInfo.textContent = `${code} - ${productDescription}`;
+            modal.style.display = 'flex';
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+        }
+
+        document.getElementById('imageModal').addEventListener('click', function (event) {
+            if (event.target === this) {
+                closeImageModal();
+            }
+        });
+
+        document.getElementById('zoomedImage').addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+
+        document.querySelectorAll('#imageModal button').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+        });
+
+        function shareImage() {
+            const zoomedImage = document.getElementById('zoomedImage');
+            const imageUrl = zoomedImage.src;
+            const productCode = zoomedImage.alt;
+            const product = allProducts.find(p => p.code === productCode);
+            const productDescription = product ? product.description : '';
+            const imageTitle = `${productCode} - ${productDescription}`;
+            if (navigator.share) {
+                fetch(imageUrl)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const file = new File([blob], imageTitle + ".jpg", { type: "image/jpeg" });
+                        navigator.share({
+                            title: imageTitle,
+                            files: [file]
+                        }).then(() => {
+                            console.log('Imagem compartilhada com sucesso!');
+                        }).catch((error) => {
+                            console.error('Erro ao compartilhar:', error);
+                        });
+                    }).catch(error => {
+                        console.error('Erro ao buscar a imagem:', error);
+                    });
+            } else {
+                alert('Seu navegador não suporta a API de compartilhamento. Copie o link manualmente.');
+            }
+        }
+
+        function shareToWhatsApp() {
+            const zoomedImage = document.getElementById('zoomedImage');
+            const imageUrl = zoomedImage.src;
+            const productCode = zoomedImage.alt;
+            const product = allProducts.find(p => p.code === productCode);
+            const productDescription = product ? product.description : '';
+            const message = `Confira a imagem do produto:\n\n${imageUrl}\n\nCódigo: ${productCode}\nDescrição: ${productDescription}`;
+            const encodedMessage = encodeURIComponent(message);
+            window.open(`https://wa.me/?text=${encodedMessage}`);
+        }
+
+        function checkout() {
+            const message = "Cliente: " + document.getElementById('codCliente').value + " " + cart.map(p =>
+                `${p.quantity} x ${p.code} - ${p.description}`
+            ).join('%0A');
+            window.open(`https://wa.me/5519987121005?text=Bom%20dia%20Edimar,%20segue%20pedido:%0A${message}`);
+        }
+
+        document.getElementById('filter').addEventListener('input', filterProducts);
+
+        const codFromURL = getURLParameter('cod');
+        if (codFromURL) {
+            document.getElementById('codCliente').value = codFromURL;
+            loadData();
+        }
+
+        function viewAllProducts() {
+            const codCliente = document.getElementById('codCliente').value;
+            if (codCliente != 'todos') {
+                window.location.href = `?cod=todos&save=${codCliente}`;
+            }
+        }
+
+        function viewMyProducts() {
+            const savedata = getURLParameter('save');
+            if (savedata) {
+                if (savedata != 'todos') {
+                    window.location.href = `?cod=${savedata}`;
+                }
+            }
+        }
+
+        function generatePDFWithImages() {
+            if (!window.jspdf) {
+                console.error("A biblioteca jsPDF não foi carregada.");
+                return;
+            }
+
+            const isLandscape = document.getElementById('orientacaoPaisagem').checked;
+            const orientation = isLandscape ? 'landscape' : 'portrait';
+            const pdf = new window.jspdf.jsPDF({
+                orientation: orientation,
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            let yPos = 10;
+
+            const loadImage = (url) => {
+                return new Promise((resolve) => {
+                    const image = new Image();
+                    image.src = url;
+                    image.onload = () => resolve(image);
+                    image.onerror = () => resolve(null);
+                });
+            };
+
+            const addProductToPDF = async (product, imageUrl) => {
+                const image = await loadImage(imageUrl);
+                const maxWidth = 150;
+                const description = `${product.quantity}x ${product.code} - ${product.description}`;
+                const descriptionLines = pdf.splitTextToSize(description, maxWidth);
+                const maxHeightPerProduct = 300 / 5;
+                const textBlockHeight = descriptionLines.length * 7;
+                const imageHeight = 70;
+                const totalBlockHeight = Math.max(textBlockHeight, imageHeight);
+                if (yPos + totalBlockHeight > 300) {
+                    pdf.addPage();
+                    yPos = 10;
+                }
+                if (image) {
+                    pdf.addImage(image, 'JPEG', 10, yPos, 70, 70);
+                }
+                let textYPos = yPos + 20;
+                descriptionLines.forEach(line => {
+                    pdf.text(line, 90, textYPos);
+                    textYPos += 7;
+                });
+                yPos += maxHeightPerProduct;
+            };
+
+            const generate = async () => {
+                const cartItems = document.querySelectorAll('#cart-list .cart-item');
+                for (const item of cartItems) {
+                    const img = item.querySelector('img');
+                    const imageUrl = img.src;
+                    const product = {
+                        code: img.alt.split(' ')[0],
+                        description: img.alt.split(' ').slice(1).join(' '),
+                        quantity: parseInt(item.querySelector('div').textContent.split('x')[0].trim())
+                    };
+                    await addProductToPDF(product, imageUrl);
+                }
+                pdf.save('carrinho_com_imagens.pdf');
+            };
+
+            generate().catch(error => console.error('Erro ao carregar imagens:', error));
+        }
+
+        document.getElementById('GerarImagem').addEventListener('click', generatePDFWithImages);
+
+        const savedCart = localStorage.getItem('savedCart');
+        if (savedCart) {
+            cart = JSON.parse(savedCart);
+            updateCart();
+        }
+    </script>
+</body>
+
+</html>
