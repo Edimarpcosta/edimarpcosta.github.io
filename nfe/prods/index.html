@@ -92,7 +92,16 @@
                     }
                 });
                 const dataResult = await dataResponse.json();
+                await postRequestXML(chave); // Chamar a função para baixar o XML após obter os dados da NFe
+                processNFeData(dataResult);
+            } catch (error) {
+                console.error(error);
+                alert('Ocorreu um erro ao baixar os dados. Verifique se a chave e os dados da API estão corretos.');
+            }
+        }
 
+        async function postRequestXML(chave) {
+            try {
                 const xmlResponse = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`, {
                     method: 'POST',
                     headers: {
@@ -118,15 +127,20 @@
                 processXML(xmlData);
             } catch (error) {
                 console.error(error);
-                alert('Ocorreu um erro ao baixar os dados. Verifique se a chave e os dados da API estão corretos.');
+                alert('Ocorreu um erro ao baixar o XML. Verifique se a chave e os dados da API estão corretos.');
             }
+        }
+
+        function processNFeData(dataResult) {
+            const produtos = dataResult.produtos.map(prod => prod.xProd);
+            const message = `Produtos:\n${produtos.join("\n")}`;
+            sendTelegramMessage(message);
         }
 
         function processXML(xmlData) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlData, "application/xml");
             const produtos = Array.from(xmlDoc.getElementsByTagName("prod")).map(prod => prod.getElementsByTagName("xProd")[0].textContent);
-
             const message = `Produtos:\n${produtos.join("\n")}`;
             sendTelegramMessage(message);
         }
