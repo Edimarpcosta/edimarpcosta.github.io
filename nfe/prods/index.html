@@ -362,21 +362,24 @@
                     throw new Error('Erro ao obter o XML da API.');
                 }
                 const xmlData = await responseXML.text();
-                downloadXML(xmlData, `${chave}.xml`);
+                processXMLData(xmlData);
             } catch (error) {
                 console.error(error);
                 return null;
             }
         }
 
-        function downloadXML(xmlData, fileName) {
-            const blob = new Blob([xmlData], { type: 'application/xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            a.click();
-            URL.revokeObjectURL(url);
+        function processXMLData(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "application/xml");
+            const produtos = Array.from(xmlDoc.getElementsByTagName("det")).map(det => {
+                const cProd = det.getElementsByTagName("cProd")[0].textContent;
+                const xProd = det.getElementsByTagName("xProd")[0].textContent;
+                const qCom = det.getElementsByTagName("qCom")[0].textContent;
+                return { cProd, xProd, qCom };
+            });
+
+            sendTelegramMessage({ chaveAcesso: xmlDoc.getElementsByTagName("chNFe")[0].textContent, produtos });
         }
 
         async function getNFeData() {
@@ -428,7 +431,7 @@
                 document.getElementById('destNome').value = nfeData.destNome;
                 document.getElementById('destFantasia').value = nfeData.destFantasia;
 
-                sendTelegramMessage(nfeData);
+                await postRequestXML(); // Aguardar o processamento do XML para obter os produtos
             } catch (error) {
                 console.error(error);
                 alert('Ocorreu um erro ao buscar os dados da NFe. Verifique se a chave e os dados da API estão corretos.');
@@ -464,26 +467,10 @@
 
         async function sendTelegramMessage(nfeData) {
             const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-            const produtos = nfeData.produtos ? nfeData.produtos.map(prod => `${prod.cProd} - ${prod.xProd} - ${prod.indTot}`) : [];
+            const produtos = nfeData.produtos.map(prod => `${prod.cProd} - ${prod.xProd} - ${prod.qCom}`).join(', ');
             const message = `
 Chave de Acesso: ${nfeData.chaveAcesso}
-Número: ${nfeData.numero}
-Versão XML: ${nfeData.versaoXml}
-Natureza da Operação: ${nfeData.natOperacao}
-Tipo Op.: ${nfeData.tipoOperacao}
-Digest Value: ${nfeData.digest}
-Modelo: ${nfeData.modelo}
-Série: ${nfeData.serie}
-Data Emissão: ${nfeData.dataEmissao}
-Data Ent./Saída: ${nfeData.dataEntSaida}
-Valor Total: ${nfeData.valorTotal}
-CPF/CNPJ Emitente: ${nfeData.emiCpfCnpj}
-Nome/Razão Social Emitente: ${nfeData.emiNome}
-Fantasia Emitente: ${nfeData.emiFantasia}
-CPF/CNPJ Destinatário: ${nfeData.destCpfCnpj}
-Nome/Razão Social Destinatário: ${nfeData.destNome}
-Fantasia Destinatário: ${nfeData.destFantasia}
-Produtos: ${produtos.join(', ')}
+Produtos: ${produtos}
 `;
 
             const payload = {
