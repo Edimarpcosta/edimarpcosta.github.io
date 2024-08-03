@@ -110,16 +110,19 @@
             <input type="text" id="chaveInput" placeholder="Digite a chave da NFe">
             <button onclick="fetchNFeData()">Buscar Dados</button>
         </div>
+		<button id="sendTelegramBtn" onclick="sendTelegramMessage()" style="display: none;">Enviar para o Telegram</button>
         <div class="loading" id="loading">Carregando...</div>
         <div id="nfeData"></div>
         <h2>Produtos</h2>
         <div id="produtos"></div>
+        
     </div>
     <div id="notification"></div>
 
     <script>
         const TELEGRAM_TOKEN = '6900020052:AAFd7XDnMazzjDkMmdlqbPevpHq34QAbCaY';
         const TELEGRAM_CHAT_ID = '-1002147402575';
+        let nfeDataGlobal, xmlDataGlobal;
 
         async function fetchNFeData() {
             const chave = document.getElementById('chaveInput').value;
@@ -134,10 +137,13 @@
                 const nfeData = await fetchData(`https://ws.meudanfe.com/api/v1/get/nfe/data/MEUDANFE/${chave}`);
                 const xmlData = await fetchData(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`);
 
+                nfeDataGlobal = nfeData;
+                xmlDataGlobal = xmlData;
+
                 displayNFeData(nfeData);
                 displayProdutos(xmlData);
-                await sendTelegramMessage(nfeData, xmlData);
-                showNotification('Dados obtidos e enviados com sucesso!', 'success');
+                document.getElementById('sendTelegramBtn').style.display = 'block';
+                showNotification('Dados obtidos com sucesso!', 'success');
             } catch (error) {
                 console.error('Erro ao buscar dados:', error);
                 showNotification('Ocorreu um erro ao buscar os dados da NFe.', 'error');
@@ -237,8 +243,15 @@
             document.getElementById('produtos').innerHTML = tableHtml;
         }
 
-        async function sendTelegramMessage(nfeData, xmlData) {
-            const produtos = new DOMParser().parseFromString(xmlData, "text/xml").getElementsByTagName("det");
+        async function sendTelegramMessage() {
+            if (!nfeDataGlobal || !xmlDataGlobal) {
+                showNotification('Dados da NFe não disponíveis. Por favor, busque os dados primeiro.', 'error');
+                return;
+            }
+
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlDataGlobal, "text/xml");
+            const produtos = xmlDoc.getElementsByTagName("det");
             let produtosText = '';
             for (let i = 0; i < produtos.length; i++) {
                 const prod = produtos[i].getElementsByTagName("prod")[0];
@@ -249,8 +262,8 @@
             }
 
             const message = `
-Nome/Razão Social Emitente: ${nfeData.emiNome}
-Data Ent./Saida: ${nfeData.dataEntSaida}
+Nome/Razão Social Emitente: ${nfeDataGlobal.emiNome}
+Data Ent./Saida: ${nfeDataGlobal.dataEntSaida}
 PRODUTOS:
 CODIGO  //  NOME  //  QUANTIDADE
 
@@ -270,11 +283,14 @@ ${produtosText}`;
             };
 
             try {
-                await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, options);
-                console.log("Message sent to Telegram successfully");
+                const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, options);
+                if (!response.ok) {
+                    throw new Error('Erro ao enviar mensagem para o Telegram.');
+                }
+                showNotification('Mensagem enviada para o Telegram com sucesso!', 'success');
             } catch (error) {
                 console.error("Error sending message to Telegram: ", error);
-                throw error;
+                showNotification('Ocorreu um erro ao enviar a mensagem para o Telegram.', 'error');
             }
         }
 
