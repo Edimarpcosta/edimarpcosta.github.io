@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dados da NFe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        #nfeData, #produtos {
+            margin-bottom: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dados da NFe</h1>
+    <input type="text" id="chaveInput" placeholder="Digite a chave da NFe">
+    <button onclick="fetchNFeData()">Buscar Dados</button>
+    <div id="nfeData"></div>
+    <h2>Produtos</h2>
+    <div id="produtos"></div>
+
+    <script>
+        async function fetchNFeData() {
+            const chave = document.getElementById('chaveInput').value;
+            if (!chave) {
+                alert('Por favor, digite a chave da NFe.');
+                return;
+            }
+
+            try {
+                // Fetch NFe data
+                const nfeDataResponse = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/data/MEUDANFE/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=UTF-8',
+                        'Accept': '*/*',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Accept-Encoding': 'gzip, deflate, br, zstd',
+                        'Origin': 'https://meudanfe.com.br',
+                        'Referer': 'https://meudanfe.com.br/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+                        'sec-ch-ua': '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+                        'sec-ch-ua-platform': '"Windows"',
+                        'sec-ch-ua-mobile': '?0',
+                        'sec-fetch-site': 'cross-site',
+                        'sec-fetch-mode': 'cors',
+                        'sec-fetch-dest': 'empty',
+                        'Priority': 'u=1, i'
+                    },
+                    body: chave
+                });
+                const nfeData = await nfeDataResponse.json();
+
+                // Fetch XML data
+                const xmlResponse = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=UTF-8',
+                        'Accept': '*/*',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Accept-Encoding': 'gzip, deflate, br, zstd',
+                        'Origin': 'https://meudanfe.com.br',
+                        'Referer': 'https://meudanfe.com.br/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+                        'sec-ch-ua': '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+                        'sec-ch-ua-platform': '"Windows"',
+                        'sec-ch-ua-mobile': '?0',
+                        'sec-fetch-site': 'cross-site',
+                        'sec-fetch-mode': 'cors',
+                        'sec-fetch-dest': 'empty',
+                        'Priority': 'u=1, i'
+                    },
+                    body: chave
+                });
+                const xmlData = await xmlResponse.text();
+
+                displayNFeData(nfeData);
+                displayProdutos(xmlData);
+            } catch (error) {
+                console.error('Erro ao buscar dados:', error);
+                alert('Ocorreu um erro ao buscar os dados da NFe.');
+            }
+        }
+
+        function displayNFeData(data) {
+            const nfeDataDiv = document.getElementById('nfeData');
+            nfeDataDiv.innerHTML = `
+                <h2>Informações Gerais</h2>
+                <p><strong>Chave de Acesso:</strong> ${data.chaveAcesso}</p>
+                <p><strong>Número:</strong> ${data.numero}</p>
+                <p><strong>Data de Emissão:</strong> ${data.dataEmissao}</p>
+                <p><strong>Valor Total:</strong> R$ ${data.valorTotal}</p>
+                <h3>Emitente</h3>
+                <p><strong>Nome:</strong> ${data.emiNome}</p>
+                <p><strong>CNPJ/CPF:</strong> ${data.emiCpfCnpj}</p>
+                <h3>Destinatário</h3>
+                <p><strong>Nome:</strong> ${data.destNome}</p>
+                <p><strong>CNPJ/CPF:</strong> ${data.destCpfCnpj}</p>
+            `;
+        }
+
+        function displayProdutos(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+            const produtos = xmlDoc.getElementsByTagName("det");
+            
+            let tableHtml = `
+                <table>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Quantidade</th>
+                        <th>Valor Unitário</th>
+                        <th>Valor Total</th>
+                    </tr>
+            `;
+
+            for (let i = 0; i < produtos.length; i++) {
+                const prod = produtos[i].getElementsByTagName("prod")[0];
+                const cProd = prod.getElementsByTagName("cProd")[0].textContent;
+                const xProd = prod.getElementsByTagName("xProd")[0].textContent;
+                const qCom = prod.getElementsByTagName("qCom")[0].textContent;
+                const vUnCom = prod.getElementsByTagName("vUnCom")[0].textContent;
+                const vProd = prod.getElementsByTagName("vProd")[0].textContent;
+
+                tableHtml += `
+                    <tr>
+                        <td>${cProd}</td>
+                        <td>${xProd}</td>
+                        <td>${qCom}</td>
+                        <td>R$ ${vUnCom}</td>
+                        <td>R$ ${vProd}</td>
+                    </tr>
+                `;
+            }
+
+            tableHtml += '</table>';
+            document.getElementById('produtos').innerHTML = tableHtml;
+        }
+    </script>
+</body>
+</html>
