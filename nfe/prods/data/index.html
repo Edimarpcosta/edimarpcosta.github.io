@@ -29,7 +29,7 @@
             text-align: center;
             margin-bottom: 30px;
         }
-        #nfeData, #produtos {
+        #nfeData, #produtos, #emitente, #destinatario, #impostos, #transporte {
             margin-bottom: 30px;
         }
         table {
@@ -110,18 +110,25 @@
             <input type="text" id="chaveInput" placeholder="Digite a chave da NFe">
             <button onclick="fetchNFeData()">Buscar Dados</button>
         </div>
-		<button id="sendTelegramBtn" onclick="sendTelegramMessage()" style="display: none;">Enviar para o Telegram</button>
+        <button id="sendTelegramBtn" onclick="sendTelegramMessage()" style="display: none;">Enviar para o Telegram</button>
         <div class="loading" id="loading">Carregando...</div>
         <div id="nfeData"></div>
+        <h2>Emitente</h2>
+        <div id="emitente"></div>
+        <h2>Destinatário</h2>
+        <div id="destinatario"></div>
+        <h2>Impostos</h2>
+        <div id="impostos"></div>
         <h2>Produtos</h2>
         <div id="produtos"></div>
-        
+        <h2>Transporte</h2>
+        <div id="transporte"></div>
     </div>
     <div id="notification"></div>
 
     <script>
-        const TELEGRAM_TOKEN = '6900020052:AAFd7XDnMazzjDkMmdlqbPevpHq34QAbCaY';
-        const TELEGRAM_CHAT_ID = '-1002147402575';
+        const TELEGRAM_TOKEN = 'seu_token_telegram';
+        const TELEGRAM_CHAT_ID = 'seu_chat_id';
         let nfeDataGlobal, xmlDataGlobal;
 
         async function fetchNFeData() {
@@ -141,7 +148,12 @@
                 xmlDataGlobal = xmlData;
 
                 displayNFeData(nfeData);
+                displayEmitente(xmlData);
+                displayDestinatario(xmlData);
+                displayImpostos(xmlData);
                 displayProdutos(xmlData);
+                displayTransporte(xmlData);
+
                 document.getElementById('sendTelegramBtn').style.display = 'block';
                 showNotification('Dados obtidos com sucesso!', 'success');
             } catch (error) {
@@ -179,6 +191,11 @@
             return url.includes('/xml/') ? response.text() : response.json();
         }
 
+        function getElementText(element, tagName) {
+            const tag = element.getElementsByTagName(tagName)[0];
+            return tag ? tag.textContent : 'N/A';
+        }
+
         function displayNFeData(data) {
             const nfeDataDiv = document.getElementById('nfeData');
             nfeDataDiv.innerHTML = `
@@ -190,15 +207,90 @@
                         <p><strong>Data de Emissão:</strong> ${data.dataEmissao}</p>
                         <p><strong>Valor Total:</strong> R$ ${data.valorTotal}</p>
                     </div>
+                </div>
+            `;
+        }
+
+        function displayEmitente(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+            const emitente = xmlDoc.getElementsByTagName("emit")[0];
+            
+            const emitenteDiv = document.getElementById('emitente');
+            emitenteDiv.innerHTML = `
+                <div class="info-group">
                     <div class="info-item">
-                        <h3>Emitente</h3>
-                        <p><strong>Nome:</strong> ${data.emiNome}</p>
-                        <p><strong>CNPJ/CPF:</strong> ${data.emiCpfCnpj}</p>
+                        <p><strong>Nome:</strong> ${getElementText(emitente, "xNome")}</p>
+                        <p><strong>Nome Fantasia:</strong> ${getElementText(emitente, "xFant")}</p>
+                        <p><strong>CNPJ:</strong> ${getElementText(emitente, "CNPJ")}</p>
+                        <p><strong>Inscrição Estadual:</strong> ${getElementText(emitente, "IE")}</p>
+                        <p><strong>Inscrição Municipal:</strong> ${getElementText(emitente, "IM")}</p>
+                        <p><strong>Telefone:</strong> ${getElementText(emitente, "fone")}</p>
                     </div>
                     <div class="info-item">
-                        <h3>Destinatário</h3>
-                        <p><strong>Nome:</strong> ${data.destNome}</p>
-                        <p><strong>CNPJ/CPF:</strong> ${data.destCpfCnpj}</p>
+                        <h3>Endereço</h3>
+                        <p><strong>Logradouro:</strong> ${getElementText(emitente, "xLgr")}</p>
+                        <p><strong>Número:</strong> ${getElementText(emitente, "nro")}</p>
+                        <p><strong>Bairro:</strong> ${getElementText(emitente, "xBairro")}</p>
+                        <p><strong>Município:</strong> ${getElementText(emitente, "xMun")}</p>
+                        <p><strong>CEP:</strong> ${getElementText(emitente, "CEP")}</p>
+                        <p><strong>UF:</strong> ${getElementText(emitente, "UF")}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayDestinatario(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+            const destinatario = xmlDoc.getElementsByTagName("dest")[0];
+            
+            const destinatarioDiv = document.getElementById('destinatario');
+            destinatarioDiv.innerHTML = `
+                <div class="info-group">
+                    <div class="info-item">
+                        <p><strong>Nome:</strong> ${getElementText(destinatario, "xNome")}</p>
+                        <p><strong>CNPJ:</strong> ${getElementText(destinatario, "CNPJ")}</p>
+                        <p><strong>Inscrição Estadual:</strong> ${getElementText(destinatario, "IE")}</p>
+                        <p><strong>Email:</strong> ${getElementText(destinatario, "email")}</p>
+                        <p><strong>Telefone:</strong> ${getElementText(destinatario, "fone")}</p>
+                    </div>
+                    <div class="info-item">
+                        <h3>Endereço</h3>
+                        <p><strong>Logradouro:</strong> ${getElementText(destinatario, "xLgr")}</p>
+                        <p><strong>Número:</strong> ${getElementText(destinatario, "nro")}</p>
+                        <p><strong>Bairro:</strong> ${getElementText(destinatario, "xBairro")}</p>
+                        <p><strong>Município:</strong> ${getElementText(destinatario, "xMun")}</p>
+                        <p><strong>CEP:</strong> ${getElementText(destinatario, "CEP")}</p>
+                        <p><strong>UF:</strong> ${getElementText(destinatario, "UF")}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayImpostos(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+            const impostos = xmlDoc.getElementsByTagName("ICMSTot")[0];
+            
+            const impostosDiv = document.getElementById('impostos');
+            impostosDiv.innerHTML = `
+                <div class="info-group">
+                    <div class="info-item">
+                        <p><strong>Base de Cálculo do ICMS:</strong> R$ ${getElementText(impostos, "vBC")}</p>
+                        <p><strong>Valor do ICMS:</strong> R$ ${getElementText(impostos, "vICMS")}</p>
+                        <p><strong>Base de Cálculo do ICMS ST:</strong> R$ ${getElementText(impostos, "vBCST")}</p>
+                        <p><strong>Valor do ICMS ST:</strong> R$ ${getElementText(impostos, "vST")}</p>
+                        <p><strong>Valor dos Produtos:</strong> R$ ${getElementText(impostos, "vProd")}</p>
+                        <p><strong>Valor do Frete:</strong> R$ ${getElementText(impostos, "vFrete")}</p>
+                    </div>
+                    <div class="info-item">
+                        <p><strong>Valor do Seguro:</strong> R$ ${getElementText(impostos, "vSeg")}</p>
+                        <p><strong>Valor do Desconto:</strong> R$ ${getElementText(impostos, "vDesc")}</p>
+                        <p><strong>Valor do IPI:</strong> R$ ${getElementText(impostos, "vIPI")}</p>
+                        <p><strong>Valor do PIS:</strong> R$ ${getElementText(impostos, "vPIS")}</p>
+                        <p><strong>Valor da COFINS:</strong> R$ ${getElementText(impostos, "vCOFINS")}</p>
+                        <p><strong>Valor Total da Nota:</strong> R$ ${getElementText(impostos, "vNF")}</p>
                     </div>
                 </div>
             `;
@@ -208,39 +300,75 @@
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlData, "text/xml");
             const produtos = xmlDoc.getElementsByTagName("det");
-            
+
             let tableHtml = `
                 <table>
                     <tr>
                         <th>Código</th>
                         <th>Descrição</th>
                         <th>Quantidade</th>
+                        <th>Unidade</th>
                         <th>Valor Unitário</th>
                         <th>Valor Total</th>
+                        <th>NCM</th>
+                        <th>CFOP</th>
+                        <th>CST</th>
                     </tr>
             `;
 
             for (let i = 0; i < produtos.length; i++) {
                 const prod = produtos[i].getElementsByTagName("prod")[0];
-                const cProd = prod.getElementsByTagName("cProd")[0].textContent;
-                const xProd = prod.getElementsByTagName("xProd")[0].textContent;
-                const qCom = prod.getElementsByTagName("qCom")[0].textContent;
-                const vUnCom = prod.getElementsByTagName("vUnCom")[0].textContent;
-                const vProd = prod.getElementsByTagName("vProd")[0].textContent;
+                const cProd = getElementText(prod, "cProd");
+                const xProd = getElementText(prod, "xProd");
+                const qCom = getElementText(prod, "qCom");
+                const uCom = getElementText(prod, "uCom");
+                const vUnCom = getElementText(prod, "vUnCom");
+                const vProd = getElementText(prod, "vProd");
+                const NCM = getElementText(prod, "NCM");
+                const CFOP = getElementText(prod, "CFOP");
+                const CST = getElementText(prod, "CST");
 
                 tableHtml += `
                     <tr>
                         <td>${cProd}</td>
                         <td>${xProd}</td>
                         <td>${qCom}</td>
+                        <td>${uCom}</td>
                         <td>R$ ${vUnCom}</td>
                         <td>R$ ${vProd}</td>
+                        <td>${NCM}</td>
+                        <td>${CFOP}</td>
+                        <td>${CST}</td>
                     </tr>
                 `;
             }
 
             tableHtml += '</table>';
             document.getElementById('produtos').innerHTML = tableHtml;
+        }
+
+        function displayTransporte(xmlData) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+            const transporte = xmlDoc.getElementsByTagName("transp")[0];
+            
+            const transporteDiv = document.getElementById('transporte');
+            transporteDiv.innerHTML = `
+                <div class="info-group">
+                    <div class="info-item">
+                        <p><strong>Modalidade do Frete:</strong> ${getElementText(transporte, "modFrete")}</p>
+                    </div>
+                    <div class="info-item">
+                        <h3>Transportadora</h3>
+                        <p><strong>Nome:</strong> ${getElementText(transporte, "xNome")}</p>
+                        <p><strong>CNPJ:</strong> ${getElementText(transporte, "CNPJ")}</p>
+                        <p><strong>Inscrição Estadual:</strong> ${getElementText(transporte, "IE")}</p>
+                        <p><strong>Endereço:</strong> ${getElementText(transporte, "xEnder")}</p>
+                        <p><strong>Município:</strong> ${getElementText(transporte, "xMun")}</p>
+                        <p><strong>UF:</strong> ${getElementText(transporte, "UF")}</p>
+                    </div>
+                </div>
+            `;
         }
 
         async function sendTelegramMessage() {
@@ -255,9 +383,9 @@
             let produtosText = '';
             for (let i = 0; i < produtos.length; i++) {
                 const prod = produtos[i].getElementsByTagName("prod")[0];
-                const cProd = prod.getElementsByTagName("cProd")[0].textContent;
-                const xProd = prod.getElementsByTagName("xProd")[0].textContent;
-                const qCom = prod.getElementsByTagName("qCom")[0].textContent;
+                const cProd = getElementText(prod, "cProd");
+                const xProd = getElementText(prod, "xProd");
+                const qCom = getElementText(prod, "qCom");
                 produtosText += `${cProd} - ${xProd} - ${qCom}\n`;
             }
 
