@@ -4,118 +4,197 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dados da NFe</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Roboto', sans-serif;
             line-height: 1.6;
             margin: 0;
             padding: 20px;
-        }
-        h1, h2 {
+            background-color: #f4f4f4;
             color: #333;
         }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
         #nfeData, #produtos {
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
         table {
             border-collapse: collapse;
             width: 100%;
+            margin-top: 20px;
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: left;
         }
         th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
             background-color: #f2f2f2;
+        }
+        .input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #chaveInput {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+        .info-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .info-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 4px;
+            color: white;
+            display: none;
+        }
+        .success {
+            background-color: #2ecc71;
+        }
+        .error {
+            background-color: #e74c3c;
         }
     </style>
 </head>
 <body>
-    <h1>Dados da NFe</h1>
-    <input type="text" id="chaveInput" placeholder="Digite a chave da NFe">
-    <button onclick="fetchNFeData()">Buscar Dados</button>
-    <div id="nfeData"></div>
-    <h2>Produtos</h2>
-    <div id="produtos"></div>
+    <div class="container">
+        <h1>Dados da NFe</h1>
+        <div class="input-group">
+            <input type="text" id="chaveInput" placeholder="Digite a chave da NFe">
+            <button onclick="fetchNFeData()">Buscar Dados</button>
+        </div>
+        <div class="loading" id="loading">Carregando...</div>
+        <div id="nfeData"></div>
+        <h2>Produtos</h2>
+        <div id="produtos"></div>
+    </div>
+    <div id="notification"></div>
 
     <script>
+        const TELEGRAM_TOKEN = '6900020052:AAFd7XDnMazzjDkMmdlqbPevpHq34QAbCaY';
+        const TELEGRAM_CHAT_ID = '-1002147402575';
+
         async function fetchNFeData() {
             const chave = document.getElementById('chaveInput').value;
             if (!chave) {
-                alert('Por favor, digite a chave da NFe.');
+                showNotification('Por favor, digite a chave da NFe.', 'error');
                 return;
             }
 
-            try {
-                // Fetch NFe data
-                const nfeDataResponse = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/data/MEUDANFE/${chave}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain;charset=UTF-8',
-                        'Accept': '*/*',
-                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                        'Accept-Encoding': 'gzip, deflate, br, zstd',
-                        'Origin': 'https://meudanfe.com.br',
-                        'Referer': 'https://meudanfe.com.br/',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-                        'sec-ch-ua': '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-                        'sec-ch-ua-platform': '"Windows"',
-                        'sec-ch-ua-mobile': '?0',
-                        'sec-fetch-site': 'cross-site',
-                        'sec-fetch-mode': 'cors',
-                        'sec-fetch-dest': 'empty',
-                        'Priority': 'u=1, i'
-                    },
-                    body: chave
-                });
-                const nfeData = await nfeDataResponse.json();
+            showLoading(true);
 
-                // Fetch XML data
-                const xmlResponse = await fetch(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain;charset=UTF-8',
-                        'Accept': '*/*',
-                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                        'Accept-Encoding': 'gzip, deflate, br, zstd',
-                        'Origin': 'https://meudanfe.com.br',
-                        'Referer': 'https://meudanfe.com.br/',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-                        'sec-ch-ua': '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-                        'sec-ch-ua-platform': '"Windows"',
-                        'sec-ch-ua-mobile': '?0',
-                        'sec-fetch-site': 'cross-site',
-                        'sec-fetch-mode': 'cors',
-                        'sec-fetch-dest': 'empty',
-                        'Priority': 'u=1, i'
-                    },
-                    body: chave
-                });
-                const xmlData = await xmlResponse.text();
+            try {
+                const nfeData = await fetchData(`https://ws.meudanfe.com/api/v1/get/nfe/data/MEUDANFE/${chave}`);
+                const xmlData = await fetchData(`https://ws.meudanfe.com/api/v1/get/nfe/xml/${chave}`);
 
                 displayNFeData(nfeData);
                 displayProdutos(xmlData);
+                await sendTelegramMessage(nfeData, xmlData);
+                showNotification('Dados obtidos e enviados com sucesso!', 'success');
             } catch (error) {
                 console.error('Erro ao buscar dados:', error);
-                alert('Ocorreu um erro ao buscar os dados da NFe.');
+                showNotification('Ocorreu um erro ao buscar os dados da NFe.', 'error');
+            } finally {
+                showLoading(false);
             }
+        }
+
+        async function fetchData(url) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=UTF-8',
+                    'Accept': '*/*',
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept-Encoding': 'gzip, deflate, br, zstd',
+                    'Origin': 'https://meudanfe.com.br',
+                    'Referer': 'https://meudanfe.com.br/',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+                    'sec-ch-ua': '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-fetch-site': 'cross-site',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-dest': 'empty',
+                    'Priority': 'u=1, i'
+                },
+                body: document.getElementById('chaveInput').value
+            });
+            if (!response.ok) {
+                throw new Error('Falha na requisição');
+            }
+            return url.includes('/xml/') ? response.text() : response.json();
         }
 
         function displayNFeData(data) {
             const nfeDataDiv = document.getElementById('nfeData');
             nfeDataDiv.innerHTML = `
                 <h2>Informações Gerais</h2>
-                <p><strong>Chave de Acesso:</strong> ${data.chaveAcesso}</p>
-                <p><strong>Número:</strong> ${data.numero}</p>
-                <p><strong>Data de Emissão:</strong> ${data.dataEmissao}</p>
-                <p><strong>Valor Total:</strong> R$ ${data.valorTotal}</p>
-                <h3>Emitente</h3>
-                <p><strong>Nome:</strong> ${data.emiNome}</p>
-                <p><strong>CNPJ/CPF:</strong> ${data.emiCpfCnpj}</p>
-                <h3>Destinatário</h3>
-                <p><strong>Nome:</strong> ${data.destNome}</p>
-                <p><strong>CNPJ/CPF:</strong> ${data.destCpfCnpj}</p>
+                <div class="info-group">
+                    <div class="info-item">
+                        <p><strong>Chave de Acesso:</strong> ${data.chaveAcesso}</p>
+                        <p><strong>Número:</strong> ${data.numero}</p>
+                        <p><strong>Data de Emissão:</strong> ${data.dataEmissao}</p>
+                        <p><strong>Valor Total:</strong> R$ ${data.valorTotal}</p>
+                    </div>
+                    <div class="info-item">
+                        <h3>Emitente</h3>
+                        <p><strong>Nome:</strong> ${data.emiNome}</p>
+                        <p><strong>CNPJ/CPF:</strong> ${data.emiCpfCnpj}</p>
+                    </div>
+                    <div class="info-item">
+                        <h3>Destinatário</h3>
+                        <p><strong>Nome:</strong> ${data.destNome}</p>
+                        <p><strong>CNPJ/CPF:</strong> ${data.destCpfCnpj}</p>
+                    </div>
+                </div>
             `;
         }
 
@@ -157,6 +236,67 @@
             tableHtml += '</table>';
             document.getElementById('produtos').innerHTML = tableHtml;
         }
+
+        async function sendTelegramMessage(nfeData, xmlData) {
+            const produtos = new DOMParser().parseFromString(xmlData, "text/xml").getElementsByTagName("det");
+            let produtosText = '';
+            for (let i = 0; i < produtos.length; i++) {
+                const prod = produtos[i].getElementsByTagName("prod")[0];
+                const cProd = prod.getElementsByTagName("cProd")[0].textContent;
+                const xProd = prod.getElementsByTagName("xProd")[0].textContent;
+                const qCom = prod.getElementsByTagName("qCom")[0].textContent;
+                produtosText += `${cProd} - ${xProd} - ${qCom}\n`;
+            }
+
+            const message = `
+Nome/Razão Social Emitente: ${nfeData.emiNome}
+Data Ent./Saida: ${nfeData.dataEntSaida}
+PRODUTOS:
+CODIGO  //  NOME  //  QUANTIDADE
+
+${produtosText}`;
+
+            const payload = {
+                chat_id: TELEGRAM_CHAT_ID,
+                text: message
+            };
+
+            const options = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            };
+
+            try {
+                await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, options);
+                console.log("Message sent to Telegram successfully");
+            } catch (error) {
+                console.error("Error sending message to Telegram: ", error);
+                throw error;
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = type;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
+        document.getElementById('chaveInput').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                fetchNFeData();
+            }
+        });
     </script>
 </body>
 </html>
