@@ -1,9 +1,5 @@
 function createJson() {
- // Preencher os campos com os valores desejados
-  document.getElementById("atividade_principal").value = "1053800, 4637106";
-  document.getElementById("uf").value = "SP";
-  document.getElementById("incluir_atividade_secundaria").checked = true;
-  document.getElementById("incluir_atividade_secundaria").value = 'true'; // Certifique-se de que o valor seja enviado corretamente
+
     var termo = document.getElementById("termo").value.split(',').map(function (item) { return item.trim(); }),
         atividade_principal = document.getElementById("atividade_principal").value.split(',').map(function (item) { return item.trim(); }),
         incluir_atividade_secundaria = document.getElementById("incluir_atividade_secundaria").checked ? true : false,
