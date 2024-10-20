@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta CNPJ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        label {
+            font-weight: bold;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+        }
+        .result h3 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .result p {
+            margin: 5px 0;
+        }
+        .socio {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .socio h4 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Consulta CNPJ</h1>
+
+    <label for="cnpj">Digite o CNPJ:</label>
+    <input type="text" id="cnpj" placeholder="Ex: 18491778000106" required>
+    <button id="searchBtn">Pesquisar</button>
+
+    <div class="result">
+        <h2>Resultado:</h2>
+        <div id="resultArea">Nenhum dado encontrado.</div>
+    </div>
+
+    <script>
+        document.getElementById('searchBtn').addEventListener('click', async function () {
+            const cnpj = document.getElementById('cnpj').value;
+
+            if (!cnpj) {
+                alert("Por favor, insira um CNPJ.");
+                return;
+            }
+
+            const url = `http://brasilapi.com.br/api/cnpj/v1/${cnpj}`;
+            
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error("Erro ao buscar os dados. Verifique o CNPJ e tente novamente.");
+                }
+
+                const data = await response.json();
+                displayData(data);
+
+            } catch (error) {
+                document.getElementById('resultArea').innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+            }
+        });
+
+        function displayData(data) {
+            const resultArea = document.getElementById('resultArea');
+            resultArea.innerHTML = `
+                <h3>Informações Gerais</h3>
+                <p><strong>Razão Social:</strong> ${data.razao_social || 'Não informado'}</p>
+                <p><strong>Nome Fantasia:</strong> ${data.nome_fantasia || 'Não informado'}</p>
+                <p><strong>CNPJ:</strong> ${data.cnpj}</p>
+                <p><strong>Natureza Jurídica:</strong> ${data.natureza_juridica}</p>
+                <p><strong>Situação Cadastral:</strong> ${data.descricao_situacao_cadastral}</p>
+                <p><strong>Data de Início de Atividade:</strong> ${data.data_inicio_atividade}</p>
+                
+                <h3>Endereço</h3>
+                <p><strong>Logradouro:</strong> ${data.logradouro}, ${data.numero}</p>
+                <p><strong>Complemento:</strong> ${data.complemento || 'Não informado'}</p>
+                <p><strong>Bairro:</strong> ${data.bairro}</p>
+                <p><strong>Município:</strong> ${data.municipio}</p>
+                <p><strong>UF:</strong> ${data.uf}</p>
+                <p><strong>CEP:</strong> ${data.cep}</p>
+
+                <h3>Contato</h3>
+                <p><strong>Telefone:</strong> ${data.ddd_telefone_1 || 'Não informado'}</p>
+                <p><strong>Email:</strong> ${data.email || 'Não informado'}</p>
+                
+                <h3>Atividades Econômicas</h3>
+                <p><strong>CNAE Fiscal:</strong> ${data.cnae_fAiscal_descricao}</p>
+                <ul>
+                    ${data.cnaes_secundarios.map(cnae => `<li>${cnae.descricao}</li>`).join('')}
+                </ul>
+
+                <h3>Quadro de Sócios e Administradores</h3>
+                ${data.qsa.map(socio => `
+                    <div class="socio">
+                        <h4>${socio.nome_socio}</h4>
+                        <p><strong>Qualificação:</strong> ${socio.qualificacao_socio}</p>
+                        <p><strong>Faixa Etária:</strong> ${socio.faixa_etaria}</p>
+                        <p><strong>Data de Entrada na Sociedade:</strong> ${socio.data_entrada_sociedade}</p>
+                    </div>
+                `).join('')}
+            `;
+        }
+    </script>
+
+</body>
+</html>
