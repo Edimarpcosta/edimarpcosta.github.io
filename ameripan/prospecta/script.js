@@ -77,7 +77,7 @@ function createJson() {
             body: JSON.stringify(send),
         };
 
-        return fetch('http://api.casadosdados.com.br/v2/public/cnpj/search', requestOptions)
+        return fetch('https://api.casadosdados.com.br/v2/public/cnpj/search', requestOptions)
             .then(response => {
                 if (!response.ok) {
                     showToast("Erro durante a busca, resposta não Ok.", "error");
