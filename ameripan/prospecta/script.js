@@ -66,6 +66,7 @@ function createJson() {
                 "somente_matriz": somente_matriz,
                 "somente_filial": somente_filial
             },
+            "limite": 100, // Adicionado limite de 100 itens por página
             "page": page
         };
 
@@ -99,7 +100,7 @@ function createJson() {
                 allData = allData.concat(data.data.cnpj); // Concatenar dados da página atual com os dados anteriores
 
                 // Verificar se há mais páginas
-                const hasMorePages = data.data.count > page * 20; // Considerando 20 itens por página
+                const hasMorePages = data.data.count > page * 100; // Considerando 100 itens por página
 
                 if (hasMorePages) {
                     // Chamar a função recursivamente para a próxima página
