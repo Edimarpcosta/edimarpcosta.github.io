@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta CNPJ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        label {
+            font-weight: bold;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+        }
+        .result h3 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .result p {
+            margin: 5px 0;
+        }
+        .socio {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .socio h4 {
+            margin-top: 0;
+        }
+        .formatted-cnpj {
+            margin-top: 10px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Consulta CNPJ</h1>
+
+    <label for="cnpj">Digite o CNPJ:</label>
+    <input type="text" id="cnpj" placeholder="Ex: 18.491.778/0001-06 ou 18491778000106" required>
+    <button id="searchBtn">Pesquisar</button>
+    <div class="formatted-cnpj" id="formattedCnpj"></div>
+
+    <div class="result">
+        <h2>Resultado:</h2>
+        <div id="resultArea">Nenhum dado encontrado.</div>
+    </div>
+
+    <script>
+        document.getElementById('searchBtn').addEventListener('click', async function () {
+            const cnpjInput = document.getElementById('cnpj').value;
+            const formattedCnpj = formatCnpj(cnpjInput);
+            
+            document.getElementById('formattedCnpj').textContent = `CNPJ formatado para consulta: ${formattedCnpj}`;
+
+            if (!formattedCnpj) {
+                alert("Por favor, insira um CNPJ válido.");
+                return;
+            }
+
+            const url = `https://brasilapi.com.br/api/cnpj/v1/${formattedCnpj}`;
+            
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error("Erro ao buscar os dados. Verifique o CNPJ e tente novamente.");
+                }
+
+                const data = await response.json();
+                displayData(data);
+
+            } catch (error) {
+                document.getElementById('resultArea').innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+            }
+        });
+
+        function formatCnpj(cnpj) {
+            // Remove todos os caracteres não numéricos
+            let cnpjClean = cnpj.replace(/\D/g, '');
+            
+            // Verifica se está vazio
+            if (cnpjClean === '') {
+                return '';
+            }
+            
+            // Adiciona zeros à esquerda até completar 14 caracteres
+            while (cnpjClean.length < 14) {
+                cnpjClean = '0' + cnpjClean;
+            }
+            
+            // Limita a 14 caracteres se for maior
+            if (cnpjClean.length > 14) {
+                cnpjClean = cnpjClean.substring(0, 14);
+            }
+            
+            return cnpjClean;
+        }
+
+        function displayData(data) {
+            const resultArea = document.getElementById('resultArea');
+            
+            // Formatar capital social em reais
+            const capitalSocial = data.capital_social ? 
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.capital_social) : 
+                'Não informado';
+            
+            // Formatar telefones
+            const formatarTelefone = (telefone) => {
+                if (!telefone) return 'Não informado';
+                if (telefone.length === 10) {
+                    return `(${telefone.substring(0, 2)}) ${telefone.substring(2, 6)}-${telefone.substring(6)}`;
+                } else if (telefone.length === 11) {
+                    return `(${telefone.substring(0, 2)}) ${telefone.substring(2, 3)} ${telefone.substring(3, 7)}-${telefone.substring(7)}`;
+                }
+                return telefone;
+            };
+            
+            resultArea.innerHTML = `
+                <h3>Informações Gerais</h3>
+                <p><strong>Razão Social:</strong> ${data.razao_social || 'Não informado'}</p>
+                <p><strong>Nome Fantasia:</strong> ${data.nome_fantasia || 'Não informado'}</p>
+                <p><strong>CNPJ:</strong> ${data.cnpj}</p>
+                <p><strong>Natureza Jurídica:</strong> ${data.natureza_juridica} (Código: ${data.codigo_natureza_juridica || 'Não informado'})</p>
+                <p><strong>Tipo:</strong> ${data.descricao_identificador_matriz_filial || 'Não informado'}</p>
+                <p><strong>Porte:</strong> ${data.porte || 'Não informado'}</p>
+                <p><strong>Capital Social:</strong> ${capitalSocial}</p>
+                <p><strong>Data de Abertura:</strong> ${data.data_inicio_atividade || 'Não informado'}</p>
+                <p><strong>Situação Cadastral:</strong> ${data.descricao_situacao_cadastral || 'Não informado'}</p>
+                <p><strong>Data da Situação Cadastral:</strong> ${data.data_situacao_cadastral || 'Não informado'}</p>
+                <p><strong>Motivo Situação Cadastral:</strong> ${data.descricao_motivo_situacao_cadastral || 'Não informado'}</p>
+                
+                <h3>Regime Tributário</h3>
+                <p><strong>Opção pelo Simples:</strong> ${data.opcao_pelo_simples ? 'Sim' : 'Não'}</p>
+                <p><strong>Data de Opção pelo Simples:</strong> ${data.data_opcao_pelo_simples || 'Não informado'}</p>
+                <p><strong>Data de Exclusão do Simples:</strong> ${data.data_exclusao_do_simples || 'Não aplicável'}</p>
+                <p><strong>Opção pelo MEI:</strong> ${data.opcao_pelo_mei ? 'Sim' : 'Não'}</p>
+                <p><strong>Regime Tributário:</strong> ${data.regime_tributario || 'Não informado'}</p>
+                
+                <h3>Endereço</h3>
+                <p><strong>Tipo de Logradouro:</strong> ${data.descricao_tipo_de_logradouro || ''} ${data.logradouro || 'Não informado'}, ${data.numero || 'S/N'}</p>
+                <p><strong>Complemento:</strong> ${data.complemento || 'Não informado'}</p>
+                <p><strong>Bairro:</strong> ${data.bairro || 'Não informado'}</p>
+                <p><strong>Município:</strong> ${data.municipio || 'Não informado'} - ${data.uf || ''}</p>
+                <p><strong>CEP:</strong> ${data.cep ? data.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : 'Não informado'}</p>
+                <p><strong>Código do Município:</strong> ${data.codigo_municipio || 'Não informado'} (IBGE: ${data.codigo_municipio_ibge || 'Não informado'})</p>
+
+                <h3>Contato</h3>
+                <p><strong>Telefone Principal:</strong> ${formatarTelefone(data.ddd_telefone_1)}</p>
+                <p><strong>Telefone Secundário:</strong> ${formatarTelefone(data.ddd_telefone_2)}</p>
+                <p><strong>Fax:</strong> ${formatarTelefone(data.ddd_fax)}</p>
+                <p><strong>Email:</strong> ${data.email || 'Não informado'}</p>
+                
+                <h3>Atividades Econômicas</h3>
+                <p><strong>CNAE Fiscal Principal:</strong> ${data.cnae_fiscal} - ${data.cnae_fiscal_descricao || 'Não informado'}</p>
+                
+                <h4>CNAEs Secundários</h4>
+                ${data.cnaes_secundarios && data.cnaes_secundarios.length > 0 ? 
+                    `<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                        <thead>
+                            <tr style="background-color: #f2f2f2;">
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Código</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.cnaes_secundarios.map(cnae => `
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${cnae.codigo}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${cnae.descricao}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>` : 
+                    '<p>Nenhum CNAE secundário registrado</p>'
+                }
+
+                <h3>Quadro de Sócios e Administradores</h3>
+                ${data.qsa && data.qsa.length > 0 ? 
+                    data.qsa.map(socio => `
+                        <div class="socio">
+                            <h4>${socio.nome_socio || 'Nome não informado'}</h4>
+                            <p><strong>CPF/CNPJ:</strong> ${socio.cnpj_cpf_do_socio || 'Não informado'}</p>
+                            <p><strong>Qualificação:</strong> ${socio.qualificacao_socio || 'Não informado'} (Código: ${socio.codigo_qualificacao_socio || 'Não informado'})</p>
+                            <p><strong>Tipo de Sócio:</strong> ${getIdentificadorSocio(socio.identificador_de_socio)}</p>
+                            <p><strong>Data de Entrada na Sociedade:</strong> ${socio.data_entrada_sociedade || 'Não informado'}</p>
+                            <p><strong>Faixa Etária:</strong> ${socio.faixa_etaria || 'Não informado'} (Código: ${socio.codigo_faixa_etaria || 'Não informado'})</p>
+                            <p><strong>País de Origem:</strong> ${socio.pais || 'Brasil'} (Código: ${socio.codigo_pais || 'Não informado'})</p>
+                            
+                            ${socio.nome_representante_legal ? 
+                                `<h5>Representante Legal</h5>
+                                <p><strong>Nome:</strong> ${socio.nome_representante_legal || 'Não informado'}</p>
+                                <p><strong>CPF:</strong> ${socio.cpf_representante_legal || 'Não informado'}</p>
+                                <p><strong>Qualificação:</strong> ${socio.qualificacao_representante_legal || 'Não informado'} (Código: ${socio.codigo_qualificacao_representante_legal || 'Não informado'})</p>` : 
+                                ''
+                            }
+                        </div>
+                    `).join('') : 
+                    '<p>Nenhum sócio registrado</p>'
+                }
+                
+                <h3>Informações Adicionais</h3>
+                <p><strong>Situação Especial:</strong> ${data.situacao_especial || 'Não informado'}</p>
+                <p><strong>Data da Situação Especial:</strong> ${data.data_situacao_especial || 'Não informado'}</p>
+                <p><strong>Ente Federativo Responsável:</strong> ${data.ente_federativo_responsavel || 'Não informado'}</p>
+                
+                <p style="margin-top: 20px; font-style: italic; color: #666;">Dados atualizados em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+            `;
+        }
+        
+        function getIdentificadorSocio(codigo) {
+            const tipos = {
+                1: "Pessoa Jurídica",
+                2: "Pessoa Física",
+                3: "Estrangeiro"
+            };
+            return tipos[codigo] || "Não informado";
+        }
+    </script>
+
+</body>
+</html>
