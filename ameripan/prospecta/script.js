@@ -63,6 +63,25 @@ document.addEventListener('DOMContentLoaded', () => {
     somenteFilial.addEventListener('change', function() {
         if(this.checked) somenteMatriz.checked = false;
     });
+    
+    // Configurar comportamento do checkbox de atraso
+    const enableDelayedRequests = document.getElementById('enableDelayedRequests');
+    const delayOptionsContainer = document.getElementById('delayOptionsContainer');
+    
+    // Função para mostrar/esconder as opções de atraso
+    function toggleDelayOptions() {
+        if (enableDelayedRequests.checked) {
+            delayOptionsContainer.style.display = 'block';
+        } else {
+            delayOptionsContainer.style.display = 'none';
+        }
+    }
+    
+    // Configurar estado inicial
+    toggleDelayOptions();
+    
+    // Adicionar event listener para o checkbox
+    enableDelayedRequests.addEventListener('change', toggleDelayOptions);
 });
 
 /**
@@ -130,11 +149,23 @@ function createJson() {
         com_email: document.getElementById('com_email').checked,
         pagina: parseInt(document.getElementById('pagina').value) || 1,
         preview: document.getElementById('previewBeforeExport').checked,
+        enableDelayedRequests: document.getElementById('enableDelayedRequests').checked,
+        delayStartPage: parseInt(document.getElementById('delayStartPage').value) || 10,
+        delaySeconds: parseInt(document.getElementById('delaySeconds').value) || 3,
         exportFormat: getCheckedRadioValue('exportFormat')
     };
 
+    // Limpar alertas de erro anteriores
+    const loadingAlertsElement = document.getElementById('loadingAlerts');
+    if (loadingAlertsElement) {
+        loadingAlertsElement.innerHTML = '';
+    }
+    
+    // Configurar valores de atraso
+    const initialDelay = formData.enableDelayedRequests ? (formData.delaySeconds * 1000) : 0;
+    
     // Iniciar a busca recursiva
-    fetchPage(formData.pagina, [], formData, outputFilename)
+    fetchPage(formData.pagina, [], formData, outputFilename, 0, initialDelay)
         .finally(() => {
             // Restaurar botão de pesquisa
             searchButton.disabled = false;
