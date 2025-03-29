@@ -190,7 +190,10 @@
             isProcessing: false,
             isPaused: false,
             currentIndex: 0,
-            apiDelay: 1000 // Delay entre chamadas para evitar bloqueio (em ms)
+            apiDelay: 300, // Delay entre chamadas para evitar bloqueio (em ms)
+            maxParallelRequests: 5, // Número máximo de requisições simultâneas
+            requestsInProgress: 0,
+            cnpjCache: {} // Cache para evitar consultas repetidas
         };
 
         // DOM Elements
@@ -343,13 +346,25 @@
             async fetchCnpjData(cnpj) {
                 try {
                     const formattedCnpj = utils.formatCnpjForApi(cnpj);
+                    
+                    // Verificar se já temos este CNPJ em cache
+                    if (state.cnpjCache[formattedCnpj]) {
+                        console.log(`Usando dados em cache para CNPJ ${formattedCnpj}`);
+                        return state.cnpjCache[formattedCnpj];
+                    }
+                    
                     const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${formattedCnpj}`);
                     
                     if (!response.ok) {
                         throw new Error(`Erro ao consultar CNPJ: ${response.status} ${response.statusText}`);
                     }
                     
-                    return await response.json();
+                    const data = await response.json();
+                    
+                    // Salvar no cache
+                    state.cnpjCache[formattedCnpj] = data;
+                    
+                    return data;
                 } catch (error) {
                     console.error(`Erro ao consultar CNPJ ${cnpj}:`, error);
                     return { 
@@ -360,7 +375,7 @@
                 }
             },
 
-            // Exportar resultados para um arquivo Excel
+            // Exportar resultados para um arquivo Excel com abas separadas
             exportToExcel() {
                 try {
                     // Verificar se a biblioteca XLSX está disponível
@@ -379,52 +394,105 @@
                     // Criar planilha do Excel
                     const workbook = XLSX.utils.book_new();
                     
-                    // Preparar dados para exportação
-                    const exportData = state.results.map(result => {
-                        // Se houver erro, exportar somente o CNPJ e a mensagem de erro
-                        if (result.error) {
-                            return {
-                                'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
-                                'Erro': result.errorMessage
-                            };
+                    // Separar os resultados em sucessos e erros
+                    const successResults = [];
+                    const errorResults = [];
+                    
+                    state.results.forEach(result => {
+                        if (result) {
+                            if (result.error) {
+                                errorResults.push({
+                                    'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
+                                    'CNPJ Formatado': result.cnpj,
+                                    'Erro': result.errorMessage,
+                                    'Data da Consulta': new Date().toLocaleString()
+                                });
+                            } else {
+                                // Preparar dados dos resultados bem-sucedidos
+                                const successData = {
+                                    'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
+                                    'CNPJ Formatado': result.cnpj,
+                                    'Razão Social': result.razao_social || '',
+                                    'Nome Fantasia': result.nome_fantasia || '',
+                                    'Situação Cadastral': result.descricao_situacao_cadastral || '',
+                                    'Data de Abertura': result.data_inicio_atividade || '',
+                                    'CNAE Principal': result.cnae_fiscal || '',
+                                    'Descrição CNAE': result.cnae_fiscal_descricao || '',
+                                    'Natureza Jurídica': result.natureza_juridica || '',
+                                    'Logradouro': result.logradouro || '',
+                                    'Número': result.numero || '',
+                                    'Complemento': result.complemento || '',
+                                    'Bairro': result.bairro || '',
+                                    'Município': result.municipio || '',
+                                    'UF': result.uf || '',
+                                    'CEP': result.cep || '',
+                                    'Telefone': result.ddd_telefone_1 || '',
+                                    'Telefone 2': result.ddd_telefone_2 || '',
+                                    'Email': result.email || '',
+                                    'Capital Social': result.capital_social || '',
+                                    'Porte': result.porte || '',
+                                    'Opção pelo Simples': result.opcao_pelo_simples ? 'Sim' : 'Não',
+                                    'Data Opção pelo Simples': result.data_opcao_pelo_simples || '',
+                                    'Data Consulta': new Date().toLocaleString()
+                                };
+                                
+                                // Adicionar dados dos sócios, se existirem
+                                if (result.qsa && result.qsa.length > 0) {
+                                    result.qsa.forEach((socio, index) => {
+                                        successData[`Sócio ${index+1} - Nome`] = socio.nome_socio || '';
+                                        successData[`Sócio ${index+1} - Qualificação`] = socio.qualificacao_socio || '';
+                                        successData[`Sócio ${index+1} - Data de Entrada`] = socio.data_entrada_sociedade || '';
+                                        successData[`Sócio ${index+1} - Faixa Etária`] = socio.faixa_etaria || '';
+                                    });
+                                }
+                                
+                                // Adicionar CNAEs secundários como colunas extras
+                                if (result.cnaes_secundarios && result.cnaes_secundarios.length > 0) {
+                                    result.cnaes_secundarios.forEach((cnae, index) => {
+                                        successData[`CNAE Secundário ${index+1}`] = cnae.codigo || '';
+                                        successData[`Descrição CNAE Secundário ${index+1}`] = cnae.descricao || '';
+                                    });
+                                }
+                                
+                                successResults.push(successData);
+                            }
                         }
-                        
-                        // Caso contrário, exportar os principais dados
-                        const basicData = {
-                            'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
-                            'Razão Social': result.razao_social || '',
-                            'Nome Fantasia': result.nome_fantasia || '',
-                            'Situação Cadastral': result.descricao_situacao_cadastral || '',
-                            'Data de Abertura': result.data_inicio_atividade || '',
-                            'CNAE Principal': result.cnae_fiscal_descricao || '',
-                            'Logradouro': result.logradouro || '',
-                            'Número': result.numero || '',
-                            'Complemento': result.complemento || '',
-                            'Bairro': result.bairro || '',
-                            'Município': result.municipio || '',
-                            'UF': result.uf || '',
-                            'CEP': result.cep || '',
-                            'Telefone': result.ddd_telefone_1 || '',
-                            'Email': result.email || ''
-                        };
-                        
-                        // Adicionar dados dos sócios, se existirem
-                        if (result.qsa && result.qsa.length > 0) {
-                            result.qsa.forEach((socio, index) => {
-                                basicData[`Sócio ${index+1} - Nome`] = socio.nome_socio || '';
-                                basicData[`Sócio ${index+1} - Qualificação`] = socio.qualificacao_socio || '';
-                                basicData[`Sócio ${index+1} - Data de Entrada`] = socio.data_entrada_sociedade || '';
-                            });
-                        }
-                        
-                        return basicData;
                     });
                     
-                    utils.updateStatus('Gerando planilha...');
+                    utils.updateStatus('Gerando planilhas...');
                     
-                    // Criar planilha e adicionar ao workbook
-                    const worksheet = XLSX.utils.json_to_sheet(exportData);
-                    XLSX.utils.book_append_sheet(workbook, worksheet, "Dados CNPJs");
+                    // Criar planilha de sucessos e adicionar ao workbook
+                    if (successResults.length > 0) {
+                        const successWorksheet = XLSX.utils.json_to_sheet(successResults);
+                        XLSX.utils.book_append_sheet(workbook, successWorksheet, "Dados CNPJs");
+                    } else {
+                        // Se não houver resultados bem-sucedidos, criar uma planilha vazia
+                        const emptyWorksheet = XLSX.utils.aoa_to_sheet([['Nenhum CNPJ processado com sucesso']]);
+                        XLSX.utils.book_append_sheet(workbook, emptyWorksheet, "Dados CNPJs");
+                    }
+                    
+                    // Criar planilha de erros e adicionar ao workbook
+                    if (errorResults.length > 0) {
+                        const errorWorksheet = XLSX.utils.json_to_sheet(errorResults);
+                        XLSX.utils.book_append_sheet(workbook, errorWorksheet, "Erros");
+                    } else {
+                        // Se não houver erros, criar uma planilha vazia com mensagem
+                        const emptyErrorWorksheet = XLSX.utils.aoa_to_sheet([['Nenhum erro encontrado nas consultas']]);
+                        XLSX.utils.book_append_sheet(workbook, emptyErrorWorksheet, "Erros");
+                    }
+                    
+                    // Criar planilha de resumo
+                    const summary = [
+                        ['Resumo da Consulta de CNPJs'],
+                        [''],
+                        ['Total de CNPJs processados', state.results.filter(r => r !== undefined).length],
+                        ['CNPJs processados com sucesso', successResults.length],
+                        ['CNPJs com erro', errorResults.length],
+                        ['Data e hora da exportação', new Date().toLocaleString()],
+                    ];
+                    
+                    const summaryWorksheet = XLSX.utils.aoa_to_sheet(summary);
+                    XLSX.utils.book_append_sheet(workbook, summaryWorksheet, "Resumo");
                     
                     // Exportar workbook como arquivo
                     XLSX.writeFile(workbook, "consulta_cnpjs.xlsx");
@@ -559,11 +627,16 @@
                 elements.resumeBtn.classList.remove('hidden');
                 
                 utils.hideLoading();
-                utils.updateStatus('Processamento pausado.');
+                utils.updateStatus(`Processamento pausado. ${state.results.filter(r => r !== undefined).length} de ${state.cnpjList.length} CNPJs processados.`);
             },
 
             // Retomar processamento
             async resumeProcessing() {
+                if (state.requestsInProgress > 0) {
+                    alert('Aguarde as requisições em andamento terminarem antes de retomar.');
+                    return;
+                }
+                
                 state.isPaused = false;
                 
                 // Atualizar interface
@@ -573,47 +646,107 @@
                 utils.showLoading();
                 utils.updateStatus('Retomando consultas...');
                 
-                // Continuar processamento
-                await this.processNextBatch();
+                // Calcular quantos CNPJs faltam processar
+                const processedCount = state.results.filter(r => r !== undefined).length;
+                const remainingCount = state.cnpjList.length - processedCount;
+                
+                console.log(`Retomando processamento. Faltam ${remainingCount} CNPJs.`);
+                
+                // Continuar processamento com novos lotes em paralelo
+                const pendingIndices = [];
+                for (let i = 0; i < state.cnpjList.length; i++) {
+                    if (!state.results[i]) {
+                        pendingIndices.push(i);
+                    }
+                }
+                
+                // Reiniciar do primeiro CNPJ pendente
+                if (pendingIndices.length > 0) {
+                    state.currentIndex = pendingIndices[0];
+                    await this.processNextBatch();
+                } else {
+                    this.completeProcessing();
+                }
             },
 
-            // Processar próximo lote de CNPJs
+            // Processar próximo lote de CNPJs com processamento paralelo
             async processNextBatch() {
                 if (!state.isProcessing || state.isPaused) return;
                 
-                const startIndex = state.currentIndex;
-                
                 try {
-                    while (state.currentIndex < state.cnpjList.length && !state.isPaused) {
-                        const cnpj = state.cnpjList[state.currentIndex];
+                    // Função para processar um único CNPJ
+                    const processCnpj = async (index) => {
+                        if (index >= state.cnpjList.length || state.isPaused) return;
                         
-                        // Atualizar status e progresso
-                        utils.updateStatus(`Consultando CNPJ ${state.currentIndex + 1} de ${state.cnpjList.length}...`);
-                        utils.updateProgressBar(state.currentIndex, state.cnpjList.length);
+                        const cnpj = state.cnpjList[index];
                         
-                        // Consultar API
-                        const result = await dataHandlers.fetchCnpjData(cnpj);
+                        // Incrementar contador de requisições em andamento
+                        state.requestsInProgress++;
                         
-                        // Armazenar resultado
-                        state.results[state.currentIndex] = result;
-                        
-                        // Atualizar tabela
-                        this.addResultToTable(result, state.currentIndex);
-                        
-                        // Avançar para o próximo CNPJ
-                        state.currentIndex++;
-                        
-                        // Adicionar delay para evitar sobrecarga na API
-                        await utils.sleep(state.apiDelay);
+                        try {
+                            // Consultar API
+                            const result = await dataHandlers.fetchCnpjData(cnpj);
+                            
+                            if (!state.isPaused) {
+                                // Armazenar resultado
+                                state.results[index] = result;
+                                
+                                // Atualizar tabela (de forma segura para não bloquear a UI)
+                                setTimeout(() => this.addResultToTable(result, index), 0);
+                                
+                                // Atualizar status e progresso
+                                const processedCount = state.results.filter(r => r !== undefined).length;
+                                utils.updateStatus(`Processados ${processedCount} de ${state.cnpjList.length} CNPJs...`);
+                                utils.updateProgressBar(processedCount, state.cnpjList.length);
+                                
+                                // Verificar se todos os CNPJs foram processados
+                                if (processedCount >= state.cnpjList.length) {
+                                    this.completeProcessing();
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Erro ao processar CNPJ ${cnpj}:`, error);
+                            
+                            if (!state.isPaused) {
+                                // Armazenar erro como resultado
+                                state.results[index] = { 
+                                    cnpj: cnpj, 
+                                    error: true, 
+                                    errorMessage: error.message 
+                                };
+                                
+                                // Atualizar tabela com o erro
+                                setTimeout(() => this.addResultToTable(state.results[index], index), 0);
+                            }
+                        } finally {
+                            // Decrementar contador de requisições em andamento
+                            state.requestsInProgress--;
+                            
+                            // Se não estiver pausado, tenta iniciar uma nova requisição
+                            if (!state.isPaused) {
+                                const nextIndex = state.currentIndex++;
+                                if (nextIndex < state.cnpjList.length) {
+                                    // Pequeno delay para evitar sobrecarga no navegador
+                                    setTimeout(() => processCnpj(nextIndex), state.apiDelay);
+                                }
+                            }
+                        }
+                    };
+                    
+                    // Iniciar processamento em paralelo
+                    const initialBatchSize = Math.min(state.maxParallelRequests, state.cnpjList.length);
+                    
+                    utils.updateStatus(`Iniciando consultas em paralelo (${initialBatchSize} simultâneas)...`);
+                    
+                    // Iniciar as primeiras requisições em paralelo
+                    for (let i = 0; i < initialBatchSize; i++) {
+                        state.currentIndex = i + 1;  // +1 porque o primeiro já vai ser processado
+                        processCnpj(i);
                     }
                     
-                    // Verificar se todos os CNPJs foram processados
-                    if (state.currentIndex >= state.cnpjList.length) {
-                        this.completeProcessing();
-                    }
                 } catch (error) {
-                    console.error('Erro durante o processamento:', error);
-                    utils.updateStatus('Erro durante o processamento. Verifique o console para mais detalhes.');
+                    console.error('Erro ao iniciar processamento em lote:', error);
+                    utils.updateStatus('Erro ao iniciar processamento. Verifique o console para mais detalhes.');
                     
                     // Permitir continuar do ponto de falha
                     elements.pauseBtn.classList.add('hidden');
@@ -632,46 +765,119 @@
                 elements.startBtn.classList.remove('hidden');
                 
                 utils.hideLoading();
-                utils.updateStatus(`Processamento concluído. ${state.results.length} CNPJs consultados.`);
+                
+                // Contar processamentos bem-sucedidos e com erro
+                const processedCount = state.results.filter(r => r !== undefined).length;
+                const errorCount = state.results.filter(r => r && r.error).length;
+                const successCount = processedCount - errorCount;
+                
+                utils.updateStatus(`Processamento concluído. ${processedCount} CNPJs consultados (${successCount} com sucesso, ${errorCount} com erro).`);
                 utils.updateProgressBar(state.cnpjList.length, state.cnpjList.length);
+                
+                // Otimizar a exibição da tabela após o processamento
+                this.optimizeTableRendering();
+            },
+            
+            // Otimizar a renderização da tabela
+            optimizeTableRendering() {
+                // Se tivermos muitos resultados, podemos paginar a tabela
+                if (state.results.length > 100) {
+                    console.log('Muitos resultados, otimizando renderização da tabela...');
+                    
+                    // Implementação simples: mostrar apenas os primeiros 100 registros
+                    // Em uma implementação mais completa, poderíamos adicionar paginação
+                    elements.resultsBody.innerHTML = '';
+                    
+                    for (let i = 0; i < Math.min(100, state.results.length); i++) {
+                        if (state.results[i]) {
+                            this.addResultToTable(state.results[i], i);
+                        }
+                    }
+                    
+                    // Adicionar mensagem informando que nem todos os resultados estão visíveis
+                    if (state.results.length > 100) {
+                        const infoRow = document.createElement('tr');
+                        infoRow.innerHTML = `
+                            <td colspan="7" class="py-2 px-4 border-b border-gray-200 bg-yellow-50 text-center">
+                                Mostrando os primeiros 100 de ${state.results.length} resultados. Todos os resultados serão exportados.
+                            </td>
+                        `;
+                        elements.resultsBody.appendChild(infoRow);
+                    }
+                }
             },
 
-            // Adicionar resultado à tabela
+            // Adicionar resultado à tabela com renderização otimizada
             addResultToTable(result, index) {
-                const row = document.createElement('tr');
-                
-                if (result.error) {
-                    // Linha de erro
-                    row.innerHTML = `
-                        <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
-                        <td class="py-2 px-4 border-b border-gray-200 text-red-600" colspan="5">Erro: ${result.errorMessage}</td>
-                        <td class="py-2 px-4 border-b border-gray-200"></td>
-                    `;
+                // Verificar se já existe uma linha para este índice
+                const existingRow = document.querySelector(`.result-row-${index}`);
+                if (existingRow) {
+                    // Atualizar linha existente
+                    if (result.error) {
+                        existingRow.innerHTML = `
+                            <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
+                            <td class="py-2 px-4 border-b border-gray-200 text-red-600" colspan="5">Erro: ${result.errorMessage}</td>
+                            <td class="py-2 px-4 border-b border-gray-200"></td>
+                        `;
+                    } else {
+                        existingRow.innerHTML = `
+                            <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.razao_social || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.nome_fantasia || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.descricao_situacao_cadastral || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.municipio || '-'}/${result.uf || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.cnae_fiscal_descricao || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">
+                                <button class="details-btn px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200" data-index="${index}">
+                                    Detalhes
+                                </button>
+                            </td>
+                        `;
+                    }
                 } else {
-                    // Linha com dados
-                    row.innerHTML = `
-                        <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">${result.razao_social || '-'}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">${result.nome_fantasia || '-'}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">${result.descricao_situacao_cadastral || '-'}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">${result.municipio || '-'}/${result.uf || '-'}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">${result.cnae_fiscal_descricao || '-'}</td>
-                        <td class="py-2 px-4 border-b border-gray-200">
-                            <button class="details-btn px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200" data-index="${index}">
-                                Detalhes
-                            </button>
-                        </td>
-                    `;
+                    // Criar nova linha
+                    const row = document.createElement('tr');
+                    row.className = `result-row-${index}`;
+                    
+                    if (result.error) {
+                        // Linha de erro
+                        row.innerHTML = `
+                            <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
+                            <td class="py-2 px-4 border-b border-gray-200 text-red-600" colspan="5">Erro: ${result.errorMessage}</td>
+                            <td class="py-2 px-4 border-b border-gray-200"></td>
+                        `;
+                    } else {
+                        // Linha com dados
+                        row.innerHTML = `
+                            <td class="py-2 px-4 border-b border-gray-200">${utils.formatCnpjForDisplay(result.cnpj)}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.razao_social || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.nome_fantasia || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.descricao_situacao_cadastral || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.municipio || '-'}/${result.uf || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">${result.cnae_fiscal_descricao || '-'}</td>
+                            <td class="py-2 px-4 border-b border-gray-200">
+                                <button class="details-btn px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200" data-index="${index}">
+                                    Detalhes
+                                </button>
+                            </td>
+                        `;
+                    }
+                    
+                    // Limitar o número de linhas visíveis para melhorar a performance
+                    if (elements.resultsBody.children.length < 100) {
+                        elements.resultsBody.appendChild(row);
+                    }
                 }
                 
-                elements.resultsBody.appendChild(row);
-                
-                // Adicionar evento ao botão de detalhes
-                const detailsButton = row.querySelector('.details-btn');
-                if (detailsButton) {
-                    detailsButton.addEventListener('click', () => {
-                        this.showDetails(result);
+                // Adicionar evento ao botão de detalhes - usar delegação de eventos para melhor performance
+                if (!window.detailsEventAttached) {
+                    elements.resultsBody.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('details-btn')) {
+                            const index = e.target.getAttribute('data-index');
+                            this.showDetails(state.results[index]);
+                        }
                     });
+                    window.detailsEventAttached = true;
                 }
             },
 
