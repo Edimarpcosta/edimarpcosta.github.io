@@ -6366,5 +6366,1144 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     </script>
+	
+	<script>
+	// Implementação completa do modo tela cheia e apresentação para o catálogo
+// Adicionar este script no final do arquivo HTML, antes do fechamento da tag </body>
+
+// Função auto-executável para evitar conflitos de variáveis
+(function() {
+  // ===== 1. ESTILOS CSS PARA O MODO TELA CHEIA =====
+  function addFullscreenStyles() {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      /* Estilos gerais para modo tela cheia */
+      .fullscreen-element {
+        background-color: var(--bg-primary);
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: auto !important;
+      }
+      
+      /* Barra de controle flutuante que aparece em tela cheia */
+      .fullscreen-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: var(--bg-secondary);
+        border-radius: 10px;
+        padding: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        display: flex;
+        gap: 15px;
+        z-index: 9999;
+        transition: opacity 0.3s;
+        opacity: 0.4;
+      }
+      
+      .fullscreen-controls:hover {
+        opacity: 1;
+      }
+      
+      .fullscreen-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 18px;
+      }
+      
+      .fullscreen-btn:hover {
+        transform: scale(1.1);
+        background-color: var(--secondary-color);
+      }
+      
+      /* Botão para ativar tela cheia */
+      .toggle-fullscreen-btn {
+        position: fixed;
+        right: 20px;
+        bottom: 140px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        cursor: pointer;
+        z-index: 100;
+        transition: all 0.3s;
+      }
+      
+      .toggle-fullscreen-btn:hover {
+        transform: scale(1.1);
+        background-color: var(--secondary-color);
+      }
+      
+      /* Ajustes específicos para o catálogo em tela cheia */
+      .fullscreen-element .header-controls,
+      .fullscreen-element .vendor-controls {
+        width: auto;
+        max-width: 100%;
+      }
+      
+      .fullscreen-element .filters {
+        position: sticky;
+        top: 0;
+        z-index: 90;
+      }
+      
+      .fullscreen-element .products {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      }
+      
+      .fullscreen-element .product {
+        transition: transform 0.3s;
+      }
+      
+      .fullscreen-element .product:hover {
+        transform: translateY(-10px) scale(1.03);
+        z-index: 10;
+      }
+      
+      .fullscreen-element .product-img-container {
+        height: 200px;
+      }
+      
+      .fullscreen-element header {
+        position: relative;
+        transform: none !important;
+      }
+      
+      /* Estilos para o menu de presets de zoom */
+      .zoom-preset-option {
+        padding: 8px 15px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+      }
+      
+      .zoom-preset-option:hover {
+        background-color: rgba(52, 152, 219, 0.1);
+      }
+      
+      .zoom-preset-option.active {
+        background-color: var(--primary-color);
+        color: white;
+      }
+      
+      /* Estilo do indicador de zoom */
+      #zoom-level {
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      
+      #zoom-level:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+      }
+
+      /* Modo de apresentação de slides */
+      .presentation-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-primary);
+        z-index: 10000;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        transition: opacity 0.5s;
+        opacity: 0;
+      }
+      
+      .presentation-container.active {
+        display: flex;
+        opacity: 1;
+      }
+      
+      .presentation-slide {
+        width: 90%;
+        max-width: 1200px;
+        height: 80%;
+        background-color: var(--bg-secondary);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        border-radius: 20px;
+        padding: 30px;
+        display: flex;
+        position: relative;
+        animation: fadeIn 0.5s;
+      }
+      
+      .presentation-image {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      
+      .presentation-image img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        transition: transform 0.5s;
+      }
+      
+      .presentation-image img:hover {
+        transform: scale(1.05);
+      }
+      
+      .presentation-info {
+        flex: 1;
+        padding: 0 30px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      
+      .presentation-sku {
+        font-size: 20px;
+        background-color: rgba(52, 152, 219, 0.1);
+        color: var(--primary-color);
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 50px;
+        margin-bottom: 20px;
+      }
+      
+      .presentation-name {
+        font-size: 36px;
+        font-weight: 600;
+        margin-bottom: 20px;
+      }
+      
+      .presentation-category {
+        font-size: 24px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+      
+      .presentation-price {
+        font-size: 30px;
+        color: var(--accent-color);
+        font-weight: 600;
+        margin-top: 30px;
+      }
+      
+      .presentation-navigation {
+        position: absolute;
+        bottom: 20px;
+        left: 0;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 30px;
+      }
+      
+      .presentation-nav-btn {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 24px;
+        transition: all 0.3s;
+        border: none;
+      }
+      
+      .presentation-nav-btn:hover {
+        transform: scale(1.1);
+        background-color: var(--secondary-color);
+      }
+      
+      .presentation-counter {
+        font-size: 18px;
+        background-color: rgba(52, 152, 219, 0.1);
+        padding: 5px 20px;
+        border-radius: 50px;
+      }
+      
+      .presentation-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: rgba(0,0,0,0.1);
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        z-index: 1;
+      }
+      
+      .presentation-close:hover {
+        background-color: var(--error-color);
+        color: white;
+      }
+      
+      /* Thumbnails para navegação entre produtos */
+      .presentation-thumbnails {
+        margin-top: 20px;
+        width: 90%;
+        max-width: 1200px;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 10px;
+      }
+      
+      .presentation-thumb {
+        width: 80px;
+        height: 80px;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: all 0.3s;
+      }
+      
+      .presentation-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      
+      .presentation-thumb.active {
+        border-color: var(--primary-color);
+        transform: scale(1.1);
+      }
+      
+      /* Responsividade do modo apresentação */
+      @media (max-width: 992px) {
+        .presentation-slide {
+          flex-direction: column;
+          overflow-y: auto;
+        }
+        
+        .presentation-image {
+          height: 50%;
+        }
+        
+        .presentation-info {
+          padding: 20px 0;
+        }
+        
+        .presentation-name {
+          font-size: 28px;
+        }
+        
+        .presentation-category {
+          font-size: 18px;
+        }
+        
+        .presentation-price {
+          font-size: 24px;
+        }
+      }
+      
+      /* Animações */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      
+      @keyframes slideLeft {
+        from { transform: translateX(50px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      
+      @keyframes slideRight {
+        from { transform: translateX(-50px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      
+      .slide-left {
+        animation: slideLeft 0.5s;
+      }
+      
+      .slide-right {
+        animation: slideRight 0.5s;
+      }
+      
+      /* Botão de apresentação para categorias */
+      .category-presentation-btn {
+        margin-left: 10px;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .category-presentation-btn:hover {
+        transform: scale(1.1) !important;
+      }
+    `;
+    document.head.appendChild(styleElement);
+  }
+
+  // ===== 2. FUNCIONALIDADE DE TELA CHEIA BÁSICA =====
+  class FullscreenManager {
+    constructor() {
+      // Adicionar estilos CSS
+      addFullscreenStyles();
+      
+      // Estado
+      this.isFullscreen = false;
+      this.targetElement = document.body;
+      this.zoomLevel = 100; // Valor percentual de zoom (padrão: 100%)
+      this.minZoom = 25;    // Zoom mínimo: 25%
+      this.maxZoom = 500;   // Zoom máximo: 500%
+      this.zoomStep = 25;   // Incrementos de zoom
+      
+      // Criar botão de tela cheia
+      this.createFullscreenButton();
+      
+      // Monitorar eventos de tela cheia
+      this.setupFullscreenEventListeners();
+    }
+    
+    createFullscreenButton() {
+      // Botão principal de tela cheia
+      const fsButton = document.createElement('div');
+      fsButton.className = 'toggle-fullscreen-btn';
+      fsButton.innerHTML = '<i class="fas fa-expand"></i>';
+      fsButton.title = 'Ativar/Desativar modo tela cheia';
+      fsButton.addEventListener('click', () => this.toggleFullscreen());
+      document.body.appendChild(fsButton);
+      this.fsButton = fsButton;
+      
+      // Barra de controles (visível apenas em tela cheia)
+      const controls = document.createElement('div');
+      controls.className = 'fullscreen-controls';
+      controls.style.display = 'none';
+      controls.innerHTML = `
+        <button class="fullscreen-btn" id="zoom-out-btn" title="Reduzir visualização">
+          <i class="fas fa-search-minus"></i>
+        </button>
+        <span id="zoom-level" style="background-color: rgba(255,255,255,0.2); color: var(--text-color); padding: 5px 10px; border-radius: 4px; font-size: 14px; min-width: 70px; text-align: center;">100%</span>
+        <button class="fullscreen-btn" id="zoom-in-btn" title="Ampliar visualização">
+          <i class="fas fa-search-plus"></i>
+        </button>
+        <button class="fullscreen-btn" id="zoom-reset-btn" title="Restaurar zoom padrão (100%)">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button class="fullscreen-btn" id="presentation-btn" title="Modo apresentação">
+          <i class="fas fa-tv"></i>
+        </button>
+        <button class="fullscreen-btn" id="exit-fullscreen-btn" title="Sair da tela cheia">
+          <i class="fas fa-compress"></i>
+        </button>
+      `;
+      document.body.appendChild(controls);
+      this.controls = controls;
+      
+      // Configurar eventos dos botões de controle
+      document.getElementById('zoom-out-btn').addEventListener('click', () => this.decreaseZoom());
+      document.getElementById('zoom-in-btn').addEventListener('click', () => this.increaseZoom());
+      document.getElementById('zoom-reset-btn').addEventListener('click', () => this.resetZoom());
+      document.getElementById('exit-fullscreen-btn').addEventListener('click', () => this.exitFullscreen());
+      document.getElementById('presentation-btn').addEventListener('click', () => this.startPresentation());
+      
+      // Adicionar evento de roda do mouse para zoom
+      this.targetElement.addEventListener('wheel', (e) => {
+        if (this.isFullscreen && e.ctrlKey) {
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            this.increaseZoom();
+          } else {
+            this.decreaseZoom();
+          }
+        }
+      }, { passive: false });
+    }
+    
+    setupFullscreenEventListeners() {
+      // Monitorar eventos de tela cheia
+      document.addEventListener('fullscreenchange', () => this.handleFullscreenChange());
+      document.addEventListener('webkitfullscreenchange', () => this.handleFullscreenChange());
+      document.addEventListener('mozfullscreenchange', () => this.handleFullscreenChange());
+      document.addEventListener('MSFullscreenChange', () => this.handleFullscreenChange());
+      
+      // Teclas de atalho
+      document.addEventListener('keydown', (e) => {
+        if (this.isFullscreen) {
+          if (e.key === 'Escape') {
+            this.exitFullscreen();
+          } else if (e.key === 'f' || e.key === 'F') {
+            this.toggleFullscreen();
+          } else if ((e.key === '=' || e.key === '+') && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // Prevenir zoom do navegador
+            this.increaseZoom();
+          } else if ((e.key === '-' || e.key === '_') && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // Prevenir zoom do navegador
+            this.decreaseZoom();
+          } else if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // Prevenir zoom padrão do navegador
+            this.resetZoom();
+          } else if (e.key === 'p' || e.key === 'P') {
+            this.startPresentation();
+          } else if (e.key >= '1' && e.key <= '9' && (e.ctrlKey || e.metaKey || e.altKey)) {
+            // Presets de zoom com teclas numéricas + modificador
+            e.preventDefault();
+            const presets = {
+              '1': 25,    // 25%
+              '2': 50,    // 50%
+              '3': 75,    // 75%
+              '4': 100,   // 100% (padrão)
+              '5': 150,   // 150%
+              '6': 200,   // 200%
+              '7': 300,   // 300%
+              '8': 400,   // 400%
+              '9': 500    // 500%
+            };
+            if (presets[e.key]) {
+              this.setZoom(presets[e.key]);
+            }
+          }
+        }
+      });
+    }
+    
+    toggleFullscreen() {
+      if (this.isFullscreen) {
+        this.exitFullscreen();
+      } else {
+        this.enterFullscreen();
+      }
+    }
+    
+    enterFullscreen() {
+      const element = this.targetElement;
+      
+      try {
+        if (element.requestFullscreen) {
+          element.requestFullscreen();
+        } else if (element.mozRequestFullScreen) { // Firefox
+          element.mozRequestFullScreen();
+        } else if (element.webkitRequestFullscreen) { // Chrome, Safari & Opera
+          element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) { // IE/Edge
+          element.msRequestFullscreen();
+        } else {
+          // Fallback para navegadores que não suportam a API Fullscreen
+          this.applyFullscreenStyles();
+          this.isFullscreen = true;
+          this.updateFullscreenUI();
+        }
+      } catch (error) {
+        console.error('Erro ao entrar no modo tela cheia:', error);
+        this.applyFullscreenStyles();
+        this.isFullscreen = true;
+        this.updateFullscreenUI();
+      }
+    }
+    
+    exitFullscreen() {
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) { // Firefox
+          document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) { // Chrome, Safari & Opera
+          document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { // IE/Edge
+          document.msExitFullscreen();
+        } else {
+          // Fallback
+          this.removeFullscreenStyles();
+          this.isFullscreen = false;
+          this.updateFullscreenUI();
+        }
+      } catch (error) {
+        console.error('Erro ao sair do modo tela cheia:', error);
+        this.removeFullscreenStyles();
+        this.isFullscreen = false;
+        this.updateFullscreenUI();
+      }
+    }
+    
+    handleFullscreenChange() {
+      // Verificar se estamos em tela cheia
+      this.isFullscreen = Boolean(
+        document.fullscreenElement || 
+        document.webkitFullscreenElement || 
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      
+      // Atualizar a interface de acordo
+      if (this.isFullscreen) {
+        this.applyFullscreenStyles();
+      } else {
+        this.removeFullscreenStyles();
+      }
+      
+      this.updateFullscreenUI();
+    }
+    
+    applyFullscreenStyles() {
+      // Adicionar classes e estilos de tela cheia
+      this.targetElement.classList.add('fullscreen-element');
+      
+      // Adicionar menu de presets de zoom
+      this.addZoomPresetsMenu();
+      
+      // Aplicar zoom atual
+      this.applyZoom();
+      
+      // Salvar o estado da header para restauração posterior
+      if (!this.headerOriginalState) {
+        const header = document.querySelector('header');
+        if (header) {
+          this.headerOriginalState = {
+            position: header.style.position,
+            top: header.style.top,
+            transform: header.style.transform
+          };
+        }
+      }
+      
+      // Otimizar header em tela cheia
+      const header = document.querySelector('header');
+      if (header) {
+        // Remover posicionamento sticky
+        header.style.position = 'relative';
+        header.style.top = '0';
+        header.style.transform = 'none';
+        header.classList.remove('hide');
+      }
+    }
+    
+    removeFullscreenStyles() {
+      // Remover classes e estilos de tela cheia
+      this.targetElement.classList.remove('fullscreen-element');
+      
+      // Remover menu de presets se existir
+      const presetsMenu = document.getElementById('zoom-presets-menu');
+      if (presetsMenu) {
+        presetsMenu.remove();
+      }
+      
+      // Remover qualquer transformação de zoom
+      const productContainer = document.querySelector('#product-list');
+      if (productContainer) {
+        productContainer.style.removeProperty('transform');
+        productContainer.style.removeProperty('transform-origin');
+        productContainer.style.removeProperty('height');
+      }
+      
+      // Restaurar estado original da header
+      if (this.headerOriginalState) {
+        const header = document.querySelector('header');
+        if (header) {
+          header.style.position = this.headerOriginalState.position;
+          header.style.top = this.headerOriginalState.top;
+          header.style.transform = this.headerOriginalState.transform;
+        }
+      }
+    }
+    
+    addZoomPresetsMenu() {
+      // Criar menu dropdown para presets de zoom
+      let presetsMenu = document.getElementById('zoom-presets-menu');
+      
+      // Se já existe, remover para recriar
+      if (presetsMenu) {
+        presetsMenu.remove();
+      }
+      
+      // Criar elemento para o menu de presets
+      presetsMenu = document.createElement('div');
+      presetsMenu.id = 'zoom-presets-menu';
+      presetsMenu.style.cssText = `
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--bg-secondary);
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        padding: 10px;
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        z-index: 9999;
+        min-width: 120px;
+      `;
+      
+      // Adicionar opções de zoom
+      const zoomOptions = [25, 50, 75, 100, 125, 150, 200, 300, 400, 500];
+      zoomOptions.forEach(zoom => {
+        const option = document.createElement('div');
+        option.className = 'zoom-preset-option';
+        option.textContent = `${zoom}%`;
+        option.style.cssText = `
+          padding: 8px 15px;
+          cursor: pointer;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+          ${this.zoomLevel === zoom ? 'background-color: var(--primary-color); color: white;' : ''}
+        `;
+        option.addEventListener('mouseover', () => {
+          if (this.zoomLevel !== zoom) {
+            option.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+          }
+        });
+        option.addEventListener('mouseout', () => {
+          if (this.zoomLevel !== zoom) {
+            option.style.backgroundColor = '';
+          }
+        });
+        option.addEventListener('click', () => {
+          this.setZoom(zoom);
+          presetsMenu.style.display = 'none';
+        });
+        presetsMenu.appendChild(option);
+      });
+      
+      // Adicionar ao documento
+      this.controls.appendChild(presetsMenu);
+      
+      // Adicionar evento para mostrar/ocultar o menu
+      const zoomLevelIndicator = document.getElementById('zoom-level');
+      if (zoomLevelIndicator) {
+        zoomLevelIndicator.style.cursor = 'pointer';
+        zoomLevelIndicator.title = 'Clique para selecionar um nível de zoom';
+        
+        zoomLevelIndicator.addEventListener('click', () => {
+          if (presetsMenu.style.display === 'flex') {
+            presetsMenu.style.display = 'none';
+          } else {
+            presetsMenu.style.display = 'flex';
+          }
+        });
+        
+        // Fechar ao clicar fora
+        document.addEventListener('click', (e) => {
+          if (!zoomLevelIndicator.contains(e.target) && !presetsMenu.contains(e.target)) {
+            presetsMenu.style.display = 'none';
+          }
+        });
+      }
+    }
+    
+    updateFullscreenUI() {
+      // Atualizar a aparência do botão
+      if (this.isFullscreen) {
+        this.fsButton.innerHTML = '<i class="fas fa-compress"></i>';
+        this.controls.style.display = 'flex';
+      } else {
+        this.fsButton.innerHTML = '<i class="fas fa-expand"></i>';
+        this.controls.style.display = 'none';
+      }
+    }
+    
+    increaseZoom() {
+      // Aumentar zoom pelo incremento definido
+      this.zoomLevel = Math.min(this.maxZoom, this.zoomLevel + this.zoomStep);
+      this.applyZoom();
+    }
+    
+    decreaseZoom() {
+      // Diminuir zoom pelo incremento definido
+      this.zoomLevel = Math.max(this.minZoom, this.zoomLevel - this.zoomStep);
+      this.applyZoom();
+    }
+    
+    resetZoom() {
+      // Restaurar para o zoom padrão (100%)
+      this.zoomLevel = 100;
+      this.applyZoom();
+    }
+    
+    setZoom(level) {
+      // Definir um nível específico de zoom
+      this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, level));
+      this.applyZoom();
+    }
+    
+    applyZoom() {
+      if (!this.isFullscreen) return;
+      
+      // Encontrar o elemento que contém os produtos
+      const productContainer = document.querySelector('#product-list');
+      if (!productContainer) return;
+      
+      // Remover qualquer estilo de zoom anterior
+      productContainer.style.removeProperty('transform');
+      productContainer.style.removeProperty('transform-origin');
+      
+      // Aplicar o estilo de zoom
+      if (this.zoomLevel !== 100) {
+        const scale = this.zoomLevel / 100;
+        
+        // Definir estilos para o container de produtos
+        productContainer.style.transform = `scale(${scale})`;
+        productContainer.style.transformOrigin = 'top center';
+        
+        // Ajustar espaço para o conteúdo escalado
+        if (this.zoomLevel > 100) {
+          // Quando ampliado, precisamos de mais espaço
+          const height = (scale * 100) + '%';
+          productContainer.style.height = height;
+        }
+      }
+      
+      // Atualizar o indicador de zoom na interface
+      const zoomIndicator = document.getElementById('zoom-level');
+      if (zoomIndicator) {
+        zoomIndicator.textContent = `${this.zoomLevel}%`;
+      }
+      
+      // Mostrar notificação, se disponível
+      if (typeof showNotification === 'function') {
+        showNotification(`Zoom: ${this.zoomLevel}%`, 'success');
+      }
+    }
+    
+    startPresentation() {
+      if (typeof presentationManager !== 'undefined') {
+        presentationManager.startPresentation();
+      } else {
+        console.error('Gerenciador de apresentação não está disponível');
+        if (typeof showNotification === 'function') {
+          showNotification('Não foi possível iniciar o modo de apresentação', 'error');
+        }
+      }
+    }
+  }
+
+  // ===== 3. FUNCIONALIDADE DE APRESENTAÇÃO DE PRODUTOS =====
+  class PresentationManager {
+    constructor() {
+      this.currentIndex = 0;
+      this.products = [];
+      this.isActive = false;
+      
+      // Criar container de apresentação
+      this.createPresentationContainer();
+    }
+    
+    createPresentationContainer() {
+      const container = document.createElement('div');
+      container.className = 'presentation-container';
+      container.innerHTML = `
+        <div class="presentation-slide">
+          <div class="presentation-image">
+            <img src="" alt="Produto">
+          </div>
+          <div class="presentation-info">
+            <div class="presentation-sku"></div>
+            <h2 class="presentation-name"></h2>
+            <div class="presentation-category"></div>
+            <div class="presentation-price"></div>
+          </div>
+          <div class="presentation-close">
+            <i class="fas fa-times"></i>
+          </div>
+          <div class="presentation-navigation">
+            <button class="presentation-nav-btn prev-btn">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="presentation-counter">1/1</div>
+            <button class="presentation-nav-btn next-btn">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+        <div class="presentation-thumbnails"></div>
+      `;
+      
+      document.body.appendChild(container);
+      this.container = container;
+      
+      // Configurar eventos
+      container.querySelector('.presentation-close').addEventListener('click', () => this.stopPresentation());
+      container.querySelector('.prev-btn').addEventListener('click', () => this.showPreviousProduct());
+      container.querySelector('.next-btn').addEventListener('click', () => this.showNextProduct());
+      
+      // Adicionar evento de teclado
+      document.addEventListener('keydown', (e) => {
+        if (!this.isActive) return;
+        
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+          this.showNextProduct();
+          e.preventDefault();
+        } else if (e.key === 'ArrowLeft') {
+          this.showPreviousProduct();
+          e.preventDefault();
+        } else if (e.key === 'Escape') {
+          this.stopPresentation();
+          e.preventDefault();
+        }
+      });
+    }
+    
+    startPresentation(categoryIndex = null) {
+      // Coletar produtos para apresentação
+      this.collectProducts(categoryIndex);
+      
+      if (this.products.length === 0) {
+        if (typeof showNotification === 'function') {
+          showNotification('Nenhum produto disponível para apresentação', 'error');
+        } else {
+          alert('Nenhum produto disponível para apresentação');
+        }
+        return;
+      }
+      
+      // Mostrar o container
+      this.isActive = true;
+      this.container.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      
+      // Mostrar o primeiro produto
+      this.currentIndex = 0;
+      this.updateProductDisplay();
+      
+      // Criar miniaturas para navegação
+      this.createThumbnails();
+    }
+    
+    stopPresentation() {
+      this.isActive = false;
+      this.container.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+    
+    collectProducts(categoryIndex = null) {
+      this.products = [];
+      
+      if (categoryIndex !== null) {
+        // Produtos de uma categoria específica
+        const categories = document.querySelectorAll('.category-section');
+        if (categories.length > categoryIndex) {
+          const products = categories[categoryIndex].querySelectorAll('.product');
+          this.addProductsToCollection(products);
+        }
+      } else {
+        // Todos os produtos visíveis
+        const products = document.querySelectorAll('.product');
+        this.addProductsToCollection(products);
+      }
+    }
+    
+    addProductsToCollection(productElements) {
+      productElements.forEach(product => {
+        const sku = product.getAttribute('data-sku') || '';
+        const nameElement = product.querySelector('.product-name');
+        const name = nameElement ? nameElement.textContent : '';
+        
+        const categoryElement = product.querySelector('.product-category');
+        const category = categoryElement ? categoryElement.textContent : '';
+        
+        const imgElement = product.querySelector('img');
+        // Usar versão de alta resolução da imagem se disponível
+        let imgSrc = imgElement ? imgElement.src.replace('300x300', '2500x2500') : '';
+        
+        // Tentar obter o preço (se estiver no modo vendedor)
+        let price = '';
+        const priceInput = product.querySelector('.product-price-input');
+        if (priceInput && priceInput.value) {
+          price = `R$ ${priceInput.value}`;
+        }
+        
+        this.products.push({
+          sku,
+          name,
+          category,
+          imgSrc,
+          price
+        });
+      });
+    }
+    
+    updateProductDisplay(direction = null) {
+      if (this.products.length === 0) return;
+      
+      const product = this.products[this.currentIndex];
+      const slide = this.container.querySelector('.presentation-slide');
+      
+      // Limpar classes de animação anteriores
+      slide.className = 'presentation-slide';
+      void slide.offsetWidth; // Forçar reflow para reiniciar animação
+      
+      // Adicionar classe de animação baseada na direção
+      if (direction === 'next') {
+        slide.classList.add('slide-left');
+      } else if (direction === 'prev') {
+        slide.classList.add('slide-right');
+      }
+      
+      // Atualizar informações do produto
+      this.container.querySelector('.presentation-image img').src = product.imgSrc;
+      this.container.querySelector('.presentation-sku').textContent = `SKU: ${product.sku}`;
+      this.container.querySelector('.presentation-name').textContent = product.name;
+      this.container.querySelector('.presentation-category').textContent = product.category;
+      
+      const priceElement = this.container.querySelector('.presentation-price');
+      if (product.price) {
+        priceElement.textContent = product.price;
+        priceElement.style.display = 'block';
+      } else {
+        priceElement.style.display = 'none';
+      }
+      
+      // Atualizar contador
+      this.container.querySelector('.presentation-counter').textContent = 
+        `${this.currentIndex + 1}/${this.products.length}`;
+      
+      // Atualizar miniaturas
+      this.updateActiveThumbnail();
+    }
+    
+    showNextProduct() {
+      if (this.currentIndex < this.products.length - 1) {
+        this.currentIndex++;
+      } else {
+        this.currentIndex = 0; // Voltar ao início
+      }
+      this.updateProductDisplay('next');
+    }
+    
+    showPreviousProduct() {
+      if (this.currentIndex > 0) {
+        this.currentIndex--;
+      } else {
+        this.currentIndex = this.products.length - 1; // Ir para o último
+      }
+      this.updateProductDisplay('prev');
+    }
+    
+    createThumbnails() {
+      const container = this.container.querySelector('.presentation-thumbnails');
+      container.innerHTML = '';
+      
+      this.products.forEach((product, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'presentation-thumb';
+        if (index === this.currentIndex) {
+          thumb.classList.add('active');
+        }
+        
+        thumb.innerHTML = `<img src="${product.imgSrc}" alt="${product.name}">`;
+        thumb.addEventListener('click', () => {
+          const direction = index > this.currentIndex ? 'next' : 'prev';
+          this.currentIndex = index;
+          this.updateProductDisplay(direction);
+        });
+        
+        container.appendChild(thumb);
+      });
+    }
+    
+    updateActiveThumbnail() {
+      const thumbs = this.container.querySelectorAll('.presentation-thumb');
+      thumbs.forEach((thumb, index) => {
+        if (index === this.currentIndex) {
+          thumb.classList.add('active');
+        } else {
+          thumb.classList.remove('active');
+        }
+      });
+    }
+    
+    goToProduct(index) {
+      if (index >= 0 && index < this.products.length) {
+        const direction = index > this.currentIndex ? 'next' : 'prev';
+        this.currentIndex = index;
+        this.updateProductDisplay(direction);
+      }
+    }
+  }
+
+  // ===== 4. ADICIONAR BOTÃO DE APRESENTAÇÃO ÀS CATEGORIAS =====
+  function addPresentationButtonsToCategories() {
+    document.querySelectorAll('.category-title').forEach((title, index) => {
+      // Verificar se o botão já existe
+      if (title.querySelector('.category-presentation-btn')) return;
+      
+      const presentationBtn = document.createElement('button');
+      presentationBtn.className = 'category-presentation-btn';
+      presentationBtn.innerHTML = '<i class="fas fa-play"></i>';
+      presentationBtn.title = 'Apresentar produtos desta categoria';
+      
+      presentationBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Evitar conflitos com outros eventos
+        if (window.presentationManager) {
+          window.presentationManager.startPresentation(index);
+        }
+      });
+      
+      title.appendChild(presentationBtn);
+    });
+  }
+
+  // ===== 5. INICIALIZAÇÃO =====
+  function init() {
+    // Criar instâncias dos gerenciadores
+    window.fullscreenManager = new FullscreenManager();
+    window.presentationManager = new PresentationManager();
+    
+    // Adicionar botões de apresentação às categorias
+    addPresentationButtonsToCategories();
+    
+    // Configurar observador para novas categorias
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' && mutation.addedNodes.length) {
+          setTimeout(addPresentationButtonsToCategories, 500);
+        }
+      });
+    });
+    
+    const productList = document.getElementById('product-list');
+    if (productList) {
+      observer.observe(productList, { childList: true, subtree: true });
+    }
+    
+    // Log de inicialização bem-sucedida
+    console.log('Modo tela cheia e apresentação inicializados com sucesso');
+  }
+
+  // Inicializar após o carregamento completo da página
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    // Se o DOM já estiver pronto, inicializar diretamente
+    setTimeout(init, 500);
+  }
+})();
+	</script>
 </body>
 </html>
