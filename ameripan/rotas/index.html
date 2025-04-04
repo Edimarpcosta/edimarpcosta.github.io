@@ -1,1 +1,1983 @@
-
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestão Territorial - São Paulo</title>
+    
+    <!-- Incluindo Leaflet CSS e JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --light-bg: #f8f9fa;
+            --dark-bg: #343a40;
+            --text-color: #333;
+            --light-text: #f8f9fa;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #sidebar {
+            width: 350px;
+            background-color: var(--light-bg);
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease;
+        }
+        
+        #sidebar.collapsed {
+            width: 50px;
+        }
+        
+        #sidebar-header {
+            background-color: var(--primary-color);
+            color: var(--light-text);
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #sidebar-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        #toggle-sidebar {
+            background: none;
+            border: none;
+            color: var(--light-text);
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        
+        #sidebar-tabs {
+            display: flex;
+            background-color: var(--dark-bg);
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            color: var(--light-text);
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-align: center;
+        }
+        
+        .tab-button:hover, .tab-button.active {
+            background-color: var(--secondary-color);
+        }
+        
+        .tab-button i {
+            font-size: 1.2rem;
+        }
+        
+        .tab-button span {
+            display: block;
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+        
+        #sidebar-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        #map {
+            flex-grow: 1;
+            height: 100%;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+        }
+        
+        .card-body {
+            padding: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn-danger {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .btn-warning {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background-color: #e67e22;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+        
+        .list-group {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        .list-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .list-item:last-child {
+            border-bottom: none;
+        }
+        
+        .list-item:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .list-item .actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 7px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: white;
+            background-color: var(--secondary-color);
+        }
+        
+        .badge-primary {
+            background-color: var(--secondary-color);
+        }
+        
+        .badge-success {
+            background-color: var(--success-color);
+        }
+        
+        .badge-warning {
+            background-color: var(--warning-color);
+        }
+        
+        .badge-danger {
+            background-color: var(--accent-color);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background-color: white;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s;
+        }
+        
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .modal-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-weight: bold;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 15px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        .modal-footer {
+            padding: 10px 15px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .alert {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .map-control {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            margin-bottom: 10px;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0,0,0,0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .tooltip.show {
+            display: block;
+        }
+        
+        /* Ajustes para responsividade */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            
+            #sidebar {
+                width: 100%;
+                height: 50%;
+            }
+            
+            #map {
+                height: 50%;
+            }
+            
+            #sidebar.collapsed {
+                height: 50px;
+                width: 100%;
+            }
+        }
+        
+        /* Classes para estados das cidades no mapa */
+        .city-default {
+            fill: #3388ff;
+            fill-opacity: 0.2;
+            stroke: #3388ff;
+            stroke-width: 1;
+            stroke-opacity: 0.5;
+        }
+        
+        .city-selected {
+            fill: #ff7800;
+            fill-opacity: 0.7;
+            stroke: #ff7800;
+            stroke-width: 3;
+            stroke-opacity: 1;
+        }
+        
+        .city-assigned {
+            fill: #2ecc71;
+            fill-opacity: 0.5;
+            stroke: #2ecc71;
+            stroke-width: 2;
+            stroke-opacity: 0.8;
+        }
+        
+        .city-group {
+            fill: #9b59b6;
+            fill-opacity: 0.5;
+            stroke: #9b59b6;
+            stroke-width: 2;
+            stroke-opacity: 0.8;
+        }
+        
+        /* Classe para mensagens vazias */
+        .empty-message {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        /* Estilização de tabelas */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar para controles e informações -->
+    <div id="sidebar">
+        <div id="sidebar-header">
+            <h3 id="sidebar-title">Sistema de Gestão Territorial</h3>
+            <button id="toggle-sidebar" title="Recolher/Expandir">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        
+        <div id="sidebar-tabs">
+            <button class="tab-button active" data-tab="search">
+                <i class="fas fa-search"></i>
+                <span>Busca</span>
+            </button>
+            <button class="tab-button" data-tab="favorites">
+                <i class="fas fa-star"></i>
+                <span>Favoritos</span>
+            </button>
+            <button class="tab-button" data-tab="groups">
+                <i class="fas fa-layer-group"></i>
+                <span>Grupos</span>
+            </button>
+            <button class="tab-button" data-tab="vendedores">
+                <i class="fas fa-user-tie"></i>
+                <span>Vendedores</span>
+            </button>
+            <button class="tab-button" data-tab="exportar">
+                <i class="fas fa-file-export"></i>
+                <span>Exportar</span>
+            </button>
+        </div>
+        
+        <div id="sidebar-content">
+            <!-- Aba de Busca -->
+            <div class="tab-content active" id="tab-search">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-search"></i> Buscar Cidade
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <input type="text" id="search-input" class="form-control" placeholder="Digite o nome da cidade...">
+                        </div>
+                        <button id="search-button" class="btn btn-primary btn-block">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-map-marker-alt"></i> Cidade Selecionada
+                    </div>
+                    <div class="card-body">
+                        <div id="selected-city-info">
+                            <p class="empty-message">Nenhuma cidade selecionada</p>
+                        </div>
+                        <div id="selected-city-actions" style="display: none; margin-top: 15px;">
+                            <button id="add-favorite" class="btn btn-primary">
+                                <i class="fas fa-star"></i> Adicionar aos Favoritos
+                            </button>
+                            <button id="assign-vendedor" class="btn btn-success" style="margin-top: 10px;">
+                                <i class="fas fa-user-tie"></i> Atribuir a Vendedor
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Favoritos -->
+            <div class="tab-content" id="tab-favorites">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-star"></i> Cidades Favoritas
+                    </div>
+                    <div class="card-body">
+                        <ul id="favorites-list" class="list-group">
+                            <li class="empty-message">Nenhuma cidade favorita</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Grupos -->
+            <div class="tab-content" id="tab-groups">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-plus-circle"></i> Novo Grupo
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <input type="text" id="group-name" class="form-control" placeholder="Nome do novo grupo">
+                        </div>
+                        <button id="create-group" class="btn btn-primary btn-block">
+                            <i class="fas fa-plus"></i> Criar Grupo
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-layer-group"></i> Grupos Existentes
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <select id="group-select" class="form-control">
+                                <option value="">Selecione um grupo para destacar</option>
+                            </select>
+                        </div>
+                        <ul id="groups-list" class="list-group">
+                            <li class="empty-message">Nenhum grupo criado</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Vendedores -->
+            <div class="tab-content" id="tab-vendedores">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-plus-circle"></i> Novo Vendedor
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="vendedor-nome">Nome:</label>
+                            <input type="text" id="vendedor-nome" class="form-control" placeholder="Nome completo">
+                        </div>
+                        <div class="form-group">
+                            <label for="vendedor-email">E-mail:</label>
+                            <input type="email" id="vendedor-email" class="form-control" placeholder="email@exemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="vendedor-telefone">Telefone:</label>
+                            <input type="tel" id="vendedor-telefone" class="form-control" placeholder="(11) 98765-4321">
+                        </div>
+                        <button id="add-vendedor" class="btn btn-success btn-block">
+                            <i class="fas fa-plus"></i> Adicionar Vendedor
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-user-tie"></i> Vendedores Cadastrados
+                    </div>
+                    <div class="card-body">
+                        <ul id="vendedores-list" class="list-group">
+                            <li class="empty-message">Nenhum vendedor cadastrado</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Exportação -->
+            <div class="tab-content" id="tab-exportar">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-file-export"></i> Exportar Dados
+                    </div>
+                    <div class="card-body">
+                        <p>Exporte os dados do sistema para arquivos CSV.</p>
+                        <button id="export-vendedores" class="btn btn-primary btn-block" style="margin-bottom: 10px;">
+                            <i class="fas fa-file-csv"></i> Exportar Vendedores
+                        </button>
+                        <button id="export-cidades" class="btn btn-primary btn-block" style="margin-bottom: 10px;">
+                            <i class="fas fa-file-csv"></i> Exportar Cidades
+                        </button>
+                        <button id="export-atribuicoes" class="btn btn-success btn-block">
+                            <i class="fas fa-file-csv"></i> Exportar Atribuições
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-file-import"></i> Importar Dados
+                    </div>
+                    <div class="card-body">
+                        <p>Importe dados de um arquivo CSV.</p>
+                        <div class="form-group">
+                            <label for="import-file">Selecione um arquivo CSV:</label>
+                            <input type="file" id="import-file" class="form-control" accept=".csv">
+                        </div>
+                        <button id="import-data" class="btn btn-warning btn-block">
+                            <i class="fas fa-file-import"></i> Importar Dados
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mapa principal -->
+    <div id="map"></div>
+    
+    <!-- Modal para atribuir vendedor -->
+    <div id="modal-assign-vendedor" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Atribuir Cidade a Vendedor</h4>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="assign-city-name">Cidade: <strong></strong></p>
+                <div class="form-group">
+                    <label for="assign-vendedor-select">Selecione o vendedor:</label>
+                    <select id="assign-vendedor-select" class="form-control">
+                        <option value="">Selecione um vendedor</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger modal-close">Cancelar</button>
+                <button id="confirm-assign-vendedor" class="btn btn-success">Atribuir</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para detalhes do vendedor -->
+    <div id="modal-vendedor-details" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Detalhes do Vendedor</h4>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="vendedor-info">
+                    <p><strong>Nome:</strong> <span id="detail-vendedor-nome"></span></p>
+                    <p><strong>E-mail:</strong> <span id="detail-vendedor-email"></span></p>
+                    <p><strong>Telefone:</strong> <span id="detail-vendedor-telefone"></span></p>
+                </div>
+                <h5 style="margin-top: 15px;">Cidades Atendidas</h5>
+                <ul id="vendedor-cidades" class="list-group">
+                    <li class="empty-message">Nenhuma cidade atribuída</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary modal-close">Fechar</button>
+                <button id="highlight-vendedor-cities" class="btn btn-warning">Destacar no Mapa</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notificações -->
+    <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+    
+    <script>
+        // ======== Inicialização e variáveis globais ========
+        // Inicialização do mapa
+        const map = L.map('map').setView([-23.5505, -46.6333], 7);
+        
+        // Adicionar camada de mosaicos (Tile Layer)
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Variáveis para gerenciar o estado da aplicação
+        let selectedCity = null;
+        let cityLayers = {};
+        let favorites = [];
+        let groups = {};
+        let vendedores = [];
+        let cityAssignments = {}; // { cityName: vendedorId }
+        let activeGroup = null;
+        let activeVendedor = null;
+        
+        // ======== Funções de utilidade ========
+        
+        // Função para mostrar notificações temporárias
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type}`;
+            notification.style.marginBottom = '10px';
+            notification.innerHTML = message;
+            
+            const container = document.getElementById('notification-container');
+            container.appendChild(notification);
+            
+            // Remover após 5 segundos
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.5s';
+                setTimeout(() => {
+                    container.removeChild(notification);
+                }, 500);
+            }, 5000);
+        }
+        
+        // Funções para manipulação dos modais
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function closeAllModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.classList.remove('show');
+            });
+        }
+        
+        // Função para gerar um ID único
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
+        
+        // Função para converter string para CSV seguro
+        function escapeCSV(str) {
+            if (typeof str !== 'string') return str;
+            // Se a string contém vírgula, aspas ou quebra de linha, envolva em aspas
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                // Escape aspas duplicando-as
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+        
+        // Função para exportar dados para CSV
+        function exportToCSV(data, filename) {
+            if (!data || !data.length) {
+                showNotification('Não há dados para exportar.', 'warning');
+                return;
+            }
+            
+            // Obter cabeçalhos do primeiro objeto
+            const headers = Object.keys(data[0]);
+            
+            // Criar conteúdo CSV
+            let csvContent = headers.join(',') + '\n';
+            
+            // Adicionar linhas de dados
+            data.forEach(item => {
+                const row = headers.map(header => escapeCSV(item[header])).join(',');
+                csvContent += row + '\n';
+            });
+            
+            // Criar blob e link para download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Função para importar dados de CSV
+        function importFromCSV(file, callback) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n');
+                
+                // Extrair cabeçalhos
+                const headers = lines[0].split(',').map(header => 
+                    header.trim().replace(/^"|"$/g, '')
+                );
+                
+                // Processar linhas de dados
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    
+                    // Tratamento especial para campos entre aspas
+                    const values = [];
+                    let inQuotes = false;
+                    let currentValue = '';
+                    
+                    for (let char of lines[i]) {
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            values.push(currentValue);
+                            currentValue = '';
+                        } else {
+                            currentValue += char;
+                        }
+                    }
+                    values.push(currentValue); // Último valor
+                    
+                    // Criar objeto com cabeçalhos como chaves
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index] || '';
+                    });
+                    
+                    data.push(obj);
+                }
+                
+                callback(data);
+            };
+            
+            reader.onerror = function() {
+                showNotification('Erro ao ler o arquivo.', 'danger');
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // ======== Persistência de dados ========
+        
+        // Carregar dados salvos no localStorage
+        function loadSavedData() {
+            try {
+                const savedFavorites = localStorage.getItem('spMapFavorites');
+                const savedGroups = localStorage.getItem('spMapGroups');
+                const savedVendedores = localStorage.getItem('spMapVendedores');
+                const savedAssignments = localStorage.getItem('spMapAssignments');
+                
+                if (savedFavorites) {
+                    favorites = JSON.parse(savedFavorites);
+                }
+                
+                if (savedGroups) {
+                    groups = JSON.parse(savedGroups);
+                }
+                
+                if (savedVendedores) {
+                    vendedores = JSON.parse(savedVendedores);
+                }
+                
+                if (savedAssignments) {
+                    cityAssignments = JSON.parse(savedAssignments);
+                }
+                
+                // Atualizar interface
+                updateFavoritesList();
+                updateGroupsLists();
+                updateVendedoresList();
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                showNotification('Erro ao carregar dados salvos.', 'danger');
+            }
+        }
+        
+        // Salvar dados no localStorage
+        function saveData() {
+            try {
+                localStorage.setItem('spMapFavorites', JSON.stringify(favorites));
+                localStorage.setItem('spMapGroups', JSON.stringify(groups));
+                localStorage.setItem('spMapVendedores', JSON.stringify(vendedores));
+                localStorage.setItem('spMapAssignments', JSON.stringify(cityAssignments));
+            } catch (error) {
+                console.error('Erro ao salvar dados:', error);
+                showNotification('Erro ao salvar dados.', 'danger');
+            }
+        }
+        
+        // ======== Atualização da interface ========
+        
+        // Atualiza as informações da cidade selecionada
+        function updateSelectedCityInfo() {
+            const infoContainer = document.getElementById('selected-city-info');
+            const actionsContainer = document.getElementById('selected-city-actions');
+            
+            if (!selectedCity) {
+                infoContainer.innerHTML = '<p class="empty-message">Nenhuma cidade selecionada</p>';
+                actionsContainer.style.display = 'none';
+                return;
+            }
+            
+            // Verificar se a cidade está atribuída a um vendedor
+            let vendedorInfo = '';
+            if (cityAssignments[selectedCity.name]) {
+                const vendedor = vendedores.find(v => v.id === cityAssignments[selectedCity.name]);
+                if (vendedor) {
+                    vendedorInfo = `
+                        <p><strong>Vendedor Atribuído:</strong> ${vendedor.nome}</p>
+                    `;
+                }
+            }
+            
+            infoContainer.innerHTML = `
+                <h4>${selectedCity.name}</h4>
+                ${vendedorInfo}
+                <p><small>ID: ${selectedCity.id}</small></p>
+            `;
+            
+            actionsContainer.style.display = 'block';
+        }
+        
+        // Atualiza a lista de favoritos
+        function updateFavoritesList() {
+            const favoritesList = document.getElementById('favorites-list');
+            
+            if (!favorites.length) {
+                favoritesList.innerHTML = '<li class="empty-message">Nenhuma cidade favorita</li>';
+                return;
+            }
+            
+            favoritesList.innerHTML = '';
+            
+            favorites.forEach(city => {
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                
+                const cityInfo = document.createElement('div');
+                cityInfo.innerHTML = `<strong>${city.name}</strong>`;
+                
+                // Adicionar badge se a cidade estiver atribuída a um vendedor
+                if (cityAssignments[city.name]) {
+                    const vendedor = vendedores.find(v => v.id === cityAssignments[city.name]);
+                    if (vendedor) {
+                        cityInfo.innerHTML += ` <span class="badge badge-success" title="Vendedor: ${vendedor.nome}">
+                            <i class="fas fa-user-tie"></i>
+                        </span>`;
+                    }
+                }
+                
+                li.appendChild(cityInfo);
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'actions';
+                
+                // Dropdown para selecionar grupo
+                const groupSelect = document.createElement('select');
+                groupSelect.className = 'form-control';
+                groupSelect.style.marginRight = '5px';
+                groupSelect.innerHTML = '<option value="">Sem grupo</option>';
+                
+                Object.keys(groups).forEach(groupName => {
+                    const option = document.createElement('option');
+                    option.value = groupName;
+                    option.textContent = groupName;
+                    
+                    // Se a cidade já estiver neste grupo, seleciona esta opção
+                    if (groups[groupName].includes(city.name)) {
+                        option.selected = true;
+                    }
+                    
+                    groupSelect.appendChild(option);
+                });
+                
+                groupSelect.addEventListener('change', function() {
+                    // Remove a cidade de todos os grupos
+                    Object.keys(groups).forEach(groupName => {
+                        groups[groupName] = groups[groupName].filter(name => name !== city.name);
+                    });
+                    
+                    // Adiciona a cidade ao grupo selecionado, se houver
+                    if (this.value) {
+                        groups[this.value].push(city.name);
+                    }
+                    
+                    saveData();
+                    highlightActiveGroup();
+                    
+                    showNotification(`Cidade ${city.name} ${this.value ? 'adicionada ao grupo ' + this.value : 'removida do grupo'}`);
+                });
+                
+                actionsDiv.appendChild(groupSelect);
+                
+                // Botão para ver no mapa
+                const viewButton = document.createElement('button');
+                viewButton.className = 'btn btn-primary btn-sm';
+                viewButton.innerHTML = '<i class="fas fa-eye"></i>';
+                viewButton.title = 'Ver no mapa';
+                viewButton.addEventListener('click', function() {
+                    if (cityLayers[city.name]) {
+                        // Centraliza o mapa na cidade
+                        map.fitBounds(cityLayers[city.name].getBounds());
+                        
+                        // Simula um clique na cidade
+                        cityLayers[city.name].fire('click');
+                    }
+                });
+                
+                // Botão de remover dos favoritos
+                const removeButton = document.createElement('button');
+                removeButton.className = 'btn btn-danger btn-sm';
+                removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+                removeButton.title = 'Remover dos favoritos';
+                removeButton.addEventListener('click', function() {
+                    favorites = favorites.filter(fav => fav.name !== city.name);
+                    
+                    // Remove a cidade de todos os grupos
+                    Object.keys(groups).forEach(groupName => {
+                        groups[groupName] = groups[groupName].filter(name => name !== city.name);
+                    });
+                    
+                    saveData();
+                    updateFavoritesList();
+                    
+                    // Se a cidade estiver no mapa, redefine seu estilo
+                    if (cityLayers[city.name]) {
+                        resetCityStyle(cityLayers[city.name]);
+                    }
+                    
+                    showNotification(`Cidade ${city.name} removida dos favoritos`);
+                });
+                
+                actionsDiv.appendChild(viewButton);
+                actionsDiv.appendChild(removeButton);
+                li.appendChild(actionsDiv);
+                
+                favoritesList.appendChild(li);
+            });
+        }
+        
+        // Atualiza a lista de grupos
+        function updateGroupsLists() {
+            const groupsList = document.getElementById('groups-list');
+            const groupSelect = document.getElementById('group-select');
+            
+            // Limpa as listas
+            groupsList.innerHTML = '';
+            
+            // Mantém apenas a primeira opção (placeholder)
+            while (groupSelect.options.length > 1) {
+                groupSelect.remove(1);
+            }
+            
+            if (Object.keys(groups).length === 0) {
+                groupsList.innerHTML = '<li class="empty-message">Nenhum grupo criado</li>';
+                return;
+            }
+            
+            // Adiciona os grupos às listas
+            Object.keys(groups).forEach(groupName => {
+                // Adiciona ao dropdown de seleção
+                const option = document.createElement('option');
+                option.value = groupName;
+                option.textContent = groupName;
+                groupSelect.appendChild(option);
+                
+                // Adiciona à lista de grupos
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                
+                const groupInfo = document.createElement('div');
+                groupInfo.innerHTML = `<strong>${groupName}</strong> <span class="badge badge-primary">${groups[groupName].length}</span>`;
+                li.appendChild(groupInfo);
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'actions';
+                
+                // Botão para destacar o grupo no mapa
+                const highlightButton = document.createElement('button');
+                highlightButton.className = 'btn btn-warning btn-sm';
+                highlightButton.innerHTML = '<i class="fas fa-highlighter"></i>';
+                highlightButton.title = 'Destacar no mapa';
+                highlightButton.addEventListener('click', function() {
+                    activeGroup = groupName;
+                    activeVendedor = null;
+                    groupSelect.value = groupName;
+                    highlightActiveGroup();
+                    
+                    showNotification(`Grupo ${groupName} destacado no mapa`);
+                });
+                
+                // Botão para remover o grupo
+                const removeButton = document.createElement('button');
+                removeButton.className = 'btn btn-danger btn-sm';
+                removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+                removeButton.title = 'Remover grupo';
+                removeButton.addEventListener('click', function() {
+                    delete groups[groupName];
+                    saveData();
+                    updateGroupsLists();
+                    
+                    // Se o grupo ativo foi removido, limpa o destaque
+                    if (activeGroup === groupName) {
+                        activeGroup = null;
+                        resetMapStyles();
+                    }
+                    
+                    showNotification(`Grupo ${groupName} removido`);
+                });
+                
+                actionsDiv.appendChild(highlightButton);
+                actionsDiv.appendChild(removeButton);
+                li.appendChild(actionsDiv);
+                
+                groupsList.appendChild(li);
+            });
+        }
+        
+        // Atualiza a lista de vendedores
+        function updateVendedoresList() {
+            const vendedoresList = document.getElementById('vendedores-list');
+            const assignVendedorSelect = document.getElementById('assign-vendedor-select');
+            
+            // Limpa as listas
+            vendedoresList.innerHTML = '';
+            
+            // Mantém apenas a primeira opção (placeholder)
+            while (assignVendedorSelect.options.length > 1) {
+                assignVendedorSelect.remove(1);
+            }
+            
+            if (!vendedores.length) {
+                vendedoresList.innerHTML = '<li class="empty-message">Nenhum vendedor cadastrado</li>';
+                return;
+            }
+            
+            // Adiciona os vendedores às listas
+            vendedores.forEach(vendedor => {
+                // Adiciona ao dropdown de seleção
+                const option = document.createElement('option');
+                option.value = vendedor.id;
+                option.textContent = vendedor.nome;
+                assignVendedorSelect.appendChild(option);
+                
+                // Adiciona à lista de vendedores
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                
+                const vendedorInfo = document.createElement('div');
+                
+                // Conta quantas cidades estão atribuídas a este vendedor
+                const cidadesCount = Object.values(cityAssignments).filter(id => id === vendedor.id).length;
+                
+                vendedorInfo.innerHTML = `
+                    <strong>${vendedor.nome}</strong>
+                    <span class="badge badge-primary">${cidadesCount} cidades</span>
+                `;
+                
+                li.appendChild(vendedorInfo);
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'actions';
+                
+                // Botão para ver detalhes
+                const detailsButton = document.createElement('button');
+                detailsButton.className = 'btn btn-primary btn-sm';
+                detailsButton.innerHTML = '<i class="fas fa-info-circle"></i>';
+                detailsButton.title = 'Ver detalhes';
+                detailsButton.addEventListener('click', function() {
+                    showVendedorDetails(vendedor);
+                });
+                
+                // Botão para destacar cidades no mapa
+                const highlightButton = document.createElement('button');
+                highlightButton.className = 'btn btn-warning btn-sm';
+                highlightButton.innerHTML = '<i class="fas fa-map-marker-alt"></i>';
+                highlightButton.title = 'Ver cidades no mapa';
+                highlightButton.addEventListener('click', function() {
+                    activeVendedor = vendedor.id;
+                    activeGroup = null;
+                    document.getElementById('group-select').value = '';
+                    highlightVendedorCities(vendedor.id);
+                    
+                    showNotification(`Cidades do vendedor ${vendedor.nome} destacadas no mapa`);
+                });
+                
+                // Botão para editar
+                const editButton = document.createElement('button');
+                editButton.className = 'btn btn-success btn-sm';
+                editButton.innerHTML = '<i class="fas fa-edit"></i>';
+                editButton.title = 'Editar vendedor';
+                editButton.addEventListener('click', function() {
+                    // Preenche os campos com os dados atuais
+                    document.getElementById('vendedor-nome').value = vendedor.nome;
+                    document.getElementById('vendedor-email').value = vendedor.email;
+                    document.getElementById('vendedor-telefone').value = vendedor.telefone;
+                    
+                    // Altera o botão de adicionar para atualizar
+                    const addButton = document.getElementById('add-vendedor');
+                    addButton.innerHTML = '<i class="fas fa-save"></i> Atualizar Vendedor';
+                    addButton.dataset.editId = vendedor.id;
+                    
+                    // Muda para a aba de vendedores
+                    document.querySelector('.tab-button[data-tab="vendedores"]').click();
+                    
+                    showNotification(`Editando vendedor ${vendedor.nome}`);
+                });
+                
+                // Botão para remover
+                const removeButton = document.createElement('button');
+                removeButton.className = 'btn btn-danger btn-sm';
+                removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+                removeButton.title = 'Remover vendedor';
+                removeButton.addEventListener('click', function() {
+                    if (confirm(`Tem certeza que deseja remover o vendedor ${vendedor.nome}?`)) {
+                        // Remove o vendedor
+                        vendedores = vendedores.filter(v => v.id !== vendedor.id);
+                        
+                        // Remove atribuições deste vendedor
+                        Object.keys(cityAssignments).forEach(cityName => {
+                            if (cityAssignments[cityName] === vendedor.id) {
+                                delete cityAssignments[cityName];
+                            }
+                        });
+                        
+                        saveData();
+                        updateVendedoresList();
+                        
+                        // Se o vendedor ativo foi removido, limpa o destaque
+                        if (activeVendedor === vendedor.id) {
+                            activeVendedor = null;
+                            resetMapStyles();
+                        }
+                        
+                        showNotification(`Vendedor ${vendedor.nome} removido`);
+                    }
+                });
+                
+                actionsDiv.appendChild(detailsButton);
+                actionsDiv.appendChild(highlightButton);
+                actionsDiv.appendChild(editButton);
+                actionsDiv.appendChild(removeButton);
+                li.appendChild(actionsDiv);
+                
+                vendedoresList.appendChild(li);
+            });
+        }
+        
+        // Mostra os detalhes do vendedor
+        function showVendedorDetails(vendedor) {
+            document.getElementById('detail-vendedor-nome').textContent = vendedor.nome;
+            document.getElementById('detail-vendedor-email').textContent = vendedor.email;
+            document.getElementById('detail-vendedor-telefone').textContent = vendedor.telefone;
+            
+            // Lista as cidades atribuídas
+            const cidadesList = document.getElementById('vendedor-cidades');
+            
+            // Filtra as cidades atribuídas a este vendedor
+            const cidadesAtribuidas = Object.keys(cityAssignments).filter(
+                cityName => cityAssignments[cityName] === vendedor.id
+            );
+            
+            if (!cidadesAtribuidas.length) {
+                cidadesList.innerHTML = '<li class="empty-message">Nenhuma cidade atribuída</li>';
+            } else {
+                cidadesList.innerHTML = '';
+                cidadesAtribuidas.forEach(cityName => {
+                    const li = document.createElement('li');
+                    li.className = 'list-item';
+                    
+                    const cityInfo = document.createElement('div');
+                    cityInfo.textContent = cityName;
+                    li.appendChild(cityInfo);
+                    
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'actions';
+                    
+                    // Botão para ver no mapa
+                    const viewButton = document.createElement('button');
+                    viewButton.className = 'btn btn-primary btn-sm';
+                    viewButton.innerHTML = '<i class="fas fa-eye"></i>';
+                    viewButton.title = 'Ver no mapa';
+                    viewButton.addEventListener('click', function() {
+                        if (cityLayers[cityName]) {
+                            closeAllModals();
+                            
+                            // Centraliza o mapa na cidade
+                            map.fitBounds(cityLayers[cityName].getBounds());
+                            
+                            // Simula um clique na cidade
+                            cityLayers[cityName].fire('click');
+                        }
+                    });
+                    
+                    // Botão para remover atribuição
+                    const removeButton = document.createElement('button');
+                    removeButton.className = 'btn btn-danger btn-sm';
+                    removeButton.innerHTML = '<i class="fas fa-unlink"></i>';
+                    removeButton.title = 'Remover atribuição';
+                    removeButton.addEventListener('click', function() {
+                        delete cityAssignments[cityName];
+                        saveData();
+                        showVendedorDetails(vendedor);
+                        
+                        // Atualiza o estilo da cidade no mapa
+                        if (cityLayers[cityName]) {
+                            resetCityStyle(cityLayers[cityName]);
+                        }
+                        
+                        // Atualiza a interface
+                        updateFavoritesList();
+                        updateSelectedCityInfo();
+                        
+                        showNotification(`Cidade ${cityName} removida do vendedor ${vendedor.nome}`);
+                    });
+                    
+                    actionsDiv.appendChild(viewButton);
+                    actionsDiv.appendChild(removeButton);
+                    li.appendChild(actionsDiv);
+                    
+                    cidadesList.appendChild(li);
+                });
+            }
+            
+            // Configura o botão de destacar cidades
+            document.getElementById('highlight-vendedor-cities').onclick = function() {
+                activeVendedor = vendedor.id;
+                activeGroup = null;
+                document.getElementById('group-select').value = '';
+                highlightVendedorCities(vendedor.id);
+                closeAllModals();
+            };
+            
+            openModal('modal-vendedor-details');
+        }
+        
+        // ======== Estilos e destaques no mapa ========
+        
+        // Reseta o estilo de uma cidade específica
+        function resetCityStyle(layer) {
+            layer.setStyle({
+                fillColor: '#3388ff',
+                fillOpacity: 0.2,
+                color: '#3388ff',
+                weight: 1
+            });
+            
+            // Aplica estilos conforme atribuições
+            const cityName = layer.feature.properties.name;
+            
+            // Se é um favorito
+            if (favorites.some(city => city.name === cityName)) {
+                layer.setStyle({
+                    fillOpacity: 0.4,
+                    weight: 2
+                });
+            }
+            
+            // Se está atribuída a um vendedor
+            if (cityAssignments[cityName]) {
+                layer.setStyle({
+                    fillColor: '#2ecc71',
+                    fillOpacity: 0.5,
+                    color: '#2ecc71',
+                    weight: 2
+                });
+            }
+        }
+        
+        // Reseta os estilos de todas as cidades no mapa
+        function resetMapStyles() {
+            Object.values(cityLayers).forEach(layer => {
+                resetCityStyle(layer);
+            });
+        }
+        
+        // Destaca as cidades do grupo ativo no mapa
+        function highlightActiveGroup() {
+            // Reseta os estilos de todas as cidades
+            resetMapStyles();
+            
+            // Se não houver grupo ativo, não faz nada mais
+            if (!activeGroup) return;
+            
+            // Destaca as cidades do grupo ativo
+            groups[activeGroup].forEach(cityName => {
+                if (cityLayers[cityName]) {
+                    cityLayers[cityName].setStyle({
+                        fillColor: '#9b59b6',
+                        fillOpacity: 0.6,
+                        color: '#9b59b6',
+                        weight: 3
+                    });
+                    
+                    // Traz a camada para frente
+                    if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                        cityLayers[cityName].bringToFront();
+                    }
+                }
+            });
+        }
+        
+        // Destaca as cidades atribuídas a um vendedor no mapa
+        function highlightVendedorCities(vendedorId) {
+            // Reseta os estilos de todas as cidades
+            resetMapStyles();
+            
+            // Filtra as cidades atribuídas a este vendedor
+            const cidadesAtribuidas = Object.keys(cityAssignments).filter(
+                cityName => cityAssignments[cityName] === vendedorId
+            );
+            
+            // Destaca as cidades
+            cidadesAtribuidas.forEach(cityName => {
+                if (cityLayers[cityName]) {
+                    cityLayers[cityName].setStyle({
+                        fillColor: '#e74c3c',
+                        fillOpacity: 0.6,
+                        color: '#e74c3c',
+                        weight: 3
+                    });
+                    
+                    // Traz a camada para frente
+                    if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                        cityLayers[cityName].bringToFront();
+                    }
+                }
+            });
+            
+            // Se houver cidades, ajusta o zoom para mostrar todas
+            if (cidadesAtribuidas.length > 0) {
+                const layers = cidadesAtribuidas
+                    .map(cityName => cityLayers[cityName])
+                    .filter(layer => layer); // Remove undefined
+                
+                if (layers.length > 0) {
+                    const group = L.featureGroup(layers);
+                    map.fitBounds(group.getBounds(), { padding: [50, 50] });
+                }
+            }
+        }
+        
+        // ======== Exportação e importação de dados ========
+        
+        // Exporta vendedores para CSV
+        function exportVendedoresCSV() {
+            if (!vendedores.length) {
+                showNotification('Não há vendedores para exportar.', 'warning');
+                return;
+            }
+            
+            const data = vendedores.map(v => ({
+                ID: v.id,
+                Nome: v.nome,
+                Email: v.email,
+                Telefone: v.telefone
+            }));
+            
+            exportToCSV(data, 'vendedores.csv');
+            showNotification('Vendedores exportados com sucesso!');
+        }
+        
+        // Exporta cidades para CSV
+        function exportCidadesCSV() {
+            if (!Object.keys(cityLayers).length) {
+                showNotification('Dados das cidades não carregados.', 'warning');
+                return;
+            }
+            
+            const data = Object.keys(cityLayers).map(cityName => {
+                const feature = cityLayers[cityName].feature;
+                return {
+                    ID: feature.properties.id,
+                    Nome: cityName,
+                    UF: 'SP',
+                    Favorito: favorites.some(c => c.name === cityName) ? 'Sim' : 'Não',
+                    VendedorID: cityAssignments[cityName] || ''
+                };
+            });
+            
+            exportToCSV(data, 'cidades.csv');
+            showNotification('Cidades exportadas com sucesso!');
+        }
+        
+        // Exporta atribuições para CSV
+        function exportAtribuicoesCSV() {
+            if (!Object.keys(cityAssignments).length) {
+                showNotification('Não há atribuições para exportar.', 'warning');
+                return;
+            }
+            
+            const data = Object.keys(cityAssignments).map(cityName => {
+                const vendedorId = cityAssignments[cityName];
+                const vendedor = vendedores.find(v => v.id === vendedorId);
+                
+                return {
+                    Cidade: cityName,
+                    VendedorID: vendedorId,
+                    VendedorNome: vendedor ? vendedor.nome : 'Desconhecido',
+                    VendedorEmail: vendedor ? vendedor.email : '',
+                    VendedorTelefone: vendedor ? vendedor.telefone : ''
+                };
+            });
+            
+            exportToCSV(data, 'atribuicoes.csv');
+            showNotification('Atribuições exportadas com sucesso!');
+        }
+        
+        // Importa dados de CSV
+        function importData(file) {
+            importFromCSV(file, function(data) {
+                // Tenta identificar o tipo de dados
+                if (data.length === 0) {
+                    showNotification('Arquivo vazio ou inválido.', 'warning');
+                    return;
+                }
+                
+                // Verifica os cabeçalhos para identificar o tipo de dados
+                const headers = Object.keys(data[0]);
+                
+                // Importação de vendedores
+                if (headers.includes('Nome') && headers.includes('Email')) {
+                    const importedVendedores = data.map(item => ({
+                        id: item.ID || generateId(),
+                        nome: item.Nome || '',
+                        email: item.Email || '',
+                        telefone: item.Telefone || ''
+                    })).filter(v => v.nome); // Ignora linhas sem nome
+                    
+                    if (!importedVendedores.length) {
+                        showNotification('Nenhum vendedor válido encontrado no arquivo.', 'warning');
+                        return;
+                    }
+                    
+                    // Adiciona apenas vendedores que não existem (por ID)
+                    const newVendedores = importedVendedores.filter(
+                        v => !vendedores.some(existing => existing.id === v.id)
+                    );
+                    
+                    // Atualiza vendedores existentes
+                    importedVendedores.forEach(importedVendedor => {
+                        const existingIndex = vendedores.findIndex(v => v.id === importedVendedor.id);
+                        if (existingIndex >= 0) {
+                            vendedores[existingIndex] = importedVendedor;
+                        }
+                    });
+                    
+                    // Adiciona novos vendedores
+                    vendedores = [...vendedores, ...newVendedores];
+                    
+                    saveData();
+                    updateVendedoresList();
+                    
+                    showNotification(`Importados ${newVendedores.length} novos vendedores e atualizados ${importedVendedores.length - newVendedores.length}.`);
+                    return;
+                }
+                
+                // Importação de atribuições
+                if (headers.includes('Cidade') && headers.includes('VendedorID')) {
+                    let count = 0;
+                    
+                    data.forEach(item => {
+                        if (item.Cidade && item.VendedorID) {
+                            // Verifica se o vendedor existe
+                            const vendedorExists = vendedores.some(v => v.id === item.VendedorID);
+                            
+                            if (vendedorExists) {
+                                cityAssignments[item.Cidade] = item.VendedorID;
+                                count++;
+                            }
+                        }
+                    });
+                    
+                    if (count === 0) {
+                        showNotification('Nenhuma atribuição válida encontrada no arquivo.', 'warning');
+                        return;
+                    }
+                    
+                    saveData();
+                    updateFavoritesList();
+                    updateSelectedCityInfo();
+                    resetMapStyles();
+                    
+                    showNotification(`Importadas ${count} atribuições de cidades.`);
+                    return;
+                }
+                
+                showNotification('Formato de arquivo não reconhecido.', 'warning');
+            });
+        }
+        
+        // ======== Inicialização do mapa e eventos ========
+        
+        // Carrega e exibe o GeoJSON dos municípios de São Paulo
+        fetch('https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json')
+            .then(response => response.json())
+            .then(data => {
+                // Adiciona os municípios ao mapa
+                L.geoJSON(data, {
+                    style: {
+                        fillColor: '#3388ff',
+                        fillOpacity: 0.2,
+                        color: '#3388ff',
+                        weight: 1
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const cityName = feature.properties.name;
+                        
+                        // Armazena a referência da camada para uso posterior
+                        cityLayers[cityName] = layer;
+                        
+                        // Adiciona evento de clique
+                        layer.on('click', function() {
+                            // Atualiza a cidade selecionada
+                            selectedCity = {
+                                name: cityName,
+                                id: feature.properties.id
+                            };
+                            
+                            // Reseta os estilos e destaca a cidade selecionada
+                            resetMapStyles();
+                            layer.setStyle({
+                                fillColor: '#ff7800',
+                                fillOpacity: 0.7,
+                                color: '#ff7800',
+                                weight: 3
+                            });
+                            
+                            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                                layer.bringToFront();
+                            }
+                            
+                            // Atualiza a interface
+                            updateSelectedCityInfo();
+                            
+                            // Se estiver com a sidebar recolhida, expande
+                            if (document.getElementById('sidebar').classList.contains('collapsed')) {
+                                document.getElementById('toggle-sidebar').click();
+                            }
+                            
+                            // Ativa a aba de busca
+                            document.querySelector('.tab-button[data-tab="search"]').click();
+                        });
+                        
+                        // Adiciona tooltip
+                        layer.bindTooltip(cityName, {
+                            permanent: false,
+                            direction: 'center',
+                            className: 'city-tooltip'
+                        });
+                    }
+                }).addTo(map);
+                
+                // Após carregar o mapa, aplica estilos conforme o estado
+                resetMapStyles();
+                
+                // Aplica qualquer destaque ativo
+                if (activeGroup) {
+                    highlightActiveGroup();
+                } else if (activeVendedor) {
+                    highlightVendedorCities(activeVendedor);
+                }
+                
+                showNotification('Mapa carregado com sucesso!', 'success');
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados GeoJSON:', error);
+                showNotification('Erro ao carregar o mapa. Por favor, recarregue a página.', 'danger');
+            });
+        
+        // ======== Event Listeners ========
+        
+        // Controle das abas
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove a classe 'active' de todas as abas
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                
+                // Adiciona a classe 'active' à aba clicada
+                this.classList.add('active');
+                document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // Botão para recolher/expandir a sidebar
+        document.getElementById('toggle-sidebar').addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+            
+            // Atualiza o ícone
+            const icon = this.querySelector('i');
+            if (sidebar.classList.contains('collapsed')) {
+                icon.className = 'fas fa-bars';
+            } else {
+                icon.className = 'fas fa-chevron-left';
+            }
+            
+            // Força o redimensionamento do mapa
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        });
+        
+        // Busca de cidades
+        document.getElementById('search-button').addEventListener('click', searchCity);
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchCity();
+            }
+        });
+        
+        function searchCity() {
+            const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+            
+            if (!searchInput) return;
+            
+            const foundCityName = Object.keys(cityLayers).find(cityName => 
+                cityName.toLowerCase().includes(searchInput)
+            );
+            
+            if (foundCityName) {
+                const layer = cityLayers[foundCityName];
+                
+                // Centraliza o mapa na cidade encontrada
+                map.fitBounds(layer.getBounds());
+                
+                // Simula um clique na cidade
+                layer.fire('click');
+                
+                showNotification(`Cidade ${foundCityName} encontrada`);
+            } else {
+                showNotification('Cidade não encontrada.', 'warning');
+            }
+        }
+        
+        // Adicionar cidade aos favoritos
+        document.getElementById('add-favorite').addEventListener('click', function() {
+            if (!selectedCity) return;
+            
+            // Verifica se a cidade já está nos favoritos
+            const exists = favorites.some(city => city.name === selectedCity.name);
+            if (!exists) {
+                favorites.push(selectedCity);
+                saveData();
+                updateFavoritesList();
+                
+                showNotification(`Cidade ${selectedCity.name} adicionada aos favoritos`);
+            } else {
+                showNotification(`Cidade ${selectedCity.name} já está nos favoritos`, 'info');
+            }
+        });
+        
+        // Atribuir cidade a vendedor
+        document.getElementById('assign-vendedor').addEventListener('click', function() {
+            if (!selectedCity) return;
+            
+            // Verificar se existem vendedores cadastrados
+            if (!vendedores.length) {
+                showNotification('Nenhum vendedor cadastrado. Cadastre um vendedor primeiro.', 'warning');
+                return;
+            }
+            
+            // Prepara o modal
+            document.getElementById('assign-city-name').innerHTML = `Cidade: <strong>${selectedCity.name}</strong>`;
+            
+            // Se a cidade já está atribuída, seleciona o vendedor atual
+            if (cityAssignments[selectedCity.name]) {
+                document.getElementById('assign-vendedor-select').value = cityAssignments[selectedCity.name];
+            } else {
+                document.getElementById('assign-vendedor-select').value = '';
+            }
+            
+            // Abre o modal
+            openModal('modal-assign-vendedor');
+        });
+        
+        // Confirmação de atribuição de vendedor
+        document.getElementById('confirm-assign-vendedor').addEventListener('click', function() {
+            const vendedorId = document.getElementById('assign-vendedor-select').value;
+            
+            if (!selectedCity || !vendedorId) {
+                showNotification('Selecione um vendedor', 'warning');
+                return;
+            }
+            
+            // Atribui a cidade ao vendedor
+            cityAssignments[selectedCity.name] = vendedorId;
+            saveData();
+            
+            // Atualiza a interface
+            updateFavoritesList();
+            updateSelectedCityInfo();
+            
+            // Atualiza o estilo da cidade no mapa
+            if (cityLayers[selectedCity.name]) {
+                resetCityStyle(cityLayers[selectedCity.name]);
+                
+                // Mantém a cidade selecionada destacada
+                cityLayers[selectedCity.name].setStyle({
+                    fillColor: '#ff7800',
+                    fillOpacity: 0.7,
+                    color: '#ff7800',
+                    weight: 3
+                });
+            }
+            
+            // Fecha o modal
+            closeAllModals();
+            
+            // Notificação
+            const vendedor = vendedores.find(v => v.id === vendedorId);
+            showNotification(`Cidade ${selectedCity.name} atribuída ao vendedor ${vendedor.nome}`);
+        });
+        
+        // Criar novo grupo
+        document.getElementById('create-group').addEventListener('click', function() {
+            const groupName = document.getElementById('group-name').value.trim();
+            
+            if (!groupName) {
+                showNotification('Digite um nome para o grupo', 'warning');
+                return;
+            }
+            
+            if (groups[groupName]) {
+                showNotification('Já existe um grupo com este nome', 'warning');
+                return;
+            }
+            
+            groups[groupName] = [];
+            saveData();
+            updateGroupsLists();
+            
+            document.getElementById('group-name').value = '';
+            
+            showNotification(`Grupo ${groupName} criado com sucesso`);
+        });
+        
+        // Destacar grupo selecionado
+        document.getElementById('group-select').addEventListener('change', function() {
+            activeGroup = this.value;
+            activeVendedor = null;
+            
+            if (activeGroup) {
+                highlightActiveGroup();
+                showNotification(`Grupo ${activeGroup} destacado no mapa`);
+            } else {
+                resetMapStyles();
+                showNotification('Destaque de grupo removido');
+            }
+        });
+        
+        // Adicionar novo vendedor
+        document.getElementById('add-vendedor').addEventListener('click', function() {
+            const nome = document.getElementById('vendedor-nome').value.trim();
+            const email = document.getElementById('vendedor-email').value.trim();
+            const telefone = document.getElementById('vendedor-telefone').value.trim();
+            
+            if (!nome) {
+                showNotification('Digite o nome do vendedor', 'warning');
+                return;
+            }
+            
+            // Verifica se está editando um vendedor existente
+            const editId = this.dataset.editId;
+            
+            if (editId) {
+                // Atualiza o vendedor existente
+                const index = vendedores.findIndex(v => v.id === editId);
+                if (index >= 0) {
+                    vendedores[index] = {
+                        id: editId,
+                        nome,
+                        email,
+                        telefone
+                    };
+                    
+                    // Restaura o botão para adicionar
+                    this.innerHTML = '<i class="fas fa-plus"></i> Adicionar Vendedor';
+                    delete this.dataset.editId;
+                    
+                    saveData();
+                    updateVendedoresList();
+                    
+                    // Limpa os campos
+                    document.getElementById('vendedor-nome').value = '';
+                    document.getElementById('vendedor-email').value = '';
+                    document.getElementById('vendedor-telefone').value = '';
+                    
+                    showNotification(`Vendedor ${nome} atualizado com sucesso`);
+                }
+            } else {
+                // Adiciona um novo vendedor
+                const novoVendedor = {
+                    id: generateId(),
+                    nome,
+                    email,
+                    telefone
+                };
+                
+                vendedores.push(novoVendedor);
+                saveData();
+                updateVendedoresList();
+                
+                // Limpa os campos
+                document.getElementById('vendedor-nome').value = '';
+                document.getElementById('vendedor-email').value = '';
+                document.getElementById('vendedor-telefone').value = '';
+                
+                showNotification(`Vendedor ${nome} adicionado com sucesso`);
+            }
+        });
+        
+        // Exportar dados
+        document.getElementById('export-vendedores').addEventListener('click', exportVendedoresCSV);
+        document.getElementById('export-cidades').addEventListener('click', exportCidadesCSV);
+        document.getElementById('export-atribuicoes').addEventListener('click', exportAtribuicoesCSV);
+        
+        // Importar dados
+        document.getElementById('import-data').addEventListener('click', function() {
+            const fileInput = document.getElementById('import-file');
+            
+            if (!fileInput.files.length) {
+                showNotification('Selecione um arquivo para importar', 'warning');
+                return;
+            }
+            
+            importData(fileInput.files[0]);
+            
+            // Limpa o campo de arquivo
+            fileInput.value = '';
+        });
+        
+        // Fechar modais
+        document.querySelectorAll('.modal-close').forEach(button => {
+            button.addEventListener('click', closeAllModals);
+        });
+        
+        // Fechar modal clicando fora
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeAllModals();
+                }
+            });
+        });
+        
+        // Carrega dados salvos ao iniciar
+        loadSavedData();
+    </script>
+</body>
+</html>
