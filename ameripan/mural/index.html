@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Dashboard Corporativo</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Carregamento sob demanda do FontAwesome -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" media="print" onload="this.media='all'">
     <style>
         :root {
             --primary: #2c3e50;
@@ -168,6 +171,7 @@
             position: relative;
             height: 100%;
             border: 1px solid rgba(0,0,0,0.04);
+            will-change: transform, box-shadow;
         }
         
         .card:hover {
@@ -280,6 +284,7 @@
             padding: 12px;
             border-top: 1px solid rgba(0,0,0,0.03);
             transition: transform 0.5s ease;
+            will-change: transform;
         }
         
         .image-container {
@@ -428,7 +433,8 @@
         }
         
         .fade-in {
-            animation: fadeIn 0.6s ease forwards;
+            animation: fadeIn 0.5s ease forwards;
+            will-change: opacity, transform;
         }
         
         @keyframes fadeIn {
@@ -497,6 +503,15 @@
             flex-direction: column;
         }
         
+        /* Estilos das imagens de controle */
+        .fa-search, .fa-sort, .fa-filter, .fa-external-link-alt, .fa-ellipsis-v,
+        .fa-info-circle, .fa-calendar-alt, .fa-user {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            line-height: 1;
+        }
+        
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -558,8 +573,7 @@
         const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc";
         const sheetName = "Mural";
         
-        /* 
-        Estrutura da planilha:
+        /* Estrutura da planilha:
         * Coluna A: Título do card
         * Coluna B: Informações/descrição
         * Coluna C: Link para acessar
@@ -574,6 +588,7 @@
         let allItems = [];
         let filteredItems = [];
         let sortDirection = 'asc';
+        let isLoading = true;
         
         // Elementos DOM
         const contentGrid = document.getElementById('content-grid');
@@ -588,8 +603,12 @@
         document.addEventListener('DOMContentLoaded', init);
         
         function init() {
-            loadData();
             setupEventListeners();
+            
+            // Usar requestAnimationFrame para melhorar o desempenho
+            requestAnimationFrame(() => {
+                loadData();
+            });
         }
         
         function setupEventListeners() {
@@ -631,7 +650,11 @@
         function loadData() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}?key=${apiKey}`;
             
-            fetch(url)
+            // Usar fetch com caching
+            fetch(url, { 
+                cache: 'default',
+                credentials: 'same-origin'
+            })
                 .then(response => {
                     if (!response.ok) {
                         throw new Error("Falha ao conectar com a API do Google Sheets");
@@ -640,11 +663,13 @@
                 })
                 .then(data => {
                     processData(data);
+                    isLoading = false;
                     hideLoader();
                     renderCards();
                 })
                 .catch(error => {
                     showError("Não foi possível carregar os dados. " + error.message);
+                    isLoading = false;
                     hideLoader();
                 });
         }
@@ -655,8 +680,8 @@
                 return;
             }
             
-            // Extrair cabeçalhos e dados
-            const headers = data.values[0];
+            // Criar um DocumentFragment para processamento em lote
+            const fragment = document.createDocumentFragment();
             
             // Processar cada linha de dados (pulando cabeçalhos)
             for (let i = 1; i < data.values.length; i++) {
@@ -682,7 +707,13 @@
             filteredItems = [...allItems];
         }
         
+        // Cache para processamento de links
+        const linkCache = new Map();
+        
         function renderCards() {
+            if (isLoading) return;
+            
+            // Limpar grid e mostrar
             contentGrid.innerHTML = '';
             contentGrid.style.display = 'grid';
             
@@ -698,20 +729,44 @@
                 return;
             }
             
-            filteredItems.forEach((item, index) => {
-                const card = createCard(item);
+            // Usar fragment para evitar reflows
+            const fragment = document.createDocumentFragment();
+            const batchSize = 5; // Quantos cards processar por vez
+            let currentIndex = 0;
+            
+            function renderBatch() {
+                if (currentIndex >= filteredItems.length) return;
                 
-                // Adicionar animação
-                setTimeout(() => {
+                const endIndex = Math.min(currentIndex + batchSize, filteredItems.length);
+                
+                for (let i = currentIndex; i < endIndex; i++) {
+                    const card = createCard(filteredItems[i]);
                     card.classList.add('fade-in');
-                    contentGrid.appendChild(card);
-                }, index * 50);
-            });
+                    fragment.appendChild(card);
+                }
+                
+                // Adicionar batch ao DOM
+                contentGrid.appendChild(fragment);
+                
+                // Configurar próximo batch
+                currentIndex = endIndex;
+                if (currentIndex < filteredItems.length) {
+                    requestAnimationFrame(renderBatch);
+                }
+            }
+            
+            // Iniciar renderização em batches
+            requestAnimationFrame(renderBatch);
         }
         
         // Função para transformar URLs em links clicáveis e preservar quebras de linha
         function makeLinksClickable(text) {
             if (!text) return '';
+            
+            // Verificar se já temos este texto processado no cache
+            if (linkCache.has(text)) {
+                return linkCache.get(text);
+            }
             
             // Primeiro, substituir quebras de linha por <br>
             let processedText = text.replace(/\n/g, '<br>');
@@ -720,9 +775,14 @@
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             
             // Substituir URLs por links clicáveis
-            return processedText.replace(urlRegex, url => {
+            processedText = processedText.replace(urlRegex, url => {
                 return `<a href="${url}" target="_blank" class="inline-link">${url}</a>`;
             });
+            
+            // Armazenar no cache para uso futuro
+            linkCache.set(text, processedText);
+            
+            return processedText;
         }
         
         function createCard(item) {
@@ -832,6 +892,42 @@
         function hideLoader() {
             loader.style.display = 'none';
         }
+        
+        // Adicionar monitoramento de desempenho
+        const perfMetrics = {
+            loadStart: performance.now(),
+            renderTime: 0,
+            totalItems: 0
+        };
+        
+        // Adiciona evento de carregamento da janela para medir desempenho
+        window.addEventListener('load', () => {
+            const loadTime = performance.now() - perfMetrics.loadStart;
+            console.log(`Dashboard carregado em ${loadTime.toFixed(2)}ms`);
+        });
+        
+        // Função otimizada de debounce para pesquisa
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        // Aplicar debounce à função de filtro
+        const debouncedFilter = debounce((query) => {
+            filterItems(query);
+        }, 300);
+        
+        // Substituir o evento keyup por um com debounce
+        searchInput.addEventListener('input', (event) => {
+            debouncedFilter(event.target.value);
+        });
     </script>
 </body>
 </html>
