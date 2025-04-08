@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mural de Informações Importantes</title>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            padding: 15px;
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #333;
+            font-size: 2.2rem;
+            padding: 0 10px;
+            word-wrap: break-word;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            width: 100%;
+            padding: 5px;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            position: relative;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-content {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .card-title {
+            color: #2c3e50;
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+            word-wrap: break-word;
+        }
+
+        .card-info {
+            color: #555;
+            margin-bottom: 15px;
+            line-height: 1.6;
+            flex: 1;
+            word-wrap: break-word;
+        }
+
+        .card-image {
+            width: 100%;
+            object-fit: contain;
+            background-color: #f9f9f9;
+            max-height: 250px;
+            min-height: 120px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card-image-bottom {
+            margin-top: auto;
+        }
+
+        .no-image {
+            height: 5px;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            margin-top: auto;
+            opacity: 0.7;
+        }
+        
+        .btn-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+            text-align: center;
+            word-break: break-all;
+        }
+        
+        .img-container {
+            width: 100%;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 120px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .img-error {
+            position: relative;
+            height: 10px;
+            background-color: #f9f9f9;
+        }
+
+        .img-error::after {
+            content: "Imagem não encontrada";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #999;
+            font-size: 0.8rem;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 30px;
+            font-size: 1.2rem;
+            color: #777;
+        }
+
+        /* Media queries para melhor responsividade */
+        @media (max-width: 768px) {
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+                margin-bottom: 20px;
+            }
+            
+            body {
+                padding: 10px;
+            }
+            
+            .card-content {
+                padding: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .card-title {
+                font-size: 1.2rem;
+            }
+            
+            .card-image {
+                min-height: 100px;
+                max-height: 200px;
+            }
+            
+            .btn-link {
+                width: 100%;
+                padding: 10px;
+            }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .cards-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1025px) {
+            .cards-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mural de Informações Importantes</h1>
+        <div id="loader" class="loader">Carregando informações...</div>
+        <div id="cards-container" class="cards-container"></div>
+    </div>
+
+    <script>
+        const spreadsheetId = "1x8_k27RWofNxNYDfWtC9skTEWPksk9dRHMhay6QCspU";
+        const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc";
+        const range = "Mural"; // Usando a aba "Mural" conforme solicitado
+        // Estrutura da planilha:
+        // Coluna A: Título
+        // Coluna B: Informações
+        // Coluna C: Link para acessar
+        // Coluna D: Link da imagem
+
+        function createCard(titulo, informacao, linkAcesso, linkImagem) {
+            const cardElement = document.createElement('div');
+            cardElement.className = 'card';
+            
+            const linkBtn = linkAcesso 
+                ? `<a href="${linkAcesso}" target="_blank" class="btn-link">Acessar</a>` 
+                : '';
+                
+            let imgElement = '';
+            if (linkImagem) {
+                imgElement = `<div class="img-container"><img src="${linkImagem}" alt="${titulo}" class="card-image card-image-bottom" loading="lazy" onerror="this.onerror=null; this.style.display='none'; this.parentNode.classList.add('img-error')"></div>`;
+            } else {
+                imgElement = '<div class="no-image"></div>';
+            }
+            
+            cardElement.innerHTML = `
+                <div class="card-content">
+                    <h2 class="card-title">${titulo}</h2>
+                    <p class="card-info">${informacao}</p>
+                    ${linkBtn}
+                </div>
+                ${imgElement}
+            `;
+            
+            return cardElement;
+        }
+
+        function loadMuralData() {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+            
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Erro na solicitação à API do Google Sheets.");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const cardsContainer = document.getElementById("cards-container");
+                    const loader = document.getElementById("loader");
+                    
+                    // Remover o loader
+                    loader.style.display = "none";
+                    
+                    // Verificar se há dados
+                    if (!data.values || data.values.length <= 1) {
+                        cardsContainer.innerHTML = "<p style='text-align: center; width: 100%;'>Nenhuma informação disponível.</p>";
+                        return;
+                    }
+                    
+                    // Processar os dados, começando da linha 2 (índice 1) para pular os cabeçalhos
+                    for (let i = 1; i < data.values.length; i++) {
+                        const row = data.values[i];
+                        
+                        // Verificar se a linha tem dados suficientes
+                        if (row.length >= 3) {
+                            const titulo = row[0] || "Sem título";
+                            const informacao = row[1] || "Sem informações";
+                            const linkAcesso = row[2] || "";
+                            const linkImagem = row.length >= 4 ? row[3] || "" : "";
+                            
+                            // Criar e adicionar o card ao contêiner
+                            const card = createCard(titulo, informacao, linkAcesso, linkImagem);
+                            cardsContainer.appendChild(card);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error("Erro ao obter dados:", error);
+                    const loader = document.getElementById("loader");
+                    loader.innerHTML = "Erro ao carregar os dados. Por favor, tente novamente mais tarde.";
+                    loader.style.color = "#e74c3c";
+                });
+        }
+
+        // Carregar os dados quando a página for carregada
+        document.addEventListener("DOMContentLoaded", loadMuralData);
+    </script>
+</body>
+</html>
