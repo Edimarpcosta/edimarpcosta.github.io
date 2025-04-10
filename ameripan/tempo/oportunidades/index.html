@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ameripan - Mapa de Oportunidades de Vendas</title>
+    <!-- Leaflet (biblioteca para mapas) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet.markercluster para agrupamento -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Estilos -->
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            padding: 0;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .cabecalho {
+            background-color: #3182ce;
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo img {
+            height: 36px;
+        }
+        
+        .controles {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .seletor {
+            padding: 8px;
+            border-radius: 5px;
+            border: none;
+            background-color: white;
+            color: #2d3748;
+        }
+        
+        .container-principal {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .painel-lateral {
+            width: 350px;
+            background-color: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            overflow-y: auto;
+            z-index: 10;
+            transition: transform 0.3s ease;
+        }
+        
+        .painel-lateral.recolhido {
+            transform: translateX(-350px);
+        }
+        
+        .titulo-painel {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #2d3748;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .titulo-painel button {
+            background: none;
+            border: none;
+            color: #4299e1;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .lista-vendedores {
+            margin-bottom: 20px;
+        }
+        
+        .vendedor {
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+        
+        .nome-vendedor {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background-color: #f8fafc;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .indicador-cor {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: inline-block;
+        }
+        
+        .cidades-vendedor {
+            font-size: 13px;
+            color: #4a5568;
+            margin-left: 20px;
+            display: none;
+        }
+        
+        .cidade-item {
+            margin-bottom: 5px;
+            padding: 3px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .cidade-item:hover {
+            background-color: #ebf8ff;
+            color: #2b6cb0;
+        }
+        
+        .vendedor.ativo .cidades-vendedor {
+            display: block;
+        }
+        
+        .vendedor.ativo .nome-vendedor {
+            background-color: #ebf8ff;
+        }
+        
+        .previsao-vendas {
+            margin-top: 20px;
+        }
+        
+        .oportunidade {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #f8fafc;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .oportunidade:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .oportunidade.alta {
+            background-color: #fef2f2;
+            border-left: 3px solid #ef4444;
+        }
+        
+        .oportunidade.media {
+            background-color: #fff7ed;
+            border-left: 3px solid #f97316;
+        }
+        
+        .oportunidade.baixa {
+            background-color: #f8fafc;
+            border-left: 3px solid #cbd5e1;
+        }
+        
+        .cidade-oportunidade {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .vendedor-oportunidade {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        
+        .detalhes-oportunidade {
+            font-size: 13px;
+            color: #4b5563;
+            margin-bottom: 5px;
+        }
+        
+        .datas-oportunidade {
+            font-size: 12px;
+            padding: 5px;
+            background-color: #f8fafc;
+            border-radius: 3px;
+            margin-top: 5px;
+            border-left: 2px solid #cbd5e1;
+        }
+        
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        
+        .temperatura-data {
+            font-weight: bold;
+        }
+        
+        .acoes-oportunidade {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .acoes-oportunidade button {
+            background: none;
+            border: none;
+            color: #4299e1;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        
+        .acoes-oportunidade button:hover {
+            color: #2b6cb0;
+            text-decoration: underline;
+        }
+        
+        .container-mapa {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            transition: margin-left 0.3s ease;
+        }
+        
+        .container-mapa.expandido {
+            margin-left: -350px;
+        }
+        
+        #mapa {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .resumo-geral {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f9ff;
+            border-radius: 5px;
+        }
+        
+        .titulo-resumo {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .titulo-resumo button {
+            background: none;
+            border: none;
+            color: #4299e1;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .dados-resumo {
+            font-size: 14px;
+            color: #4a5568;
+        }
+        
+        .estatisticas {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        
+        .estatistica {
+            text-align: center;
+            flex: 1;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .estatistica:hover {
+            background-color: #e6f7ff;
+        }
+        
+        .valor-estatistica {
+            font-size: 22px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        
+        .rotulo-estatistica {
+            font-size: 12px;
+            color: #718096;
+        }
+        
+        .graf-estatistica {
+            height: 200px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .graf-estatistica.ativo {
+            display: block;
+        }
+        
+        .legenda-mapa {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        
+        .titulo-legenda {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .itens-legenda {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .item-legenda {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .cor-legenda {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
+        }
+        
+        .toggle-painel {
+            position: absolute;
+            left: 350px;
+            top: 15px;
+            background-color: white;
+            border: none;
+            border-radius: 5px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: left 0.3s ease;
+        }
+        
+        .toggle-painel.recolhido {
+            left: 10px;
+        }
+        
+        .calendario-semanal {
+            display: flex;
+            margin: 10px 0;
+            gap: 5px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+        
+        .dia-calendario {
+            min-width: 40px;
+            border-radius: 5px;
+            padding: 5px;
+            text-align: center;
+            font-size: 12px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+        }
+        
+        .dia-calendario .data {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .dia-calendario .temperatura {
+            font-size: 11px;
+        }
+        
+        .dia-calendario.quente {
+            background-color: #ffedd5;
+            border-color: #fdba74;
+        }
+        
+        .dia-calendario.muito-quente {
+            background-color: #fee2e2;
+            border-color: #fca5a5;
+        }
+        
+        .controles-exportacao {
+            display: flex;
+            margin-top: 10px;
+            gap: 10px;
+        }
+        
+        .btn-exportar {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .btn-exportar:hover {
+            background-color: #3182ce;
+        }
+        
+        .btn-exportar svg {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .modal-overlay.ativo {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-conteudo {
+            background-color: white;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-cabecalho {
+            padding: 15px;
+            background-color: #3182ce;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-titulo {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .modal-fechar {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        
+        .modal-corpo {
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .modal-acoes {
+            padding: 15px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .modal-btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .modal-btn-primario {
+            background-color: #3182ce;
+            color: white;
+            border: none;
+        }
+        
+        .modal-btn-secundario {
+            background-color: #e2e8f0;
+            color: #4a5568;
+            border: none;
+        }
+        
+        .detalhes-cidade {
+            margin-bottom: 20px;
+        }
+        
+        .info-cidade {
+            margin-bottom: 15px;
+        }
+        
+        .info-cidade-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #4a5568;
+            font-size: 14px;
+        }
+        
+        .info-cidade-valor {
+            font-size: 16px;
+        }
+        
+        .previsao-cidade-dias {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+        
+        .previsao-cidade-dia {
+            background-color: #f8fafc;
+            border-radius: 5px;
+            padding: 10px;
+            min-width: 100px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .previsao-cidade-data {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .previsao-cidade-temp {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        
+        .previsao-cidade-desc {
+            font-size: 12px;
+            color: #4b5563;
+        }
+        
+        .indicador-tendencia {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 5px;
+        }
+        
+        .tendencia-alta {
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 8px solid #ef4444;
+        }
+        
+        .tendencia-baixa {
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 8px solid #3b82f6;
+        }
+        
+        .tendencia-estavel {
+            width: 10px;
+            height: 2px;
+            background-color: #9ca3af;
+        }
+        
+        .alertas-container {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .alerta-item {
+            background-color: #fffbeb;
+            border-left: 3px solid #fbbf24;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .alerta-titulo {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .alerta-icone {
+            color: #fbbf24;
+            margin-right: 5px;
+        }
+        
+        .alerta-descricao {
+            font-size: 13px;
+            color: #4b5563;
+        }
+        
+        .info-rota {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .rota-sugerida {
+            margin-top: 10px;
+        }
+        
+        .rota-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f8fafc;
+            border-radius: 5px;
+        }
+        
+        .rota-numero {
+            background-color: #3182ce;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+        
+        .rota-cidade {
+            font-weight: bold;
+            flex: 1;
+        }
+        
+        .rota-temp {
+            margin-right: 10px;
+            font-weight: bold;
+            color: #ef4444;
+        }
+        
+        @media (max-width: 768px) {
+            .controles {
+                justify-content: center;
+            }
+            
+            .toggle-painel {
+                top: auto;
+                bottom: 20px;
+                left: 20px !important;
+                background-color: #3182ce;
+                color: white;
+                z-index: 1500;
+            }
+            
+            .estatisticas {
+                flex-wrap: wrap;
+            }
+            
+            .estatistica {
+                min-width: 50%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cabecalho">
+        <div class="logo">
+            <img src="https://cdn.awsli.com.br/1284/1284671/favicon/e91f4136fd.png" alt="Logo Ameripan">
+            Ameripan - Oportunidades de Vendas
+        </div>
+        <div class="controles">
+            <select id="filtro-vendedor" class="seletor">
+                <option value="todos">Todos os Vendedores</option>
+                <option value="hana">Hana</option>
+                <option value="gabriela">Gabriela</option>
+                <option value="juari">Juari</option>
+                <option value="jordano">Jordano</option>
+                <option value="emanuel">Emanuel</option>
+                <option value="cristiane">Cristiane</option>
+                <option value="lucas">Lucas</option>
+                <option value="marcelo">Marcelo (Online)</option>
+            </select>
+            <select id="filtro-visualizacao" class="seletor">
+                <option value="temperatura">Temperatura</option>
+                <option value="potencial">Potencial de Vendas</option>
+                <option value="vendedor">Por Vendedor</option>
+            </select>
+            <select id="filtro-periodo" class="seletor">
+                <option value="hoje">Hoje</option>
+                <option value="amanha">Amanhã</option>
+                <option value="3dias">Próximos 3 dias</option>
+                <option value="7dias">Próximos 7 dias</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="container-principal">
+        <div class="painel-lateral" id="painel-lateral">
+            <h2 class="titulo-painel">
+                Vendedores e Territórios
+                <button id="expandir-todos">Expandir todos</button>
+            </h2>
+            
+            <div class="lista-vendedores">
+                <div class="vendedor" data-vendedor="hana">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #3b82f6;"></span>
+                        Hana (7 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Rio Claro" data-lat="-22.4151" data-lon="-47.5616">Rio Claro</div>
+                        <div class="cidade-item" data-cidade="Limeira" data-lat="-22.5638" data-lon="-47.4097">Limeira</div>
+                        <div class="cidade-item" data-cidade="Cordeirópolis" data-lat="-22.4778" data-lon="-47.4519">Cordeirópolis</div>
+                        <div class="cidade-item" data-cidade="Santa Gertrudes" data-lat="-22.4572" data-lon="-47.5272">Santa Gertrudes</div>
+                        <div class="cidade-item" data-cidade="Iracemápolis" data-lat="-22.5838" data-lon="-47.5166">Iracemápolis</div>
+                        <div class="cidade-item" data-cidade="Charqueada" data-lat="-22.5098" data-lon="-47.7754">Charqueada</div>
+                        <div class="cidade-item" data-cidade="Ipeúna" data-lat="-22.4355" data-lon="-47.7151">Ipeúna</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="gabriela">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #ec4899;"></span>
+                        Gabriela (10 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Piracicaba" data-lat="-22.7253" data-lon="-47.6492">Piracicaba</div>
+                        <div class="cidade-item" data-cidade="Águas de São Pedro" data-lat="-22.5986" data-lon="-47.8756">Águas de São Pedro</div>
+                        <div class="cidade-item" data-cidade="São Pedro" data-lat="-22.5483" data-lon="-47.9094">São Pedro</div>
+                        <div class="cidade-item" data-cidade="Santa Maria da Serra" data-lat="-22.5661" data-lon="-48.1593">Santa Maria da Serra</div>
+                        <div class="cidade-item" data-cidade="Saltinho" data-lat="-22.8450" data-lon="-47.6751">Saltinho</div>
+                        <div class="cidade-item" data-cidade="Rio das Pedras" data-lat="-22.8417" data-lon="-47.6047">Rio das Pedras</div>
+                        <div class="cidade-item" data-cidade="Tietê" data-lat="-23.1100" data-lon="-47.7164">Tietê</div>
+                        <div class="cidade-item" data-cidade="Cerquilho" data-lat="-23.1657" data-lon="-47.7459">Cerquilho</div>
+                        <div class="cidade-item" data-cidade="Jurumirim" data-lat="-23.2084" data-lon="-48.7388">Jurumirim</div>
+                        <div class="cidade-item" data-cidade="Laranjal Paulista" data-lat="-23.0506" data-lon="-47.8375">Laranjal Paulista</div>
+                    </div>
+                </div>
+                
+                <!-- Continuação dos demais vendedores e cidades... -->
+                <div class="vendedor" data-vendedor="juari">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #10b981;"></span>
+                        Juari (4 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Mogi Mirim" data-lat="-22.4328" data-lon="-46.9541">Mogi Mirim</div>
+                        <div class="cidade-item" data-cidade="Mogi Guaçu" data-lat="-22.3675" data-lon="-46.9428">Mogi Guaçu</div>
+                        <div class="cidade-item" data-cidade="Itapira" data-lat="-22.4357" data-lon="-46.8224">Itapira</div>
+                        <div class="cidade-item" data-cidade="Artur Nogueira" data-lat="-22.5726" data-lon="-47.1726">Artur Nogueira</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="jordano">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #eab308;"></span>
+                        Jordano (14 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Cosmópolis" data-lat="-22.6425" data-lon="-47.1968">Cosmópolis</div>
+                        <div class="cidade-item" data-cidade="Holambra" data-lat="-22.6337" data-lon="-47.0486">Holambra</div>
+                        <div class="cidade-item" data-cidade="Santo Antônio de Posse" data-lat="-22.6029" data-lon="-46.9184">Santo Antônio de Posse</div>
+                        <div class="cidade-item" data-cidade="Jaguariúna" data-lat="-22.7037" data-lon="-46.9851">Jaguariúna</div>
+                        <div class="cidade-item" data-cidade="Amparo" data-lat="-22.7008" data-lon="-46.7619">Amparo</div>
+                        <div class="cidade-item" data-cidade="Pedreira" data-lat="-22.7412" data-lon="-46.9015">Pedreira</div>
+                        <div class="cidade-item" data-cidade="Pinhalzinho" data-lat="-22.7799" data-lon="-46.5896">Pinhalzinho</div>
+                        <div class="cidade-item" data-cidade="Monte Alegre do Sul" data-lat="-22.6753" data-lon="-46.6814">Monte Alegre do Sul</div>
+                        <div class="cidade-item" data-cidade="Socorro" data-lat="-22.5903" data-lon="-46.5252">Socorro</div>
+                        <div class="cidade-item" data-cidade="Águas de Lindóia" data-lat="-22.4733" data-lon="-46.6314">Águas de Lindóia</div>
+                        <div class="cidade-item" data-cidade="Lindóia" data-lat="-22.5217" data-lon="-46.6500">Lindóia</div>
+                        <div class="cidade-item" data-cidade="Serra Negra" data-lat="-22.6115" data-lon="-46.7022">Serra Negra</div>
+                        <div class="cidade-item" data-cidade="Hortolândia" data-lat="-22.8528" data-lon="-47.2141">Hortolândia</div>
+                        <div class="cidade-item" data-cidade="Campinas" data-lat="-22.9056" data-lon="-47.0608">Campinas</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="emanuel">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #f97316;"></span>
+                        Emanuel (5 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Americana" data-lat="-22.7357" data-lon="-47.3331">Americana</div>
+                        <div class="cidade-item" data-cidade="Santa Bárbara D'Oeste" data-lat="-22.7539" data-lon="-47.4136">Santa Bárbara D'Oeste</div>
+                        <div class="cidade-item" data-cidade="Nova Odessa" data-lat="-22.7826" data-lon="-47.2941">Nova Odessa</div>
+                        <div class="cidade-item" data-cidade="Sumaré" data-lat="-22.8204" data-lon="-47.2728">Sumaré</div>
+                        <div class="cidade-item" data-cidade="Paulínia" data-lat="-22.7611" data-lon="-47.1542">Paulínia</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="cristiane">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #8b5cf6;"></span>
+                        Cristiane (11 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Pirassununga" data-lat="-21.9960" data-lon="-47.4259">Pirassununga</div>
+                        <div class="cidade-item" data-cidade="Leme" data-lat="-22.1872" data-lon="-47.3833">Leme</div>
+                        <div class="cidade-item" data-cidade="Araras" data-lat="-22.3572" data-lon="-47.3842">Araras</div>
+                        <div class="cidade-item" data-cidade="Descalvado" data-lat="-21.9100" data-lon="-47.6181">Descalvado</div>
+                        <div class="cidade-item" data-cidade="Porto Ferreira" data-lat="-21.8499" data-lon="-47.4869">Porto Ferreira</div>
+                        <div class="cidade-item" data-cidade="Santa Rita do Passa Quatro" data-lat="-21.7083" data-lon="-47.4778">Santa Rita do Passa Quatro</div>
+                        <div class="cidade-item" data-cidade="Tambaú" data-lat="-21.7036" data-lon="-47.2700">Tambaú</div>
+                        <div class="cidade-item" data-cidade="Santa Cruz das Palmeiras" data-lat="-21.8276" data-lon="-47.2481">Santa Cruz das Palmeiras</div>
+                        <div class="cidade-item" data-cidade="Conchal" data-lat="-22.3280" data-lon="-47.1729">Conchal</div>
+                        <div class="cidade-item" data-cidade="Engenheiro Coelho" data-lat="-22.4838" data-lon="-47.2110">Engenheiro Coelho</div>
+                        <div class="cidade-item" data-cidade="Santa Cruz da Conceição" data-lat="-22.1405" data-lon="-47.4513">Santa Cruz da Conceição</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="lucas">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #06b6d4;"></span>
+                        Lucas (6 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Águas da Prata" data-lat="-21.9319" data-lon="-46.7172">Águas da Prata</div>
+                        <div class="cidade-item" data-cidade="Aguaí" data-lat="-22.0572" data-lon="-46.9739">Aguaí</div>
+                        <div class="cidade-item" data-cidade="São João da Boa Vista" data-lat="-21.9850" data-lon="-46.7981">São João da Boa Vista</div>
+                        <div class="cidade-item" data-cidade="Espírito Santo do Pinhal" data-lat="-22.1910" data-lon="-46.7477">Espírito Santo do Pinhal</div>
+                        <div class="cidade-item" data-cidade="Casa Branca" data-lat="-21.7731" data-lon="-47.0867">Casa Branca</div>
+                        <div class="cidade-item" data-cidade="Vargem Grande do Sul" data-lat="-21.8319" data-lon="-46.8914">Vargem Grande do Sul</div>
+                    </div>
+                </div>
+                
+                <div class="vendedor" data-vendedor="marcelo">
+                    <div class="nome-vendedor">
+                        <span class="indicador-cor" style="background-color: #64748b;"></span>
+                        Marcelo - Online (9 cidades)
+                    </div>
+                    <div class="cidades-vendedor">
+                        <div class="cidade-item" data-cidade="Campinas" data-lat="-22.9056" data-lon="-47.0608">Campinas</div>
+                        <div class="cidade-item" data-cidade="Americana" data-lat="-22.7357" data-lon="-47.3331">Americana</div>
+                        <div class="cidade-item" data-cidade="Santa Bárbara D'Oeste" data-lat="-22.7539" data-lon="-47.4136">Santa Bárbara D'Oeste</div>
+                        <div class="cidade-item" data-cidade="Nova Odessa" data-lat="-22.7826" data-lon="-47.2941">Nova Odessa</div>
+                        <div class="cidade-item" data-cidade="Piracicaba" data-lat="-22.7253" data-lon="-47.6492">Piracicaba</div>
+                        <div class="cidade-item" data-cidade="Rio das Pedras" data-lat="-22.8417" data-lon="-47.6047">Rio das Pedras</div>
+                        <div class="cidade-item" data-cidade="Ipeúna" data-lat="-22.4355" data-lon="-47.7151">Ipeúna</div>
+                        <div class="cidade-item" data-cidade="São Pedro" data-lat="-22.5483" data-lon="-47.9094">São Pedro</div>
+                        <div class="cidade-item" data-cidade="Águas de São Pedro" data-lat="-22.5986" data-lon="-47.8756">Águas de São Pedro</div>
+                        <div class="cidade-item" data-cidade="Santa Maria da Serra" data-lat="-22.5661" data-lon="-48.1593">Santa Maria da Serra</div>
+                    </div>
+                </div>
+            </div>
+            
+            <h2 class="titulo-painel">
+                Principais Oportunidades
+                <button id="atualizar-oportunidades">Atualizar</button>
+            </h2>
+            
+            <div class="calendario-semanal" id="calendario-semanal">
+                <!-- Calendário será preenchido via JavaScript -->
+            </div>
+            
+            <div class="previsao-vendas" id="oportunidades-container">
+                <!-- Oportunidades serão inseridas aqui pelo JavaScript -->
+            </div>
+            
+            <div class="resumo-geral">
+                <div class="titulo-resumo">
+                    Resumo do Período
+                    <button id="expandir-resumo">Ver gráficos</button>
+                </div>
+                <div class="dados-resumo">
+                    Visualizando: <span id="periodo-atual">Hoje</span>
+                </div>
+                <div class="estatisticas">
+                    <div class="estatistica" data-graf="cidades-quentes-graf">
+                        <div class="valor-estatistica" id="cidades-quentes">0</div>
+                        <div class="rotulo-estatistica">Cidades Quentes</div>
+                    </div>
+                    <div class="estatistica" data-graf="oportunidades-alta-graf">
+                        <div class="valor-estatistica" id="oportunidades-alta">0</div>
+                        <div class="rotulo-estatistica">Oportunidades Alta</div>
+                    </div>
+                    <div class="estatistica" data-graf="sequencias-sol-graf">
+                        <div class="valor-estatistica" id="sequencias-sol">0</div>
+                        <div class="rotulo-estatistica">Sequências Sol</div>
+                    </div>
+                </div>
+                
+                <!-- Gráficos expandidos -->
+                <div class="graf-estatistica" id="cidades-quentes-graf">
+                    <canvas id="grafico-cidades-quentes"></canvas>
+                </div>
+                <div class="graf-estatistica" id="oportunidades-alta-graf">
+                    <canvas id="grafico-oportunidades"></canvas>
+                </div>
+                <div class="graf-estatistica" id="sequencias-sol-graf">
+                    <canvas id="grafico-sequencias"></canvas>
+                </div>
+                
+                <div class="controles-exportacao">
+                    <button class="btn-exportar" id="btn-pdf">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        Exportar PDF
+                    </button>
+                    <button class="btn-exportar" id="btn-excel">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="15" y1="3" x2="15" y2="21"></line>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                        </svg>
+                        Exportar Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <button id="toggle-painel" class="toggle-painel">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+        
+        <div class="container-mapa" id="container-mapa">
+            <div id="mapa"></div>
+            
+            <div class="legenda-mapa">
+                <div class="titulo-legenda">Temperatura</div>
+                <div class="itens-legenda" id="legenda-temperatura">
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #ef4444;"></div>
+                        <span>Acima de 30°C</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #f97316;"></div>
+                        <span>25°C a 30°C</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #fcd34d;"></div>
+                        <span>20°C a 25°C</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #22d3ee;"></div>
+                        <span>15°C a 20°C</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #93c5fd;"></div>
+                        <span>Abaixo de 15°C</span>
+                    </div>
+                </div>
+                <div class="itens-legenda" id="legenda-potencial" style="display: none;">
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #ef4444;"></div>
+                        <span>Oportunidade Alta</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #f97316;"></div>
+                        <span>Oportunidade Média</span>
+                    </div>
+                    <div class="item-legenda">
+                        <div class="cor-legenda" style="background-color: #fcd34d;"></div>
+                        <span>Oportunidade Baixa</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Detalhes da Cidade -->
+    <div id="modal-cidade" class="modal-overlay">
+        <div class="modal-conteudo">
+            <div class="modal-cabecalho">
+                <div class="modal-titulo" id="modal-cidade-titulo">Detalhes da Cidade</div>
+                <button class="modal-fechar" id="fechar-modal-cidade">&times;</button>
+            </div>
+            <div class="modal-corpo" id="modal-cidade-corpo">
+                <!-- Conteúdo será preenchido via JavaScript -->
+            </div>
+            <div class="modal-acoes">
+                <button class="modal-btn modal-btn-secundario" id="fechar-modal-btn">Fechar</button>
+                <button class="modal-btn modal-btn-primario" id="ver-detalhes-tempo-btn">Ver Detalhes de Tempo</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Alerta de Oportunidade -->
+    <div id="modal-alerta" class="modal-overlay">
+        <div class="modal-conteudo">
+            <div class="modal-cabecalho">
+                <div class="modal-titulo">Alerta de Oportunidade</div>
+                <button class="modal-fechar" id="fechar-modal-alerta">&times;</button>
+            </div>
+            <div class="modal-corpo" id="modal-alerta-corpo">
+                <!-- Conteúdo será preenchido via JavaScript -->
+            </div>
+            <div class="modal-acoes">
+                <button class="modal-btn modal-btn-secundario" id="fechar-alerta-btn">Fechar</button>
+                <button class="modal-btn modal-btn-primario" id="agendar-visita-btn">Agendar Visita</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configuração inicial do mapa
+            const mapa = L.map('mapa').setView([-22.3, -47.4], 9); // Coordenadas centradas no interior de SP
+            
+            // Adicionar camada de mapa do OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapa);
+            
+            // Cores associadas a cada vendedor (mesmas usadas no painel)
+            const coresVendedores = {
+                hana: '#3b82f6',
+                gabriela: '#ec4899',
+                juari: '#10b981',
+                jordano: '#eab308',
+                emanuel: '#f97316',
+                cristiane: '#8b5cf6',
+                lucas: '#06b6d4',
+                marcelo: '#64748b'
+            };
+            
+            // Dados de cidades com coordenadas
+            const cidades = [];
+            const cidadesItens = document.querySelectorAll('.cidade-item');
+            cidadesItens.forEach(item => {
+                const vendedor = item.closest('.vendedor').dataset.vendedor;
+                cidades.push({
+                    nome: item.dataset.cidade,
+                    coords: [parseFloat(item.dataset.lat), parseFloat(item.dataset.lon)],
+                    vendedor: vendedor,
+                    temperatura: gerarTemperaturaAleatoria(15, 33),
+                    sequenciaSol: Math.floor(Math.random() * 5) + 1,
+                    // Simular previsão para dias futuros
+                    previsao: gerarPrevisao()
+                });
+            });
+            
+            // Função auxiliar para gerar temperaturas aleatórias
+            function gerarTemperaturaAleatoria(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+            
+            // Função para gerar previsão para 7 dias
+            function gerarPrevisao() {
+                const hoje = new Date();
+                const previsao = [];
+                
+                for (let i = 0; i < 7; i++) {
+                    const data = new Date(hoje);
+                    data.setDate(data.getDate() + i);
+                    
+                    const tempMax = gerarTemperaturaAleatoria(20, 35);
+                    const tempMin = gerarTemperaturaAleatoria(15, tempMax - 2);
+                    
+                    // Gerar tempo aleatório (0 = ensolarado, 1 = parcialmente nublado, 2 = nublado, 3 = chuvoso)
+                    const tempo = Math.floor(Math.random() * 4);
+                    
+                    previsao.push({
+                        data: data,
+                        tempMax: tempMax,
+                        tempMin: tempMin,
+                        tempo: tempo,
+                        probChuva: tempo === 3 ? gerarTemperaturaAleatoria(60, 90) : gerarTemperaturaAleatoria(0, 30)
+                    });
+                }
+                
+                return previsao;
+            }
+            
+            // Preparar os grupos de marcadores por vendedor
+            let gruposVendedores = {}; // Usar let em vez de const
+           // let marcadoresCidades = {};
+			let mapMarkers = {};
+            
+            Object.keys(coresVendedores).forEach(vendedor => {
+                gruposVendedores[vendedor] = L.layerGroup().addTo(mapa);
+            });
+            
+            // Função para obter cor baseada na temperatura
+            function getCorTemperatura(temp) {
+                if (temp >= 30) return '#ef4444'; // Vermelho
+                if (temp >= 25) return '#f97316'; // Laranja
+                if (temp >= 20) return '#fcd34d'; // Amarelo
+                if (temp >= 15) return '#22d3ee'; // Ciano
+                return '#93c5fd'; // Azul claro
+            }
+            
+            // Função para obter cor baseada no potencial de vendas
+            function getCorPotencial(temp, sequenciaSol) {
+                if (temp >= 28 && sequenciaSol >= 3) return '#ef4444'; // Alta oportunidade
+                if (temp >= 25) return '#f97316'; // Média oportunidade
+                return '#fcd34d'; // Baixa oportunidade
+            }
+            
+            // Função para formatar data
+            function formatarData(data) {
+                const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                
+                return `${dias[data.getDay()]}, ${data.getDate()} ${meses[data.getMonth()]}`;
+            }
+            
+            // Função para preencher o calendário semanal
+            function preencherCalendarioSemanal() {
+                const calendario = document.getElementById('calendario-semanal');
+                calendario.innerHTML = '';
+                
+                const hoje = new Date();
+                
+                for (let i = 0; i < 7; i++) {
+                    const data = new Date(hoje);
+                    data.setDate(data.getDate() + i);
+                    
+                    // Calcular temperatura média para este dia em todas as cidades
+                    const temperaturas = cidades.map(cidade => {
+                        return cidade.previsao[i].tempMax;
+                    });
+                    
+                    const tempMedia = Math.round(temperaturas.reduce((a, b) => a + b, 0) / temperaturas.length);
+                    
+                    // Definir classe baseada na temperatura média
+                    let classe = '';
+                    if (tempMedia >= 30) {
+                        classe = 'muito-quente';
+                    } else if (tempMedia >= 25) {
+                        classe = 'quente';
+                    }
+                    
+                    const diaEl = document.createElement('div');
+                    diaEl.className = `dia-calendario ${classe}`;
+                    diaEl.dataset.dia = i;
+                    
+                    diaEl.innerHTML = `
+                        <div class="data">${data.getDate()}/${data.getMonth() + 1}</div>
+                        <div class="temperatura">${tempMedia}°C</div>
+                    `;
+                    
+                    diaEl.addEventListener('click', () => {
+                        // Atualizar filtro de período baseado no dia clicado
+                        if (i === 0) {
+                            document.getElementById('filtro-periodo').value = 'hoje';
+                        } else if (i === 1) {
+                            document.getElementById('filtro-periodo').value = 'amanha';
+                        } else {
+                            document.getElementById('filtro-periodo').value = '3dias';
+                        }
+                        
+                        // Disparar evento de mudança para atualizar a visualização
+                        document.getElementById('filtro-periodo').dispatchEvent(new Event('change'));
+                    });
+                    
+                    calendario.appendChild(diaEl);
+                }
+            }
+            
+            // Função para adicionar marcadores ao mapa
+            function adicionarMarcadores(modo) {
+                // Limpar todos os grupos
+                Object.values(gruposVendedores).forEach(grupo => grupo.clearLayers());
+                mapMarkers = {};
+                
+                // Adicionar marcadores conforme o modo de visualização
+                cidades.forEach(cidade => {
+                    let corMarcador;
+                    
+                    if (modo === 'temperatura') {
+                        corMarcador = getCorTemperatura(cidade.temperatura);
+                    } else if (modo === 'potencial') {
+                        corMarcador = getCorPotencial(cidade.temperatura, cidade.sequenciaSol);
+                    } else { // modo === 'vendedor'
+                        corMarcador = coresVendedores[cidade.vendedor];
+                    }
+                    
+                    // Criação do marcador
+                    const marcador = L.circleMarker(cidade.coords, {
+                        radius: 8,
+                        fillColor: corMarcador,
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    });
+                    
+                    // Conteúdo do popup
+                    let conteudoPopup = `
+                        <b>${cidade.nome}</b><br>
+                        Temperatura: ${cidade.temperatura}°C<br>
+                        Vendedor: ${cidade.vendedor.charAt(0).toUpperCase() + cidade.vendedor.slice(1)}<br>
+                        <br>
+                        <a href="#" onclick="mostrarDetalhesCidade('${cidade.nome}'); return false;">Ver detalhes completos</a>
+                    `;
+                    
+                    // Adicionar popup ao marcador
+                    marcador.bindPopup(conteudoPopup);
+                    
+                    // Salvar referência ao marcador
+                    mapMarkers[cidade.nome] = marcador;
+                    
+                    // Adicionar ao grupo do vendedor correspondente
+                    gruposVendedores[cidade.vendedor].addLayer(marcador);
+                });
+            }
+            
+            // Função para atualizar legendas
+            function atualizarLegendas(modo) {
+                document.getElementById('legenda-temperatura').style.display = modo === 'temperatura' ? 'block' : 'none';
+                document.getElementById('legenda-potencial').style.display = modo === 'potencial' ? 'block' : 'none';
+                
+                // Atualizar título da legenda
+                const tituloLegenda = document.querySelector('.titulo-legenda');
+                tituloLegenda.textContent = modo === 'temperatura' ? 'Temperatura' : 
+                                          modo === 'potencial' ? 'Potencial de Vendas' : 'Vendedores';
+            }
+            
+            // Função para criar gráficos
+            function criarGraficos() {
+                // Dados para os gráficos
+                const labels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+                
+                // Gráfico de cidades quentes
+                new Chart(document.getElementById('grafico-cidades-quentes'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Cidades acima de 28°C',
+                            data: [12, 15, 18, 14, 10],
+                            backgroundColor: '#ef4444'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+                
+                // Gráfico de oportunidades
+                new Chart(document.getElementById('grafico-oportunidades'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Oportunidades Alta',
+                            data: [8, 10, 12, 9, 7],
+                            backgroundColor: '#f97316'
+                        }, {
+                            label: 'Oportunidades Média',
+                            data: [15, 12, 10, 14, 16],
+                            backgroundColor: '#fcd34d'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                stacked: true,
+                            },
+                            y: {
+                                stacked: true
+                            }
+                        }
+                    }
+                });
+                
+                // Gráfico de sequências de sol
+                new Chart(document.getElementById('grafico-sequencias'), {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Sequências de 3+ dias de sol',
+                            data: [5, 9, 12, 15, 10],
+                            borderColor: '#eab308',
+                            backgroundColor: 'rgba(234, 179, 8, 0.2)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+            
+            // Função para gerar oportunidades
+            function gerarOportunidades() {
+                const container = document.getElementById('oportunidades-container');
+                container.innerHTML = '';
+                
+                // Ordenar cidades por temperatura e sequência de sol
+                const cidadesOrdenadas = [...cidades].sort((a, b) => {
+                    // Primeiro critério: sequência de sol
+                    if (b.sequenciaSol !== a.sequenciaSol) {
+                        return b.sequenciaSol - a.sequenciaSol;
+                    }
+                    // Segundo critério: temperatura
+                    return b.temperatura - a.temperatura;
+                });
+                
+                // Pegar as 5 melhores oportunidades
+                const melhoresOportunidades = cidadesOrdenadas.slice(0, 5);
+                
+                // Gerar oportunidades
+                melhoresOportunidades.forEach((cidade, index) => {
+                    let classe = 'baixa';
+                    
+                    if (cidade.temperatura >= 28 && cidade.sequenciaSol >= 3) {
+                        classe = 'alta';
+                    } else if (cidade.temperatura >= 25) {
+                        classe = 'media';
+                    }
+                    
+                    const vendedorNome = cidade.vendedor.charAt(0).toUpperCase() + cidade.vendedor.slice(1);
+                    
+                    // Criar datas para a oportunidade
+                    const hoje = new Date();
+                    const datas = [];
+                    
+                    for (let i = 0; i < cidade.sequenciaSol; i++) {
+                        const data = new Date(hoje);
+                        data.setDate(data.getDate() + i);
+                        
+                        datas.push({
+                            data: formatarData(data),
+                            temp: cidade.previsao[i].tempMax
+                        });
+                    }
+                    
+                    const elementoOportunidade = document.createElement('div');
+                    elementoOportunidade.className = `oportunidade ${classe}`;
+                    elementoOportunidade.dataset.cidade = cidade.nome;
+                    
+                    elementoOportunidade.innerHTML = `
+                        <div class="cidade-oportunidade">
+                            ${cidade.nome}
+                            <span>${cidade.temperatura}°C</span>
+                        </div>
+                        <div class="vendedor-oportunidade">Vendedor: ${vendedorNome}</div>
+                        <div class="detalhes-oportunidade">
+                            ${cidade.sequenciaSol} dias de sol previstos. 
+                            ${classe === 'alta' ? 'Excelente oportunidade!' : 
+                              classe === 'media' ? 'Boa oportunidade.' : 'Oportunidade moderada.'}
+                        </div>
+                        <div class="datas-oportunidade">
+                            ${datas.map(d => `
+                                <div class="data-item">
+                                    <span>${d.data}</span>
+                                    <span class="temperatura-data">${d.temp}°C</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="acoes-oportunidade">
+                            <button class="btn-ver-mapa" data-cidade="${cidade.nome}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                Ver no mapa
+                            </button>
+                            <button class="btn-ver-detalhes" data-cidade="${cidade.nome}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    <line x1="11" y1="8" x2="11" y2="14"></line>
+                                    <line x1="8" y1="11" x2="14" y2="11"></line>
+                                </svg>
+                                Ver detalhes
+                            </button>
+                        </div>
+                    `;
+                    
+                    container.appendChild(elementoOportunidade);
+                });
+                
+                // Configurar eventos para os botões das oportunidades
+                document.querySelectorAll('.btn-ver-mapa').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const nomeCidade = this.dataset.cidade;
+                        centralizarMapa(nomeCidade);
+                    });
+                });
+                
+                document.querySelectorAll('.btn-ver-detalhes').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const nomeCidade = this.dataset.cidade;
+                        mostrarDetalhesCidade(nomeCidade);
+                    });
+                });
+                
+                document.querySelectorAll('.oportunidade').forEach(oportunidade => {
+                    oportunidade.addEventListener('click', function() {
+                        if (!event.target.closest('button')) {
+                            const nomeCidade = this.dataset.cidade;
+                            centralizarMapa(nomeCidade);
+                        }
+                    });
+                });
+                
+                // Atualizar estatísticas
+                document.getElementById('cidades-quentes').textContent = 
+                    cidades.filter(c => c.temperatura >= 28).length;
+                
+                document.getElementById('oportunidades-alta').textContent = 
+                    melhoresOportunidades.filter(c => c.temperatura >= 28 && c.sequenciaSol >= 3).length;
+                
+                document.getElementById('sequencias-sol').textContent = 
+                    cidades.filter(c => c.sequenciaSol >= 3).length;
+            }
+            
+            // Função para centralizar o mapa em uma cidade
+            function centralizarMapa(nomeCidade) {
+                const cidade = cidades.find(c => c.nome === nomeCidade);
+                if (cidade) {
+                    mapa.setView(cidade.coords, 12);
+                    
+                    // Abrir popup da cidade
+                    if (mapMarkers[nomeCidade]) {
+                        mapMarkers[nomeCidade].openPopup();
+                    }
+                    
+                    // Recolher o painel lateral em dispositivos móveis
+                    if (window.innerWidth <= 768) {
+                        document.getElementById('painel-lateral').classList.add('recolhido');
+                        document.getElementById('toggle-painel').classList.add('recolhido');
+                    }
+                }
+            }
+            
+            // Função para mostrar detalhes da cidade em um modal
+            window.mostrarDetalhesCidade = function(nomeCidade) {
+                const cidade = cidades.find(c => c.nome === nomeCidade);
+                if (!cidade) return;
+                
+                const modalTitulo = document.getElementById('modal-cidade-titulo');
+                const modalCorpo = document.getElementById('modal-cidade-corpo');
+                
+                modalTitulo.textContent = `${cidade.nome} - Detalhes`;
+                
+                // Calcular percentual de potencial de vendas
+                let potencial = "Baixo";
+                let potencialClasse = "text-yellow-500";
+                let potencialPerc = 30;
+                
+                if (cidade.temperatura >= 28 && cidade.sequenciaSol >= 3) {
+                    potencial = "Alto";
+                    potencialClasse = "text-red-500";
+                    potencialPerc = 90;
+                } else if (cidade.temperatura >= 25) {
+                    potencial = "Médio";
+                    potencialClasse = "text-orange-500";
+                    potencialPerc = 60;
+                }
+                
+                // Gerar sugestão de rota
+                const vendedor = cidade.vendedor.charAt(0).toUpperCase() + cidade.vendedor.slice(1);
+                const cidadesVendedor = cidades.filter(c => c.vendedor === cidade.vendedor);
+                
+                // Ordenar por potencial
+                const rotaSugerida = [...cidadesVendedor].sort((a, b) => {
+                    // Primeiro critério: temperatura
+                    if (b.temperatura !== a.temperatura) {
+                        return b.temperatura - a.temperatura;
+                    }
+                    // Segundo critério: sequência de sol
+                    return b.sequenciaSol - a.sequenciaSol;
+                });
+                
+                // Conteúdo do modal
+                modalCorpo.innerHTML = `
+                    <div class="detalhes-cidade">
+                        <div class="info-cidade">
+                            <div class="info-cidade-label">Temperatura Atual:</div>
+                            <div class="info-cidade-valor">${cidade.temperatura}°C</div>
+                        </div>
+                        <div class="info-cidade">
+                            <div class="info-cidade-label">Sequência de Dias Ensolarados:</div>
+                            <div class="info-cidade-valor">${cidade.sequenciaSol} dias</div>
+                        </div>
+                        <div class="info-cidade">
+                            <div class="info-cidade-label">Potencial de Vendas:</div>
+                            <div class="info-cidade-valor" style="color: ${potencialClasse}">
+                                ${potencial} (${potencialPerc}%)
+                            </div>
+                        </div>
+                        <div class="info-cidade">
+                            <div class="info-cidade-label">Vendedor Responsável:</div>
+                            <div class="info-cidade-valor">${vendedor}</div>
+                        </div>
+                        
+                        <div class="info-cidade">
+                            <div class="info-cidade-label">Previsão para os próximos dias:</div>
+                            <div class="previsao-cidade-dias">
+                                ${cidade.previsao.slice(0, 5).map((p, i) => {
+                                    const iconeTempo = p.tempo === 0 ? '☀️' : 
+                                                      p.tempo === 1 ? '⛅' : 
+                                                      p.tempo === 2 ? '☁️' : '🌧️';
+                                    
+                                    // Calcular tendência em relação ao dia anterior
+                                    let tendencia = '';
+                                    if (i > 0) {
+                                        const diff = p.tempMax - cidade.previsao[i-1].tempMax;
+                                        if (diff > 2) {
+                                            tendencia = `<span class="indicador-tendencia tendencia-alta"></span>`;
+                                        } else if (diff < -2) {
+                                            tendencia = `<span class="indicador-tendencia tendencia-baixa"></span>`;
+                                        } else {
+                                            tendencia = `<span class="indicador-tendencia tendencia-estavel"></span>`;
+                                        }
+                                    }
+                                    
+                                    return `
+                                        <div class="previsao-cidade-dia">
+                                            <div class="previsao-cidade-data">${formatarData(p.data)}</div>
+                                            <div class="previsao-cidade-temp">${p.tempMax}°C ${tendencia}</div>
+                                            <div class="previsao-cidade-desc">${iconeTempo} ${p.probChuva}% chuva</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alertas-container">
+                        <h3 style="font-weight: bold; margin-bottom: 10px;">Alertas</h3>
+                        ${cidade.temperatura >= 30 ? `
+                            <div class="alerta-item">
+                                <div class="alerta-titulo">
+                                    <span class="alerta-icone">⚠️</span> Onda de Calor
+                                </div>
+                                <div class="alerta-descricao">
+                                    Temperatura acima de 30°C. Excelente oportunidade para vendas de sorvetes e milk-shakes!
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${cidade.sequenciaSol >= 3 ? `
+                            <div class="alerta-item">
+                                <div class="alerta-titulo">
+                                    <span class="alerta-icone">🔆</span> Sequência de Dias Ensolarados
+                                </div>
+                                <div class="alerta-descricao">
+                                    ${cidade.sequenciaSol} dias consecutivos de sol. Planeje vendas para o início da próxima semana.
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="info-rota">
+                        <h3 style="font-weight: bold; margin-bottom: 10px;">Rota Sugerida para ${vendedor}</h3>
+                        <div class="rota-sugerida">
+                            ${rotaSugerida.slice(0, 5).map((c, i) => `
+                                <div class="rota-item">
+                                    <div class="rota-numero">${i+1}</div>
+                                    <div class="rota-cidade">${c.nome}</div>
+                                    <div class="rota-temp">${c.temperatura}°C</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+                // Configurar botão Ver Detalhes de Tempo
+                document.getElementById('ver-detalhes-tempo-btn').onclick = function() {
+                    window.open(`https://edimarpcosta.github.io/ameripan/tempo?city=${encodeURIComponent(nomeCidade)}`, '_blank');
+                };
+                
+                // Mostrar o modal
+                document.getElementById('modal-cidade').classList.add('ativo');
+            };
+            
+            // Evento para fechar o modal de cidade
+            document.getElementById('fechar-modal-cidade').addEventListener('click', function() {
+                document.getElementById('modal-cidade').classList.remove('ativo');
+            });
+            
+            document.getElementById('fechar-modal-btn').addEventListener('click', function() {
+                document.getElementById('modal-cidade').classList.remove('ativo');
+            });
+            
+            // Inicialização
+            adicionarMarcadores('temperatura');
+            gerarOportunidades();
+            preencherCalendarioSemanal();
+            criarGraficos();
+            
+            // Event listeners para filtros
+            document.getElementById('filtro-visualizacao').addEventListener('change', function(e) {
+                const modo = e.target.value;
+                adicionarMarcadores(modo);
+                atualizarLegendas(modo);
+            });
+            
+            document.getElementById('filtro-vendedor').addEventListener('change', function(e) {
+                const vendedor = e.target.value;
+                
+                // Mostrar/esconder grupos de marcadores
+                if (vendedor === 'todos') {
+                    Object.keys(gruposVendedores).forEach(v => {
+                        mapa.addLayer(gruposVendedores[v]);
+                    });
+                } else {
+                    Object.keys(gruposVendedores).forEach(v => {
+                        if (v === vendedor) {
+                            mapa.addLayer(gruposVendedores[v]);
+                        } else {
+                            mapa.removeLayer(gruposVendedores[v]);
+                        }
+                    });
+                    
+                    // Ajustar o mapa para mostrar todas as cidades do vendedor
+                    const cidadesVendedor = cidades.filter(c => c.vendedor === vendedor);
+                    if (cidadesVendedor.length > 0) {
+                        const bounds = L.latLngBounds(cidadesVendedor.map(c => c.coords));
+                        mapa.fitBounds(bounds);
+                    }
+                }
+            });
+            
+            document.getElementById('filtro-periodo').addEventListener('change', function(e) {
+                const periodo = e.target.value;
+                document.getElementById('periodo-atual').textContent = 
+                    e.target.options[e.target.selectedIndex].text;
+                
+                // Simulação de temperaturas diferentes por período
+                cidades.forEach(cidade => {
+                    let ajuste = 0;
+                    
+                    switch(periodo) {
+                        case 'hoje':
+                            ajuste = 0;
+                            break;
+                        case 'amanha':
+                            ajuste = cidade.previsao[1].tempMax - cidade.temperatura;
+                            break;
+                        case '3dias':
+                            // Média dos próximos 3 dias
+                            const media3dias = (cidade.previsao[0].tempMax + cidade.previsao[1].tempMax + cidade.previsao[2].tempMax) / 3;
+                            ajuste = media3dias - cidade.temperatura;
+                            break;
+                        case '7dias':
+                            // Média dos próximos 7 dias
+                            const media7dias = cidade.previsao.reduce((acc, p) => acc + p.tempMax, 0) / 7;
+                            ajuste = media7dias - cidade.temperatura;
+                            break;
+                    }
+                    
+                    cidade.temperatura = Math.round(cidade.temperatura + ajuste);
+                    
+                    // Atualizar sequência de sol com base no período
+                    if (periodo === 'hoje') {
+                        cidade.sequenciaSol = cidade.previsao.filter((p, i) => i < 5 && p.tempo <= 1).length;
+                    } else if (periodo === 'amanha') {
+                        cidade.sequenciaSol = cidade.previsao.filter((p, i) => i >= 1 && i < 6 && p.tempo <= 1).length;
+                    } else {
+                        // Usar o valor original
+                    }
+                });
+                
+                // Atualizar visualização e oportunidades
+                const modoAtual = document.getElementById('filtro-visualizacao').value;
+                adicionarMarcadores(modoAtual);
+                gerarOportunidades();
+            });
+            
+            // Toggle do painel lateral
+            document.getElementById('toggle-painel').addEventListener('click', function() {
+                const painel = document.getElementById('painel-lateral');
+                const toggleBtn = document.getElementById('toggle-painel');
+                const containerMapa = document.getElementById('container-mapa');
+                
+                painel.classList.toggle('recolhido');
+                toggleBtn.classList.toggle('recolhido');
+                containerMapa.classList.toggle('expandido');
+            });
+            
+            // Click nos vendedores para expandir/colapsar
+            document.querySelectorAll('.vendedor').forEach(el => {
+                el.querySelector('.nome-vendedor').addEventListener('click', function() {
+                    el.classList.toggle('ativo');
+                });
+            });
+            
+            // Expandir todos os vendedores
+            document.getElementById('expandir-todos').addEventListener('click', function() {
+                const vendedores = document.querySelectorAll('.vendedor');
+                const todosFechados = Array.from(vendedores).every(v => !v.classList.contains('ativo'));
+                
+                vendedores.forEach(v => {
+                    if (todosFechados) {
+                        v.classList.add('ativo');
+                    } else {
+                        v.classList.remove('ativo');
+                    }
+                });
+                
+                this.textContent = todosFechados ? 'Recolher todos' : 'Expandir todos';
+            });
+            
+            // Expandir resumo
+            document.getElementById('expandir-resumo').addEventListener('click', function() {
+                const graficos = document.querySelectorAll('.graf-estatistica');
+                const algumAberto = Array.from(graficos).some(g => g.classList.contains('ativo'));
+                
+                graficos.forEach(g => {
+                    if (algumAberto) {
+                        g.classList.remove('ativo');
+                    } else {
+                        g.classList.add('ativo');
+                    }
+                });
+                
+                this.textContent = algumAberto ? 'Ver gráficos' : 'Ocultar gráficos';
+            });
+            
+            // Atualizar oportunidades
+            document.getElementById('atualizar-oportunidades').addEventListener('click', function() {
+                gerarOportunidades();
+            });
+            
+            // Clicar em uma estatística mostra o gráfico correspondente
+            document.querySelectorAll('.estatistica').forEach(el => {
+                el.addEventListener('click', function() {
+                    const grafId = this.dataset.graf;
+                    const graf = document.getElementById(grafId);
+                    
+                    // Esconder todos os gráficos
+                    document.querySelectorAll('.graf-estatistica').forEach(g => {
+                        g.classList.remove('ativo');
+                    });
+                    
+                    // Mostrar apenas o clicado
+                    graf.classList.add('ativo');
+                    
+                    // Atualizar texto do botão
+                    document.getElementById('expandir-resumo').textContent = 'Ocultar gráficos';
+                });
+            });
+            
+            // Clique nas cidades do menu
+            document.querySelectorAll('.cidade-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const nomeCidade = this.dataset.cidade;
+                    centralizarMapa(nomeCidade);
+                    
+                    // Oferecer a opção de abrir o aplicativo de tempo para esta cidade
+                    setTimeout(() => {
+                        const confirmacao = confirm(`Deseja ver previsão detalhada do tempo para ${nomeCidade}?`);
+                        if (confirmacao) {
+                            window.open(`https://edimarpcosta.github.io/ameripan/tempo?city=${encodeURIComponent(nomeCidade)}`, '_blank');
+                        }
+                    }, 1000);
+                });
+            });
+            
+            // Simular botões de exportação
+            document.getElementById('btn-pdf').addEventListener('click', function() {
+                alert('Relatório em PDF sendo gerado...\nConteúdo: Resumo de oportunidades de vendas por região.\nEm uma implementação real, esta função geraria um PDF para download.');
+            });
+            
+            document.getElementById('btn-excel').addEventListener('click', function() {
+                alert('Planilha Excel sendo gerada...\nConteúdo: Dados detalhados de todas as cidades, temperaturas e previsões.\nEm uma implementação real, esta função geraria um arquivo Excel para download.');
+            });
+			
+        });
+    </script>
+</body>
+</html>
