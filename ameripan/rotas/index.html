@@ -462,9 +462,62 @@
         tr:hover {
             background-color: #f5f5f5;
         }
+        
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            font-size: 1.2rem;
+        }
+        
+        .loader-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #sync-status {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            padding: 8px 15px;
+            background-color: rgba(52, 152, 219, 0.9);
+            color: white;
+            border-radius: 4px;
+            z-index: 1000;
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loader-spinner"></div>
+        <div>Carregando dados da planilha...</div>
+    </div>
+    
+    <!-- Status de sincronização -->
+    <div id="sync-status">
+        <i class="fas fa-sync-alt"></i> Sincronizando dados...
+    </div>
+    
     <!-- Sidebar para controles e informações -->
     <div id="sidebar">
         <div id="sidebar-header">
@@ -491,9 +544,9 @@
                 <i class="fas fa-user-tie"></i>
                 <span>Vendedores</span>
             </button>
-            <button class="tab-button" data-tab="exportar">
-                <i class="fas fa-file-export"></i>
-                <span>Exportar</span>
+            <button class="tab-button" data-tab="sincronizar">
+                <i class="fas fa-sync-alt"></i>
+                <span>Sincronizar</span>
             </button>
         </div>
         
@@ -585,24 +638,10 @@
             <div class="tab-content" id="tab-vendedores">
                 <div class="card">
                     <div class="card-header">
-                        <i class="fas fa-plus-circle"></i> Novo Vendedor
+                        <i class="fas fa-info-circle"></i> Informações
                     </div>
                     <div class="card-body">
-                        <div class="form-group">
-                            <label for="vendedor-nome">Nome:</label>
-                            <input type="text" id="vendedor-nome" class="form-control" placeholder="Nome completo">
-                        </div>
-                        <div class="form-group">
-                            <label for="vendedor-email">E-mail:</label>
-                            <input type="email" id="vendedor-email" class="form-control" placeholder="email@exemplo.com">
-                        </div>
-                        <div class="form-group">
-                            <label for="vendedor-telefone">Telefone:</label>
-                            <input type="tel" id="vendedor-telefone" class="form-control" placeholder="(11) 98765-4321">
-                        </div>
-                        <button id="add-vendedor" class="btn btn-success btn-block">
-                            <i class="fas fa-plus"></i> Adicionar Vendedor
-                        </button>
+                        <p>Os vendedores e cidades atribuídas são carregados da planilha Google Sheets. Para atualizar esses dados, utilize a aba "Sincronizar".</p>
                     </div>
                 </div>
                 
@@ -612,45 +651,39 @@
                     </div>
                     <div class="card-body">
                         <ul id="vendedores-list" class="list-group">
-                            <li class="empty-message">Nenhum vendedor cadastrado</li>
+                            <li class="empty-message">Carregando vendedores...</li>
                         </ul>
                     </div>
                 </div>
             </div>
             
-            <!-- Aba de Exportação -->
-            <div class="tab-content" id="tab-exportar">
+            <!-- Aba de Sincronização -->
+            <div class="tab-content" id="tab-sincronizar">
                 <div class="card">
                     <div class="card-header">
-                        <i class="fas fa-file-export"></i> Exportar Dados
+                        <i class="fas fa-sync-alt"></i> Sincronizar Dados
                     </div>
                     <div class="card-body">
-                        <p>Exporte os dados do sistema para arquivos CSV.</p>
-                        <button id="export-vendedores" class="btn btn-primary btn-block" style="margin-bottom: 10px;">
-                            <i class="fas fa-file-csv"></i> Exportar Vendedores
+                        <p>Sincronize os dados com a planilha do Google Sheets.</p>
+                        <button id="reload-data" class="btn btn-primary btn-block" style="margin-bottom: 10px;">
+                            <i class="fas fa-download"></i> Recarregar Dados da Planilha
                         </button>
-                        <button id="export-cidades" class="btn btn-primary btn-block" style="margin-bottom: 10px;">
-                            <i class="fas fa-file-csv"></i> Exportar Cidades
-                        </button>
-                        <button id="export-atribuicoes" class="btn btn-success btn-block">
-                            <i class="fas fa-file-csv"></i> Exportar Atribuições
-                        </button>
+                        <p style="margin-top: 15px;">Última atualização: <span id="last-update">Nunca</span></p>
                     </div>
                 </div>
                 
                 <div class="card">
                     <div class="card-header">
-                        <i class="fas fa-file-import"></i> Importar Dados
+                        <i class="fas fa-info-circle"></i> Informações da Planilha
                     </div>
                     <div class="card-body">
-                        <p>Importe dados de um arquivo CSV.</p>
-                        <div class="form-group">
-                            <label for="import-file">Selecione um arquivo CSV:</label>
-                            <input type="file" id="import-file" class="form-control" accept=".csv">
-                        </div>
-                        <button id="import-data" class="btn btn-warning btn-block">
-                            <i class="fas fa-file-import"></i> Importar Dados
-                        </button>
+                        <p>Estrutura da planilha na aba "equipe":</p>
+                        <ul style="list-style-type: disc; margin-left: 20px; margin-bottom: 15px;">
+                            <li>Linha 1: Nome do supervisor</li>
+                            <li>Linha 2: Nome do vendedor</li>
+                            <li>Linhas seguintes: Cidades atendidas</li>
+                        </ul>
+                        <p>ID da Planilha: <code id="spreadsheet-id"></code></p>
                     </div>
                 </div>
             </div>
@@ -693,8 +726,7 @@
             <div class="modal-body">
                 <div id="vendedor-info">
                     <p><strong>Nome:</strong> <span id="detail-vendedor-nome"></span></p>
-                    <p><strong>E-mail:</strong> <span id="detail-vendedor-email"></span></p>
-                    <p><strong>Telefone:</strong> <span id="detail-vendedor-telefone"></span></p>
+                    <p><strong>Supervisor:</strong> <span id="detail-vendedor-supervisor"></span></p>
                 </div>
                 <h5 style="margin-top: 15px;">Cidades Atendidas</h5>
                 <ul id="vendedor-cidades" class="list-group">
@@ -712,6 +744,14 @@
     <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
     
     <script>
+        // ======== Configuração do Google Sheets ========
+        const spreadsheetId = "1x8_k27RWofNxNYDfWtC9skTEWPksk9dRHMhay6QCspU"; // Mesmo ID usado no mural-cards.html
+        const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc"; // Mesmo API key
+        const range = "equipe"; // Usando a aba "equipe" conforme solicitado
+        
+        // Atualiza a exibição do ID da planilha
+        document.getElementById('spreadsheet-id').textContent = spreadsheetId;
+        
         // ======== Inicialização e variáveis globais ========
         // Inicialização do mapa
         const map = L.map('map').setView([-23.5505, -46.6333], 7);
@@ -730,6 +770,7 @@
         let cityAssignments = {}; // { cityName: vendedorId }
         let activeGroup = null;
         let activeVendedor = null;
+        let lastUpdateTime = null;
         
         // ======== Funções de utilidade ========
         
@@ -769,100 +810,118 @@
             return Date.now().toString(36) + Math.random().toString(36).substring(2);
         }
         
-        // Função para converter string para CSV seguro
-        function escapeCSV(str) {
-            if (typeof str !== 'string') return str;
-            // Se a string contém vírgula, aspas ou quebra de linha, envolva em aspas
-            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                // Escape aspas duplicando-as
-                return '"' + str.replace(/"/g, '""') + '"';
-            }
-            return str;
+        // Formatar data e hora
+        function formatDateTime(date) {
+            if (!date) return "Nunca";
+            
+            const options = {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            
+            return date.toLocaleDateString('pt-BR', options);
         }
         
-        // Função para exportar dados para CSV
-        function exportToCSV(data, filename) {
-            if (!data || !data.length) {
-                showNotification('Não há dados para exportar.', 'warning');
+        // Exibir/ocultar overlay de carregamento
+        function showLoading(show = true) {
+            const overlay = document.getElementById('loading-overlay');
+            if (show) {
+                overlay.style.display = 'flex';
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+        
+        // Exibir/ocultar status de sincronização
+        function showSyncStatus(show = true) {
+            const status = document.getElementById('sync-status');
+            if (show) {
+                status.style.display = 'block';
+            } else {
+                status.style.display = 'none';
+            }
+        }
+        
+        // ======== Funções para Google Sheets ========
+        
+        // Função para carregar dados da planilha
+        function loadDataFromSheets() {
+            showLoading(true);
+            showSyncStatus(true);
+            
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+            
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Erro na solicitação à API do Google Sheets.");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    processSheetsData(data);
+                    lastUpdateTime = new Date();
+                    document.getElementById('last-update').textContent = formatDateTime(lastUpdateTime);
+                    showNotification("Dados carregados com sucesso da planilha!", "success");
+                })
+                .catch(error => {
+                    console.error("Erro ao obter dados:", error);
+                    showNotification("Erro ao carregar dados da planilha. Verifique sua conexão.", "danger");
+                })
+                .finally(() => {
+                    showLoading(false);
+                    showSyncStatus(false);
+                    saveDataToLocalStorage();
+                });
+        }
+        
+        // Função para processar os dados da planilha
+        function processSheetsData(data) {
+            // Limpar dados atuais
+            vendedores = [];
+            cityAssignments = {};
+            
+            if (!data.values || data.values.length < 2) {
+                showNotification("Nenhum dado encontrado na planilha.", "warning");
                 return;
             }
             
-            // Obter cabeçalhos do primeiro objeto
-            const headers = Object.keys(data[0]);
-            
-            // Criar conteúdo CSV
-            let csvContent = headers.join(',') + '\n';
-            
-            // Adicionar linhas de dados
-            data.forEach(item => {
-                const row = headers.map(header => escapeCSV(item[header])).join(',');
-                csvContent += row + '\n';
-            });
-            
-            // Criar blob e link para download
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', filename);
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-        
-        // Função para importar dados de CSV
-        function importFromCSV(file, callback) {
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const content = e.target.result;
-                const lines = content.split('\n');
-                
-                // Extrair cabeçalhos
-                const headers = lines[0].split(',').map(header => 
-                    header.trim().replace(/^"|"$/g, '')
-                );
-                
-                // Processar linhas de dados
-                const data = [];
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
+            // Processar cada coluna (cada coluna representa um vendedor)
+            for (let colIndex = 0; colIndex < data.values[0].length; colIndex++) {
+                // Verificar se a coluna tem dados (supervisor e vendedor)
+                if (data.values[0][colIndex] && data.values[1][colIndex]) {
+                    const supervisor = data.values[0][colIndex];
+                    const vendedorNome = data.values[1][colIndex];
                     
-                    // Tratamento especial para campos entre aspas
-                    const values = [];
-                    let inQuotes = false;
-                    let currentValue = '';
+                    // Gerar um ID único para o vendedor
+                    const vendedorId = generateId();
                     
-                    for (let char of lines[i]) {
-                        if (char === '"') {
-                            inQuotes = !inQuotes;
-                        } else if (char === ',' && !inQuotes) {
-                            values.push(currentValue);
-                            currentValue = '';
-                        } else {
-                            currentValue += char;
-                        }
-                    }
-                    values.push(currentValue); // Último valor
-                    
-                    // Criar objeto com cabeçalhos como chaves
-                    const obj = {};
-                    headers.forEach((header, index) => {
-                        obj[header] = values[index] || '';
+                    // Adicionar o vendedor ao array
+                    vendedores.push({
+                        id: vendedorId,
+                        nome: vendedorNome,
+                        supervisor: supervisor,
+                        email: "", // Campo vazio por padrão
+                        telefone: "" // Campo vazio por padrão
                     });
                     
-                    data.push(obj);
+                    // Processar as cidades atribuídas a este vendedor (linhas 3 em diante)
+                    for (let rowIndex = 2; rowIndex < data.values.length; rowIndex++) {
+                        if (data.values[rowIndex] && data.values[rowIndex][colIndex]) {
+                            const cidadeNome = data.values[rowIndex][colIndex];
+                            cityAssignments[cidadeNome] = vendedorId;
+                        }
+                    }
                 }
-                
-                callback(data);
-            };
+            }
             
-            reader.onerror = function() {
-                showNotification('Erro ao ler o arquivo.', 'danger');
-            };
-            
-            reader.readAsText(file);
+            // Atualizar a interface
+            updateVendedoresList();
+            resetMapStyles();
         }
         
         // ======== Persistência de dados ========
@@ -874,6 +933,7 @@
                 const savedGroups = localStorage.getItem('spMapGroups');
                 const savedVendedores = localStorage.getItem('spMapVendedores');
                 const savedAssignments = localStorage.getItem('spMapAssignments');
+                const savedLastUpdate = localStorage.getItem('spMapLastUpdate');
                 
                 if (savedFavorites) {
                     favorites = JSON.parse(savedFavorites);
@@ -891,26 +951,35 @@
                     cityAssignments = JSON.parse(savedAssignments);
                 }
                 
+                if (savedLastUpdate) {
+                    lastUpdateTime = new Date(savedLastUpdate);
+                    document.getElementById('last-update').textContent = formatDateTime(lastUpdateTime);
+                }
+                
                 // Atualizar interface
                 updateFavoritesList();
                 updateGroupsLists();
                 updateVendedoresList();
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
-                showNotification('Erro ao carregar dados salvos.', 'danger');
+                showNotification('Erro ao carregar dados salvos. Carregando dados da planilha...', 'warning');
+                loadDataFromSheets();
             }
         }
         
         // Salvar dados no localStorage
-        function saveData() {
+        function saveDataToLocalStorage() {
             try {
                 localStorage.setItem('spMapFavorites', JSON.stringify(favorites));
                 localStorage.setItem('spMapGroups', JSON.stringify(groups));
                 localStorage.setItem('spMapVendedores', JSON.stringify(vendedores));
                 localStorage.setItem('spMapAssignments', JSON.stringify(cityAssignments));
+                if (lastUpdateTime) {
+                    localStorage.setItem('spMapLastUpdate', lastUpdateTime.toISOString());
+                }
             } catch (error) {
                 console.error('Erro ao salvar dados:', error);
-                showNotification('Erro ao salvar dados.', 'danger');
+                showNotification('Erro ao salvar dados localmente.', 'danger');
             }
         }
         
@@ -934,6 +1003,7 @@
                 if (vendedor) {
                     vendedorInfo = `
                         <p><strong>Vendedor Atribuído:</strong> ${vendedor.nome}</p>
+                        <p><strong>Supervisor:</strong> ${vendedor.supervisor || 'Não definido'}</p>
                     `;
                 }
             }
@@ -1010,7 +1080,7 @@
                         groups[this.value].push(city.name);
                     }
                     
-                    saveData();
+                    saveDataToLocalStorage();
                     highlightActiveGroup();
                     
                     showNotification(`Cidade ${city.name} ${this.value ? 'adicionada ao grupo ' + this.value : 'removida do grupo'}`);
@@ -1046,7 +1116,7 @@
                         groups[groupName] = groups[groupName].filter(name => name !== city.name);
                     });
                     
-                    saveData();
+                    saveDataToLocalStorage();
                     updateFavoritesList();
                     
                     // Se a cidade estiver no mapa, redefine seu estilo
@@ -1123,7 +1193,7 @@
                 removeButton.title = 'Remover grupo';
                 removeButton.addEventListener('click', function() {
                     delete groups[groupName];
-                    saveData();
+                    saveDataToLocalStorage();
                     updateGroupsLists();
                     
                     // Se o grupo ativo foi removido, limpa o destaque
@@ -1180,7 +1250,10 @@
                 
                 vendedorInfo.innerHTML = `
                     <strong>${vendedor.nome}</strong>
-                    <span class="badge badge-primary">${cidadesCount} cidades</span>
+                    <div>
+                        <small>Supervisor: ${vendedor.supervisor || 'N/A'}</small>
+                        <span class="badge badge-primary">${cidadesCount} cidades</span>
+                    </div>
                 `;
                 
                 li.appendChild(vendedorInfo);
@@ -1211,62 +1284,8 @@
                     showNotification(`Cidades do vendedor ${vendedor.nome} destacadas no mapa`);
                 });
                 
-                // Botão para editar
-                const editButton = document.createElement('button');
-                editButton.className = 'btn btn-success btn-sm';
-                editButton.innerHTML = '<i class="fas fa-edit"></i>';
-                editButton.title = 'Editar vendedor';
-                editButton.addEventListener('click', function() {
-                    // Preenche os campos com os dados atuais
-                    document.getElementById('vendedor-nome').value = vendedor.nome;
-                    document.getElementById('vendedor-email').value = vendedor.email;
-                    document.getElementById('vendedor-telefone').value = vendedor.telefone;
-                    
-                    // Altera o botão de adicionar para atualizar
-                    const addButton = document.getElementById('add-vendedor');
-                    addButton.innerHTML = '<i class="fas fa-save"></i> Atualizar Vendedor';
-                    addButton.dataset.editId = vendedor.id;
-                    
-                    // Muda para a aba de vendedores
-                    document.querySelector('.tab-button[data-tab="vendedores"]').click();
-                    
-                    showNotification(`Editando vendedor ${vendedor.nome}`);
-                });
-                
-                // Botão para remover
-                const removeButton = document.createElement('button');
-                removeButton.className = 'btn btn-danger btn-sm';
-                removeButton.innerHTML = '<i class="fas fa-trash"></i>';
-                removeButton.title = 'Remover vendedor';
-                removeButton.addEventListener('click', function() {
-                    if (confirm(`Tem certeza que deseja remover o vendedor ${vendedor.nome}?`)) {
-                        // Remove o vendedor
-                        vendedores = vendedores.filter(v => v.id !== vendedor.id);
-                        
-                        // Remove atribuições deste vendedor
-                        Object.keys(cityAssignments).forEach(cityName => {
-                            if (cityAssignments[cityName] === vendedor.id) {
-                                delete cityAssignments[cityName];
-                            }
-                        });
-                        
-                        saveData();
-                        updateVendedoresList();
-                        
-                        // Se o vendedor ativo foi removido, limpa o destaque
-                        if (activeVendedor === vendedor.id) {
-                            activeVendedor = null;
-                            resetMapStyles();
-                        }
-                        
-                        showNotification(`Vendedor ${vendedor.nome} removido`);
-                    }
-                });
-                
                 actionsDiv.appendChild(detailsButton);
                 actionsDiv.appendChild(highlightButton);
-                actionsDiv.appendChild(editButton);
-                actionsDiv.appendChild(removeButton);
                 li.appendChild(actionsDiv);
                 
                 vendedoresList.appendChild(li);
@@ -1276,8 +1295,7 @@
         // Mostra os detalhes do vendedor
         function showVendedorDetails(vendedor) {
             document.getElementById('detail-vendedor-nome').textContent = vendedor.nome;
-            document.getElementById('detail-vendedor-email').textContent = vendedor.email;
-            document.getElementById('detail-vendedor-telefone').textContent = vendedor.telefone;
+            document.getElementById('detail-vendedor-supervisor').textContent = vendedor.supervisor || 'Não definido';
             
             // Lista as cidades atribuídas
             const cidadesList = document.getElementById('vendedor-cidades');
@@ -1319,30 +1337,7 @@
                         }
                     });
                     
-                    // Botão para remover atribuição
-                    const removeButton = document.createElement('button');
-                    removeButton.className = 'btn btn-danger btn-sm';
-                    removeButton.innerHTML = '<i class="fas fa-unlink"></i>';
-                    removeButton.title = 'Remover atribuição';
-                    removeButton.addEventListener('click', function() {
-                        delete cityAssignments[cityName];
-                        saveData();
-                        showVendedorDetails(vendedor);
-                        
-                        // Atualiza o estilo da cidade no mapa
-                        if (cityLayers[cityName]) {
-                            resetCityStyle(cityLayers[cityName]);
-                        }
-                        
-                        // Atualiza a interface
-                        updateFavoritesList();
-                        updateSelectedCityInfo();
-                        
-                        showNotification(`Cidade ${cityName} removida do vendedor ${vendedor.nome}`);
-                    });
-                    
                     actionsDiv.appendChild(viewButton);
-                    actionsDiv.appendChild(removeButton);
                     li.appendChild(actionsDiv);
                     
                     cidadesList.appendChild(li);
@@ -1467,234 +1462,6 @@
             }
         }
         
-        // ======== Exportação e importação de dados ========
-        
-        // Exporta vendedores para CSV
-        function exportVendedoresCSV() {
-            if (!vendedores.length) {
-                showNotification('Não há vendedores para exportar.', 'warning');
-                return;
-            }
-            
-            const data = vendedores.map(v => ({
-                ID: v.id,
-                Nome: v.nome,
-                Email: v.email,
-                Telefone: v.telefone
-            }));
-            
-            exportToCSV(data, 'vendedores.csv');
-            showNotification('Vendedores exportados com sucesso!');
-        }
-        
-        // Exporta cidades para CSV
-        function exportCidadesCSV() {
-            if (!Object.keys(cityLayers).length) {
-                showNotification('Dados das cidades não carregados.', 'warning');
-                return;
-            }
-            
-            const data = Object.keys(cityLayers).map(cityName => {
-                const feature = cityLayers[cityName].feature;
-                return {
-                    ID: feature.properties.id,
-                    Nome: cityName,
-                    UF: 'SP',
-                    Favorito: favorites.some(c => c.name === cityName) ? 'Sim' : 'Não',
-                    VendedorID: cityAssignments[cityName] || ''
-                };
-            });
-            
-            exportToCSV(data, 'cidades.csv');
-            showNotification('Cidades exportadas com sucesso!');
-        }
-        
-        // Exporta atribuições para CSV
-        function exportAtribuicoesCSV() {
-            if (!Object.keys(cityAssignments).length) {
-                showNotification('Não há atribuições para exportar.', 'warning');
-                return;
-            }
-            
-            const data = Object.keys(cityAssignments).map(cityName => {
-                const vendedorId = cityAssignments[cityName];
-                const vendedor = vendedores.find(v => v.id === vendedorId);
-                
-                return {
-                    Cidade: cityName,
-                    VendedorID: vendedorId,
-                    VendedorNome: vendedor ? vendedor.nome : 'Desconhecido',
-                    VendedorEmail: vendedor ? vendedor.email : '',
-                    VendedorTelefone: vendedor ? vendedor.telefone : ''
-                };
-            });
-            
-            exportToCSV(data, 'atribuicoes.csv');
-            showNotification('Atribuições exportadas com sucesso!');
-        }
-        
-        // Importa dados de CSV
-        function importData(file) {
-            importFromCSV(file, function(data) {
-                // Tenta identificar o tipo de dados
-                if (data.length === 0) {
-                    showNotification('Arquivo vazio ou inválido.', 'warning');
-                    return;
-                }
-                
-                // Verifica os cabeçalhos para identificar o tipo de dados
-                const headers = Object.keys(data[0]);
-                
-                // Importação de vendedores
-                if (headers.includes('Nome') && headers.includes('Email')) {
-                    const importedVendedores = data.map(item => ({
-                        id: item.ID || generateId(),
-                        nome: item.Nome || '',
-                        email: item.Email || '',
-                        telefone: item.Telefone || ''
-                    })).filter(v => v.nome); // Ignora linhas sem nome
-                    
-                    if (!importedVendedores.length) {
-                        showNotification('Nenhum vendedor válido encontrado no arquivo.', 'warning');
-                        return;
-                    }
-                    
-                    // Adiciona apenas vendedores que não existem (por ID)
-                    const newVendedores = importedVendedores.filter(
-                        v => !vendedores.some(existing => existing.id === v.id)
-                    );
-                    
-                    // Atualiza vendedores existentes
-                    importedVendedores.forEach(importedVendedor => {
-                        const existingIndex = vendedores.findIndex(v => v.id === importedVendedor.id);
-                        if (existingIndex >= 0) {
-                            vendedores[existingIndex] = importedVendedor;
-                        }
-                    });
-                    
-                    // Adiciona novos vendedores
-                    vendedores = [...vendedores, ...newVendedores];
-                    
-                    saveData();
-                    updateVendedoresList();
-                    
-                    showNotification(`Importados ${newVendedores.length} novos vendedores e atualizados ${importedVendedores.length - newVendedores.length}.`);
-                    return;
-                }
-                
-                // Importação de atribuições
-                if (headers.includes('Cidade') && headers.includes('VendedorID')) {
-                    let count = 0;
-                    
-                    data.forEach(item => {
-                        if (item.Cidade && item.VendedorID) {
-                            // Verifica se o vendedor existe
-                            const vendedorExists = vendedores.some(v => v.id === item.VendedorID);
-                            
-                            if (vendedorExists) {
-                                cityAssignments[item.Cidade] = item.VendedorID;
-                                count++;
-                            }
-                        }
-                    });
-                    
-                    if (count === 0) {
-                        showNotification('Nenhuma atribuição válida encontrada no arquivo.', 'warning');
-                        return;
-                    }
-                    
-                    saveData();
-                    updateFavoritesList();
-                    updateSelectedCityInfo();
-                    resetMapStyles();
-                    
-                    showNotification(`Importadas ${count} atribuições de cidades.`);
-                    return;
-                }
-                
-                showNotification('Formato de arquivo não reconhecido.', 'warning');
-            });
-        }
-        
-        // ======== Inicialização do mapa e eventos ========
-        
-        // Carrega e exibe o GeoJSON dos municípios de São Paulo
-        fetch('https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json')
-            .then(response => response.json())
-            .then(data => {
-                // Adiciona os municípios ao mapa
-                L.geoJSON(data, {
-                    style: {
-                        fillColor: '#3388ff',
-                        fillOpacity: 0.2,
-                        color: '#3388ff',
-                        weight: 1
-                    },
-                    onEachFeature: function(feature, layer) {
-                        const cityName = feature.properties.name;
-                        
-                        // Armazena a referência da camada para uso posterior
-                        cityLayers[cityName] = layer;
-                        
-                        // Adiciona evento de clique
-                        layer.on('click', function() {
-                            // Atualiza a cidade selecionada
-                            selectedCity = {
-                                name: cityName,
-                                id: feature.properties.id
-                            };
-                            
-                            // Reseta os estilos e destaca a cidade selecionada
-                            resetMapStyles();
-                            layer.setStyle({
-                                fillColor: '#ff7800',
-                                fillOpacity: 0.7,
-                                color: '#ff7800',
-                                weight: 3
-                            });
-                            
-                            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-                                layer.bringToFront();
-                            }
-                            
-                            // Atualiza a interface
-                            updateSelectedCityInfo();
-                            
-                            // Se estiver com a sidebar recolhida, expande
-                            if (document.getElementById('sidebar').classList.contains('collapsed')) {
-                                document.getElementById('toggle-sidebar').click();
-                            }
-                            
-                            // Ativa a aba de busca
-                            document.querySelector('.tab-button[data-tab="search"]').click();
-                        });
-                        
-                        // Adiciona tooltip
-                        layer.bindTooltip(cityName, {
-                            permanent: false,
-                            direction: 'center',
-                            className: 'city-tooltip'
-                        });
-                    }
-                }).addTo(map);
-                
-                // Após carregar o mapa, aplica estilos conforme o estado
-                resetMapStyles();
-                
-                // Aplica qualquer destaque ativo
-                if (activeGroup) {
-                    highlightActiveGroup();
-                } else if (activeVendedor) {
-                    highlightVendedorCities(activeVendedor);
-                }
-                
-                showNotification('Mapa carregado com sucesso!', 'success');
-            })
-            .catch(error => {
-                console.error('Erro ao carregar dados GeoJSON:', error);
-                showNotification('Erro ao carregar o mapa. Por favor, recarregue a página.', 'danger');
-            });
-        
         // ======== Event Listeners ========
         
         // Controle das abas
@@ -1773,7 +1540,7 @@
             const exists = favorites.some(city => city.name === selectedCity.name);
             if (!exists) {
                 favorites.push(selectedCity);
-                saveData();
+                saveDataToLocalStorage();
                 updateFavoritesList();
                 
                 showNotification(`Cidade ${selectedCity.name} adicionada aos favoritos`);
@@ -1788,7 +1555,7 @@
             
             // Verificar se existem vendedores cadastrados
             if (!vendedores.length) {
-                showNotification('Nenhum vendedor cadastrado. Cadastre um vendedor primeiro.', 'warning');
+                showNotification('Nenhum vendedor cadastrado. Carregue os dados da planilha.', 'warning');
                 return;
             }
             
@@ -1817,7 +1584,7 @@
             
             // Atribui a cidade ao vendedor
             cityAssignments[selectedCity.name] = vendedorId;
-            saveData();
+            saveDataToLocalStorage();
             
             // Atualiza a interface
             updateFavoritesList();
@@ -1859,7 +1626,7 @@
             }
             
             groups[groupName] = [];
-            saveData();
+            saveDataToLocalStorage();
             updateGroupsLists();
             
             document.getElementById('group-name').value = '';
@@ -1881,85 +1648,9 @@
             }
         });
         
-        // Adicionar novo vendedor
-        document.getElementById('add-vendedor').addEventListener('click', function() {
-            const nome = document.getElementById('vendedor-nome').value.trim();
-            const email = document.getElementById('vendedor-email').value.trim();
-            const telefone = document.getElementById('vendedor-telefone').value.trim();
-            
-            if (!nome) {
-                showNotification('Digite o nome do vendedor', 'warning');
-                return;
-            }
-            
-            // Verifica se está editando um vendedor existente
-            const editId = this.dataset.editId;
-            
-            if (editId) {
-                // Atualiza o vendedor existente
-                const index = vendedores.findIndex(v => v.id === editId);
-                if (index >= 0) {
-                    vendedores[index] = {
-                        id: editId,
-                        nome,
-                        email,
-                        telefone
-                    };
-                    
-                    // Restaura o botão para adicionar
-                    this.innerHTML = '<i class="fas fa-plus"></i> Adicionar Vendedor';
-                    delete this.dataset.editId;
-                    
-                    saveData();
-                    updateVendedoresList();
-                    
-                    // Limpa os campos
-                    document.getElementById('vendedor-nome').value = '';
-                    document.getElementById('vendedor-email').value = '';
-                    document.getElementById('vendedor-telefone').value = '';
-                    
-                    showNotification(`Vendedor ${nome} atualizado com sucesso`);
-                }
-            } else {
-                // Adiciona um novo vendedor
-                const novoVendedor = {
-                    id: generateId(),
-                    nome,
-                    email,
-                    telefone
-                };
-                
-                vendedores.push(novoVendedor);
-                saveData();
-                updateVendedoresList();
-                
-                // Limpa os campos
-                document.getElementById('vendedor-nome').value = '';
-                document.getElementById('vendedor-email').value = '';
-                document.getElementById('vendedor-telefone').value = '';
-                
-                showNotification(`Vendedor ${nome} adicionado com sucesso`);
-            }
-        });
-        
-        // Exportar dados
-        document.getElementById('export-vendedores').addEventListener('click', exportVendedoresCSV);
-        document.getElementById('export-cidades').addEventListener('click', exportCidadesCSV);
-        document.getElementById('export-atribuicoes').addEventListener('click', exportAtribuicoesCSV);
-        
-        // Importar dados
-        document.getElementById('import-data').addEventListener('click', function() {
-            const fileInput = document.getElementById('import-file');
-            
-            if (!fileInput.files.length) {
-                showNotification('Selecione um arquivo para importar', 'warning');
-                return;
-            }
-            
-            importData(fileInput.files[0]);
-            
-            // Limpa o campo de arquivo
-            fileInput.value = '';
+        // Recarregar dados da planilha
+        document.getElementById('reload-data').addEventListener('click', function() {
+            loadDataFromSheets();
         });
         
         // Fechar modais
@@ -1976,8 +1667,93 @@
             });
         });
         
-        // Carrega dados salvos ao iniciar
-        loadSavedData();
+        // ======== Inicialização do mapa e eventos ========
+        
+        // Carrega e exibe o GeoJSON dos municípios de São Paulo
+        fetch('https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json')
+            .then(response => response.json())
+            .then(data => {
+                // Adiciona os municípios ao mapa
+                L.geoJSON(data, {
+                    style: {
+                        fillColor: '#3388ff',
+                        fillOpacity: 0.2,
+                        color: '#3388ff',
+                        weight: 1
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const cityName = feature.properties.name;
+                        
+                        // Armazena a referência da camada para uso posterior
+                        cityLayers[cityName] = layer;
+                        
+                        // Adiciona evento de clique
+                        layer.on('click', function() {
+                            // Atualiza a cidade selecionada
+                            selectedCity = {
+                                name: cityName,
+                                id: feature.properties.id
+                            };
+                            
+                            // Reseta os estilos e destaca a cidade selecionada
+                            resetMapStyles();
+                            layer.setStyle({
+                                fillColor: '#ff7800',
+                                fillOpacity: 0.7,
+                                color: '#ff7800',
+                                weight: 3
+                            });
+                            
+                            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                                layer.bringToFront();
+                            }
+                            
+                            // Atualiza a interface
+                            updateSelectedCityInfo();
+                            
+                            // Se estiver com a sidebar recolhida, expande
+                            if (document.getElementById('sidebar').classList.contains('collapsed')) {
+                                document.getElementById('toggle-sidebar').click();
+                            }
+                            
+                            // Ativa a aba de busca
+                            document.querySelector('.tab-button[data-tab="search"]').click();
+                        });
+                        
+                        // Adiciona tooltip
+                        layer.bindTooltip(cityName, {
+                            permanent: false,
+                            direction: 'center',
+                            className: 'city-tooltip'
+                        });
+                    }
+                }).addTo(map);
+                
+                // Tenta carregar dados do localStorage primeiro
+                loadSavedData();
+                
+                // Se não houver vendedores carregados ou se for a primeira vez
+                if (vendedores.length === 0) {
+                    loadDataFromSheets();
+                } else {
+                    // Após carregar o mapa, aplica estilos conforme o estado
+                    resetMapStyles();
+                    
+                    // Aplica qualquer destaque ativo
+                    if (activeGroup) {
+                        highlightActiveGroup();
+                    } else if (activeVendedor) {
+                        highlightVendedorCities(activeVendedor);
+                    }
+                    
+                    showLoading(false);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados GeoJSON:', error);
+                showNotification('Erro ao carregar o mapa. Por favor, recarregue a página.', 'danger');
+                showLoading(false);
+            });
     </script>
 </body>
 </html>
