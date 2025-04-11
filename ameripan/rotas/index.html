@@ -746,7 +746,7 @@
     <script>
         // ======== Configuração do Google Sheets ========
         const spreadsheetId = "1jG4Wv-Vz-MczcVgPHEiH2_pmp4m2EYmFY3XFoKUlraE"; // Mesmo ID usado no mural-cards.html
-        const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc"; // Mesmo API key
+        const apiKey = "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo"; // Mesmo API key
         const range = "equipe"; // Usando a aba "equipe" conforme solicitado
         
         // Atualiza a exibição do ID da planilha
@@ -1754,6 +1754,346 @@
                 showNotification('Erro ao carregar o mapa. Por favor, recarregue a página.', 'danger');
                 showLoading(false);
             });
+			
+			// Adicione este array de cores logo após as variáveis globais
+// São 50 cores distintas e visualmente diferenciáveis (excluindo vermelho)
+const vendedorColors = [
+    '#3498db', // azul claro
+    '#b9770e', // marrom amarelado
+    '#616a6b', // cinza olivina
+    '#7d3c98', // roxo púrpura
+    '#27ae60', // verde médio
+    '#a04000', // marrom
+    '#48d1cc', // turquesa médio
+    '#f1c40f', // amarelo
+    '#8e44ad', // roxo escuro
+    '#95a5a6', // cinza claro
+    '#196f3d', // verde escuro
+    '#d68910', // ocre
+    '#5dade2', // azul celeste
+    '#40e0d0', // turquesa brilhante
+    '#6e2c00', // marrom escuro
+    '#bb8fce', // lavanda
+    '#1e8449', // verde musgo
+    '#808080', // cinza médio
+    '#f39c12', // laranja
+    '#21618c', // azul marinho
+    '#c19a6b', // bege escuro
+    '#9b59b6', // roxo médio
+    '#a9dfbf', // verde menta claro
+    '#566573', // cinza ardósia
+    '#d35400', // laranja escuro
+    '#117a65', // teal escuro
+    '#9370db', // roxo médio
+    '#6495ed', // azul corníflora
+    '#229954', // verde jade
+    '#d7bde2', // lilás claro
+    '#5b2c6f', // púrpura escuro
+    '#f8c471', // laranja claro
+    '#4682b4', // azul aço
+    '#1abc9c', // turquesa
+    '#d2b48c', // tan
+    '#7f8c8d', // cinza médio
+    '#00fa9a', // verde primavera
+    '#6a0dad', // roxo violeta
+    '#f4d03f', // amarelo dourado
+    '#87ceeb', // azul céu
+    '#cd853f', // peru
+    '#2980b9', // azul médio
+    '#76d7c4', // turquesa claro
+    '#00ced1', // turquesa escuro
+    '#8a2be2', // azul violeta
+    '#f5cba7', // pêssego
+    '#16a085', // verde-azulado
+    '#ffdb58', // amarelo mostarda
+    '#00a86b', // jade
+    '#5d6d7e'  // azul ardósia
+];
+
+// Modifique a função processSheetsData para atribuir cores aos vendedores
+function processSheetsData(data) {
+    // Limpar dados atuais
+    vendedores = [];
+    cityAssignments = {};
+    
+    if (!data.values || data.values.length < 2) {
+        showNotification("Nenhum dado encontrado na planilha.", "warning");
+        return;
+    }
+    
+    // Processar cada coluna (cada coluna representa um vendedor)
+    let colorIndex = 0;
+    for (let colIndex = 0; colIndex < data.values[0].length; colIndex++) {
+        // Verificar se a coluna tem dados (supervisor e vendedor)
+        if (data.values[0][colIndex] && data.values[1][colIndex]) {
+            const supervisor = data.values[0][colIndex];
+            const vendedorNome = data.values[1][colIndex];
+            
+            // Gerar um ID único para o vendedor
+            const vendedorId = generateId();
+            
+            // Atribuir uma cor única ao vendedor
+            const vendedorColor = vendedorColors[colorIndex % vendedorColors.length];
+            colorIndex++;
+            
+            // Adicionar o vendedor ao array
+            vendedores.push({
+                id: vendedorId,
+                nome: vendedorNome,
+                supervisor: supervisor,
+                email: "", // Campo vazio por padrão
+                telefone: "", // Campo vazio por padrão
+                color: vendedorColor // Nova propriedade de cor
+            });
+            
+            // Processar as cidades atribuídas a este vendedor (linhas 3 em diante)
+            for (let rowIndex = 2; rowIndex < data.values.length; rowIndex++) {
+                if (data.values[rowIndex] && data.values[rowIndex][colIndex]) {
+                    const cidadeNome = data.values[rowIndex][colIndex];
+                    cityAssignments[cidadeNome] = vendedorId;
+                }
+            }
+        }
+    }
+    
+    // Atualizar a interface
+    updateVendedoresList();
+    resetMapStyles();
+}
+
+// Modifique a função resetCityStyle para usar a cor específica do vendedor
+function resetCityStyle(layer) {
+    layer.setStyle({
+        fillColor: '#3388ff',
+        fillOpacity: 0.2,
+        color: '#3388ff',
+        weight: 1
+    });
+    
+    // Aplica estilos conforme atribuições
+    const cityName = layer.feature.properties.name;
+    
+    // Se é um favorito
+    if (favorites.some(city => city.name === cityName)) {
+        layer.setStyle({
+            fillOpacity: 0.4,
+            weight: 2
+        });
+    }
+    
+    // Se está atribuída a um vendedor
+    if (cityAssignments[cityName]) {
+        const vendedorId = cityAssignments[cityName];
+        const vendedor = vendedores.find(v => v.id === vendedorId);
+        
+        if (vendedor && vendedor.color) {
+            layer.setStyle({
+                fillColor: vendedor.color,
+                fillOpacity: 0.5,
+                color: vendedor.color,
+                weight: 2
+            });
+        }
+    }
+}
+
+// Modifique a função highlightVendedorCities para usar vermelho para destaque
+function highlightVendedorCities(vendedorId) {
+    // Reseta os estilos de todas as cidades
+    resetMapStyles();
+    
+    // Filtra as cidades atribuídas a este vendedor
+    const cidadesAtribuidas = Object.keys(cityAssignments).filter(
+        cityName => cityAssignments[cityName] === vendedorId
+    );
+    
+    // Destaca as cidades com vermelho (reservado para destaque)
+    cidadesAtribuidas.forEach(cityName => {
+        if (cityLayers[cityName]) {
+            cityLayers[cityName].setStyle({
+                fillColor: '#e74c3c',  // Vermelho reservado para destaque
+                fillOpacity: 0.7,
+                color: '#e74c3c',
+                weight: 3
+            });
+            
+            // Traz a camada para frente
+            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                cityLayers[cityName].bringToFront();
+            }
+        }
+    });
+    
+    // Se houver cidades, ajusta o zoom para mostrar todas
+    if (cidadesAtribuidas.length > 0) {
+        const layers = cidadesAtribuidas
+            .map(cityName => cityLayers[cityName])
+            .filter(layer => layer); // Remove undefined
+        
+        if (layers.length > 0) {
+            const group = L.featureGroup(layers);
+            map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        }
+    }
+}
+
+// Atualizar a função updateVendedoresList para exibir um indicador de cor
+function updateVendedoresList() {
+    const vendedoresList = document.getElementById('vendedores-list');
+    const assignVendedorSelect = document.getElementById('assign-vendedor-select');
+    
+    // Limpa as listas
+    vendedoresList.innerHTML = '';
+    
+    // Mantém apenas a primeira opção (placeholder)
+    while (assignVendedorSelect.options.length > 1) {
+        assignVendedorSelect.remove(1);
+    }
+    
+    if (!vendedores.length) {
+        vendedoresList.innerHTML = '<li class="empty-message">Nenhum vendedor cadastrado</li>';
+        return;
+    }
+    
+    // Adiciona os vendedores às listas
+    vendedores.forEach(vendedor => {
+        // Adiciona ao dropdown de seleção
+        const option = document.createElement('option');
+        option.value = vendedor.id;
+        option.textContent = vendedor.nome;
+        assignVendedorSelect.appendChild(option);
+        
+        // Adiciona à lista de vendedores
+        const li = document.createElement('li');
+        li.className = 'list-item';
+        
+        const vendedorInfo = document.createElement('div');
+        
+        // Conta quantas cidades estão atribuídas a este vendedor
+        const cidadesCount = Object.values(cityAssignments).filter(id => id === vendedor.id).length;
+        
+        // Adiciona indicador de cor do vendedor
+        vendedorInfo.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                <div style="width: 15px; height: 15px; background-color: ${vendedor.color}; 
+                      margin-right: 8px; border-radius: 50%; border: 1px solid #333;"></div>
+                <strong>${vendedor.nome}</strong>
+            </div>
+            <div>
+                <small>Supervisor: ${vendedor.supervisor || 'N/A'}</small>
+                <span class="badge badge-primary">${cidadesCount} cidades</span>
+            </div>
+        `;
+        
+        li.appendChild(vendedorInfo);
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'actions';
+        
+        // Botão para ver detalhes
+        const detailsButton = document.createElement('button');
+        detailsButton.className = 'btn btn-primary btn-sm';
+        detailsButton.innerHTML = '<i class="fas fa-info-circle"></i>';
+        detailsButton.title = 'Ver detalhes';
+        detailsButton.addEventListener('click', function() {
+            showVendedorDetails(vendedor);
+        });
+        
+        // Botão para destacar cidades no mapa
+        const highlightButton = document.createElement('button');
+        highlightButton.className = 'btn btn-warning btn-sm';
+        highlightButton.innerHTML = '<i class="fas fa-map-marker-alt"></i>';
+        highlightButton.title = 'Ver cidades no mapa';
+        highlightButton.addEventListener('click', function() {
+            activeVendedor = vendedor.id;
+            activeGroup = null;
+            document.getElementById('group-select').value = '';
+            highlightVendedorCities(vendedor.id);
+            
+            showNotification(`Cidades do vendedor ${vendedor.nome} destacadas no mapa`);
+        });
+        
+        actionsDiv.appendChild(detailsButton);
+        actionsDiv.appendChild(highlightButton);
+        li.appendChild(actionsDiv);
+        
+        vendedoresList.appendChild(li);
+    });
+}
+
+// Também atualizar a função showVendedorDetails para mostrar a cor
+function showVendedorDetails(vendedor) {
+    document.getElementById('detail-vendedor-nome').textContent = vendedor.nome;
+    document.getElementById('detail-vendedor-supervisor').textContent = vendedor.supervisor || 'Não definido';
+    
+    // Adicionar indicador de cor ao título do modal
+    const modalTitle = document.querySelector('#modal-vendedor-details .modal-title');
+    modalTitle.innerHTML = `
+        <div style="display: flex; align-items: center;">
+            <div style="width: 15px; height: 15px; background-color: ${vendedor.color}; 
+                  margin-right: 8px; border-radius: 50%; border: 1px solid #333;"></div>
+            Detalhes do Vendedor
+        </div>
+    `;
+    
+    // Lista as cidades atribuídas
+    const cidadesList = document.getElementById('vendedor-cidades');
+    
+    // Filtra as cidades atribuídas a este vendedor
+    const cidadesAtribuidas = Object.keys(cityAssignments).filter(
+        cityName => cityAssignments[cityName] === vendedor.id
+    );
+    
+    if (!cidadesAtribuidas.length) {
+        cidadesList.innerHTML = '<li class="empty-message">Nenhuma cidade atribuída</li>';
+    } else {
+        cidadesList.innerHTML = '';
+        cidadesAtribuidas.forEach(cityName => {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            
+            const cityInfo = document.createElement('div');
+            cityInfo.textContent = cityName;
+            li.appendChild(cityInfo);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+            
+            // Botão para ver no mapa
+            const viewButton = document.createElement('button');
+            viewButton.className = 'btn btn-primary btn-sm';
+            viewButton.innerHTML = '<i class="fas fa-eye"></i>';
+            viewButton.title = 'Ver no mapa';
+            viewButton.addEventListener('click', function() {
+                if (cityLayers[cityName]) {
+                    closeAllModals();
+                    
+                    // Centraliza o mapa na cidade
+                    map.fitBounds(cityLayers[cityName].getBounds());
+                    
+                    // Simula um clique na cidade
+                    cityLayers[cityName].fire('click');
+                }
+            });
+            
+            actionsDiv.appendChild(viewButton);
+            li.appendChild(actionsDiv);
+            
+            cidadesList.appendChild(li);
+        });
+    }
+    
+    // Configura o botão de destacar cidades
+    document.getElementById('highlight-vendedor-cities').onclick = function() {
+        activeVendedor = vendedor.id;
+        activeGroup = null;
+        document.getElementById('group-select').value = '';
+        highlightVendedorCities(vendedor.id);
+        closeAllModals();
+    };
+    
+    openModal('modal-vendedor-details');
+}
     </script>
 </body>
 </html>
