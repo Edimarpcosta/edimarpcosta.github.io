@@ -2034,12 +2034,23 @@ categorySwipeStyles.textContent = `
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script>
-  // Variáveis globais
+        // Configurações para o Google Sheets
+const GOOGLE_SHEETS_CONFIG = {
+    spreadsheetId: "1mqPdLr8nlOG6VCsLCbDuIadvTrl3cCwO1n3fMnjXInw", // ID da planilha
+    apiKey: "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc", // Chave API
+    range: "produtos" // Nome da aba/planilha (ajuste conforme sua estrutura)
+};
+
+// Variáveis para controle de carregamento
 let productData = [];
 let allProducts = [];
-let visibleProducts = 20;
-const incrementAmount = 15;
+let visibleProducts = 40;  // Aumento do valor inicial para mais produtos na primeira carga
+const incrementAmount = 30; // Aumentado para carregar mais produtos por vez
 let isLoading = false;
+let scrollThreshold = 200; // Distância em pixels do final da página para começar a carregar mais
+
+///
+
 let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
 // Coleções
@@ -2070,7 +2081,7 @@ document.getElementById('initial-loader').style.display = 'flex';
 
 // Inicializar a página
 document.addEventListener('DOMContentLoaded', () => {
-    fetchCSV();
+    fetchGoogleSheetsData();
     updateCartCount();
     setupTheme();
     updateCollectionCount();
@@ -2168,25 +2179,31 @@ function toggleAdvancedFilters() {
     }
 }
 
-// Buscar dados do CSV
-async function fetchCSV() {
+// Função para buscar dados do Google Sheets
+async function fetchGoogleSheetsData() {
     try {
-        // Primeiro tentar com a URL completa
-        const csvUrl = "https://edimarpcosta.github.io/ameripan/catalogo/produtos.csv";
-        console.log("Tentando buscar CSV de:", csvUrl);
+        // Mostrar loader inicial
+        document.getElementById('initial-loader').style.display = 'flex';
         
-        const response = await fetch(csvUrl);
+        const { spreadsheetId, apiKey, range } = GOOGLE_SHEETS_CONFIG;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
         
+        console.log("Buscando dados do Google Sheets:", url);
+        
+        const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`Erro ao buscar CSV: ${response.status} ${response.statusText}`);
+            throw new Error(`Erro ao buscar dados do Google Sheets: ${response.status} ${response.statusText}`);
         }
         
-        const csv = await response.text();
-        parseCSV(csv);
-    } catch (error) {
-        console.error("Erro ao carregar o CSV remoto:", error);
+        const data = await response.json();
+        console.log("Dados recebidos do Google Sheets:", data);
         
-        // Tentar carregar dados de exemplo se o arquivo remoto falhar
+        // Processar os dados da planilha
+        processGoogleSheetsData(data.values);
+    } catch (error) {
+        console.error("Erro ao carregar dados do Google Sheets:", error);
+        
+        // Tentar carregar dados de exemplo como fallback
         try {
             console.log("Tentando carregar dados de exemplo");
             const exampleData = generateExampleData();
@@ -2197,7 +2214,7 @@ async function fetchCSV() {
             document.getElementById('product-list').innerHTML = `
                 <div class="no-products">
                     <p>Erro ao carregar os produtos: ${error.message}</p>
-                    <p>Verifique se o arquivo CSV está disponível ou carregue um arquivo manualmente.</p>
+                    <p>Verifique se a planilha do Google Sheets está acessível ou carregue um arquivo manualmente.</p>
                     <input type="file" id="csv-file-input" accept=".csv" style="margin-top: 20px;" 
                            onchange="handleFileUpload(event)" />
                 </div>
@@ -2206,185 +2223,186 @@ async function fetchCSV() {
     }
 }
 
-// Função para tratar upload de CSV
-function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const csv = e.target.result;
-                parseCSV(csv);
-                showNotification('Arquivo CSV carregado com sucesso!', 'success');
-            } catch (error) {
-                console.error("Erro ao processar arquivo:", error);
-                showNotification('Erro ao processar o arquivo CSV.', 'error');
-            }
-        };
-        reader.onerror = function() {
-            showNotification('Erro ao ler o arquivo.', 'error');
-        };
-        reader.readAsText(file);
-    }
-}
-
-// Gerar dados de exemplo para quando o CSV não pode ser carregado
-function generateExampleData() {
-    const categories = ['confeitaria', 'chocolate', 'padaria', 'ingredientes', 'embalagens', 'acaiteria'];
-    const products = [];
-    
-    // Gerar 30 produtos de exemplo
-    for (let i = 1; i <= 30; i++) {
-        const category = categories[Math.floor(Math.random() * categories.length)];
-        const isChocolate = category === 'chocolate' || category === 'acaiteria';
-        
-        let name = '';
-        let packageSize = '';
-        
-        if (isChocolate) {
-            const types = ['Ao Leite', 'Meio Amargo', 'Branco', 'Premium', 'Granulado', 'Gotas'];
-            const brands = ['Melken Harald', 'Mavalério', 'Genuine Cargill', 'Sicao', 'Top Blend Harald'];
-            const type = types[Math.floor(Math.random() * types.length)];
-            const brand = brands[Math.floor(Math.random() * brands.length)];
-            const sizes = ['500g', '1kg', '4kg', '10kg'];
-            const sizeIndex = Math.floor(Math.random() * sizes.length);
-            packageSize = sizes[sizeIndex];
-            
-            // Padrão diferente para produtos de acaiteria
-            if (category === 'acaiteria') {
-                if (type === 'Gotas') {
-                    name = `${type === 'Gotas' ? 'Chocolate' : 'Cobertura'} ${type} ${brand} ${Math.floor(Math.random() * 3) + 1}`;
-                } else {
-                    name = `${['Chocolate', 'Cobertura'][Math.floor(Math.random() * 2)]} ${type} ${brand} ${Math.floor(Math.random() * 3) + 1}`;
-                }
-            } else {
-                name = `Chocolate ${type} ${packageSize}`;
-            }
-        } else if (category === 'confeitaria') {
-            const items = ['Confeito', 'Pasta Americana', 'Corante', 'Essência', 'Glacê', 'Forminha'];
-            const colors = ['Colorido', 'Rosa', 'Azul', 'Verde', 'Amarelo', 'Vermelho'];
-            const item = items[Math.floor(Math.random() * items.length)];
-            const color = Math.random() > 0.5 ? colors[Math.floor(Math.random() * colors.length)] : '';
-            packageSize = Math.random() > 0.5 ? ['500g', '1kg'][Math.floor(Math.random() * 2)] : '';
-            name = `${item} ${color} ${packageSize}`.trim();
-        } else {
-            const prefixes = ['Super', 'Premium', 'Master', 'Profissional', 'Especial'];
-            const items = ['Farinha', 'Fermento', 'Açúcar', 'Caixa', 'Saco', 'Mistura', 'Aroma'];
-            const prefix = Math.random() > 0.7 ? prefixes[Math.floor(Math.random() * prefixes.length)] : '';
-            const item = items[Math.floor(Math.random() * items.length)];
-            packageSize = Math.random() > 0.5 ? ['1kg', '5kg', '25kg'][Math.floor(Math.random() * 3)] : '';
-            name = `${prefix} ${item} ${packageSize}`.trim();
+// Função para processar os dados recebidos do Google Sheets - versão completa e atualizada
+function processGoogleSheetsData(values) {
+    try {
+        if (!values || values.length <= 1) {
+            console.error("Não há dados na planilha ou apenas o cabeçalho está presente");
+            showNotification("Não há dados na planilha ou apenas o cabeçalho está presente", "error");
+            return;
         }
         
-        // Criar código SKU único
-        const sku = `${i.toString().padStart(4, '0')}`;
+        console.log(`Processando ${values.length - 1} linhas de dados da planilha...`);
         
-        // URL de imagem placeholder
-        const img = `https://via.placeholder.com/300x300?text=${encodeURIComponent(name)}`;
+        // A primeira linha contém os cabeçalhos
+        const headers = values[0];
+        console.log("Cabeçalhos encontrados:", headers);
         
-        products.push({
-            rowid: i.toString(),
-            categoria: category,
-            sku: sku,
-            marca: name,
-            img: img,
-            packageSize: packageSize
-        });
-    }
-    
-    return products;
-}
-
-// Processar dados de exemplo
-function parseExampleData(exampleData) {
-    allProducts = exampleData;
-    
-    // Ordenar produtos por categoria e nome
-    allProducts.sort((a, b) => {
-        if (a.categoria !== b.categoria) {
-            return a.categoria.localeCompare(b.categoria);
-        }
-        return a.marca.localeCompare(b.marca);
-    });
-    
-    // Ocultar loader inicial
-    document.getElementById('initial-loader').style.display = 'none';
-    
-    // Popular categorias e exibir produtos
-    populateCategories();
-    displayProducts();
-    
-    // Configurar observador para scroll infinito
-    setupInfiniteScroll();
-    
-    // Mostrar notificação
-    showNotification('Usando dados de exemplo. Você pode carregar um CSV manualmente.', 'success');
-}
-
-// Análise do CSV
-function parseCSV(csv) {
-    let lines = csv.split('\n');
-    
-    // Pular o cabeçalho
-    if (lines.length > 0) {
-        lines = lines.slice(1);
-    }
-    
-    // Array temporário para detectar duplicatas
-    const tempProducts = [];
-    const processedSkus = new Set();
-    
-    lines.forEach(line => {
-        // Separar corretamente os campos
-        let fields = line.split(';');
-        if (fields.length < 5) return;
+        // Encontrar os índices das colunas necessárias
+        const rowIdIndex = headers.indexOf("rowid");
+        const categoriaIndex = headers.indexOf("categoria");
+        const skuIndex = headers.indexOf("sku");
+        const marcaIndex = headers.indexOf("marca");
+        const imgIndex = headers.indexOf("img");
         
-        let [rowid, categoria, sku, marca, preco, img] = fields;
-        
-        // Limpar espaços em branco
-        sku = sku ? sku.trim() : "";
-        marca = marca ? marca.trim() : "";
-        img = img ? img.trim() : "";
-        categoria = categoria ? categoria.trim() : "";
-        
-        // Extrair informação de tamanho da embalagem (se existir)
-        let packageSize = extractPackageSize(marca);
-        
-        // Verificar se já processamos este SKU
-        if (sku && !processedSkus.has(sku)) {
-            processedSkus.add(sku);
-            tempProducts.push({ 
-                rowid, 
-                categoria, 
-                sku, 
-                marca, 
-                img, 
-                packageSize,
-                price: '' // Campo para preço no modo vendedor
+        // Verificar se todas as colunas necessárias foram encontradas
+        if (categoriaIndex === -1 || skuIndex === -1 || marcaIndex === -1) {
+            console.error("Colunas necessárias não encontradas na planilha.", {
+                categoria: categoriaIndex !== -1,
+                sku: skuIndex !== -1,
+                marca: marcaIndex !== -1
             });
+            
+            showNotification("Estrutura da planilha incorreta. Verifique se existem as colunas: categoria, sku, marca", "error");
+            return;
         }
-    });
-    
-    allProducts = tempProducts;
-    
-    // Ordenar produtos por categoria e nome
-    allProducts.sort((a, b) => {
-        if (a.categoria !== b.categoria) {
-            return a.categoria.localeCompare(b.categoria);
+        
+        // Array temporário para os produtos
+        const tempProducts = [];
+        
+        // Agora usamos um Set para detectar combinações únicas de SKU+categoria
+        // em vez de apenas SKUs únicos
+        const processedSkuCategoryPairs = new Set();
+        const processedRows = { total: 0, valid: 0, duplicates: 0, invalid: 0, imageIssues: 0 };
+        
+        // Processar cada linha de dados (pulando o cabeçalho)
+        for (let i = 1; i < values.length; i++) {
+            try {
+                processedRows.total++;
+                const row = values[i];
+                
+                // Extrair os valores da linha (com validação)
+                const rowid = rowIdIndex !== -1 && row[rowIdIndex] ? row[rowIdIndex].toString() : i.toString();
+                const categoria = categoriaIndex !== -1 && row[categoriaIndex] ? row[categoriaIndex].toString().trim() : "";
+                const sku = skuIndex !== -1 && row[skuIndex] ? row[skuIndex].toString().trim() : "";
+                const marca = marcaIndex !== -1 && row[marcaIndex] ? row[marcaIndex].toString().trim() : "";
+                
+                // Processar URL da imagem com validação
+                let img = "";
+                if (imgIndex !== -1 && row[imgIndex]) {
+                    img = row[imgIndex].toString().trim();
+                    // Validar e corrigir URL de imagem
+                    img = validateImageUrl(img);
+                    
+                    // Registrar problema se a URL original estava vazia ou foi substituída por um placeholder
+                    if (!row[imgIndex] || row[imgIndex].toString().trim() === "" || img.includes("placeholder.com")) {
+                        processedRows.imageIssues++;
+                    }
+                } else {
+                    // Sem URL de imagem fornecida
+                    img = `https://via.placeholder.com/300x300?text=${encodeURIComponent(`Produto ${sku}`)}`;
+                    processedRows.imageIssues++;
+                }
+                
+                // Pular linhas sem dados essenciais
+                if (!categoria || !sku || !marca) {
+                    console.warn(`Linha ${i+1} ignorada por falta de dados essenciais:`, { categoria, sku, marca });
+                    processedRows.invalid++;
+                    continue;
+                }
+                
+                // Criar uma chave única para a combinação de SKU e categoria
+                const skuCategoryKey = `${sku}-${categoria}`;
+                
+                // Verificar se já processamos este par de SKU+categoria
+                if (sku && !processedSkuCategoryPairs.has(skuCategoryKey)) {
+                    // Marcar esta combinação como processada
+                    processedSkuCategoryPairs.add(skuCategoryKey);
+                    
+                    // Extrair informação de tamanho da embalagem (se existir)
+                    let packageSize = extractPackageSize(marca);
+                    
+                    // Adicionar o produto
+                    tempProducts.push({ 
+                        rowid, 
+                        categoria, 
+                        sku, 
+                        marca, 
+                        img, 
+                        packageSize,
+                        price: '' // Campo para preço no modo vendedor
+                    });
+                    
+                    processedRows.valid++;
+                } else {
+                    // Produto duplicado (mesmo SKU e categoria)
+                    processedRows.duplicates++;
+                }
+            } catch (rowError) {
+                console.error(`Erro ao processar linha ${i+1}:`, rowError);
+                processedRows.invalid++;
+            }
         }
-        return a.marca.localeCompare(b.marca);
-    });
-    
-    // Ocultar loader inicial
-    document.getElementById('initial-loader').style.display = 'none';
-    
-    // Popular categorias e exibir produtos
-    populateCategories();
-    displayProducts();
-    
-    // Configurar observador para scroll infinito
-    setupInfiniteScroll();
+        
+        // Registrar estatísticas
+        console.log("Estatísticas de processamento:", processedRows);
+        
+        // Atualizar o array global de produtos
+        allProducts = tempProducts;
+        
+        // Ordenar produtos por categoria e nome
+        allProducts.sort((a, b) => {
+            if (a.categoria !== b.categoria) {
+                return a.categoria.localeCompare(b.categoria);
+            }
+            return a.marca.localeCompare(b.marca);
+        });
+        
+        // Ocultar loader inicial
+        document.getElementById('initial-loader').style.display = 'none';
+        
+        // Popular categorias e exibir produtos
+        populateCategories();
+        displayProducts();
+        
+        // Configurar observador para scroll infinito
+        setupInfiniteScroll();
+        
+        // Mostrar notificação de sucesso
+        if (typeof showNotification === 'function') {
+            let message = `${allProducts.length} produtos carregados com sucesso!`;
+            
+            // Adicionar aviso se houver problemas com imagens
+            if (processedRows.imageIssues > 0) {
+                message += ` (${processedRows.imageIssues} com problemas de imagem)`;
+            }
+            
+            showNotification(message, 'success');
+            
+            // Mostrar alerta adicional se houver muitos problemas de imagem
+            if (processedRows.imageIssues > allProducts.length * 0.3) { // Se mais de 30% tem problemas
+                setTimeout(() => {
+                    showNotification('Verifique as URLs de imagem na planilha. Muitas estão ausentes ou incorretas.', 'error');
+                }, 2000);
+            }
+        }
+        
+        // Guardar estatísticas para diagnóstico
+        window.sheetsProcessingStats = processedRows;
+        
+    } catch (error) {
+        console.error("Erro durante o processamento dos dados da planilha:", error);
+        document.getElementById('initial-loader').style.display = 'none';
+        showNotification("Erro ao processar os dados: " + error.message, "error");
+    }
 }
+
+// Função auxiliar para verificar e corrigir URLs de imagem
+function validateImageUrl(url) {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+        return "https://via.placeholder.com/300x300?text=Imagem+Indisponível";
+    }
+    
+    // Se a URL não começar com http:// ou https://, adicionar https://
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return 'https://' + url;
+    }
+    
+    return url;
+}
+
+
+
 
 // Extrai informação de tamanho da embalagem
 function extractPackageSize(name) {
@@ -2410,26 +2428,33 @@ function extractPackageSize(name) {
 }
 
 // Exibir produtos com filtros aplicados
+// Versão otimizada de displayProducts que mantém os produtos já exibidos
 function displayProducts(filter = "", category = "", sort = "", packageSize = "") {
     // Obter valores dos filtros dos campos de entrada se não forem fornecidos
-    filter = filter || document.getElementById("search").value || "";
-    category = category || document.getElementById("category").value || "";
-    sort = sort || document.getElementById("sort").value || "";
+    filter = filter || document.getElementById("search")?.value || "";
+    category = category || document.getElementById("category")?.value || "";
+    sort = sort || document.getElementById("sort")?.value || "";
     packageSize = packageSize || document.getElementById("package-size")?.value || "";
+    
+    // Resetar variáveis de controle quando mudamos os filtros
+    if (filter || category || sort || packageSize) {
+        visibleProducts = 40; // Voltar ao valor inicial ao filtrar
+        window.preloadedElements = {}; // Limpar cache de elementos
+    }
     
     // Filtrar produtos de acordo com critérios
     productData = allProducts.filter(p => {
-       // Processar múltiplos termos de filtro separados por vírgula
-const filterTerms = filter.split(',')
-    .map(term => term.trim().toLowerCase())
-    .filter(term => term.length > 0);
+        // Processar múltiplos termos de filtro separados por vírgula
+        const filterTerms = filter.split(',')
+            .map(term => term.trim().toLowerCase())
+            .filter(term => term.length > 0);
 
-// Filtro por texto (nome ou SKU) - agora suporta múltiplos termos
-const textMatch = filterTerms.length === 0 || 
-    filterTerms.some(term => 
-        p.marca.toLowerCase().includes(term) || 
-        p.sku.toLowerCase().includes(term)
-    );
+        // Filtro por texto (nome ou SKU) - agora suporta múltiplos termos
+        const textMatch = filterTerms.length === 0 || 
+            filterTerms.some(term => 
+                p.marca.toLowerCase().includes(term) || 
+                p.sku.toLowerCase().includes(term)
+            );
         
         // Filtro por categoria
         const categoryMatch = !category || p.categoria === category;
@@ -2479,9 +2504,13 @@ const textMatch = filterTerms.length === 0 ||
     // Agrupar por categoria
     let categories = [...new Set(visibleData.map(p => p.categoria))].sort();
     
+    // Criar um fragmento para todas as categorias (reduz reflow)
+    const mainFragment = document.createDocumentFragment();
+    
     categories.forEach(cat => {
         let categorySection = document.createElement("div");
         categorySection.classList.add("category-section");
+        categorySection.setAttribute('data-category', cat);
         
         // Adicionar título da categoria e botão para selecionar todos
         let categorySelectorHtml = '';
@@ -2503,105 +2532,324 @@ const textMatch = filterTerms.length === 0 ||
         let productContainer = document.createElement("div");
         productContainer.classList.add("products");
         
+        // Aplicar modo de visualização atual (grid/lista)
+        if (typeof window.isGridView !== 'undefined' && !window.isGridView) {
+            productContainer.classList.add("list-view");
+        }
+        
+        // Criar um fragmento para os produtos desta categoria
+        const categoryFragment = document.createDocumentFragment();
+        
         visibleData
             .filter(p => p.categoria === cat)
             .forEach(p => {
-                // Verificar se o produto está selecionado
-                const isSelected = selectedProducts.some(item => item.sku === p.sku);
-                
-                // Verificar se o produto está no carrinho
-                const inCart = cart.some(item => item.sku === p.sku);
-                const cartItem = cart.find(item => item.sku === p.sku);
-                const quantity = cartItem ? cartItem.quantity : 0;
-                
-                // Obter preço do produto (no modo vendedor)
-                const selectedProduct = selectedProducts.find(item => item.sku === p.sku);
-                const productPrice = selectedProduct ? selectedProduct.price || '' : '';
-                
-                let productDiv = document.createElement("div");
-                productDiv.classList.add("product");
-                if (isSelected) {
-                    productDiv.classList.add("selected");
-                }
-                productDiv.setAttribute('data-rowid', p.rowid);
-                productDiv.setAttribute('data-sku', p.sku);
-                
-                const imgHighRes = p.img ? p.img.replace('300x300', '2500x2500') : '';
-                
-                // Botão de seleção para modo vendedor
-                let selectionButton = '';
-                if (inVendorMode) {
-                    selectionButton = `
-                        <div class="product-select" onclick="toggleProductSelection('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}', '${p.img}')">
-                            ${isSelected ? '<i class="fas fa-check"></i>' : ''}
-                        </div>
-                    `;
-                }
-                
-                // Conteúdo da imagem e informações básicas do produto
-                let productContent = `
-                    <div class="product-img-container">
-                        <img src="${p.img}" alt="${p.marca}" 
-                             onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')"
-                             onerror="handleImageError(this, '${p.sku}')">
-                        ${selectionButton}
-                        <div class="product-actions">
-                            <div class="product-action-btn" onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')">
-                                <i class="fas fa-search-plus"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="product-info">
-                        <span class="product-sku">${p.sku}</span>
-                        <h3 class="product-name">${p.marca}</h3>
-                        <span class="product-category">${p.categoria}</span>
-                        ${p.packageSize ? `<span class="product-package">${p.packageSize}</span>` : ''}
-                `;
-                
-                // Adicionar campo de preço no modo vendedor para produtos selecionados
-                if (inVendorMode && isSelected) {
-                    productContent += `
-                        <div class="price-input-group">
-                            <span class="currency-symbol">R$</span>
-                            <input type="text" class="product-price-input" 
-                                   placeholder="Insira o preço" 
-                                   value="${productPrice}"
-                                   onchange="updateProductPrice('${p.sku}', this.value)">
-                        </div>
-                    `;
-                }
-                
-                // Controles de carrinho (apenas no modo cliente ou para ambos os modos)
-                if (!inVendorMode || (inVendorMode && true)) { // Permitir carrinho no modo vendedor também
-                    productContent += `
-                        <div class="product-controls">
-                            <div class="quantity-control">
-                                <button class="qty-btn" onclick="decrementQuantity('${p.sku}')">-</button>
-                                <input type="number" class="qty-input" id="qty-${p.sku}" value="${quantity}" min="0" max="999" readonly>
-                                <button class="qty-btn" onclick="incrementQuantity('${p.sku}')">+</button>
-                            </div>
-                            <button class="add-to-cart ${inCart ? 'in-cart' : ''}" 
-                                    id="cart-btn-${p.sku}" 
-                                    onclick="toggleCart('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}')">
-                                ${inCart ? '<i class="fas fa-check"></i>' : '<i class="fas fa-cart-plus"></i>'}
-                            </button>
-                        </div>
-                    `;
-                }
-                
-                productContent += `</div>`; // Fechando product-info
-                
-                productDiv.innerHTML = productContent;
-                productContainer.appendChild(productDiv);
+                // Criar elemento do produto
+                const productElement = createProductElement(p);
+                categoryFragment.appendChild(productElement);
             });
         
+        // Adicionar todos os produtos de uma vez (operação DOM única)
+        productContainer.appendChild(categoryFragment);
         categorySection.appendChild(productContainer);
-        productList.appendChild(categorySection);
+        mainFragment.appendChild(categorySection);
     });
+    
+    // Adicionar todas as categorias ao DOM de uma vez
+    productList.appendChild(mainFragment);
     
     // Verificar se precisamos mostrar o loader para carregamento infinito
     addInfiniteScrollLoader();
+    
+    // Iniciar pré-carregamento silencioso
+    setTimeout(() => {
+        if (productData.length > visibleProducts) {
+            preloadNextBatch();
+        }
+    }, 500);
 }
+
+///novas functions
+
+
+// Função para debugar problemas de imagem
+function debugImageIssues() {
+    console.log("Verificando problemas de imagem...");
+    
+    // Contar e verificar problemas
+    let totalImages = 0;
+    let emptyUrlCount = 0;
+    let invalidUrlCount = 0;
+    let brokenImages = document.querySelectorAll('img[src=""]').length;
+    
+    // Analisar URLs de imagens nos produtos
+    allProducts.forEach(product => {
+        totalImages++;
+        if (!product.img || product.img.trim() === '') {
+            emptyUrlCount++;
+            console.warn(`Produto SKU ${product.sku} tem URL de imagem vazia`);
+        } else if (!product.img.startsWith('http://') && !product.img.startsWith('https://')) {
+            invalidUrlCount++;
+            console.warn(`Produto SKU ${product.sku} tem URL de imagem sem protocolo: ${product.img}`);
+        }
+    });
+    
+    console.log(`Análise completa: ${totalImages} imagens no total`);
+    console.log(`${emptyUrlCount} URLs vazias, ${invalidUrlCount} URLs sem protocolo, ${brokenImages} imagens quebradas no DOM`);
+    
+    // Mostrar notificação para o usuário
+    if (typeof showNotification === 'function') {
+        if (emptyUrlCount > 0 || invalidUrlCount > 0) {
+            showNotification(`Atenção: ${emptyUrlCount + invalidUrlCount} produtos com problemas nas URLs de imagem`, 'error');
+        } else {
+            showNotification('Nenhum problema encontrado nas URLs de imagem', 'success');
+        }
+    }
+}
+
+// Função corrigida para criar elemento de produto (foco nas imagens)
+function createProductElement(p) {
+    // Verificar se o produto está selecionado
+    const isSelected = selectedProducts.some(item => item.sku === p.sku);
+    
+    // Verificar se o produto está no carrinho
+    const inCart = cart.some(item => item.sku === p.sku);
+    const cartItem = cart.find(item => item.sku === p.sku);
+    const quantity = cartItem ? cartItem.quantity : 0;
+    
+    // Obter preço do produto (no modo vendedor)
+    const selectedProduct = selectedProducts.find(item => item.sku === p.sku);
+    const productPrice = selectedProduct ? selectedProduct.price || '' : '';
+    
+    let productDiv = document.createElement("div");
+    productDiv.classList.add("product");
+    if (isSelected) {
+        productDiv.classList.add("selected");
+    }
+    productDiv.setAttribute('data-rowid', p.rowid);
+    productDiv.setAttribute('data-sku', p.sku);
+    
+    // Processar URL da imagem com mais cuidado
+    let imgSrc = p.img || '';
+    // Garantir que a URL seja válida (não vazia e tenha um formato de URL)
+    if (!imgSrc || imgSrc.trim() === '') {
+        imgSrc = "https://via.placeholder.com/300x300?text=Produto+Indisponível";
+    }
+    
+    const imgHighRes = imgSrc.includes('300x300') ? imgSrc.replace('300x300', '2500x2500') : imgSrc;
+    
+    // Botão de seleção para modo vendedor
+    let selectionButton = '';
+    if (inVendorMode) {
+        selectionButton = `
+            <div class="product-select" onclick="toggleProductSelection('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}', '${imgSrc}')">
+                ${isSelected ? '<i class="fas fa-check"></i>' : ''}
+            </div>
+        `;
+    }
+    
+    // Conteúdo da imagem e informações básicas do produto
+    // Removido o atributo loading="lazy" para compatibilidade
+    let productContent = `
+        <div class="product-img-container">
+            <img src="${imgSrc}" alt="${p.marca}" 
+                 onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')"
+                 onerror="handleImageError(this, '${p.sku}')">
+            ${selectionButton}
+            <div class="product-actions">
+                <div class="product-action-btn" onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')">
+                    <i class="fas fa-search-plus"></i>
+                </div>
+            </div>
+        </div>
+        <div class="product-info">
+            <span class="product-sku">${p.sku}</span>
+            <h3 class="product-name">${p.marca}</h3>
+            <span class="product-category">${p.categoria}</span>
+            ${p.packageSize ? `<span class="product-package">${p.packageSize}</span>` : ''}
+    `;
+    
+    // Adicionar campo de preço no modo vendedor para produtos selecionados
+    if (inVendorMode && isSelected) {
+        productContent += `
+            <div class="price-input-group">
+                <span class="currency-symbol">R$</span>
+                <input type="text" class="product-price-input" 
+                       placeholder="Insira o preço" 
+                       value="${productPrice}"
+                       onchange="updateProductPrice('${p.sku}', this.value)">
+            </div>
+        `;
+    }
+    
+    // Controles de carrinho (apenas no modo cliente ou para ambos os modos)
+    if (!inVendorMode || (inVendorMode && true)) { // Permitir carrinho no modo vendedor também
+        productContent += `
+            <div class="product-controls">
+                <div class="quantity-control">
+                    <button class="qty-btn" onclick="decrementQuantity('${p.sku}')">-</button>
+                    <input type="number" class="qty-input" id="qty-${p.sku}" value="${quantity}" min="0" max="999" readonly>
+                    <button class="qty-btn" onclick="incrementQuantity('${p.sku}')">+</button>
+                </div>
+                <button class="add-to-cart ${inCart ? 'in-cart' : ''}" 
+                        id="cart-btn-${p.sku}" 
+                        onclick="toggleCart('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}')">
+                    ${inCart ? '<i class="fas fa-check"></i>' : '<i class="fas fa-cart-plus"></i>'}
+                </button>
+            </div>
+        `;
+    }
+    
+    productContent += `</div>`; // Fechando product-info
+    
+    productDiv.innerHTML = productContent;
+    return productDiv;
+}
+
+// Pré-carregar o próximo lote de produtos sem mostrar ao usuário
+function preloadNextBatch() {
+    // Verificar se já estamos carregando ou se não há mais produtos
+    if (isLoading || productData.length <= visibleProducts) return;
+    
+    // Calcular quantos produtos pré-carregar
+    let preloadAmount = Math.min(incrementAmount, productData.length - visibleProducts);
+    
+    if (preloadAmount <= 0) return;
+    
+    // Marcar como carregamento em progresso
+    isLoading = true;
+    
+    // Criar elementos DOM para os próximos produtos mas não inserir na página ainda
+    const preloadedItems = [];
+    const fragment = document.createDocumentFragment();
+    
+    // Encontrar produtos por categoria para criar a estrutura adequada
+    const preloadStart = visibleProducts;
+    const preloadEnd = preloadStart + preloadAmount;
+    
+    // Agrupar produtos por categoria
+    const categoriesMap = {};
+    
+    for (let i = preloadStart; i < preloadEnd && i < productData.length; i++) {
+        const product = productData[i];
+        if (!categoriesMap[product.categoria]) {
+            categoriesMap[product.categoria] = [];
+        }
+        categoriesMap[product.categoria].push(product);
+    }
+    
+    // Armazenar elementos pré-carregados em cache de memória
+    window.preloadedElements = window.preloadedElements || {};
+    
+    // Criar elementos para cada categoria, mas não adicioná-los ainda
+    for (const category in categoriesMap) {
+        if (!window.preloadedElements[category]) {
+            window.preloadedElements[category] = {
+                container: null,
+                products: []
+            };
+            
+            // Verificar se a seção da categoria já existe
+            let categorySection = document.querySelector(`.category-section[data-category="${category}"]`);
+            
+            if (!categorySection) {
+                // Se não existir, criar uma nova seção
+                categorySection = document.createElement("div");
+                categorySection.classList.add("category-section");
+                categorySection.setAttribute('data-category', category);
+                
+                // Adicionar título da categoria e botão para selecionar todos
+                let categorySelectorHtml = '';
+                if (inVendorMode) {
+                    categorySelectorHtml = `
+                        <div class="category-selection">
+                            <button class="select-all-cat" onclick="toggleCategorySelection('${category}')">Selecionar Todos</button>
+                        </div>
+                    `;
+                }
+                
+                categorySection.innerHTML = `
+                    <h2 class="category-title">
+                        ${category}
+                        ${categorySelectorHtml}
+                    </h2>
+                `;
+                
+                // Criar container de produtos
+                const productContainer = document.createElement("div");
+                productContainer.classList.add("products");
+                if (!window.isGridView) {
+                    productContainer.classList.add("list-view");
+                }
+                
+                categorySection.appendChild(productContainer);
+                window.preloadedElements[category].container = categorySection;
+            } else {
+                // Se a seção já existe, usar o container existente
+                window.preloadedElements[category].container = categorySection;
+            }
+        }
+        
+        // Adicionar produtos pré-carregados para esta categoria
+        categoriesMap[category].forEach(p => {
+            // Criar elemento do produto (mesma lógica de displayProducts)
+            const productElement = createProductElement(p);
+            window.preloadedElements[category].products.push(productElement);
+        });
+    }
+    
+    // Marcar o carregamento como concluído
+    visibleProducts += preloadAmount;
+    isLoading = false;
+    
+    // console.log(`Pré-carregado ${preloadAmount} produtos silenciosamente`);
+}
+
+
+// Adicionar elementos pré-carregados à página
+function appendPreloadedElements() {
+    if (!window.preloadedElements) return;
+    
+    const productListElement = document.getElementById('product-list');
+    
+    // Para cada categoria com elementos pré-carregados
+    for (const category in window.preloadedElements) {
+        const categoryData = window.preloadedElements[category];
+        
+        if (!categoryData || !categoryData.products || categoryData.products.length === 0) {
+            continue;
+        }
+        
+        // Procurar seção existente ou criar nova
+        let categorySection = document.querySelector(`.category-section[data-category="${category}"]`);
+        let productContainer;
+        
+        if (!categorySection) {
+            // Usar a seção pré-criada
+            categorySection = categoryData.container;
+            productListElement.appendChild(categorySection);
+            productContainer = categorySection.querySelector('.products');
+        } else {
+            // Usar o container existente
+            productContainer = categorySection.querySelector('.products');
+        }
+        
+        // Adicionar produtos com otimização DOM
+        if (productContainer && categoryData.products.length > 0) {
+            // Criar um fragmento para adicionar todos os produtos de uma vez
+            const fragment = document.createDocumentFragment();
+            categoryData.products.forEach(product => {
+                fragment.appendChild(product);
+            });
+            
+            // Adicionar o fragmento ao container (operação DOM única)
+            productContainer.appendChild(fragment);
+        }
+    }
+    
+    // Limpar memória após adicionar à página
+    window.preloadedElements = {};
+}
+
 
 // Popular seletor de categorias
 function populateCategories() {
@@ -2617,13 +2865,18 @@ function populateCategories() {
     });
 }
 
-// Lidar com erros de carregamento de imagem
+// Versão melhorada da função handleImageError
 function handleImageError(img, sku) {
-    // Usar uma imagem de placeholder
-    img.src = "https://via.placeholder.com/300x300?text=Produto+Indisponível";
+    console.warn(`Erro ao carregar imagem para SKU ${sku}. Substituindo por placeholder.`);
     
-    // Registrar erro para depuração
-    console.warn(`Erro ao carregar imagem para SKU ${sku}`);
+    // Verificar se a URL já é um placeholder para evitar loop
+    if (img.src.includes('placeholder.com')) return;
+    
+    // Usar uma imagem de placeholder
+    img.src = `https://via.placeholder.com/300x300?text=${encodeURIComponent(`Produto ${sku}`)}`;
+    
+    // Adicionar classe para estilo específico
+    img.classList.add('placeholder-img');
 }
 
 // Abrir modal de imagem
@@ -4910,16 +5163,19 @@ function closeModal(modalId) {
     document.body.style.overflow = 'auto';
 }
 
-// Configuração do scroll infinito
+// Configuração do scroll infinito otimizado
 function setupInfiniteScroll() {
     // Usar Intersection Observer para detectar quando o usuário chega ao final da página
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting && !isLoading) {
-                loadMoreProducts();
+                loadMoreProducts(false); // false = sem atraso artificial
             }
         });
-    }, { threshold: 0.1 });
+    }, { 
+        rootMargin: `0px 0px ${scrollThreshold}px 0px`, // Começar a carregar antes de chegar ao final
+        threshold: 0.1 
+    });
     
     const loader = document.createElement('div');
     loader.id = 'infinite-scroll-trigger';
@@ -4927,33 +5183,85 @@ function setupInfiniteScroll() {
     document.getElementById('product-list').after(loader);
     
     observer.observe(loader);
+    
+    // Pré-carregamento: começar a carregar mais produtos logo após a primeira exibição
+    setTimeout(() => {
+        if (productData.length > visibleProducts) {
+            // Pré-carregar o próximo lote silenciosamente
+            preloadNextBatch();
+        }
+    }, 1000);
+    
+    // Otimização para scroll rápido: detectar quando o usuário está rolando rapidamente
+    let lastScrollTop = 0;
+    let scrollSpeed = 0;
+    
+    window.addEventListener('scroll', () => {
+        const scrollTop = window.scrollY;
+        scrollSpeed = Math.abs(scrollTop - lastScrollTop);
+        lastScrollTop = scrollTop;
+        
+        // Se o usuário está rolando rapidamente, carregar mais produtos antecipadamente
+        if (scrollSpeed > 50 && !isLoading && (window.innerHeight + window.scrollY) > document.body.offsetHeight - 1000) {
+            loadMoreProducts(false);
+        }
+    });
 }
 
+// Adicionar loader (otimizado para usar menos recursos)
 function addInfiniteScrollLoader() {
     // Verificar se há mais produtos para carregar
     if (productData.length > visibleProducts) {
-        const loader = document.createElement('div');
-        loader.className = 'loading-spinner';
-        loader.id = 'products-loader';
-        loader.innerHTML = '<div class="spinner"></div>';
-        document.getElementById('product-list').appendChild(loader);
+        // Verificar se o loader já existe para evitar duplicatas
+        if (!document.getElementById('products-loader')) {
+            const loader = document.createElement('div');
+            loader.className = 'loading-spinner';
+            loader.id = 'products-loader';
+            loader.innerHTML = '<div class="spinner"></div>';
+            document.getElementById('product-list').appendChild(loader);
+        }
     }
 }
 
-function loadMoreProducts() {
+// Carrega mais produtos com otimização para desempenho
+function loadMoreProducts(withDelay = false) {
     if (isLoading || productData.length <= visibleProducts) return;
     
     isLoading = true;
     
-    // Simular carregamento
-    setTimeout(() => {
-        visibleProducts += incrementAmount;
-        
-        // Reexibir produtos com os mesmos filtros
-        displayProducts();
+    // Remover o loader existente
+    const existingLoader = document.getElementById('products-loader');
+    if (existingLoader) {
+        existingLoader.remove();
+    }
+    
+    // Função a ser executada para carregar mais produtos
+    const loadFunction = () => {
+        // Use os elementos pré-carregados se disponíveis
+        if (window.preloadedElements) {
+            appendPreloadedElements();
+        } else {
+            // Caso não tenhamos elementos pré-carregados, use o método tradicional
+            visibleProducts += incrementAmount;
+            displayProducts();
+        }
         
         isLoading = false;
-    }, 500);
+        
+        // Pré-carregar o próximo lote para rolagem contínua
+        setTimeout(() => {
+            if (productData.length > visibleProducts) {
+                preloadNextBatch();
+            }
+        }, 200);
+    };
+    
+    // Executar imediatamente ou com um delay mínimo
+    if (withDelay) {
+        setTimeout(loadFunction, 100); // Delay reduzido de 500ms para 100ms
+    } else {
+        loadFunction();
+    }
 }
 
 // Controle do botão "Voltar ao Topo"
@@ -5017,7 +5325,7 @@ document.addEventListener("keydown", function(e) {
 // Variáveis para controlar o comportamento de rolagem do header
 let lastScrollTop = 0;
 const header = document.querySelector('header');
-const scrollThreshold = 50; // Quantidade mínima de rolagem para acionar o comportamento
+
 
 // Função para controlar a visibilidade do header durante a rolagem
 function handleHeaderScroll() {
