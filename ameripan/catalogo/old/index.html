@@ -6780,7 +6780,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Estado
       this.isFullscreen = false;
       this.targetElement = document.body;
-      this.zoomLevel = 100; // Valor percentual de zoom (padrão: 100%)
+      this.zoomLevel = 103; // Valor percentual de zoom (padrão: 100%)
       this.minZoom = 25;    // Zoom mínimo: 25%
       this.maxZoom = 500;   // Zoom máximo: 500%
       this.zoomStep = 25;   // Incrementos de zoom
@@ -7141,8 +7141,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     resetZoom() {
-      // Restaurar para o zoom padrão (100%)
-      this.zoomLevel = 100;
+      // Restaurar para o zoom padrão (103%)
+      this.zoomLevel = 103;
       this.applyZoom();
     }
     
@@ -7503,6 +7503,534 @@ document.addEventListener('DOMContentLoaded', function() {
     // Se o DOM já estiver pronto, inicializar diretamente
     setTimeout(init, 500);
   }
+})();
+	</script>
+	<script>
+	// Script para substituir completamente o modal de visualização de produto
+// Este script deve ser adicionado diretamente na página HTML
+
+(function() {
+  // Executar imediatamente após o carregamento do script
+  console.log("Inicializando substituição do modal de produto...");
+  
+  // 1. Primeiro, vamos garantir que o script seja executado após o carregamento da página
+  function inicializar() {
+    // Substituir a função openImageModal existente
+    substituirFuncaoModal();
+    
+    // Adicionar estilos diretamente
+    adicionarEstilos();
+    
+    // Adicionar eventos de clique a todos os produtos
+    adicionarEventosClique();
+    
+    console.log("Substituição do modal de produto concluída!");
+  }
+  
+  // 2. Substituir completamente a função openImageModal
+  function substituirFuncaoModal() {
+    // Salvar referência à função original (se existir)
+    const funcaoOriginal = window.openImageModal;
+    
+    // Criar nossa nova função
+    window.openImageModal = function(imgSrc, sku, name) {
+      console.log("Nova função de modal ativada:", imgSrc, sku, name);
+      
+      // Se a função original existir e não conseguirmos mostrar nosso modal, tentar a original como fallback
+      let modalCriado = criarEMostrarNovoModal(imgSrc, sku, name);
+      
+      if (!modalCriado && typeof funcaoOriginal === 'function') {
+        console.log("Fallback para função original de modal");
+        return funcaoOriginal(imgSrc, sku, name);
+      }
+    };
+  }
+  
+  // 3. Criar e mostrar nosso novo modal aprimorado
+  function criarEMostrarNovoModal(imgSrc, sku, name) {
+    try {
+      // Remover qualquer modal existente primeiro
+      const modalExistente = document.getElementById('novoImageModal');
+      if (modalExistente) {
+        document.body.removeChild(modalExistente);
+      }
+      
+      // Garantir que a URL da imagem seja de alta resolução
+      let imagemHD = imgSrc;
+      if (imgSrc && imgSrc.includes('300x300')) {
+        imagemHD = imgSrc.replace('300x300', '2500x2500');
+      }
+      
+      // Criar o elemento do modal
+      const modal = document.createElement('div');
+      modal.id = 'novoImageModal';
+      modal.className = 'novo-modal';
+      
+      // HTML interno do modal
+      modal.innerHTML = `
+        <div class="novo-modal-content">
+          <span class="novo-modal-close">&times;</span>
+          <div class="novo-modal-info">
+            <h3 class="produto-nome">${name || 'Nome do Produto'}</h3>
+            <p class="produto-sku">Código: ${sku}</p>
+          </div>
+          <div class="novo-modal-body">
+            <div class="novo-modal-image-container">
+              <img src="${imagemHD}" alt="${name}" class="novo-modal-image">
+              <div class="zoom-controls">
+                <button class="zoom-btn zoom-out" title="Diminuir"><i class="fas fa-search-minus"></i></button>
+                <button class="zoom-btn zoom-reset" title="Restaurar"><i class="fas fa-sync-alt"></i></button>
+                <button class="zoom-btn zoom-in" title="Aumentar"><i class="fas fa-search-plus"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Adicionar o modal ao corpo do documento
+      document.body.appendChild(modal);
+      
+      // Configurar eventos
+      const closeBtn = modal.querySelector('.novo-modal-close');
+      closeBtn.addEventListener('click', function() {
+        document.body.removeChild(modal);
+      });
+      
+      // Fechar ao clicar fora do conteúdo
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
+      
+      // Adicionar funcionalidade de zoom
+      const imagem = modal.querySelector('.novo-modal-image');
+      const zoomOutBtn = modal.querySelector('.zoom-out');
+      const zoomResetBtn = modal.querySelector('.zoom-reset');
+      const zoomInBtn = modal.querySelector('.zoom-in');
+      
+      // Estado do zoom
+      let zoomLevel = 1;
+      const maxZoom = 3;
+      const minZoom = 1;
+      
+      // Função para aplicar zoom
+      function aplicarZoom() {
+        imagem.style.transform = `scale(${zoomLevel})`;
+        
+        // Ajustar cursor com base no nível de zoom
+        if (zoomLevel > 1) {
+          imagem.style.cursor = 'move';
+        } else {
+          imagem.style.cursor = 'pointer';
+          imagem.style.transformOrigin = 'center center';
+        }
+      }
+      
+      // Configurar eventos de zoom
+      zoomOutBtn.addEventListener('click', function() {
+        zoomLevel = Math.max(minZoom, zoomLevel - 0.5);
+        aplicarZoom();
+      });
+      
+      zoomResetBtn.addEventListener('click', function() {
+        zoomLevel = 1;
+        aplicarZoom();
+      });
+      
+      zoomInBtn.addEventListener('click', function() {
+        zoomLevel = Math.min(maxZoom, zoomLevel + 0.5);
+        aplicarZoom();
+      });
+      
+      // Zoom com clique na imagem
+      imagem.addEventListener('click', function(e) {
+        if (zoomLevel === 1) {
+          zoomLevel = 2;
+        } else {
+          zoomLevel = 1;
+        }
+        aplicarZoom();
+      });
+      
+      // Zoom com duplo clique
+      imagem.addEventListener('dblclick', function(e) {
+        e.preventDefault();
+        
+        if (zoomLevel < maxZoom) {
+          zoomLevel = maxZoom;
+        } else {
+          zoomLevel = 1;
+        }
+        
+        // Aplicar zoom no ponto clicado
+        if (zoomLevel > 1) {
+          const rect = imagem.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width * 100;
+          const y = (e.clientY - rect.top) / rect.height * 100;
+          imagem.style.transformOrigin = `${x}% ${y}%`;
+        }
+        
+        aplicarZoom();
+      });
+      
+      // Zoom com roda do mouse
+      imagem.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        
+        if (e.deltaY < 0) {
+          zoomLevel = Math.min(maxZoom, zoomLevel + 0.25);
+        } else {
+          zoomLevel = Math.max(minZoom, zoomLevel - 0.25);
+        }
+        
+        // Aplicar zoom no ponto do mouse
+        if (zoomLevel > 1) {
+          const rect = imagem.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width * 100;
+          const y = (e.clientY - rect.top) / rect.height * 100;
+          imagem.style.transformOrigin = `${x}% ${y}%`;
+        }
+        
+        aplicarZoom();
+      }, { passive: false });
+      
+      // Movimento da imagem quando ampliada
+      let arrastando = false;
+      let inicioX, inicioY, origemInicialX, origemInicialY;
+      
+      imagem.addEventListener('mousedown', function(e) {
+        if (zoomLevel > 1) {
+          arrastando = true;
+          inicioX = e.clientX;
+          inicioY = e.clientY;
+          
+          const origem = imagem.style.transformOrigin;
+          const [x, y] = origem ? origem.split(' ').map(val => parseFloat(val)) : [50, 50];
+          origemInicialX = x || 50;
+          origemInicialY = y || 50;
+          
+          e.preventDefault();
+        }
+      });
+      
+      document.addEventListener('mousemove', function(e) {
+        if (arrastando && zoomLevel > 1) {
+          const deltaX = e.clientX - inicioX;
+          const deltaY = e.clientY - inicioY;
+          
+          const sensibilidade = 100 / zoomLevel;
+          const novoX = Math.max(0, Math.min(100, origemInicialX - (deltaX / sensibilidade)));
+          const novoY = Math.max(0, Math.min(100, origemInicialY - (deltaY / sensibilidade)));
+          
+          imagem.style.transformOrigin = `${novoX}% ${novoY}%`;
+        }
+      });
+      
+      document.addEventListener('mouseup', function() {
+        arrastando = false;
+      });
+      
+      imagem.addEventListener('mouseleave', function() {
+        arrastando = false;
+      });
+      
+      // Suporte a toque para dispositivos móveis
+      imagem.addEventListener('touchstart', function(e) {
+        if (zoomLevel > 1 && e.touches.length === 1) {
+          arrastando = true;
+          inicioX = e.touches[0].clientX;
+          inicioY = e.touches[0].clientY;
+          
+          const origem = imagem.style.transformOrigin;
+          const [x, y] = origem ? origem.split(' ').map(val => parseFloat(val)) : [50, 50];
+          origemInicialX = x || 50;
+          origemInicialY = y || 50;
+          
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      imagem.addEventListener('touchmove', function(e) {
+        if (arrastando && zoomLevel > 1 && e.touches.length === 1) {
+          const deltaX = e.touches[0].clientX - inicioX;
+          const deltaY = e.touches[0].clientY - inicioY;
+          
+          const sensibilidade = 100 / zoomLevel;
+          const novoX = Math.max(0, Math.min(100, origemInicialX - (deltaX / sensibilidade)));
+          const novoY = Math.max(0, Math.min(100, origemInicialY - (deltaY / sensibilidade)));
+          
+          imagem.style.transformOrigin = `${novoX}% ${novoY}%`;
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      imagem.addEventListener('touchend', function() {
+        arrastando = false;
+      });
+      
+      // Mostrar o modal
+      setTimeout(() => {
+        modal.style.opacity = '1';
+      }, 10);
+      
+      return true;
+    } catch (error) {
+      console.error("Erro ao criar modal:", error);
+      return false;
+    }
+  }
+  
+  // 4. Adicionar estilos CSS diretamente
+  function adicionarEstilos() {
+    const estilos = document.createElement('style');
+    estilos.id = 'novoModalEstilos';
+    estilos.textContent = `
+      /* Estilos para o novo modal */
+      .novo-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      
+      .novo-modal-content {
+        width: 95%;
+        height: 95vh;
+        background-color: var(--bg-secondary, #ffffff);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+      
+      .novo-modal-close {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        font-size: 2rem;
+        color: var(--primary-color, #3498db);
+        cursor: pointer;
+        z-index: 100;
+        width: 40px;
+        height: 40px;
+        background-color: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      }
+      
+      .novo-modal-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        padding-top: 0;
+      }
+      
+      .novo-modal-image-container {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        padding: 20px;
+      }
+      
+      .novo-modal-image {
+        max-width: 90%;
+        max-height: 75vh;
+        object-fit: contain;
+        transition: transform 0.3s ease;
+        cursor: pointer;
+      }
+      
+      .novo-modal-info {
+        width: 100%;
+        text-align: center;
+        padding: 15px 25px;
+        background-color: var(--bg-primary, #f8f9fa);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: relative;
+        z-index: 5;
+      }
+      
+      .produto-nome {
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin: 0 0 10px 0;
+        color: var(--text-color, #333333);
+      }
+      
+      .produto-sku {
+        font-size: 1.2rem;
+        color: var(--primary-color, #3498db);
+        margin: 0;
+        font-weight: 500;
+      }
+      
+      .zoom-controls {
+        position: absolute;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 10;
+      }
+      
+      .zoom-btn {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background-color: rgba(52, 152, 219, 0.5);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        opacity: 0.7;
+        transition: opacity 0.3s, transform 0.2s;
+      }
+      
+      .zoom-btn.zoom-reset {
+        background-color: rgba(230, 126, 34, 0.5);
+      }
+      
+      .zoom-btn:hover {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+      
+      /* Responsividade */
+      @media (max-width: 768px) {
+        .novo-modal-content {
+          width: 98%;
+          height: 98vh;
+        }
+        
+        .produto-nome {
+          font-size: 1.4rem;
+        }
+        
+        .zoom-btn {
+          width: 40px;
+          height: 40px;
+          font-size: 16px;
+        }
+      }
+    `;
+    
+    document.head.appendChild(estilos);
+  }
+  
+  // 5. Adicionar eventos de clique a todos os produtos
+  function adicionarEventosClique() {
+    // Procurar por elementos com a classe 'product-img-container' ou 'product img'
+    const produtoImagens = document.querySelectorAll('.product-img-container img, .product img');
+    
+    produtoImagens.forEach(img => {
+      // Adicionar evento de clique que chama a função openImageModal
+      img.addEventListener('click', function(e) {
+        // Evitar comportamento padrão
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Obter o elemento pai do produto
+        const produtoElemento = img.closest('.product');
+        if (!produtoElemento) return;
+        
+        // Obter informações do produto
+        const sku = produtoElemento.getAttribute('data-sku') || '';
+        
+        // Tentar encontrar o nome do produto
+        let nome = '';
+        const nomeElemento = produtoElemento.querySelector('.product-name');
+        if (nomeElemento) {
+          nome = nomeElemento.textContent || '';
+        }
+        
+        // Se não encontrar o nome, tentar obter de outros elementos
+        if (!nome) {
+          // Tentar obter de elementos comuns que podem conter o nome
+          const possiveisElementosNome = [
+            produtoElemento.querySelector('h3'),
+            produtoElemento.querySelector('.marca'),
+            produtoElemento.querySelector('[class*="name"]'),
+            produtoElemento.querySelector('[class*="titulo"]'),
+            produtoElemento.querySelector('[class*="title"]')
+          ];
+          
+          for (let elemento of possiveisElementosNome) {
+            if (elemento && elemento.textContent) {
+              nome = elemento.textContent.trim();
+              console.log("Nome encontrado em elemento alternativo:", nome);
+              break;
+            }
+          }
+        }
+        
+        // Obter a URL da imagem
+        const imgSrc = img.src || '';
+        
+        // Chamar a função openImageModal (nossa função substituída)
+        if (typeof window.openImageModal === 'function') {
+          window.openImageModal(imgSrc, sku, nome);
+        } else {
+          console.error("Função openImageModal não está disponível");
+          // Tentar criar nosso modal diretamente
+          criarEMostrarNovoModal(imgSrc, sku, nome);
+        }
+      });
+    });
+  }
+  
+  // Executar inicialização com base no status de carregamento da página
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializar);
+  } else {
+    // Documento já está pronto
+    inicializar();
+  }
+  
+  // Além disso, criar um observador para capturar novos produtos adicionados ao DOM
+  const observador = new MutationObserver(function(mutacoes) {
+    mutacoes.forEach(function(mutacao) {
+      if (mutacao.type === 'childList' && mutacao.addedNodes.length) {
+        // Verificar se foram adicionados produtos
+        const novoProdutoAdicionado = Array.from(mutacao.addedNodes).some(
+          node => node.classList && (node.classList.contains('product') || node.querySelectorAll('.product').length > 0)
+        );
+        
+        if (novoProdutoAdicionado) {
+          // Adicionar eventos de clique aos novos produtos
+          adicionarEventosClique();
+        }
+      }
+    });
+  });
+  
+  // Iniciar observação
+  observador.observe(document.body, { childList: true, subtree: true });
 })();
 	</script>
 </body>
