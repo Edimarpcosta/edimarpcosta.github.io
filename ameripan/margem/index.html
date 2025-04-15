@@ -630,7 +630,91 @@
                 // Auto-processar após um pequeno delay quando texto é colado
                 setTimeout(processarDadosColados, 300);
             });
+            
+            // Configurar navegação por Enter nos campos gerais
+            configNavegacaoPorEnter('vendedor', 'codCliente');
+            configNavegacaoPorEnter('codCliente', 'codPedido');
+            // O último campo configureamos para ir para o primeiro campo do primeiro produto
+            configNavegacaoPorEnter('codPedido', function() {
+                // Buscar o primeiro campo de código (se existir)
+                const primeiroCodigoInput = document.querySelector('.produto-card input') || 
+                                           document.querySelector('#lista-produtos-desktop input');
+                if (primeiroCodigoInput) {
+                    primeiroCodigoInput.focus();
+                }
+            });
         });
+        
+        // Configurar navegação por Enter
+        function configNavegacaoPorEnter(campoAtualId, proximoCampoIdOuCallback) {
+            const campoAtual = document.getElementById(campoAtualId);
+            if (!campoAtual) return;
+            
+            campoAtual.addEventListener('keydown', function(e) {
+                // Verifica se a tecla pressionada foi Enter
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // Previne o comportamento padrão
+                    
+                    // Se for uma função, chama a função
+                    if (typeof proximoCampoIdOuCallback === 'function') {
+                        proximoCampoIdOuCallback();
+                    } 
+                    // Se for uma string (ID), foca no elemento
+                    else {
+                        const proximoCampo = document.getElementById(proximoCampoIdOuCallback);
+                        if (proximoCampo) {
+                            proximoCampo.focus();
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Navegação por Enter em campos de produtos
+        function configNavegacaoPorEnterEmProduto(inputElement, produto) {
+            if (!inputElement) return;
+            
+            inputElement.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    
+                    // Buscar todos os inputs do produto
+                    const produtoContainer = this.closest('.produto-card') || this.closest('tr');
+                    if (!produtoContainer) return;
+                    
+                    const inputs = Array.from(produtoContainer.querySelectorAll('input'));
+                    const currentIndex = inputs.indexOf(this);
+                    
+                    if (currentIndex !== -1 && currentIndex < inputs.length - 1) {
+                        // Passar para o próximo campo
+                        inputs[currentIndex + 1].focus();
+                    } else if (currentIndex === inputs.length - 1) {
+                        // Se for o último campo deste produto, verificar se há produtos depois
+                        const produtos = document.querySelectorAll('.produto-card, #lista-produtos-desktop tr');
+                        const produtoIndex = Array.from(produtos).indexOf(produtoContainer);
+                        
+                        if (produtoIndex !== -1 && produtoIndex < produtos.length - 1) {
+                            // Há um próximo produto, focar no primeiro campo
+                            const proximoProduto = produtos[produtoIndex + 1];
+                            const proximoInput = proximoProduto.querySelector('input');
+                            if (proximoInput) {
+                                proximoInput.focus();
+                            }
+                        } else {
+                            // É o último produto, adicionar novo produto e focar nele
+                            adicionarProduto();
+                            // Aguardar um pouco para o novo produto ser renderizado
+                            setTimeout(() => {
+                                const novoInput = document.querySelector('.produto-card:last-child input, #lista-produtos-desktop tr:last-child input');
+                                if (novoInput) {
+                                    novoInput.focus();
+                                }
+                            }, 50);
+                        }
+                    }
+                }
+            });
+        }
         
         // Alternar entre modos
         function mudarModo(modo) {
@@ -660,9 +744,9 @@
             const novoProduto = {
                 id: Date.now(),
                 codigo: '',
-                quantidade: 1,
-                valor: 0,
-                custo: 0
+                quantidade: '',
+                valor: '',
+                custo: ''
             };
             
             produtos.push(novoProduto);
@@ -682,15 +766,21 @@
             const produto = produtos.find(p => p.id === id);
             if (produto) {
                 if (campo === 'quantidade' || campo === 'valor' || campo === 'custo') {
-                    produto[campo] = parseFloat(valor) || 0;
+                    // Se o campo estiver vazio, armazenar como string vazia em vez de 0
+                    produto[campo] = valor === '' ? '' : parseFloat(valor) || 0;
                 } else {
                     produto[campo] = valor;
                 }
                 
                 // Calcular valores para este produto específico
-                const total = (produto.quantidade * produto.valor).toFixed(2);
-                const margem = produto.valor > 0 ? ((produto.valor - produto.custo) / produto.valor * 100).toFixed(2) : '0.00';
-                const markup = produto.custo > 0 ? ((produto.valor - produto.custo) / produto.custo * 100).toFixed(2) : '0.00';
+                // Tratar campos vazios como zero para cálculos
+                const quantidade = produto.quantidade === '' ? 0 : produto.quantidade;
+                const valorUnitario = produto.valor === '' ? 0 : produto.valor;
+                const custoUnitario = produto.custo === '' ? 0 : produto.custo;
+                
+                const total = (quantidade * valorUnitario).toFixed(2);
+                const margem = valorUnitario > 0 ? ((valorUnitario - custoUnitario) / valorUnitario * 100).toFixed(2) : '0.00';
+                const markup = custoUnitario > 0 ? ((valorUnitario - custoUnitario) / custoUnitario * 100).toFixed(2) : '0.00';
                 
                 // Atualizar apenas os elementos visuais deste produto sem re-renderizar tudo
                 atualizarVisualizacaoProduto(id, total, margem, markup);
@@ -792,6 +882,13 @@
                             </div>
                         </td>
                     `;
+                    
+                    // Configurar navegação por Enter nos campos
+                    listaDesktop.appendChild(tr);
+                    const inputs = tr.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        configNavegacaoPorEnterEmProduto(input, produto);
+                    });
                     listaDesktop.appendChild(tr);
                 });
             }
@@ -880,6 +977,10 @@
                         </div>
                     `;
                     listaMobile.appendChild(card);
+                    const inputs = card.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        configNavegacaoPorEnterEmProduto(input, produto);
+                    });
                 });
             }
         }
@@ -897,9 +998,23 @@
         
         // Calcular totais e indicadores
         function calcularTotais() {
-            const totalItens = produtos.reduce((sum, p) => sum + p.quantidade, 0);
-            const totalVenda = produtos.reduce((sum, p) => sum + (p.quantidade * p.valor), 0);
-            const totalCusto = produtos.reduce((sum, p) => sum + (p.quantidade * p.custo), 0);
+            // Tratar valores vazios como zero para cálculos
+            const totalItens = produtos.reduce((sum, p) => {
+                const quantidade = p.quantidade === '' ? 0 : p.quantidade;
+                return sum + quantidade;
+            }, 0);
+            
+            const totalVenda = produtos.reduce((sum, p) => {
+                const quantidade = p.quantidade === '' ? 0 : p.quantidade;
+                const valor = p.valor === '' ? 0 : p.valor;
+                return sum + (quantidade * valor);
+            }, 0);
+            
+            const totalCusto = produtos.reduce((sum, p) => {
+                const quantidade = p.quantidade === '' ? 0 : p.quantidade;
+                const custo = p.custo === '' ? 0 : p.custo;
+                return sum + (quantidade * custo);
+            }, 0);
             
             let margemMedia = 0;
             let markupMedio = 0;
