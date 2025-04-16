@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Instruções para tela cheia -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Autorização de Retirada - Ameripan</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -28,6 +31,11 @@
             padding: 0;
         }
         
+        /* Fix para evitar zoom em inputs no iOS */
+        input, textarea, select {
+            font-size: 16px; /* Previne zoom automático no iOS */
+        }
+        
         body {
             font-family: 'Poppins', Arial, sans-serif;
             max-width: 100%;
@@ -36,6 +44,7 @@
             background-color: #f5f5f5;
             color: var(--text-color);
             line-height: 1.6;
+            touch-action: manipulation; /* Melhora comportamento touch */
         }
         
         .container {
@@ -124,12 +133,112 @@
             background-color: #fff;
             position: relative;
             box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden; /* Previne overflow ao redimensionar */
+            height: 180px; /* Altura padrão */
+            width: 100%;
+            transition: all 0.3s ease;
+            touch-action: none; /* Previne comportamentos padrão do navegador em toques */
+            -webkit-tap-highlight-color: transparent; /* Remove highlight em dispositivos iOS */
+        }
+        
+        /* Classe para modo tela cheia */
+        .signature-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            margin: 0;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background-color: white;
+        }
+        
+        /* Botões de controle no modo tela cheia */
+        .fullscreen-controls {
+            display: none; /* Oculto por padrão */
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            z-index: 1010;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        /* Quando em tela cheia, mostrar os controles */
+        .signature-fullscreen + .fullscreen-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        /* Estilo dos botões de controle para tela cheia */
+        .fullscreen-btn {
+            padding: 15px 25px;
+            font-size: 18px;
+            border-radius: 50px;
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            min-width: 160px;
+        }
+        
+        .fullscreen-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-confirm-fs {
+            background-color: var(--success-color);
+        }
+        
+        .btn-clear-fs {
+            background-color: #f44336;
+        }
+        
+        .btn-back-fs {
+            background-color: #607d8b;
+        }
+        
+        .btn-icon {
+            margin-right: 8px;
+            font-size: 22px;
+        }
+        
+        /* Classe para modo paisagem */
+        .signature-landscape {
+            height: 280px;
         }
         
         #signature-pad {
             width: 100%;
-            height: 300px;
+            height: 100%;
             touch-action: none;
+            cursor: crosshair;
+        }
+        
+        /* Mensagem de instrução na área de assinatura */
+        .signature-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #aaa;
+            font-size: 1rem;
+            text-align: center;
+            pointer-events: none; /* Não interfere com eventos touch */
+            user-select: none; /* Previne seleção */
+            opacity: 0.7;
         }
         
         .signature-buttons {
@@ -152,12 +261,17 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            touch-action: manipulation; /* Melhora comportamento touch */
         }
         
         .button:hover {
             background-color: #005090;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .button:active {
+            transform: translateY(0);
         }
         
         .clear-button {
@@ -216,6 +330,36 @@
             margin-top: 30px;
         }
         
+        /* Mensagem de sucesso com overlay */
+        .success-message {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .success-content {
+            background-color: var(--success-color);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            max-width: 80%;
+        }
+        
+        .success-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
         /* Responsividade */
         @media (max-width: 768px) {
             body {
@@ -232,6 +376,11 @@
             
             .button {
                 width: 100%;
+            }
+            
+            /* Ajuste para dimensões de tela */
+            .signature-pad-container {
+                height: 150px;
             }
         }
         
@@ -252,7 +401,7 @@
     <div class="container" id="print-content">
         <div class="brand-header">
             <div class="logo-container">
-                <img src="https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan Logo" class="logo" crossorigin="anonymous">
+                <img src="https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/ameripan/retirada/logo.webp" alt="Ameripan Logo" class="logo" crossorigin="anonymous">
             </div>
             <p class="brand-slogan">Ameripan, mais sabor ao seu negócio!</p>
         </div>
@@ -309,11 +458,25 @@
             <label for="signature-pad">Assinatura:</label>
             <div class="signature-pad-container" id="signature-container">
                 <canvas id="signature-pad"></canvas>
+                <div class="signature-message" id="signature-message">Assine aqui</div>
             </div>
             <div class="signature-buttons">
                 <button class="button clear-button" id="clear-signature">Limpar</button>
                 <button class="button" id="expand-signature" style="background-color: #0088cc;">Expandir</button>
                 <button class="button" id="landscape-signature" style="background-color: #FF9800;">Modo Paisagem</button>
+            </div>
+            
+            <!-- Botões de controle para modo tela cheia (visíveis apenas em modo expandido) -->
+            <div class="fullscreen-controls">
+                <button class="fullscreen-btn btn-confirm-fs" id="confirm-fullscreen">
+                    <span class="btn-icon">✓</span> Confirmar
+                </button>
+                <button class="fullscreen-btn btn-clear-fs" id="clear-fullscreen">
+                    <span class="btn-icon">✗</span> Limpar
+                </button>
+                <button class="fullscreen-btn btn-back-fs" id="exit-fullscreen">
+                    <span class="btn-icon">←</span> Voltar
+                </button>
             </div>
         </div>
         
@@ -331,385 +494,539 @@
     
     <iframe id="output-pdf"></iframe>
     
+    <div class="success-message" id="success-message">
+        <div class="success-content">
+            <div class="success-icon">✓</div>
+            <h2>PDF Gerado com Sucesso!</h2>
+            <p>O download foi iniciado automaticamente.</p>
+        </div>
+    </div>
+    
     <script>
-        // Configuração da assinatura
-        const canvas = document.getElementById('signature-pad');
-        const clearButton = document.getElementById('clear-signature');
-        const exportButton = document.getElementById('export-pdf');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-        
-        // Ajustar o tamanho do canvas
-        function resizeCanvas() {
-            const containerWidth = canvas.parentElement.clientWidth;
-            canvas.width = containerWidth;
-            canvas.height = 180;
+        document.addEventListener('DOMContentLoaded', function() {
+            // ------------------------------------------------------------------------
+            // CONFIGURAÇÃO OTIMIZADA DE ASSINATURA PARA DISPOSITIVOS TOUCH
+            // ------------------------------------------------------------------------
             
-            // Configurar o estilo do canvas
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000000';
-        }
-        
-        // Ajustar o tamanho do canvas - IMPLEMENTAÇÃO SIMPLIFICADA
-        function resizeCanvas() {
-            const containerWidth = canvas.parentElement.clientWidth;
-            canvas.width = containerWidth;
-            canvas.height = 180;
+            // Elementos do DOM
+            const canvas = document.getElementById('signature-pad');
+            const signatureMessage = document.getElementById('signature-message');
+            const clearButton = document.getElementById('clear-signature');
+            const expandButton = document.getElementById('expand-signature');
+            const landscapeButton = document.getElementById('landscape-signature');
+            const signatureContainer = document.getElementById('signature-container');
+            const exportButton = document.getElementById('export-pdf');
+            const successMessage = document.getElementById('success-message');
             
-            // Configurar o estilo do canvas
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000000';
-        }
-        
-        // Inicializar o canvas
-        window.addEventListener('load', function() {
-            resizeCanvas();
-            // Pré-carga da imagem do logo para garantir que esteja disponível para o PDF
-            const logoImg = new Image();
-            logoImg.crossOrigin = "anonymous"; // Importante para CORS
-            logoImg.src = "https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png";
-        });
-        window.addEventListener('resize', resizeCanvas);
-        
-        // Funções para desenhar
-        function startDrawing(e) {
-            isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
+            // Contexto de desenho e variáveis de estado
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let isFullscreen = false;
+            let isLandscape = false;
+            let hasSignature = false;
             
-            // Calcular a posição para dispositivos touch e mouse
-            if (e.type === 'touchstart') {
-                lastX = e.touches[0].clientX - rect.left;
-                lastY = e.touches[0].clientY - rect.top;
-            } else {
-                lastX = e.clientX - rect.left;
-                lastY = e.clientY - rect.top;
-            }
-        }
-        
-        function draw(e) {
-            if (!isDrawing) return;
-            e.preventDefault();
-            
-            const rect = canvas.getBoundingClientRect();
-            let currentX, currentY;
-            
-            // Calcular a posição para dispositivos touch e mouse
-            if (e.type === 'touchmove') {
-                currentX = e.touches[0].clientX - rect.left;
-                currentY = e.touches[0].clientY - rect.top;
-            } else {
-                currentX = e.clientX - rect.left;
-                currentY = e.clientY - rect.top;
-            }
-            
-            // Desenhar a linha
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(currentX, currentY);
-            ctx.stroke();
-            
-            lastX = currentX;
-            lastY = currentY;
-        }
-        
-        function stopDrawing() {
-            isDrawing = false;
-        }
-        
-        // Limpar a assinatura
-        function clearSignature() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // SOLUÇÃO DEFINITIVA PARA O PROBLEMA DE OFFSET EM DISPOSITIVOS TOUCH
-        // Variáveis para o pad de assinatura
-        const canvas = document.getElementById('signature-pad');
-        const clearButton = document.getElementById('clear-signature');
-        const expandButton = document.getElementById('expand-signature');
-        const landscapeButton = document.getElementById('landscape-signature');
-        const signatureContainer = document.getElementById('signature-container');
-        const exportButton = document.getElementById('export-pdf');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-        let isFullscreen = false;
-        let isLandscape = false;
-        
-        // Parar o desenho
-        function stopDrawing() {
-            isDrawing = false;
-        }
-        
-        // Limpar a assinatura
-        function clearSignature() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // Ajustar o tamanho do canvas com base no container
-        function resizeCanvas() {
-            const containerWidth = canvas.parentElement.clientWidth;
-            canvas.width = containerWidth;
-            canvas.height = isLandscape ? 280 : 180;
-            
-            // Configurar o estilo do canvas
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000000';
-        }
-        
-        // Alternar modo tela cheia
-        function toggleFullscreen() {
-            if (isFullscreen) {
-                // Sair do modo tela cheia
-                signatureContainer.classList.remove('signature-fullscreen');
-                document.body.style.overflow = 'auto';
-                expandButton.textContent = 'Expandir';
-                expandButton.style.backgroundColor = '#0088cc';
-            } else {
-                // Entrar no modo tela cheia
-                signatureContainer.classList.add('signature-fullscreen');
-                document.body.style.overflow = 'hidden';
-                expandButton.textContent = 'Reduzir';
-                expandButton.style.backgroundColor = '#e67817';
-            }
-            
-            isFullscreen = !isFullscreen;
-            setTimeout(resizeCanvas, 100); // Redimensionar após a transição
-        }
-        
-        // Alternar modo paisagem
-        function toggleLandscape() {
-            if (isLandscape) {
-                // Sair do modo paisagem
-                signatureContainer.classList.remove('signature-landscape');
-                landscapeButton.textContent = 'Modo Paisagem';
-                landscapeButton.style.backgroundColor = '#FF9800';
-            } else {
-                // Entrar no modo paisagem
-                signatureContainer.classList.add('signature-landscape');
-                landscapeButton.textContent = 'Modo Retrato';
-                landscapeButton.style.backgroundColor = '#e91e63';
-            }
-            
-            isLandscape = !isLandscape;
-            resizeCanvas();
-        }
-        
-        // Inicializar o canvas
-        window.addEventListener('load', function() {
-            resizeCanvas();
-            // Pré-carga da imagem do logo
-            const logoImg = new Image();
-            logoImg.crossOrigin = "anonymous";
-            logoImg.src = "https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png";
-        });
-        window.addEventListener('resize', resizeCanvas);
-        
-        // Adicionar eventos aos botões
-        clearButton.addEventListener('click', clearSignature);
-        expandButton.addEventListener('click', toggleFullscreen);
-        landscapeButton.addEventListener('click', toggleLandscape);
-        
-        // CORREÇÃO PARA DISPOSITIVOS TOUCH E MOUSE
-        function handleMouseDown(e) {
-            const rect = canvas.getBoundingClientRect();
-            lastX = e.clientX - rect.left;
-            lastY = e.clientY - rect.top;
-            isDrawing = true;
-        }
-        
-        function handleMouseMove(e) {
-            if (!isDrawing) return;
-            
-            const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
-            
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(currentX, currentY);
-            ctx.stroke();
-            
-            lastX = currentX;
-            lastY = currentY;
-        }
-        
-        function handleTouchStart(e) {
-            e.preventDefault();
-            if (e.touches.length !== 1) return;
-            
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            
-            // Coordenadas precisas do toque
-            lastX = touch.clientX - rect.left;
-            lastY = touch.clientY - rect.top;
-            isDrawing = true;
-        }
-        
-        function handleTouchMove(e) {
-            e.preventDefault();
-            if (!isDrawing || e.touches.length !== 1) return;
-            
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            
-            // Coordenadas precisas do movimento do toque
-            const currentX = touch.clientX - rect.left;
-            const currentY = touch.clientY - rect.top;
-            
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(currentX, currentY);
-            ctx.stroke();
-            
-            lastX = currentX;
-            lastY = currentY;
-        }
-        
-        // Eventos mouse
-        canvas.addEventListener('mousedown', handleMouseDown);
-        canvas.addEventListener('mousemove', handleMouseMove);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
-        
-        // Eventos touch com correção de offset
-        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-        canvas.addEventListener('touchend', stopDrawing);
-        canvas.addEventListener('touchcancel', stopDrawing);
-        
-        clearButton.addEventListener('click', clearSignature);
-        
-        // Formatação de campos
-        const cpfInput = document.getElementById('cpf');
-        cpfInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.length > 11) value = value.slice(0, 11);
-            
-            if (value.length > 9) {
-                value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-            } else if (value.length > 6) {
-                value = value.replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3');
-            } else if (value.length > 3) {
-                value = value.replace(/(\d{3})(\d{3})/, '$1.$2');
-            }
-            
-            e.target.value = value;
-        });
-        
-        const valorInput = document.getElementById('valor');
-        valorInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-            e.target.value = value;
-        });
-        
-        // Exportar para PDF
-        exportButton.addEventListener('click', function() {
-            const { jsPDF } = window.jspdf;
-            
-            // Verificar se todos os campos obrigatórios foram preenchidos
-            const requiredInputs = document.querySelectorAll('[required]');
-            let allFilled = true;
-            
-            requiredInputs.forEach(input => {
-                if (!input.value.trim()) {
-                    allFilled = false;
-                    input.style.borderColor = 'red';
-                } else {
-                    input.style.borderColor = '#ddd';
+            // Prevenir comportamentos indesejados em dispositivos touch
+            document.addEventListener('touchmove', function(e) {
+                if (e.target.id !== 'signature-pad') {
+                    e.preventDefault();
                 }
+            }, { passive: false });
+            
+            // Evitar zoom duplo toque
+            document.addEventListener('dblclick', function(e) {
+                e.preventDefault();
             });
             
-            if (!allFilled) {
-                alert('Por favor, preencha todos os campos obrigatórios.');
-                return;
+            // Ajustar o tamanho do canvas com base no container - VERSÃO MELHORADA
+            function resizeCanvas() {
+                // Obter as dimensões reais do container
+                const containerWidth = canvas.parentElement.clientWidth;
+                const containerHeight = canvas.parentElement.clientHeight;
+                
+                // Importante: definir o estilo de width/height e width/height do canvas para garantir precisão
+                canvas.style.width = containerWidth + 'px';
+                canvas.style.height = containerHeight + 'px';
+                
+                // Usar devicePixelRatio para melhorar a nitidez em telas de alta densidade
+                const dpr = window.devicePixelRatio || 1;
+                
+                // Definir as dimensões reais do canvas (importantes para precisão do desenho)
+                canvas.width = containerWidth * dpr;
+                canvas.height = containerHeight * dpr;
+                
+                // Escalar o contexto para corresponder ao devicePixelRatio
+                ctx.scale(dpr, dpr);
+                
+                // Configurar o estilo do canvas
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#000000';
             }
             
-            // Formatar a data para exibição
-            const dataInput = document.getElementById('data');
-            const dataArray = dataInput.value.split('-');
-            const dataFormatada = dataArray[2] + '/' + dataArray[1] + '/' + dataArray[0];
+            // Alternar modo tela cheia - VERSÃO MELHORADA
+            function toggleFullscreen() {
+                // Salvar estado da assinatura antes de redimensionar
+                const signatureData = hasSignature ? canvas.toDataURL() : null;
+                
+                if (isFullscreen) {
+                    // Sair do modo tela cheia
+                    signatureContainer.classList.remove('signature-fullscreen');
+                    document.body.style.overflow = 'auto';
+                    expandButton.textContent = 'Expandir';
+                    expandButton.style.backgroundColor = '#0088cc';
+                } else {
+                    // Entrar no modo tela cheia
+                    signatureContainer.classList.add('signature-fullscreen');
+                    document.body.style.overflow = 'hidden';
+                    expandButton.textContent = 'Reduzir';
+                    expandButton.style.backgroundColor = '#e67817';
+                }
+                
+                isFullscreen = !isFullscreen;
+                
+                // Usar setTimeout para garantir que a transição CSS termine antes do redimensionamento
+                setTimeout(function() {
+                    // Redimensionar o canvas após a mudança
+                    resizeCanvas();
+                    
+                    // Restaurar a assinatura após o redimensionamento, se houver
+                    if (signatureData) {
+                        const img = new Image();
+                        img.onload = function() {
+                            // Calcular proporções para manter a assinatura proporcional
+                            const newWidth = canvas.width / window.devicePixelRatio;
+                            const newHeight = canvas.height / window.devicePixelRatio;
+                            
+                            // Limpar o canvas antes de desenhar a imagem restaurada
+                            ctx.clearRect(0, 0, newWidth, newHeight);
+                            
+                            // Desenhar a imagem preservando a proporção
+                            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                        };
+                        img.src = signatureData;
+                    }
+                }, 300); // Tempo suficiente para a transição CSS completar
+            }
             
-            // Criar o PDF
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const printContent = document.getElementById('print-content');
+            // Alternar modo paisagem - VERSÃO MELHORADA
+            function toggleLandscape() {
+                // Salvar estado da assinatura antes de redimensionar
+                const signatureData = hasSignature ? canvas.toDataURL() : null;
+                
+                if (isLandscape) {
+                    // Sair do modo paisagem
+                    signatureContainer.classList.remove('signature-landscape');
+                    landscapeButton.textContent = 'Modo Paisagem';
+                    landscapeButton.style.backgroundColor = '#FF9800';
+                } else {
+                    // Entrar no modo paisagem
+                    signatureContainer.classList.add('signature-landscape');
+                    landscapeButton.textContent = 'Modo Retrato';
+                    landscapeButton.style.backgroundColor = '#e91e63';
+                }
+                
+                isLandscape = !isLandscape;
+                
+                // Usar setTimeout para garantir que a transição CSS termine antes do redimensionamento
+                setTimeout(function() {
+                    // Redimensionar o canvas após a mudança
+                    resizeCanvas();
+                    
+                    // Restaurar a assinatura após o redimensionamento, se houver
+                    if (signatureData) {
+                        const img = new Image();
+                        img.onload = function() {
+                            // Calcular proporções para manter a assinatura proporcional
+                            const newWidth = canvas.width / window.devicePixelRatio;
+                            const newHeight = canvas.height / window.devicePixelRatio;
+                            
+                            // Limpar o canvas antes de desenhar a imagem restaurada
+                            ctx.clearRect(0, 0, newWidth, newHeight);
+                            
+                            // Desenhar a imagem preservando a proporção
+                            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                        };
+                        img.src = signatureData;
+                    }
+                }, 300); // Tempo suficiente para a transição CSS completar
+            }
             
-            html2canvas(printContent, {
-                scale: 1.5, // Aumenta a qualidade da renderização
-                useCORS: true, // Permite carregar imagens de outros domínios
-                allowTaint: true, // Permite renderizar imagens de outros domínios
-                logging: false, // Desativa logs
-                scrollY: -window.scrollY, // Corrige problemas com scroll
-                // Função para garantir a carga da imagem logo antes de capturar
-                onclone: function(clonedDoc) {
-                    const logoImg = clonedDoc.querySelector('.logo');
-                    if (logoImg) {
-                        logoImg.crossOrigin = "anonymous";
-                        // Espera a imagem carregar
-                        return new Promise((resolve) => {
-                            if (logoImg.complete) {
-                                resolve();
-                            } else {
-                                logoImg.onload = resolve;
-                            }
-                        });
+            // Sistema de coordenadas aprimorado para precisão em qualquer tamanho
+            // Converte coordenadas do cliente para coordenadas do canvas com alta precisão
+            function getCanvasCoordinates(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                
+                // A razão entre o tamanho do canvas no DOM e seu tamanho real (importante para precisão)
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                // Aplicar escala do devicePixelRatio para corrigir imprecisões
+                const dpr = window.devicePixelRatio || 1;
+                
+                // Calcular as coordenadas precisas
+                return {
+                    x: (clientX - rect.left) * (scaleX / dpr),
+                    y: (clientY - rect.top) * (scaleY / dpr)
+                };
+            }
+            
+            // Iniciar o desenho (mouse e touch) - VERSÃO MELHORADA
+            function startDrawing(e) {
+                e.preventDefault(); // Previne comportamentos padrão
+                
+                let clientX, clientY;
+                
+                // Obter coordenadas do cliente para dispositivos touch e mouse
+                if (e.type === 'touchstart') {
+                    // Garantir que usamos o primeiro toque
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                
+                // Converter para coordenadas precisas do canvas
+                const coords = getCanvasCoordinates(clientX, clientY);
+                lastX = coords.x;
+                lastY = coords.y;
+                
+                isDrawing = true;
+                hasSignature = true; // Indicar que há assinatura
+                signatureMessage.style.display = 'none'; // Esconder a mensagem
+                
+                // Iniciar o caminho no ponto de contato
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(lastX, lastY);
+                ctx.stroke();
+            }
+            
+            // Desenhar (mouse e touch) - VERSÃO MELHORADA
+            function draw(e) {
+                if (!isDrawing) return;
+                e.preventDefault(); // Previne comportamentos padrão
+                
+                let clientX, clientY;
+                
+                // Obter coordenadas do cliente para dispositivos touch e mouse
+                if (e.type === 'touchmove') {
+                    // Garantir que usamos o primeiro toque
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                
+                // Converter para coordenadas precisas do canvas
+                const coords = getCanvasCoordinates(clientX, clientY);
+                const currentX = coords.x;
+                const currentY = coords.y;
+                
+                // Desenhar a linha com suavização para movimentos rápidos
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                
+                // Usar coordenadas intermediárias para suavizar a linha em movimentos rápidos
+                const dx = currentX - lastX;
+                const dy = currentY - lastY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 5) {
+                    // Para movimentos rápidos, criar pontos intermediários para suavizar
+                    const steps = Math.floor(distance / 2);
+                    for (let i = 1; i < steps; i++) {
+                        const t = i / steps;
+                        const x = lastX + dx * t;
+                        const y = lastY + dy * t;
+                        ctx.lineTo(x, y);
                     }
                 }
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
                 
-                // Dimensões de uma folha A4 em mm (210x297)
-                const pageWidth = 210;
-                const pageHeight = 297;
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
                 
-                // Cria um novo documento PDF em orientação retrato e tamanho A4
-                const doc = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
+                lastX = currentX;
+                lastY = currentY;
+            }
+            
+            // Parar o desenho
+            function stopDrawing() {
+                isDrawing = false;
+            }
+            
+            // Limpar a assinatura - VERSÃO MELHORADA
+            function clearSignature() {
+                // Limpar todo o canvas considerando o devicePixelRatio
+                const dpr = window.devicePixelRatio || 1;
+                ctx.save(); // Salvar o contexto atual
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // Resetar transformações
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.restore(); // Restaurar o contexto com transformações
+                
+                // Restaurar configurações
+                signatureMessage.style.display = 'block';
+                signatureMessage.textContent = 'Assine aqui';
+                signatureMessage.style.color = '#aaa';
+                signatureContainer.style.borderColor = 'var(--border-color)';
+                hasSignature = false;
+                
+                // Redimensionar para garantir consistência após a limpeza
+                resizeCanvas();
+            }
+            
+            // Inicializar o canvas e outros elementos
+            window.addEventListener('load', function() {
+                resizeCanvas();
+                
+                // Definir data atual como padrão
+                const today = new Date();
+                const dateInput = document.getElementById('data');
+                dateInput.valueAsDate = today;
+                
+                // Pré-carga da imagem do logo
+                const logoImg = new Image();
+                logoImg.crossOrigin = "anonymous";
+                logoImg.src = "https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/ameripan/retirada/logo.webp";
+                
+                // Inicializar os botões do modo tela cheia
+                initFullscreenControls();
+            });
+            
+            // Redimensionar o canvas quando a janela for redimensionada
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Eventos de mouse
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Eventos de touch com solução otimizada
+            canvas.addEventListener('touchstart', startDrawing, { passive: false });
+            canvas.addEventListener('touchmove', draw, { passive: false });
+            canvas.addEventListener('touchend', stopDrawing);
+            canvas.addEventListener('touchcancel', stopDrawing);
+            
+            // Configuração dos botões de controle em modo tela cheia
+            function initFullscreenControls() {
+                // Obter referências aos botões de controle em tela cheia
+                const confirmFullscreenBtn = document.getElementById('confirm-fullscreen');
+                const clearFullscreenBtn = document.getElementById('clear-fullscreen');
+                const exitFullscreenBtn = document.getElementById('exit-fullscreen');
+                
+                // Botão para confirmar a assinatura em tela cheia
+                confirmFullscreenBtn.addEventListener('click', function() {
+                    // Confirmar e sair do modo tela cheia
+                    if (hasSignature) {
+                        toggleFullscreen(); // Sair do modo tela cheia
+                    } else {
+                        alert('Por favor, faça sua assinatura antes de confirmar.');
+                    }
                 });
                 
-                // Calcula a largura da imagem para a página inteira com margens
-                const margin = 10;
-                const contentWidth = pageWidth - (margin * 2);
+                // Botão para limpar a assinatura em tela cheia
+                clearFullscreenBtn.addEventListener('click', function() {
+                    clearSignature();
+                });
                 
-                // Calcula a altura proporcional
-                const contentHeight = canvas.height * contentWidth / canvas.width;
+                // Botão para sair do modo tela cheia
+                exitFullscreenBtn.addEventListener('click', function() {
+                    toggleFullscreen(); // Sair do modo tela cheia
+                });
+            }
+            
+            // Eventos de botões principais
+            clearButton.addEventListener('click', clearSignature);
+            expandButton.addEventListener('click', toggleFullscreen);
+            landscapeButton.addEventListener('click', toggleLandscape);
+            
+            // ------------------------------------------------------------------------
+            // FORMATAÇÃO DOS CAMPOS
+            // ------------------------------------------------------------------------
+            
+            // Formatação de CPF
+            const cpfInput = document.getElementById('cpf');
+            cpfInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 11) value = value.slice(0, 11);
                 
-                // Verifica se a altura excede a página
-                if (contentHeight > (pageHeight - (margin * 2))) {
-                    // Se exceder, ajusta a altura para caber na página com margens
-                    const adjustedHeight = pageHeight - (margin * 2);
-                    const adjustedWidth = canvas.width * adjustedHeight / canvas.height;
-                    
-                    // Centraliza horizontalmente
-                    const xOffset = (pageWidth - adjustedWidth) / 2;
-                    
-                    doc.addImage(imgData, 'PNG', xOffset, margin, adjustedWidth, adjustedHeight);
-                } else {
-                    // Se não exceder, centraliza a imagem
-                    const xOffset = (pageWidth - contentWidth) / 2;
-                    doc.addImage(imgData, 'PNG', xOffset, margin, contentWidth, contentHeight);
+                if (value.length > 9) {
+                    value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                } else if (value.length > 6) {
+                    value = value.replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3');
+                } else if (value.length > 3) {
+                    value = value.replace(/(\d{3})(\d{3})/, '$1.$2');
                 }
                 
-                // Salvar o PDF
-                const pdfOutput = doc.output('datauristring');
-                document.getElementById('output-pdf').src = pdfOutput;
-                document.getElementById('output-pdf').style.display = 'block';
+                e.target.value = value;
+            });
+            
+            // Formatação de valor monetário
+            const valorInput = document.getElementById('valor');
+            valorInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
                 
-                // Fazer o download do PDF
-                const fileName = 'Autorização_Retirada_Ameripan_' + new Date().getTime() + '.pdf';
-                doc.save(fileName);
+                if (value === '') {
+                    e.target.value = '';
+                    return;
+                }
+                
+                // Converter para formato de moeda
+                value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                e.target.value = value;
+            });
+            
+            // ------------------------------------------------------------------------
+            // EXPORTAÇÃO PARA PDF
+            // ------------------------------------------------------------------------
+            
+            exportButton.addEventListener('click', function() {
+                // Verificar se todos os campos obrigatórios foram preenchidos
+                const requiredInputs = document.querySelectorAll('[required]');
+                let allFilled = true;
+                
+                requiredInputs.forEach(input => {
+                    if (!input.value.trim()) {
+                        allFilled = false;
+                        input.style.borderColor = 'red';
+                    } else {
+                        input.style.borderColor = '#ddd';
+                    }
+                });
+                
+                // Verificar se há assinatura
+                if (!hasSignature) {
+                    allFilled = false;
+                    signatureContainer.style.borderColor = 'red';
+                    signatureMessage.style.color = 'red';
+                    signatureMessage.style.display = 'block';
+                    signatureMessage.textContent = 'Assinatura obrigatória';
+                } else {
+                    signatureContainer.style.borderColor = '#ddd';
+                }
+                
+                if (!allFilled) {
+                    alert('Por favor, preencha todos os campos obrigatórios e assine o documento.');
+                    return;
+                }
+                
+                // Formatar a data para exibição
+                const dataInput = document.getElementById('data');
+                const dataArray = dataInput.value.split('-');
+                const dataFormatada = dataArray[2] + '/' + dataArray[1] + '/' + dataArray[0];
+                
+                // Se estiver em modo tela cheia, sair antes de exportar
+                if (isFullscreen) {
+                    toggleFullscreen();
+                }
+                
+                // Mostrar indicação de carregamento
+                exportButton.disabled = true;
+                exportButton.innerHTML = '<span>Gerando PDF...</span>';
+                
+                // Usar setTimeout para permitir que a UI se atualize antes de começar o processo pesado
+                setTimeout(function() {
+                    // Criar o PDF usando html2canvas e jsPDF
+                    const { jsPDF } = window.jspdf;
+                    const printContent = document.getElementById('print-content');
+                    
+                    html2canvas(printContent, {
+                        scale: 2, // Aumenta a qualidade da renderização
+                        useCORS: true, // Permite carregar imagens de outros domínios
+                        allowTaint: true, // Permite renderizar imagens de outros domínios
+                        logging: false, // Desativa logs
+                        scrollY: -window.scrollY, // Corrige problemas com scroll
+                        // Função para garantir a carga da imagem logo antes de capturar
+                        onclone: function(clonedDoc) {
+                            const logoImg = clonedDoc.querySelector('.logo');
+                            if (logoImg) {
+                                logoImg.crossOrigin = "anonymous";
+                                // Espera a imagem carregar
+                                return new Promise((resolve) => {
+                                    if (logoImg.complete) {
+                                        resolve();
+                                    } else {
+                                        logoImg.onload = resolve;
+                                    }
+                                });
+                            }
+                        }
+                    }).then(canvas => {
+                        const imgData = canvas.toDataURL('image/png');
+                        
+                        // Dimensões de uma folha A4 em mm (210x297)
+                        const pageWidth = 210;
+                        const pageHeight = 297;
+                        
+                        // Cria um novo documento PDF em orientação retrato e tamanho A4
+                        const doc = new jsPDF({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                        });
+                        
+                        // Calcula a largura da imagem para a página inteira com margens
+                        const margin = 10;
+                        const contentWidth = pageWidth - (margin * 2);
+                        
+                        // Calcula a altura proporcional
+                        const contentHeight = canvas.height * contentWidth / canvas.width;
+                        
+                        // Verifica se a altura excede a página
+                        if (contentHeight > (pageHeight - (margin * 2))) {
+                            // Se exceder, ajusta a altura para caber na página com margens
+                            const adjustedHeight = pageHeight - (margin * 2);
+                            const adjustedWidth = canvas.width * adjustedHeight / canvas.height;
+                            
+                            // Centraliza horizontalmente
+                            const xOffset = (pageWidth - adjustedWidth) / 2;
+                            
+                            doc.addImage(imgData, 'PNG', xOffset, margin, adjustedWidth, adjustedHeight);
+                        } else {
+                            // Se não exceder, centraliza a imagem
+                            const xOffset = (pageWidth - contentWidth) / 2;
+                            doc.addImage(imgData, 'PNG', xOffset, margin, contentWidth, contentHeight);
+                        }
+                        
+                        // Adicionar a data e hora da geração no rodapé
+                        const now = new Date();
+                        const dateTimeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+                        doc.setFontSize(8);
+                        doc.setTextColor(150, 150, 150);
+                        doc.text('Documento gerado em: ' + dateTimeStr, pageWidth / 2, pageHeight - 5, {
+                            align: 'center'
+                        });
+                        
+                        // Exibir no iframe
+                        const pdfOutput = doc.output('datauristring');
+                        document.getElementById('output-pdf').src = pdfOutput;
+                        document.getElementById('output-pdf').style.display = 'block';
+                        
+                        // Fazer o download do PDF
+                        const fileName = 'Autorização_Retirada_Ameripan_' + new Date().getTime() + '.pdf';
+                        doc.save(fileName);
+                        
+                        // Restaurar o botão e mostrar mensagem de sucesso
+                        exportButton.disabled = false;
+                        exportButton.innerHTML = '<span>Exportar para PDF</span>';
+                        
+                        // Mostrar mensagem de sucesso
+                        successMessage.style.display = 'flex';
+                        setTimeout(function() {
+                            successMessage.style.display = 'none';
+                        }, 3000);
+                    }).catch(error => {
+                        console.error('Erro ao gerar PDF:', error);
+                        alert('Ocorreu um erro ao gerar o PDF. Por favor, tente novamente.');
+                        exportButton.disabled = false;
+                        exportButton.innerHTML = '<span>Exportar para PDF</span>';
+                    });
+                }, 100);
             });
         });
     </script>
