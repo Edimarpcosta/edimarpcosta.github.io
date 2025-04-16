@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autorização de Retirada - Ameripan</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #0066cc;
+            font-weight: bold;
+            font-size: 1.5em;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 60px;
+            resize: vertical;
+        }
+        .signature-pad-container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-top: 10px;
+            background-color: #fff;
+            position: relative;
+        }
+        #signature-pad {
+            width: 100%;
+            height: 200px;
+            touch-action: none;
+        }
+        .signature-buttons {
+            margin-top: 5px;
+            display: flex;
+            gap: 10px;
+        }
+        .button {
+            padding: 10px 15px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #0052a3;
+        }
+        .clear-button {
+            background-color: #f44336;
+        }
+        .clear-button:hover {
+            background-color: #d32f2f;
+        }
+        .export-button {
+            background-color: #4CAF50;
+            margin-top: 20px;
+        }
+        .export-button:hover {
+            background-color: #3e8e41;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .notice {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 5px solid #0066cc;
+            font-size: 0.9em;
+        }
+        .emphasis {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        #output-pdf {
+            display: none;
+            width: 100%;
+            height: 500px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="print-content">
+        <div class="header">
+            🔹 AUTORIZAÇÃO DE RETIRADA DE MERCADORIA NA AMERIPAN 🔹
+        </div>
+        
+        <div class="form-group">
+            <label for="nome">👤 Eu:</label>
+            <input type="text" id="nome" name="nome" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="empresa">Proprietário da empresa:</label>
+            <input type="text" id="empresa" name="empresa" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="cpf">🆔 CPF:</label>
+            <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="autorizado">✅ Autorizo o(a):</label>
+            <input type="text" id="autorizado" name="autorizado" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="pedidos">📦 Pedido(s):</label>
+            <textarea id="pedidos" name="pedidos" required></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="valor">💰 Valor Total: R$</label>
+            <input type="text" id="valor" name="valor" placeholder="0,00" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="cidade">📍 Sua Cidade:</label>
+            <input type="text" id="cidade" name="cidade" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="data">📅 Data:</label>
+            <input type="date" id="data" name="data" required>
+        </div>
+        
+        <div class="notice">
+            No depósito da empresa Ameripan, localizado na Rua Purus nº 652, Bairro Jd. São Roque, Americana, SP
+        </div>
+        
+        <div class="form-group">
+            <label for="signature-pad">Assinatura:</label>
+            <div class="signature-pad-container">
+                <canvas id="signature-pad"></canvas>
+            </div>
+            <div class="signature-buttons">
+                <button class="button clear-button" id="clear-signature">Limpar Assinatura</button>
+            </div>
+        </div>
+        
+        <div class="notice">
+            <span class="emphasis">⚠️ Autorização concedida pelo proprietário/sócio via WhatsApp. ✅</span>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="button export-button" id="export-pdf">Exportar para PDF</button>
+    </div>
+    
+    <iframe id="output-pdf"></iframe>
+    
+    <script>
+        // Configuração da assinatura
+        const canvas = document.getElementById('signature-pad');
+        const clearButton = document.getElementById('clear-signature');
+        const exportButton = document.getElementById('export-pdf');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Ajustar o tamanho do canvas
+        function resizeCanvas() {
+            const containerWidth = canvas.parentElement.clientWidth;
+            canvas.width = containerWidth;
+            canvas.height = 200;
+            
+            // Configurar o estilo do canvas
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#000000';
+        }
+        
+        // Inicializar o canvas
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Funções para desenhar
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            
+            // Calcular a posição para dispositivos touch e mouse
+            if (e.type === 'touchstart') {
+                lastX = e.touches[0].clientX - rect.left;
+                lastY = e.touches[0].clientY - rect.top;
+            } else {
+                lastX = e.clientX - rect.left;
+                lastY = e.clientY - rect.top;
+            }
+        }
+        
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            let currentX, currentY;
+            
+            // Calcular a posição para dispositivos touch e mouse
+            if (e.type === 'touchmove') {
+                currentX = e.touches[0].clientX - rect.left;
+                currentY = e.touches[0].clientY - rect.top;
+            } else {
+                currentX = e.clientX - rect.left;
+                currentY = e.clientY - rect.top;
+            }
+            
+            // Desenhar a linha
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+            
+            lastX = currentX;
+            lastY = currentY;
+        }
+        
+        function stopDrawing() {
+            isDrawing = false;
+        }
+        
+        // Limpar a assinatura
+        function clearSignature() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Adicionar eventos para mouse e touch
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+        
+        clearButton.addEventListener('click', clearSignature);
+        
+        // Formatação de campos
+        const cpfInput = document.getElementById('cpf');
+        cpfInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.slice(0, 11);
+            
+            if (value.length > 9) {
+                value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            } else if (value.length > 6) {
+                value = value.replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3');
+            } else if (value.length > 3) {
+                value = value.replace(/(\d{3})(\d{3})/, '$1.$2');
+            }
+            
+            e.target.value = value;
+        });
+        
+        const valorInput = document.getElementById('valor');
+        valorInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+            e.target.value = value;
+        });
+        
+        // Exportar para PDF
+        exportButton.addEventListener('click', function() {
+            const { jsPDF } = window.jspdf;
+            
+            // Verificar se todos os campos obrigatórios foram preenchidos
+            const requiredInputs = document.querySelectorAll('[required]');
+            let allFilled = true;
+            
+            requiredInputs.forEach(input => {
+                if (!input.value.trim()) {
+                    allFilled = false;
+                    input.style.borderColor = 'red';
+                } else {
+                    input.style.borderColor = '#ddd';
+                }
+            });
+            
+            if (!allFilled) {
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return;
+            }
+            
+            // Formatar a data para exibição
+            const dataInput = document.getElementById('data');
+            const dataArray = dataInput.value.split('-');
+            const dataFormatada = dataArray[2] + '/' + dataArray[1] + '/' + dataArray[0];
+            
+            // Criar o PDF
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const printContent = document.getElementById('print-content');
+            
+            html2canvas(printContent).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 190;
+                const pageHeight = 297;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+                
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
+                // Salvar o PDF
+                const pdfOutput = doc.output('datauristring');
+                document.getElementById('output-pdf').src = pdfOutput;
+                document.getElementById('output-pdf').style.display = 'block';
+                
+                // Fazer o download do PDF
+                const fileName = 'Autorização_Retirada_Ameripan_' + new Date().getTime() + '.pdf';
+                doc.save(fileName);
+            });
+        });
+    </script>
+</body>
+</html>
