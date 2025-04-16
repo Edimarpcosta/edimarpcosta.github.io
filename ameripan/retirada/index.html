@@ -307,11 +307,13 @@
         
         <div class="form-group">
             <label for="signature-pad">Assinatura:</label>
-            <div class="signature-pad-container">
+            <div class="signature-pad-container" id="signature-container">
                 <canvas id="signature-pad"></canvas>
             </div>
             <div class="signature-buttons">
-                <button class="button clear-button" id="clear-signature">Limpar Assinatura</button>
+                <button class="button clear-button" id="clear-signature">Limpar</button>
+                <button class="button" id="expand-signature" style="background-color: #0088cc;">Expandir</button>
+                <button class="button" id="landscape-signature" style="background-color: #FF9800;">Modo Paisagem</button>
             </div>
         </div>
         
@@ -426,15 +428,105 @@
         }
         
         // SOLUÇÃO DEFINITIVA PARA O PROBLEMA DE OFFSET EM DISPOSITIVOS TOUCH
-        // Eventos mouse
-        canvas.addEventListener('mousedown', function(e) {
+        // Variáveis para o pad de assinatura
+        const canvas = document.getElementById('signature-pad');
+        const clearButton = document.getElementById('clear-signature');
+        const expandButton = document.getElementById('expand-signature');
+        const landscapeButton = document.getElementById('landscape-signature');
+        const signatureContainer = document.getElementById('signature-container');
+        const exportButton = document.getElementById('export-pdf');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isFullscreen = false;
+        let isLandscape = false;
+        
+        // Parar o desenho
+        function stopDrawing() {
+            isDrawing = false;
+        }
+        
+        // Limpar a assinatura
+        function clearSignature() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Ajustar o tamanho do canvas com base no container
+        function resizeCanvas() {
+            const containerWidth = canvas.parentElement.clientWidth;
+            canvas.width = containerWidth;
+            canvas.height = isLandscape ? 280 : 180;
+            
+            // Configurar o estilo do canvas
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#000000';
+        }
+        
+        // Alternar modo tela cheia
+        function toggleFullscreen() {
+            if (isFullscreen) {
+                // Sair do modo tela cheia
+                signatureContainer.classList.remove('signature-fullscreen');
+                document.body.style.overflow = 'auto';
+                expandButton.textContent = 'Expandir';
+                expandButton.style.backgroundColor = '#0088cc';
+            } else {
+                // Entrar no modo tela cheia
+                signatureContainer.classList.add('signature-fullscreen');
+                document.body.style.overflow = 'hidden';
+                expandButton.textContent = 'Reduzir';
+                expandButton.style.backgroundColor = '#e67817';
+            }
+            
+            isFullscreen = !isFullscreen;
+            setTimeout(resizeCanvas, 100); // Redimensionar após a transição
+        }
+        
+        // Alternar modo paisagem
+        function toggleLandscape() {
+            if (isLandscape) {
+                // Sair do modo paisagem
+                signatureContainer.classList.remove('signature-landscape');
+                landscapeButton.textContent = 'Modo Paisagem';
+                landscapeButton.style.backgroundColor = '#FF9800';
+            } else {
+                // Entrar no modo paisagem
+                signatureContainer.classList.add('signature-landscape');
+                landscapeButton.textContent = 'Modo Retrato';
+                landscapeButton.style.backgroundColor = '#e91e63';
+            }
+            
+            isLandscape = !isLandscape;
+            resizeCanvas();
+        }
+        
+        // Inicializar o canvas
+        window.addEventListener('load', function() {
+            resizeCanvas();
+            // Pré-carga da imagem do logo
+            const logoImg = new Image();
+            logoImg.crossOrigin = "anonymous";
+            logoImg.src = "https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png";
+        });
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Adicionar eventos aos botões
+        clearButton.addEventListener('click', clearSignature);
+        expandButton.addEventListener('click', toggleFullscreen);
+        landscapeButton.addEventListener('click', toggleLandscape);
+        
+        // CORREÇÃO PARA DISPOSITIVOS TOUCH E MOUSE
+        function handleMouseDown(e) {
             const rect = canvas.getBoundingClientRect();
             lastX = e.clientX - rect.left;
             lastY = e.clientY - rect.top;
             isDrawing = true;
-        });
+        }
         
-        canvas.addEventListener('mousemove', function(e) {
+        function handleMouseMove(e) {
             if (!isDrawing) return;
             
             const rect = canvas.getBoundingClientRect();
@@ -448,33 +540,29 @@
             
             lastX = currentX;
             lastY = currentY;
-        });
+        }
         
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
-        
-        // Eventos touch - CORREÇÃO DE OFFSET
-        canvas.addEventListener('touchstart', function(e) {
+        function handleTouchStart(e) {
             e.preventDefault();
             if (e.touches.length !== 1) return;
             
             const touch = e.touches[0];
             const rect = canvas.getBoundingClientRect();
             
-            // Em dispositivos touch, aplicamos um ajuste de zero para corrigir o offset
+            // Coordenadas precisas do toque
             lastX = touch.clientX - rect.left;
             lastY = touch.clientY - rect.top;
             isDrawing = true;
-        }, { passive: false });
+        }
         
-        canvas.addEventListener('touchmove', function(e) {
+        function handleTouchMove(e) {
             e.preventDefault();
             if (!isDrawing || e.touches.length !== 1) return;
             
             const touch = e.touches[0];
             const rect = canvas.getBoundingClientRect();
             
-            // Mesma correção aplicada aqui
+            // Coordenadas precisas do movimento do toque
             const currentX = touch.clientX - rect.left;
             const currentY = touch.clientY - rect.top;
             
@@ -485,8 +573,17 @@
             
             lastX = currentX;
             lastY = currentY;
-        }, { passive: false });
+        }
         
+        // Eventos mouse
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        // Eventos touch com correção de offset
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
         canvas.addEventListener('touchend', stopDrawing);
         canvas.addEventListener('touchcancel', stopDrawing);
         
