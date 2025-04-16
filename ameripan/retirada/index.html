@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Autorização de Retirada - Ameripan</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -251,7 +252,7 @@
     <div class="container" id="print-content">
         <div class="brand-header">
             <div class="logo-container">
-                <img src="https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan Logo" class="logo">
+                <img src="https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan Logo" class="logo" crossorigin="anonymous">
             </div>
             <p class="brand-slogan">Ameripan, mais sabor ao seu negócio!</p>
         </div>
@@ -342,7 +343,7 @@
         function resizeCanvas() {
             const containerWidth = canvas.parentElement.clientWidth;
             canvas.width = containerWidth;
-            canvas.height = 150;
+            canvas.height = 180;
             
             // Configurar o estilo do canvas
             ctx.lineWidth = 2;
@@ -351,8 +352,27 @@
             ctx.strokeStyle = '#000000';
         }
         
+        // Ajustar o tamanho do canvas - IMPLEMENTAÇÃO SIMPLIFICADA
+        function resizeCanvas() {
+            const containerWidth = canvas.parentElement.clientWidth;
+            canvas.width = containerWidth;
+            canvas.height = 180;
+            
+            // Configurar o estilo do canvas
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#000000';
+        }
+        
         // Inicializar o canvas
-        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('load', function() {
+            resizeCanvas();
+            // Pré-carga da imagem do logo para garantir que esteja disponível para o PDF
+            const logoImg = new Image();
+            logoImg.crossOrigin = "anonymous"; // Importante para CORS
+            logoImg.src = "https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png";
+        });
         window.addEventListener('resize', resizeCanvas);
         
         // Funções para desenhar
@@ -405,15 +425,70 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
         
-        // Adicionar eventos para mouse e touch
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
+        // SOLUÇÃO DEFINITIVA PARA O PROBLEMA DE OFFSET EM DISPOSITIVOS TOUCH
+        // Eventos mouse
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            isDrawing = true;
+        });
+        
+        canvas.addEventListener('mousemove', function(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+            
+            lastX = currentX;
+            lastY = currentY;
+        });
+        
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mouseout', stopDrawing);
         
-        canvas.addEventListener('touchstart', startDrawing);
-        canvas.addEventListener('touchmove', draw);
+        // Eventos touch - CORREÇÃO DE OFFSET
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            if (e.touches.length !== 1) return;
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            
+            // Em dispositivos touch, aplicamos um ajuste de zero para corrigir o offset
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+            isDrawing = true;
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            if (!isDrawing || e.touches.length !== 1) return;
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            
+            // Mesma correção aplicada aqui
+            const currentX = touch.clientX - rect.left;
+            const currentY = touch.clientY - rect.top;
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+            
+            lastX = currentX;
+            lastY = currentY;
+        }, { passive: false });
+        
         canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchcancel', stopDrawing);
         
         clearButton.addEventListener('click', clearSignature);
         
@@ -475,8 +550,24 @@
             html2canvas(printContent, {
                 scale: 1.5, // Aumenta a qualidade da renderização
                 useCORS: true, // Permite carregar imagens de outros domínios
+                allowTaint: true, // Permite renderizar imagens de outros domínios
                 logging: false, // Desativa logs
-                scrollY: -window.scrollY // Corrige problemas com scroll
+                scrollY: -window.scrollY, // Corrige problemas com scroll
+                // Função para garantir a carga da imagem logo antes de capturar
+                onclone: function(clonedDoc) {
+                    const logoImg = clonedDoc.querySelector('.logo');
+                    if (logoImg) {
+                        logoImg.crossOrigin = "anonymous";
+                        // Espera a imagem carregar
+                        return new Promise((resolve) => {
+                            if (logoImg.complete) {
+                                resolve();
+                            } else {
+                                logoImg.onload = resolve;
+                            }
+                        });
+                    }
+                }
             }).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 
