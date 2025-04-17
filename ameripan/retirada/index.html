@@ -102,14 +102,15 @@
         }
         
         .field-input {
-    border: none;
-    outline: none;
-    width: 100%;
-    background: transparent;
-    font-family: 'Arial', sans-serif;
-    padding: 2px 0;
-    font-weight: bold; /* Adiciona negrito aos textos */
-}
+            border: none;
+            outline: none;
+            width: 100%;
+            background: transparent;
+            font-family: 'Arial', sans-serif;
+            padding: 2px 0;
+            font-weight: bold; /* Texto em negrito */
+            font-size: 17px; /* Aumenta levemente o tamanho */
+        }
         
         .spacer {
             margin-bottom: 20px;
@@ -135,6 +136,7 @@
             outline: none;
             background: transparent;
             font-family: 'Arial', sans-serif;
+            font-weight: bold; /* Texto em negrito */
         }
         
         .signature-section {
@@ -449,7 +451,7 @@
                 <span class="date-field"><input type="text" id="dia" maxlength="2" placeholder="Dia"></span> de 
                 <span class="date-field"><input type="text" id="mes" placeholder="Mês"></span> de 
                 <span class="date-field"><input type="text" id="ano" maxlength="4" placeholder="Ano"></span>
-                <div style="margin-top: 5px; font-size: 14px;">Cidade >------------------------------------> Data</div>
+                <div style="margin-top: 5px; font-size: 14px;">Cidade Data</div>
             </div>
         </div>
         
@@ -544,13 +546,20 @@
             let hasModalSignature = false;
             
             // ------------------------------------------------------------------------
-            // PREVENÇÃO DE COMPORTAMENTOS INDESEJADOS EM TOUCH
+            // PREVENÇÃO DE COMPORTAMENTOS INDESEJADOS EM TOUCH (CORRIGIDO)
             // ------------------------------------------------------------------------
-            document.addEventListener('touchmove', function(e) {
-                if (e.target.id !== 'signature-pad' && e.target.id !== 'signature-modal-canvas') {
-                    e.preventDefault();
-                }
-            }, { passive: false });
+            // Prevenção de comportamentos indesejados APENAS nas áreas de assinatura
+            const preventDefaultOnSignaturePads = function(e) {
+                e.preventDefault();
+            };
+
+            // Aplicar prevenção apenas nos canvas de assinatura
+            if (canvas) {
+                canvas.addEventListener('touchmove', preventDefaultOnSignaturePads, { passive: false });
+            }
+            if (modalCanvas) {
+                modalCanvas.addEventListener('touchmove', preventDefaultOnSignaturePads, { passive: false });
+            }
             
             // Evitar zoom duplo toque
             document.addEventListener('dblclick', function(e) {
@@ -952,33 +961,32 @@
                 });
             }
             
-            // Formatação de valor monetário
-           // Formatação de valor monetário
-const valorInput = document.getElementById('valor');
-if (valorInput) {
-    valorInput.addEventListener('input', function(e) {
-        let value = e.target.value.replace(/\D/g, '');
-        
-        if (value === '') {
-            e.target.value = '';
-            return;
-        }
-        
-        // Converter para formato de moeda
-        value = (parseInt(value) / 100).toFixed(2);
-        
-        // Separar parte inteira e decimal
-        let [integerPart, decimalPart] = value.split('.');
-        
-        // Adicionar separadores de milhar
-        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        
-        // Juntar com a parte decimal usando vírgula
-        value = integerPart + ',' + decimalPart;
-        
-        e.target.value = value;
-    });
-}
+            // Formatação de valor monetário COM SEPARADOR DE MILHAR
+            const valorInput = document.getElementById('valor');
+            if (valorInput) {
+                valorInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    
+                    if (value === '') {
+                        e.target.value = '';
+                        return;
+                    }
+                    
+                    // Converter para formato de moeda
+                    value = (parseInt(value) / 100).toFixed(2);
+                    
+                    // Separar parte inteira e decimal
+                    let [integerPart, decimalPart] = value.split('.');
+                    
+                    // Adicionar separadores de milhar
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                    
+                    // Juntar com a parte decimal usando vírgula
+                    value = integerPart + ',' + decimalPart;
+                    
+                    e.target.value = value;
+                });
+            }
             
             // Formatação de dia (somente números e limite 2 dígitos)
             const diaInput = document.getElementById('dia');
@@ -1018,6 +1026,32 @@ if (valorInput) {
                 document.getElementById('dia').value = dia;
                 document.getElementById('mes').value = mes;
                 document.getElementById('ano').value = ano;
+            }
+            
+            // ------------------------------------------------------------------------
+            // EVITAR QUE O TECLADO CUBRA OS CAMPOS DE TEXTO
+            // ------------------------------------------------------------------------
+            function setupKeyboardVisibilityFix() {
+                // Seleciona todos os campos de entrada de texto
+                const allInputs = document.querySelectorAll('input, textarea');
+                
+                allInputs.forEach(input => {
+                    // Quando o campo receber foco (e o teclado aparecer)
+                    input.addEventListener('focus', function() {
+                        // Pequeno atraso para permitir que o teclado apareça
+                        setTimeout(() => {
+                            // Rolar para o elemento com margem de segurança
+                            const scrollOffset = 150; // pixels acima do campo
+                            const rect = this.getBoundingClientRect();
+                            const scrollToY = window.pageYOffset + rect.top - scrollOffset;
+                            
+                            window.scrollTo({
+                                top: scrollToY,
+                                behavior: 'smooth'
+                            });
+                        }, 300);
+                    });
+                });
             }
             
             // ------------------------------------------------------------------------
@@ -1160,6 +1194,7 @@ if (valorInput) {
                 resizeCanvas();
                 resizeModalCanvas();
                 inicializarDataPadrao();
+                setupKeyboardVisibilityFix(); // Configurar fix para teclado
                 
                 // Verificar se deve abrir o modal em orientação paisagem
                 checkOrientation();
