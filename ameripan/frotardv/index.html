@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestão de Frota</title>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1e88e5;
+      --secondary: #26a69a;
+      --warning: #ff9800; /* Amarelo para alerta/erros leves */
+      --danger: #e53935; /* Vermelho para erros graves */
+      --info: #0dcaf0; /* Azul claro para informações/ajustes */
+      --dark: #212121;
+      --light: #f5f5f5;
+      --header-height: 60px;
+      --sidebar-width: 240px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: #f0f2f5;
+      color: #333;
+    }
+
+    header {
+      height: var(--header-height);
+      background-color: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      margin-left: 15px;
+    }
+
+    .logo {
+      font-size: 24px;
+      margin-right: 10px;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: var(--header-height);
+      left: 0;
+      width: var(--sidebar-width);
+      height: calc(100vh - var(--header-height));
+      background-color: white;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 99;
+    }
+
+    .sidebar ul {
+      list-style-type: none;
+    }
+
+    .sidebar li {
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      display: flex;
+      align-items: center;
+    }
+
+    .sidebar li:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .sidebar li.active {
+      background-color: rgba(30, 136, 229, 0.1);
+      border-left: 4px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .sidebar li i {
+      margin-right: 10px;
+      width: 20px;
+      text-align: center;
+    }
+
+    .main-content {
+      margin-left: var(--sidebar-width);
+      margin-top: var(--header-height);
+      padding: 20px;
+      min-height: calc(100vh - var(--header-height));
+    }
+
+    .dashboard-section {
+      display: none;
+    }
+
+    .dashboard-section.active {
+      display: block;
+    }
+
+    .filter-container {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      align-items: flex-end;
+    }
+
+    .filter-item {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .filter-item label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    .filter-item select,
+    .filter-item input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: #1976d2;
+    }
+
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-header h2 {
+      font-size: 1.25rem;
+      color: #333;
+      margin: 0;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-card-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .stat-card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+    }
+
+    .stat-card-title {
+      color: #777;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .stat-card-value {
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .stat-card-footer {
+      margin-top: auto;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .bg-blue { background-color: rgba(30, 136, 229, 0.1); color: var(--primary); }
+    .bg-green { background-color: rgba(38, 166, 154, 0.1); color: var(--secondary); }
+    .bg-orange { background-color: rgba(255, 152, 0, 0.1); color: var(--warning); }
+    .bg-red { background-color: rgba(229, 57, 53, 0.1); color: var(--danger); }
+
+    .chart-container { position: relative; height: 300px; width: 100%; }
+    .chart-container-large { position: relative; height: 400px; width: 100%; }
+
+    table { width: 100%; border-collapse: collapse; }
+    table th, table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; } /* Ajuste fonte tabela */
+    table th { font-weight: 600; color: #555; background-color: #f9f9f9; }
+    table tr:last-child td { border-bottom: none; }
+
+    .loading { display: flex; justify-content: center; align-items: center; height: 200px; width: 100%; }
+    .loading-spinner { width: 50px; height: 50px; border: 5px solid rgba(30, 136, 229, 0.2); border-radius: 50%; border-top-color: var(--primary); animation: spin 1s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .text-danger { color: var(--danger); }
+    .text-success { color: var(--secondary); }
+    .text-warning { color: var(--warning); }
+    .text-info { color: var(--info); } /* Cor para ícone de informação */
+
+
+    .table-responsive { overflow-x: auto; }
+
+    /* Estilo para registros com erro */
+    .registro-erro {
+      background-color: #fff3cd !important; /* Amarelo claro de aviso */
+      color: #856404 !important; /* Texto mais escuro para contraste */
+    }
+    .registro-erro td {
+      border-color: #ffeeba !important;
+    }
+    .registro-erro a { color: #664d03 !important; }
+
+    /* Ícones de Status na Tabela Relatório Completo */
+    .status-icon { cursor: help; margin-left: 5px; }
+    .status-icon.ok { color: var(--secondary); }
+    .status-icon.warning { color: var(--warning); }
+    .status-icon.info { color: var(--info); }
+
+    .tooltip-wrapper { /* Wrapper para tooltip */
+        position: relative;
+        display: inline-block;
+    }
+    .tooltip-text { /* Estilo do tooltip */
+        visibility: hidden;
+        width: 240px; /* Aumentado para caber mais texto */
+        background-color: #555;
+        color: #fff;
+        text-align: left; /* Alinhado à esquerda */
+        border-radius: 6px;
+        padding: 8px 10px; /* Mais padding */
+        position: absolute;
+        z-index: 10;
+        bottom: 125%; /* Position tooltip above the icon */
+        left: 50%;
+        margin-left: -120px; /* Center the tooltip */
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 12px;
+        line-height: 1.4;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .tooltip-wrapper:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+    }
+
+
+    @media (max-width: 992px) {
+      .sidebar { width: 60px; transition: width 0.3s; }
+      .sidebar span { display: none; }
+      .main-content { margin-left: 60px; }
+      .sidebar:hover { width: var(--sidebar-width); }
+      .sidebar:hover span { display: inline; }
+    }
+
+    @media (max-width: 576px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .filter-item { min-width: 100%; }
+      header h1 { font-size: 1.2rem; }
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <i class="fas fa-car-side logo"></i>
+    <h1>Gestão de Frota Ameripan</h1>
+  </header>
+
+  <div class="sidebar">
+    <ul>
+      <li class="active" data-section="resumo"><i class="fas fa-chart-pie"></i><span>Resumo Geral</span></li>
+      <li data-section="pessoa"><i class="fas fa-user"></i><span>Por Pessoa</span></li>
+      <li data-section="categoria"><i class="fas fa-tags"></i><span>Por Categoria</span></li>
+      <li data-section="quilometragem"><i class="fas fa-road"></i><span>Quilometragem</span></li>
+      <li data-section="tecnicos"><i class="fas fa-tools"></i><span>Técnicos</span></li>
+      <li data-section="supervisores"><i class="fas fa-user-tie"></i><span>Supervisores</span></li>
+      <li data-section="relatorio"><i class="fas fa-file-alt"></i><span>Relatório Completo</span></li>
+      <li data-section="ignorados"><i class="fas fa-exclamation-triangle"></i><span>Dados Ignorados</span></li>
+    </ul>
+  </div>
+
+  <div class="main-content">
+    <div class="filter-container">
+      <div class="filter-item">
+        <label for="dataInicio">Data Início</label>
+        <input type="date" id="dataInicio">
+      </div>
+      <div class="filter-item">
+        <label for="dataFim">Data Fim</label>
+        <input type="date" id="dataFim">
+      </div>
+      <div class="filter-item">
+        <label for="filtroUsuario">Usuário</label>
+        <select id="filtroUsuario">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-item" style="flex: 0;">
+        <button class="btn btn-primary" id="aplicarFiltro">
+          <i class="fas fa-filter"></i> Aplicar Filtros
+        </button>
+      </div>
+    </div>
+
+    <div id="loadingData" class="loading">
+      <div class="loading-spinner"></div>
+    </div>
+
+    <div class="dashboard-section active" id="resumo">
+      <div class="card-header" style="background: transparent; border: none; padding-left: 0; padding-right: 0;">
+          <h2>Resumo Geral (Período Selecionado)</h2>
+      </div>
+      <div class="dashboard-grid">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-card-icon bg-blue"><i class="fas fa-gas-pump"></i></div>
+            <div><h3 class="stat-card-title">Total Abastecimento</h3></div>
+          </div>
+          <p class="stat-card-value" id="totalAbastecimento">R$ 0,00</p>
+          <div class="stat-card-footer"><span id="countAbastecimento">0</span> registros válidos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-card-icon bg-green"><i class="fas fa-road"></i></div>
+            <div><h3 class="stat-card-title">Total Quilômetros</h3></div>
+          </div>
+          <p class="stat-card-value" id="totalQuilometros">0 km</p>
+           <div class="stat-card-footer"><span id="countKm">0</span> registros válidos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-card-icon bg-orange"><i class="fas fa-money-bill-wave"></i></div>
+            <div><h3 class="stat-card-title">Outros Gastos</h3></div>
+          </div>
+          <p class="stat-card-value" id="totalOutrosGastos">R$ 0,00</p>
+          <div class="stat-card-footer">(Pedágio, Estac., Outros)</div>
+        </div>
+         <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-card-icon bg-red"><i class="fas fa-exclamation-triangle"></i></div>
+            <div><h3 class="stat-card-title">Registros Ignorados</h3></div>
+          </div>
+          <p class="stat-card-value" id="totalRegistrosIgnorados">0</p>
+          <div class="stat-card-footer">Por inconsistências nos dados</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Distribuição de Gastos (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="distribuicaoGastosChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Gastos Mensais (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="gastosMensaisChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="pessoa">
+      <div class="card">
+        <div class="card-header"><h2>Gastos por Pessoa (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container-large"><canvas id="gastosPorPessoaChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Detalhamento por Pessoa (Válidos)</h2></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table id="tabelaGastosPorPessoa">
+              <thead>
+                <tr>
+                  <th>Usuário</th>
+                  <th>Abast. Empresa</th>
+                  <th>Abast. Externo</th>
+                  <th>Pedágio</th>
+                  <th>Estacionamento</th>
+                  <th>Outros</th>
+                  <th>Km Total</th>
+                  <th>Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="categoria">
+       <div class="card-header" style="background: transparent; border: none; padding-left: 0; padding-right: 0;">
+          <h2>Gastos por Categoria (Válidos)</h2>
+       </div>
+       <div class="dashboard-grid">
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-blue"><i class="fas fa-building"></i></div><div><h3 class="stat-card-title">Abast. Empresa</h3></div></div>
+          <p class="stat-card-value" id="cardTotalAbastEmpresa">R$ 0,00</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-green"><i class="fas fa-gas-pump"></i></div><div><h3 class="stat-card-title">Abast. Externo</h3></div></div>
+          <p class="stat-card-value" id="cardTotalAbastExterno">R$ 0,00</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-orange"><i class="fas fa-road"></i></div><div><h3 class="stat-card-title">Pedágio</h3></div></div>
+          <p class="stat-card-value" id="cardTotalPedagio">R$ 0,00</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-red"><i class="fas fa-parking"></i></div><div><h3 class="stat-card-title">Estacionamento</h3></div></div>
+          <p class="stat-card-value" id="cardTotalEstacionamento">R$ 0,00</p>
+        </div>
+         <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon" style="background-color: rgba(108, 117, 125, 0.1); color: #6c757d;"><i class="fas fa-receipt"></i></div><div><h3 class="stat-card-title">Outros</h3></div></div>
+          <p class="stat-card-value" id="cardTotalOutros">R$ 0,00</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Distribuição por Categoria (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="distribuicaoPorCategoriaChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Evolução Mensal por Categoria (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container-large"><canvas id="evolucaoMensalCategoriasChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="quilometragem">
+      <div class="card-header" style="background: transparent; border: none; padding-left: 0; padding-right: 0;">
+          <h2>Quilometragem (Dados Válidos)</h2>
+       </div>
+      <div class="dashboard-grid">
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-blue"><i class="fas fa-road"></i></div><div><h3 class="stat-card-title">Quilometragem Total</h3></div></div>
+          <p class="stat-card-value" id="kmTotal">0 km</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-green"><i class="fas fa-tachometer-alt"></i></div><div><h3 class="stat-card-title">Média Diária</h3></div></div>
+          <p class="stat-card-value" id="mediaDiaria">0 km</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-orange"><i class="fas fa-user"></i></div><div><h3 class="stat-card-title">Maior KM (Pessoa)</h3></div></div>
+          <p class="stat-card-value" id="maiorKmUsuarioValor">0 km</p>
+          <div class="stat-card-footer"><span id="maiorKmUsuarioNome">N/D</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-card-icon bg-red"><i class="fas fa-calendar-day"></i></div><div><h3 class="stat-card-title">Maior KM (Dia)</h3></div></div>
+          <p class="stat-card-value" id="maiorKmDiaValor">0 km</p>
+           <div class="stat-card-footer"><span id="maiorKmDiaData">N/D</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Quilometragem por Usuário (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container-large"><canvas id="kmPorUsuarioChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Evolução da Quilometragem Mensal (Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="evolucaoQuilometragemChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="tecnicos">
+       <div class="card">
+        <div class="card-header"><h2>Desempenho dos Técnicos (Dados Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="tecnicosClientesChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Detalhamento de Visitas (Técnicos - Dados Válidos)</h2></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table id="tabelaTecnicos">
+              <thead><tr><th>Técnico</th><th>Cliente</th><th>Data</th><th>Entrada</th><th>Saída</th><th>Duração</th><th>Km Percorridos</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="supervisores">
+       <div class="card">
+        <div class="card-header"><h2>Atividade dos Supervisores (Dados Válidos)</h2></div>
+        <div class="card-body"><div class="chart-container"><canvas id="supervisoresGastosChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Detalhamento por Supervisor (Dados Válidos)</h2></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table id="tabelaSupervisores">
+              <thead><tr><th>Supervisor</th><th>Data</th><th>Rota</th><th>Km Inicial</th><th>Km Final</th><th>Km Total</th><th>Gastos Total</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="relatorio">
+      <div class="card">
+        <div class="card-header">
+          <h2>Relatório Completo (Todos os Registros)</h2>
+          <button class="btn btn-primary" id="exportarRelatorio">
+            <i class="fas fa-file-export"></i> Exportar Visão Atual
+          </button>
+        </div>
+        <div class="card-body">
+           <p style="margin-bottom: 15px; font-size: 14px; color: #666;">
+             Esta tabela mostra todos os registros do período selecionado, incluindo aqueles com possíveis erros (destacados em <span style="background-color:#fff3cd; padding: 2px 4px; border-radius: 3px;">amarelo</span>).
+             Os registros destacados são excluídos das demais seções de resumo e gráficos.
+           </p>
+          <div class="table-responsive">
+            <table id="tabelaRelatorioCompleto">
+              <thead>
+                <tr>
+                  <th>Data</th><th>Usuário</th><th>Tipo</th><th>Cargo</th><th>Km Inicial</th><th>Km Final</th><th>Km Total</th>
+                  <th>Abast. Empresa</th><th>Abast. Externo</th><th>Pedágio</th><th>Estacionam.</th><th>Outros</th>
+                  <th>Descr. Outros</th><th>Cliente</th><th>Entrada</th><th>Saída</th><th>Info</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section" id="ignorados">
+        <div class="card">
+            <div class="card-header">
+                <h2>Dados Ignorados nos Cálculos</h2>
+                 <button class="btn btn-primary" id="exportarIgnorados">
+                    <i class="fas fa-file-export"></i> Exportar Ignorados
+                 </button>
+            </div>
+            <div class="card-body">
+                <p style="margin-bottom: 15px; font-size: 14px; color: #666;">
+                    Esta tabela lista os registros do período selecionado que foram identificados com inconsistências (ex: Abastecimento > R$300, KM Total > 1000km, Pedágio/Estac./Outros > R$150, etc.) e, por isso, foram
+                    <strong>excluídos de todos os cálculos estatísticos, gráficos e somatórios</strong> para garantir a precisão das análises.
+                    Eles permanecem visíveis aqui e no "Relatório Completo" para fins de auditoria.
+                </p>
+                <div class="table-responsive">
+                    <table id="tabelaDadosIgnorados">
+                        <thead>
+                             <tr>
+                                <th>Data</th><th>Usuário</th><th>Tipo</th><th>Km Inicial</th><th>Km Final</th><th>Km Total</th>
+                                <th>Abast. Empresa</th><th>Abast. Externo</th><th>Pedágio</th><th>Estacionam.</th><th>Outros</th>
+                                <th>Descr. Outros</th><th>Cliente</th><th>Entrada</th><th>Saída</th><th>Motivo da Exclusão</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+  </div>
+ <script>
+  // ==========================================================================
+  // CONFIGURAÇÕES GLOBAIS
+  // ==========================================================================
+  const spreadsheetId = "1NcN7iDeckWIE990evZWi9RoF3SIPn9ztiih9wjO-J3w";
+  const apiKey = "AIzaSyB_DqAfjDQHOGESUrUboqiVYv0qGa1WeJc"; // ATENÇÃO: Segurança!
+  const range = "HISTORICO";
+
+  // --- Constantes de Validação ---
+  const MAX_KM_REGISTRO = 1000;
+  const MAX_ABAST = 300;
+  const MAX_OUTROS_GASTOS = 150;
+
+  // Variáveis globais
+  let dadosOriginais = []; let dadosFiltrados = []; let usuariosUnicos = []; let veiculosUnicos = []; let charts = {};
+
+  // ==========================================================================
+  // FUNÇÕES AUXILIARES E DE UTILIDADE
+  // ==========================================================================
+  function extrairValorNumerico(str) { if (!str || typeof str !== 'string') return 0; str = str.replace(/R\$\s*/g, '').trim(); const match = str.match(/(\d+([,.]\d+)?)/); if (match) { const numeroStr = match[0].replace(/\.(?=.*\.)/g, '').replace(',', '.'); const valor = parseFloat(numeroStr); return isNaN(valor) ? 0 : valor; } return 0; }
+  function calcularDuracao(entradaStr, saidaStr) { if (!entradaStr || !saidaStr) return ''; const parseTime = (timeStr) => { if (!timeStr || typeof timeStr !== 'string') return null; const parts = timeStr.trim().match(/(\d{1,2}):(\d{1,2})/); if (parts && parts.length === 3) { const hours = parseInt(parts[1], 10); const minutes = parseInt(parts[2], 10); if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) { return hours * 60 + minutes; } } return null; }; try { const entradaTimes = entradaStr.split(/[;\s]+/).map(parseTime).filter(t => t !== null); const saidaTimes = saidaStr.split(/[;\s]+/).map(parseTime).filter(t => t !== null); if (entradaTimes.length === 0 || saidaTimes.length === 0) return '-'; const minEntrada = Math.min(...entradaTimes); const maxSaida = Math.max(...saidaTimes); if (maxSaida > minEntrada) { const diffMinutes = maxSaida - minEntrada; const hours = Math.floor(diffMinutes / 60); const minutes = diffMinutes % 60; return `${hours}h ${minutes}min`; } else if (maxSaida === minEntrada) { return '0h 0min'; } else { return '-'; } } catch (e) { console.error("Erro calculando duração:", e, entradaStr, saidaStr); return "?"; } }
+  const formatBRL = (value) => { const num = Number(value); return isNaN(num) ? 'R$ 0,00' : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); };
+  const formatNumber = (value) => { const num = Number(value); return isNaN(num) ? '0' : Math.round(num).toLocaleString('pt-BR'); };
+  function destroyChart(chartId) { const canvas = document.getElementById(chartId); const ctx = canvas?.getContext('2d'); if (charts[chartId]) { try { charts[chartId].destroy(); } catch (e) { console.error(`Erro destruindo chart ${chartId}:`, e); } delete charts[chartId]; } if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); } }
+  function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return unsafe === null || unsafe === undefined ? '' : unsafe; return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+  const addIfNumber = (currentSum, value) => { const numValue = Number(value) || 0; return currentSum + numValue; };
+
+  // ==========================================================================
+  // PROCESSAMENTO DE DADOS DA PLANILHA
+  // ==========================================================================
+  function processarDados(values) {
+      console.log("Iniciando processamento de dados...");
+      if (!values || values.length < 1) { throw new Error("Dados da planilha estão vazios."); }
+      const headers = values[0]; const headerMap = {}; const missingHeaders = [];
+      const COL = { DATA: 'DATA', USUARIO: 'USUARIO', KM_INICIAL: 'KM INICIAL', KM_FINAL: 'KM FINAL', ABAST_EMPRESA: 'ABAST. EMPRESA', ABAST_EXTERNO: 'ABAST. EXTERNO', PEDAGIO: 'PEDAGIO', ESTACIONAMENTO: 'ESTACIONAMENTO', LAVAGEM: 'LAVAGEM', OUTROS: 'OUTROS', DESC_OUTROS: 'DESCREVA OUTROS', CLIENTE: 'CLIENTE', ENTRADA: 'ENTRADA', SAIDA: 'SAIDA', ROTA: 'ROTA', VEICULO: 'VEICULO', PLACA: 'PLACA' };
+      const expectedHeaders = Object.values(COL); headers.forEach((header, index) => { const normalizedHeader = (header || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); if (normalizedHeader) headerMap[normalizedHeader] = index; });
+      expectedHeaders.forEach(expected => { const normalizedExpected = expected.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); if (headerMap[normalizedExpected] === undefined) { missingHeaders.push(expected); } });
+      if (missingHeaders.length > 0) { console.warn("Cabeçalhos não encontrados:", missingHeaders.join(', ')); }
+      function getValue(row, colName) { const normalizedColName = colName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); const index = headerMap[normalizedColName]; if (index !== undefined && index < row.length) return row[index]; return ''; }
+
+      dadosOriginais = values.slice(1).map((row, rowIndex) => {
+          const item = { originalIndex: rowIndex + 2 }; item['TEM_ERRO'] = false; item['ERRO_MOTIVO'] = [];
+          try {
+              item[COL.DATA] = (getValue(row, COL.DATA) || '').trim(); item[COL.USUARIO] = (getValue(row, COL.USUARIO) || '').trim(); item[COL.ROTA] = (getValue(row, COL.ROTA) || '').trim(); item[COL.VEICULO] = (getValue(row, COL.VEICULO) || '').trim(); item[COL.PLACA] = (getValue(row, COL.PLACA) || '').trim(); item[COL.CLIENTE] = (getValue(row, COL.CLIENTE) || '').trim(); item[COL.ENTRADA] = (getValue(row, COL.ENTRADA) || '').trim(); item[COL.SAIDA] = (getValue(row, COL.SAIDA) || '').trim(); item[COL.DESC_OUTROS] = (getValue(row, COL.DESC_OUTROS) || '').trim();
+              if (!item[COL.DATA] || !item[COL.USUARIO]) { item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push("Data ou Usuário ausente"); }
+              let itemDate = null; const dataParts = item[COL.DATA].split('/'); if (item[COL.DATA] && dataParts.length === 3) { const year = parseInt(dataParts[2]); const month = parseInt(dataParts[1]) - 1; const day = parseInt(dataParts[0]); if (!isNaN(year) && !isNaN(month) && !isNaN(day) && year > 1900 && year < 2100) { itemDate = new Date(Date.UTC(year, month, day, 12)); if (isNaN(itemDate.getTime())) itemDate = null; } } if (!itemDate && item[COL.DATA]) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push("Formato de Data inválido"); } item['DATA_OBJ'] = itemDate;
+              const kmInicialStr = getValue(row, COL.KM_INICIAL) || ''; const kmFinalStr = getValue(row, COL.KM_FINAL) || ''; item['KM INICIAL STR'] = kmInicialStr; item['KM FINAL STR'] = kmFinalStr; const kmInicialNum = extrairValorNumerico(kmInicialStr); const kmFinalNum = extrairValorNumerico(kmFinalStr); item[COL.KM_INICIAL] = kmInicialNum; item[COL.KM_FINAL] = kmFinalNum; item['KM TOTAL'] = 0; if (kmInicialNum > 0 || kmFinalNum > 0) { if (kmFinalNum >= kmInicialNum) { item['KM TOTAL'] = kmFinalNum - kmInicialNum; if (item['KM TOTAL'] > MAX_KM_REGISTRO) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`KM Total > ${MAX_KM_REGISTRO} km`); } } else { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push("KM Final < KM Inicial"); item['KM TOTAL'] = 0; } }
+              item['ABAST. EMPRESA STR'] = getValue(row, COL.ABAST_EMPRESA) || ''; item['ABAST. EXTERNO STR'] = getValue(row, COL.ABAST_EXTERNO) || ''; item['PEDÁGIO STR'] = getValue(row, COL.PEDAGIO) || ''; item['ESTACIONAMENTO STR'] = getValue(row, COL.ESTACIONAMENTO) || ''; item['OUTROS STR'] = getValue(row, COL.OUTROS) || ''; const lavagemStr = getValue(row, COL.LAVAGEM) || '';
+              item[COL.ABAST_EMPRESA] = extrairValorNumerico(item['ABAST. EMPRESA STR']); item[COL.ABAST_EXTERNO] = extrairValorNumerico(item['ABAST. EXTERNO STR']); item[COL.PEDAGIO] = extrairValorNumerico(item['PEDÁGIO STR']); item[COL.ESTACIONAMENTO] = extrairValorNumerico(item['ESTACIONAMENTO STR']); item[COL.OUTROS] = extrairValorNumerico(item['OUTROS STR']); const lavagemVal = extrairValorNumerico(lavagemStr); if (item[COL.ESTACIONAMENTO] === 0 && lavagemVal > 0) { item[COL.ESTACIONAMENTO] = lavagemVal; item['ESTACIONAMENTO STR'] += (item['ESTACIONAMENTO STR'] ? '; ' : '') + `(LAVAGEM: ${lavagemStr})`; }
+              if (item[COL.ABAST_EMPRESA] > MAX_ABAST) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`Abast. Empresa > R$${MAX_ABAST}`); } if (item[COL.ABAST_EXTERNO] > MAX_ABAST) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`Abast. Externo > R$${MAX_ABAST}`); } if (item[COL.PEDAGIO] > MAX_OUTROS_GASTOS) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`Valor Pedágio > R$${MAX_OUTROS_GASTOS}`); } if (item[COL.ESTACIONAMENTO] > MAX_OUTROS_GASTOS) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`Valor Estacionam./Lavagem > R$${MAX_OUTROS_GASTOS}`); } if (item[COL.OUTROS] > MAX_OUTROS_GASTOS) { if (!item['TEM_ERRO']) item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push(`Valor Outros > R$${MAX_OUTROS_GASTOS}`); }
+              item['ID_VEICULO'] = item[COL.PLACA] ? item[COL.PLACA].toUpperCase().replace(/[\s-]/g, '') : (item[COL.VEICULO] ? item[COL.VEICULO].toUpperCase().trim() : 'N/I'); if (item['ID_VEICULO'] === 'N/I' && (item[COL.KM_INICIAL] > 0 || item[COL.KM_FINAL] > 0 || item[COL.ABAST_EMPRESA] > 0 || item[COL.ABAST_EXTERNO] > 0)) { item['ID_VEICULO'] = '(Veículo Não Informado)'; }
+              if (item[COL.CLIENTE] || item[COL.ENTRADA] || item[COL.SAIDA]) { item['TIPO'] = 'TÉCNICO'; } else { item['TIPO'] = 'SUPERVISOR'; } const nomeUsuarioUpper = (item[COL.USUARIO] || "").toUpperCase(); if (nomeUsuarioUpper.includes('CARLOS EDUARDO') && (nomeUsuarioUpper.includes('GABRIEL') || nomeUsuarioUpper.includes('GOMES'))) { item['CARGO'] = 'GERENTE'; } else { item['CARGO'] = item['TIPO']; }
+              item['ERRO_MOTIVO'] = [...new Set(item['ERRO_MOTIVO'])];
+          } catch (e) { console.error(`Erro processando linha ${rowIndex + 2}:`, e, row); item['TEM_ERRO'] = true; item['ERRO_MOTIVO'].push('Erro interno no processamento.'); }
+          return item;
+      });
+      veiculosUnicos = [...new Set(dadosOriginais.map(item => item['ID_VEICULO']).filter(v => v && v !== 'N/I' && v !== '(Veículo Não Informado)'))].sort();
+      console.log(`Processamento concluído. Total: ${dadosOriginais.length}. Erros: ${dadosOriginais.filter(d => d.TEM_ERRO).length}`);
+      usuariosUnicos = [...new Set(dadosOriginais.map(item => item['USUARIO']).filter(Boolean))].sort();
+  }
+
+  // --- FUNÇÕES DE CARREGAMENTO E API ---
+  async function carregarDados() { document.getElementById('loadingData').style.display = 'flex'; document.getElementById('loadingData').innerHTML = '<div class="loading-spinner"></div><div style="margin-top: 15px;">Carregando dados...</div>'; try { const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`; console.log("Buscando dados:", url); const response = await fetch(url); if (!response.ok) { const errorText = await response.text(); console.error("Erro API:", response.status, errorText); let errorMsg = `Erro ${response.status}. `; try { const errorData = JSON.parse(errorText); errorMsg += errorData.error?.message || 'Verifique ID/Chave/Permissões.'; } catch (e) { errorMsg += 'Verifique o console.'; } throw new Error(errorMsg); } const data = await response.json(); if (!data.values || data.values.length < 2) { throw new Error("Planilha vazia ou sem dados."); } processarDados(data.values); configurarFiltros(); aplicarFiltros(); atualizarInterface(); document.getElementById('loadingData').style.display = 'none'; console.log("Dados carregados!"); } catch (error) { console.error("Falha ao carregar:", error); document.getElementById('loadingData').innerHTML = `<div style="padding: 20px; color: var(--danger);"><i class="fas fa-times-circle fa-3x"></i><h3>Erro</h3><p>${error.message}</p><button onclick="location.reload()" class="btn btn-primary">Tentar Novamente</button></div>`; document.getElementById('loadingData').style.display = 'flex'; } }
+
+  // --- FUNÇÕES DE FILTRO E ATUALIZAÇÃO DA INTERFACE ---
+  function configurarFiltros() { const selectUsuario = document.getElementById('filtroUsuario'); selectUsuario.innerHTML = '<option value="">Todos</option>'; usuariosUnicos.forEach(usuario => { const option = document.createElement('option'); option.value = usuario; option.textContent = usuario; selectUsuario.appendChild(option); }); const hoje = new Date(); const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1); const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); const formatDate = (date) => { const d = new Date(date), month = '' + (d.getMonth() + 1), day = '' + d.getDate(), year = d.getFullYear(); return [year, month.padStart(2, '0'), day.padStart(2, '0')].join('-'); }; document.getElementById('dataInicio').value = formatDate(primeiroDiaMes); document.getElementById('dataFim').value = formatDate(ultimoDiaMes); console.log(`Datas padrão: ${formatDate(primeiroDiaMes)} a ${formatDate(ultimoDiaMes)}`); document.getElementById('aplicarFiltro').addEventListener('click', () => { aplicarFiltros(); atualizarInterface(); }); }
+
+  function aplicarFiltros() {
+      const dataInicioStr = document.getElementById('dataInicio').value; const dataFimStr = document.getElementById('dataFim').value; const usuarioSelecionado = document.getElementById('filtroUsuario').value;
+      const inicioFiltroStr = dataInicioStr ? dataInicioStr.replace(/-/g, '') : null; const fimFiltroStr = dataFimStr ? dataFimStr.replace(/-/g, '') : null;
+      console.log(`Aplicando filtros: Data ${dataInicioStr || 'N/D'} a ${dataFimStr || 'N/D'}, Usuário: ${usuarioSelecionado || 'Todos'}`);
+      dadosFiltrados = dadosOriginais.filter(item => {
+          let passaFiltro = true;
+          let itemDateStr = null;
+          if (item['DATA_OBJ']) { const d = item['DATA_OBJ']; const year = d.getUTCFullYear(); const month = String(d.getUTCMonth() + 1).padStart(2, '0'); const day = String(d.getUTCDate()).padStart(2, '0'); itemDateStr = `${year}${month}${day}`; }
+          if (!itemDateStr) { passaFiltro = false; } else { if (inicioFiltroStr && itemDateStr < inicioFiltroStr) passaFiltro = false; if (fimFiltroStr && itemDateStr > fimFiltroStr) passaFiltro = false; }
+          if (usuarioSelecionado && item['USUARIO'] !== usuarioSelecionado) { passaFiltro = false; }
+          return passaFiltro;
+      });
+      console.log(`Filtro aplicado. ${dadosFiltrados.length} registros resultantes.`);
+  }
+
+  function atualizarInterface() { console.log("Atualizando interface..."); const dadosValidosParaCalculo = dadosFiltrados.filter(item => !item.TEM_ERRO); const dadosComErro = dadosFiltrados.filter(item => item.TEM_ERRO); console.log(`Dados Válidos: ${dadosValidosParaCalculo.length} | Ignorados: ${dadosComErro.length}`); try { atualizarEstatisticasGerais(dadosValidosParaCalculo, dadosComErro.length); } catch(e) { console.error("Erro stats:", e); } try { atualizarGraficos(dadosValidosParaCalculo); } catch(e) { console.error("Erro graficos:", e); } try { atualizarTabelas(dadosValidosParaCalculo, dadosFiltrados, dadosComErro); } catch(e) { console.error("Erro tabelas:", e); } console.log("Interface atualizada."); }
+
+  // --- FUNÇÕES DE ATUALIZAÇÃO DE COMPONENTES DA UI ---
+  function atualizarEstatisticasGerais(dadosValidos, totalIgnorados) {
+      console.log("Atualizando estatísticas gerais...");
+      const totalAbastEmpresa = dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EMPRESA']), 0); const totalAbastExterno = dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EXTERNO']), 0); const totalPedagio = dadosValidos.reduce((s, i) => addIfNumber(s, i['PEDAGIO']), 0); const totalEstacionamento = dadosValidos.reduce((s, i) => addIfNumber(s, i['ESTACIONAMENTO']), 0); const totalOutros = dadosValidos.reduce((s, i) => addIfNumber(s, i['OUTROS']), 0); const totalKm = dadosValidos.reduce((s, i) => addIfNumber(s, i['KM TOTAL']), 0);
+      const totalAbastecimento = totalAbastEmpresa + totalAbastExterno; const outrosGastosGeral = totalPedagio + totalEstacionamento + totalOutros; const totalGeralGastos = totalAbastecimento + outrosGastosGeral; const custoPorKm = totalKm > 0 ? totalGeralGastos / totalKm : 0;
+
+      // Atualiza UI - Adiciona verificações de existência dos elementos
+      const setElementText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; else console.warn(`Elemento com ID '${id}' não encontrado no HTML.`); };
+      const setElementBRL = (id, value) => setElementText(id, formatBRL(value));
+      const setElementNum = (id, value) => setElementText(id, formatNumber(value));
+
+      setElementBRL('totalAbastecimento', totalAbastecimento);
+      setElementText('totalQuilometros', `${formatNumber(totalKm)} km`);
+      setElementBRL('totalOutrosGastos', outrosGastosGeral);
+      setElementText('totalRegistrosIgnorados', totalIgnorados);
+      setElementBRL('custoPorKm', custoPorKm);
+      setElementText('countAbastecimento', formatNumber(dadosValidos.filter(d => (d['ABAST. EMPRESA'] || 0) > 0 || (d['ABAST. EXTERNO'] || 0) > 0).length) + ' registros válidos');
+      setElementText('countKm', formatNumber(dadosValidos.filter(d => (d['KM TOTAL'] || 0) > 0).length) + ' registros válidos');
+
+      // Gastos por Categoria Cards (Usando IDs que provavelmente estão no HTML, adicionando verificação)
+      setElementBRL('cardTotalAbastEmpresa', totalAbastEmpresa);
+      setElementBRL('cardTotalAbastExterno', totalAbastExterno);
+      setElementBRL('cardTotalPedagio', totalPedagio);
+      setElementBRL('cardTotalEstacionamento', totalEstacionamento);
+      setElementBRL('cardTotalOutros', totalOutros);
+
+      // Quilometragem Cards
+      setElementText('kmTotal', `${formatNumber(totalKm)} km`);
+      const diasUnicos = [...new Set(dadosValidos.map(item => item['DATA']))].length; const mediaDiaria = diasUnicos > 0 ? totalKm / diasUnicos : 0;
+      setElementText('mediaDiaria', `${formatNumber(mediaDiaria)} km`);
+      const kmPorUsuario = dadosValidos.reduce((acc, item) => { const user = item['USUARIO']; if(user) acc[user] = addIfNumber(acc[user] || 0, item['KM TOTAL']); return acc; }, {}); const usuarioMaiorKm = Object.entries(kmPorUsuario).sort((a, b) => b[1] - a[1])[0];
+      setElementText('maiorKmUsuarioValor', usuarioMaiorKm ? `${formatNumber(usuarioMaiorKm[1])} km` : '0 km');
+      setElementText('maiorKmUsuarioNome', usuarioMaiorKm ? usuarioMaiorKm[0] : 'N/D');
+      const registroMaiorKm = dadosValidos.sort((a, b) => (b['KM TOTAL'] || 0) - (a['KM TOTAL'] || 0))[0];
+      setElementText('maiorKmDiaValor', registroMaiorKm ? `${formatNumber(registroMaiorKm['KM TOTAL'])} km` : '0 km');
+      setElementText('maiorKmDiaData', registroMaiorKm ? `${registroMaiorKm['DATA']} (${escapeHtml(registroMaiorKm['USUARIO'] || '')})` : 'N/D');
+
+      console.log("Estatísticas gerais UI atualizadas.");
+  }
+
+  function atualizarGraficos(dadosValidos) { console.log("Atualizando gráficos..."); const chartIds = ['gastosMensaisChart', 'distribuicaoGastosChart', 'gastosPorPessoaChart', 'distribuicaoPorCategoriaChart', 'evolucaoMensalCategoriasChart', 'kmPorUsuarioChart', 'evolucaoQuilometragemChart', 'tecnicosClientesChart', 'supervisoresGastosChart']; chartIds.forEach(destroyChart); try { atualizarGraficoGastosMensais(dadosValidos); } catch (e) { console.error("Erro GraficoGastosMensais:", e); } try { atualizarGraficoDistribuicaoGastos(dadosValidos); } catch (e) { console.error("Erro GraficoDistribuicaoGastos:", e); } try { atualizarGraficoGastosPorPessoa(dadosValidos); } catch (e) { console.error("Erro GraficoGastosPorPessoa:", e); } try { atualizarGraficoDistribuicaoPorCategoria(dadosValidos); } catch (e) { console.error("Erro GraficoDistribuicaoPorCategoria:", e); } try { atualizarGraficoEvolucaoMensalCategorias(dadosValidos); } catch (e) { console.error("Erro GraficoEvolucaoMensalCategorias:", e); } try { atualizarGraficoKmPorUsuario(dadosValidos); } catch (e) { console.error("Erro GraficoKmPorUsuario:", e); } try { atualizarGraficoEvolucaoQuilometragem(dadosValidos); } catch (e) { console.error("Erro GraficoEvolucaoQuilometragem:", e); } try { atualizarGraficoTecnicos(dadosValidos); } catch (e) { console.error("Erro GraficoTecnicos:", e); } try { atualizarGraficoSupervisores(dadosValidos); } catch (e) { console.error("Erro GraficoSupervisores:", e); } console.log("Gráficos OK."); }
+
+  // --- FUNÇÕES DE ATUALIZAÇÃO DE GRÁFICOS ESPECÍFICOS ---
+  function atualizarGraficoGastosMensais(dadosValidos) { const chartId = 'gastosMensaisChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const gastosPorMes = dadosValidos.reduce((acc, item) => { const dt = item['DATA_OBJ']; if (!dt) return acc; const mesAno = `${String(dt.getUTCMonth() + 1).padStart(2,'0')}/${dt.getUTCFullYear()}`; if (!acc[mesAno]) acc[mesAno] = { abastecimento: 0, outros: 0, dataObj: new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1)) }; acc[mesAno].abastecimento = addIfNumber(acc[mesAno].abastecimento, item['ABAST. EMPRESA']); acc[mesAno].abastecimento = addIfNumber(acc[mesAno].abastecimento, item['ABAST. EXTERNO']); acc[mesAno].outros = addIfNumber(acc[mesAno].outros, item['PEDAGIO']); acc[mesAno].outros = addIfNumber(acc[mesAno].outros, item['ESTACIONAMENTO']); acc[mesAno].outros = addIfNumber(acc[mesAno].outros, item['OUTROS']); return acc; }, {}); const mesesOrdenados = Object.keys(gastosPorMes).sort((a, b) => gastosPorMes[a].dataObj - gastosPorMes[b].dataObj); charts[chartId] = new Chart(ctx, { type: 'bar', data: { labels: mesesOrdenados, datasets: [ { label: 'Abastecimento', backgroundColor: 'rgba(30, 136, 229, 0.7)', data: mesesOrdenados.map(m => gastosPorMes[m].abastecimento) }, { label: 'Outros Gastos', backgroundColor: 'rgba(255, 152, 0, 0.7)', data: mesesOrdenados.map(m => gastosPorMes[m].outros) } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: value => formatBRL(value) } } }, plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBRL(ctx.raw)}` } } } } }); }
+  function atualizarGraficoDistribuicaoGastos(dadosValidos) { const chartId = 'distribuicaoGastosChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const totais = { 'Abast. Empresa': dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EMPRESA']), 0), 'Abast. Externo': dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EXTERNO']), 0), 'Pedágio': dadosValidos.reduce((s, i) => addIfNumber(s, i['PEDAGIO']), 0), 'Estacionamento': dadosValidos.reduce((s, i) => addIfNumber(s, i['ESTACIONAMENTO']), 0), 'Outros': dadosValidos.reduce((s, i) => addIfNumber(s, i['OUTROS']), 0), }; const labels = Object.keys(totais).filter(k => totais[k] > 0); const data = labels.map(k => totais[k]); const totalGeral = data.reduce((a, b) => a + b, 0); const backgroundColors = ['#1e88e5', '#26a69a', '#ff9800', '#e53935', '#6c757d']; charts[chartId] = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors.slice(0, data.length) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: ctx => `${ctx.label}: ${formatBRL(ctx.raw)} (${totalGeral > 0 ? (ctx.raw / totalGeral * 100).toFixed(1) : '0.0'}%)` } }, legend: { position: 'bottom' } } } }); }
+  function atualizarGraficoGastosPorPessoa(dadosValidos) { const chartId = 'gastosPorPessoaChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) { console.error(`Canvas ${chartId} não encontrado.`); return; } console.log(`Atualizando ${chartId}...`); try { const gastos = dadosValidos.reduce((acc, item) => { const user = item['USUARIO']; if (!user || typeof user !== 'string' || user.trim() === '') return acc; if (!acc[user]) { acc[user] = { abastecimento: 0, pedagio: 0, estacionamento: 0, outros: 0 }; } const add = (s, v, f) => { const n = Number(v) || 0; if (!isNaN(n)) return s + n; console.warn(`NaN em ${f} para ${user}`); return s;}; acc[user].abastecimento = add(acc[user].abastecimento, item['ABAST. EMPRESA'], 'AbastE'); acc[user].abastecimento = add(acc[user].abastecimento, item['ABAST. EXTERNO'],'AbastX'); acc[user].pedagio = add(acc[user].pedagio, item['PEDAGIO'],'Ped'); acc[user].estacionamento = add(acc[user].estacionamento, item['ESTACIONAMENTO'],'Est'); acc[user].outros = add(acc[user].outros, item['OUTROS'],'Out'); return acc; }, {}); const usuariosOrdenados = Object.keys(gastos).sort((a, b) => (gastos[b].abastecimento + gastos[b].pedagio + gastos[b].estacionamento + gastos[b].outros) - (gastos[a].abastecimento + gastos[a].pedagio + gastos[a].estacionamento + gastos[a].outros)); if (usuariosOrdenados.length === 0) { console.warn(`Gráfico ${chartId}: Sem dados.`); destroyChart(chartId); ctx.font = "14px 'Segoe UI'"; ctx.fillStyle = "#888"; ctx.textAlign = "center"; ctx.fillText("Sem dados.", ctx.canvas.width / 2, ctx.canvas.height / 2); return; } charts[chartId] = new Chart(ctx, { type: 'bar', data: { labels: usuariosOrdenados, datasets: [ { label: 'Abastecimento', backgroundColor: 'rgba(30, 136, 229, 0.7)', data: usuariosOrdenados.map(u => gastos[u].abastecimento) }, { label: 'Pedágio', backgroundColor: 'rgba(255, 152, 0, 0.7)', data: usuariosOrdenados.map(u => gastos[u].pedagio) }, { label: 'Estacionamento', backgroundColor: 'rgba(229, 57, 53, 0.7)', data: usuariosOrdenados.map(u => gastos[u].estacionamento) }, { label: 'Outros', backgroundColor: 'rgba(108, 117, 125, 0.7)', data: usuariosOrdenados.map(u => gastos[u].outros) } ] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { stacked: true, ticks: { callback: value => formatBRL(value) } }, y: { stacked: true } }, plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBRL(ctx.raw)}` } } } } }); } catch (error) { console.error(`Erro gráfico ${chartId}:`, error); destroyChart(chartId); try { ctx.font = "14px 'Segoe UI'"; ctx.fillStyle = "#dc3545"; ctx.textAlign = "center"; ctx.fillText("Erro.", ctx.canvas.width / 2, ctx.canvas.height / 2); } catch (e) {} } }
+  function atualizarGraficoDistribuicaoPorCategoria(dadosValidos) { const chartId = 'distribuicaoPorCategoriaChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const totais = { 'Abast. Empresa': dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EMPRESA']), 0), 'Abast. Externo': dadosValidos.reduce((s, i) => addIfNumber(s, i['ABAST. EXTERNO']), 0), 'Pedágio': dadosValidos.reduce((s, i) => addIfNumber(s, i['PEDAGIO']), 0), 'Estacionamento': dadosValidos.reduce((s, i) => addIfNumber(s, i['ESTACIONAMENTO']), 0), 'Outros': dadosValidos.reduce((s, i) => addIfNumber(s, i['OUTROS']), 0), }; const labels = Object.keys(totais).filter(k => totais[k] > 0); const data = labels.map(k => totais[k]); const totalGeral = data.reduce((a, b) => a + b, 0); const backgroundColors = ['#1e88e5', '#26a69a', '#ff9800', '#e53935', '#6c757d']; charts[chartId] = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors.slice(0, data.length) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: ctx => `${ctx.label}: ${formatBRL(ctx.raw)} (${totalGeral > 0 ? (ctx.raw / totalGeral * 100).toFixed(1) : '0.0'}%)` } }, legend: { position: 'bottom' } } } }); }
+  function atualizarGraficoEvolucaoMensalCategorias(dadosValidos) { const chartId = 'evolucaoMensalCategoriasChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const gastosPorMesCategoria = dadosValidos.reduce((acc, item) => { const dt = item['DATA_OBJ']; if (!dt) return acc; const mesAno = `${String(dt.getUTCMonth() + 1).padStart(2,'0')}/${dt.getUTCFullYear()}`; if (!acc[mesAno]) acc[mesAno] = { abastEmpresa: 0, abastExterno: 0, pedagio: 0, estacionamento: 0, outros: 0, dataObj: new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1)) }; acc[mesAno].abastEmpresa = addIfNumber(acc[mesAno].abastEmpresa, item['ABAST. EMPRESA']); acc[mesAno].abastExterno = addIfNumber(acc[mesAno].abastExterno, item['ABAST. EXTERNO']); acc[mesAno].pedagio = addIfNumber(acc[mesAno].pedagio, item['PEDAGIO']); acc[mesAno].estacionamento = addIfNumber(acc[mesAno].estacionamento, item['ESTACIONAMENTO']); acc[mesAno].outros = addIfNumber(acc[mesAno].outros, item['OUTROS']); return acc; }, {}); const mesesOrdenados = Object.keys(gastosPorMesCategoria).sort((a, b) => gastosPorMesCategoria[a].dataObj - gastosPorMesCategoria[b].dataObj); const colors = { emp: '#1e88e5', ext: '#26a69a', ped: '#ff9800', est: '#e53935', out: '#6c757d' }; charts[chartId] = new Chart(ctx, { type: 'line', data: { labels: mesesOrdenados, datasets: [ { label: 'Abast. Empresa', data: mesesOrdenados.map(m => gastosPorMesCategoria[m].abastEmpresa), borderColor: colors.emp, tension: 0.1, fill: false }, { label: 'Abast. Externo', data: mesesOrdenados.map(m => gastosPorMesCategoria[m].abastExterno), borderColor: colors.ext, tension: 0.1, fill: false }, { label: 'Pedágio', data: mesesOrdenados.map(m => gastosPorMesCategoria[m].pedagio), borderColor: colors.ped, tension: 0.1, fill: false }, { label: 'Estacionamento', data: mesesOrdenados.map(m => gastosPorMesCategoria[m].estacionamento), borderColor: colors.est, tension: 0.1, fill: false }, { label: 'Outros', data: mesesOrdenados.map(m => gastosPorMesCategoria[m].outros), borderColor: colors.out, tension: 0.1, fill: false } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: value => formatBRL(value) } } }, plugins: { tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBRL(ctx.raw)}` } } } } }); }
+  function atualizarGraficoKmPorUsuario(dadosValidos) { const chartId = 'kmPorUsuarioChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const kmPorUsuario = dadosValidos.reduce((acc, item) => { const user = item['USUARIO']; if(user) acc[user] = addIfNumber(acc[user] || 0, item['KM TOTAL']); return acc; }, {}); const usuariosOrdenados = Object.keys(kmPorUsuario).sort((a, b) => kmPorUsuario[b] - kmPorUsuario[a]); charts[chartId] = new Chart(ctx, { type: 'bar', data: { labels: usuariosOrdenados, datasets: [{ label: 'Quilometragem', backgroundColor: 'rgba(38, 166, 154, 0.7)', data: usuariosOrdenados.map(u => kmPorUsuario[u]) }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { ticks: { callback: value => `${formatNumber(value)} km` } } }, plugins: { tooltip: { callbacks: { label: ctx => `Km: ${formatNumber(ctx.raw)}` } } } } }); }
+  function atualizarGraficoEvolucaoQuilometragem(dadosValidos) { const chartId = 'evolucaoQuilometragemChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const kmPorMes = dadosValidos.reduce((acc, item) => { const dt = item['DATA_OBJ']; if (!dt) return acc; const mesAno = `${String(dt.getUTCMonth() + 1).padStart(2,'0')}/${dt.getUTCFullYear()}`; if (!acc[mesAno]) acc[mesAno] = { km: 0, dataObj: new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1)) }; acc[mesAno].km = addIfNumber(acc[mesAno].km, item['KM TOTAL']); return acc; }, {}); const mesesOrdenados = Object.keys(kmPorMes).sort((a, b) => kmPorMes[a].dataObj - kmPorMes[b].dataObj); charts[chartId] = new Chart(ctx, { type: 'line', data: { labels: mesesOrdenados, datasets: [{ label: 'Quilometragem', borderColor: 'rgba(38, 166, 154, 1)', backgroundColor: 'rgba(38, 166, 154, 0.2)', data: mesesOrdenados.map(m => kmPorMes[m].km), fill: true, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: value => `${formatNumber(value)} km` } } }, plugins: { tooltip: { callbacks: { label: ctx => `Km: ${formatNumber(ctx.raw)}` } } } } }); }
+  function atualizarGraficoTecnicos(dadosValidos) { const chartId = 'tecnicosClientesChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const dadosTecnicos = dadosValidos.filter(item => item['TIPO'] === 'TÉCNICO'); const visitasPorTecnico = dadosTecnicos.reduce((acc, item) => { const tecnico = item['USUARIO']; if (!tecnico) return acc; if (!acc[tecnico]) acc[tecnico] = { visitas: 0, clientes: new Set(), km: 0 }; acc[tecnico].visitas++; if (item['CLIENTE']) acc[tecnico].clientes.add(item['CLIENTE']); acc[tecnico].km = addIfNumber(acc[tecnico].km, item['KM TOTAL']); return acc; }, {}); const tecnicosOrdenados = Object.keys(visitasPorTecnico).sort((a, b) => visitasPorTecnico[b].visitas - visitasPorTecnico[a].visitas); charts[chartId] = new Chart(ctx, { type: 'bar', data: { labels: tecnicosOrdenados, datasets: [ { label: 'Visitas Realizadas', backgroundColor: 'rgba(30, 136, 229, 0.7)', data: tecnicosOrdenados.map(t => visitasPorTecnico[t].visitas), yAxisID: 'yVisitas' }, { label: 'Clientes Atendidos', backgroundColor: 'rgba(156, 39, 176, 0.7)', data: tecnicosOrdenados.map(t => visitasPorTecnico[t].clientes.size), yAxisID: 'yVisitas' }, { label: 'Km Percorridos', type: 'line', borderColor: 'rgba(38, 166, 154, 1)', data: tecnicosOrdenados.map(t => visitasPorTecnico[t].km), yAxisID: 'yKm', fill: false }] }, options: { responsive: true, maintainAspectRatio: false, scales: { yVisitas: { type: 'linear', position: 'left', title: { display: true, text: 'Contagem' } }, yKm: { type: 'linear', position: 'right', title: { display: true, text: 'Km' }, grid: { drawOnChartArea: false }, ticks: { callback: v => `${formatNumber(v)} km` } } }, plugins: { tooltip: { mode: 'index', intersect: false } } } }); }
+  function atualizarGraficoSupervisores(dadosValidos) { const chartId = 'supervisoresGastosChart'; const ctx = document.getElementById(chartId)?.getContext('2d'); if (!ctx) return; const dadosSupervisores = dadosValidos.filter(item => item['TIPO'] === 'SUPERVISOR' || item['CARGO'] === 'GERENTE'); const dadosPorSupervisor = dadosSupervisores.reduce((acc, item) => { const supervisor = item['USUARIO']; if (!supervisor) return acc; if (!acc[supervisor]) acc[supervisor] = { gastos: 0, km: 0 }; acc[supervisor].gastos = addIfNumber(acc[supervisor].gastos, item['ABAST. EMPRESA']); acc[supervisor].gastos = addIfNumber(acc[supervisor].gastos, item['ABAST. EXTERNO']); acc[supervisor].gastos = addIfNumber(acc[supervisor].gastos, item['PEDAGIO']); acc[supervisor].gastos = addIfNumber(acc[supervisor].gastos, item['ESTACIONAMENTO']); acc[supervisor].gastos = addIfNumber(acc[supervisor].gastos, item['OUTROS']); acc[supervisor].km = addIfNumber(acc[supervisor].km, item['KM TOTAL']); return acc; }, {}); const supervisoresOrdenados = Object.keys(dadosPorSupervisor).sort((a, b) => dadosPorSupervisor[b].gastos - dadosPorSupervisor[a].gastos); charts[chartId] = new Chart(ctx, { type: 'bar', data: { labels: supervisoresOrdenados, datasets: [ { label: 'Gastos Totais (R$)', backgroundColor: 'rgba(229, 57, 53, 0.7)', data: supervisoresOrdenados.map(s => dadosPorSupervisor[s].gastos), yAxisID: 'yGastos' }, { label: 'Km Percorridos', backgroundColor: 'rgba(38, 166, 154, 0.7)', data: supervisoresOrdenados.map(s => dadosPorSupervisor[s].km), yAxisID: 'yKm' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { yGastos: { type: 'linear', position: 'left', title: { display: true, text: 'Gastos (R$)' }, ticks: { callback: v => formatBRL(v) } }, yKm: { type: 'linear', position: 'right', title: { display: true, text: 'Km' }, grid: { drawOnChartArea: false }, ticks: { callback: v => `${formatNumber(v)} km` } } }, plugins: { tooltip: { mode: 'index', intersect: false } } } }); }
+
+  // --- FUNÇÕES DE ATUALIZAÇÃO DE TABELAS ---
+  function atualizarTabelas(dadosValidosParaCalculo, dadosFiltrados, dadosComErro) { console.log("Atualizando tabelas..."); try { atualizarTabelaGastosPorPessoa(dadosValidosParaCalculo); } catch(e) { console.error("Erro TabelaGastosPorPessoa:", e); } try { atualizarTabelaTecnicos(dadosValidosParaCalculo); } catch(e) { console.error("Erro TabelaTecnicos:", e); } try { atualizarTabelaSupervisores(dadosValidosParaCalculo); } catch(e) { console.error("Erro TabelaSupervisores:", e); } try { atualizarTabelaRelatorioCompleto(dadosFiltrados); } catch(e) { console.error("Erro TabelaRelatorioCompleto:", e); } try { atualizarTabelaDadosIgnorados(dadosComErro); } catch(e) { console.error("Erro TabelaDadosIgnorados:", e); } try { atualizarTabelaVeiculos(dadosValidosParaCalculo); } catch(e) { console.error("Erro TabelaVeiculos:", e); } console.log("Tabelas OK."); }
+
+  function atualizarTabelaGastosPorPessoa(dadosValidos) { const tbody = document.querySelector('#tabelaGastosPorPessoa tbody'); if (!tbody) { console.error("TBODY #tabelaGastosPorPessoa não encontrado."); return; } tbody.innerHTML = ''; try { const gastosPorPessoa = dadosValidos.reduce((acc, item) => { const user = item['USUARIO']; if (!user || typeof user !== 'string' || user.trim() === '') return acc; if (!acc[user]) acc[user] = { abEmp: 0, abExt: 0, ped: 0, est: 0, out: 0, km: 0, total: 0 }; acc[user].abEmp = addIfNumber(acc[user].abEmp, item['ABAST. EMPRESA']); acc[user].abExt = addIfNumber(acc[user].abExt, item['ABAST. EXTERNO']); acc[user].ped = addIfNumber(acc[user].ped, item['PEDAGIO']); acc[user].est = addIfNumber(acc[user].est, item['ESTACIONAMENTO']); acc[user].out = addIfNumber(acc[user].out, item['OUTROS']); acc[user].km = addIfNumber(acc[user].km, item['KM TOTAL']); acc[user].total = acc[user].abEmp + acc[user].abExt + acc[user].ped + acc[user].est + acc[user].out; return acc; }, {}); const usuariosOrdenados = Object.keys(gastosPorPessoa).sort((a, b) => gastosPorPessoa[b].total - gastosPorPessoa[a].total); if (usuariosOrdenados.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhum dado.</td></tr>'; return; } usuariosOrdenados.forEach(usuario => { const g = gastosPorPessoa[usuario]; const row = tbody.insertRow(); row.innerHTML = `<td>${escapeHtml(usuario)}</td><td>${formatBRL(g.abEmp)}</td><td>${formatBRL(g.abExt)}</td><td>${formatBRL(g.ped)}</td><td>${formatBRL(g.est)}</td><td>${formatBRL(g.out)}</td><td>${formatNumber(g.km)} km</td><td><strong>${formatBRL(g.total)}</strong></td>`; }); } catch (error) { console.error("Erro Tabela Gastos por Pessoa:", error); tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro.</td></tr>'; } }
+  function atualizarTabelaTecnicos(dadosValidos) { const tbody = document.querySelector('#tabelaTecnicos tbody'); if (!tbody) return; tbody.innerHTML = ''; const dadosTecnicos = dadosValidos.filter(item => item['TIPO'] === 'TÉCNICO').sort((a, b) => (b['DATA_OBJ'] || 0) - (a['DATA_OBJ'] || 0)); if (dadosTecnicos.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum dado.</td></tr>'; return; } dadosTecnicos.forEach(item => { try { const duracao = calcularDuracao(item['ENTRADA'], item['SAIDA']); const row = tbody.insertRow(); row.innerHTML = `<td>${escapeHtml(item['USUARIO'] || '-')}</td><td>${escapeHtml(item['CLIENTE'] || '-')}</td><td>${item['DATA'] || '-'}</td><td>${item['ENTRADA'] || '-'}</td><td>${item['SAIDA'] || '-'}</td><td>${duracao || '-'}</td><td>${formatNumber(item['KM TOTAL'] || 0)} km</td>`; } catch (e) { console.error("Erro linha TabelaTecnicos:", e, item); } }); }
+  function atualizarTabelaSupervisores(dadosValidos) { const tbody = document.querySelector('#tabelaSupervisores tbody'); if (!tbody) return; tbody.innerHTML = ''; const dadosSupervisores = dadosValidos.filter(item => item['TIPO'] === 'SUPERVISOR' || item['CARGO'] === 'GERENTE').sort((a, b) => (b['DATA_OBJ'] || 0) - (a['DATA_OBJ'] || 0)); if (dadosSupervisores.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum dado.</td></tr>'; return; } dadosSupervisores.forEach(item => { try { const totalGastos = addIfNumber(0, item['ABAST. EMPRESA']) + addIfNumber(0, item['ABAST. EXTERNO']) + addIfNumber(0, item['PEDAGIO']) + addIfNumber(0, item['ESTACIONAMENTO']) + addIfNumber(0, item['OUTROS']); const row = tbody.insertRow(); row.innerHTML = `<td>${escapeHtml(item['USUARIO'] || '-')} ${item['CARGO'] === 'GERENTE' ? '<span class="badge bg-info text-dark ms-1">Gerente</span>' : ''}</td><td>${item['DATA'] || '-'}</td><td>${escapeHtml(item['ROTA'] || '-')}</td><td>${item['KM INICIAL STR'] || '-'}</td><td>${item['KM FINAL STR'] || '-'}</td><td>${formatNumber(item['KM TOTAL'] || 0)} km</td><td>${formatBRL(totalGastos)}</td>`; } catch (e) { console.error("Erro linha TabelaSupervisores:", e, item); } }); }
+  function atualizarTabelaRelatorioCompleto(dadosParaExibir) { const tbody = document.querySelector('#tabelaRelatorioCompleto tbody'); if (!tbody) { console.error("TBODY #tabelaRelatorioCompleto não encontrado."); return;} tbody.innerHTML = ''; const dadosOrdenados = [...dadosParaExibir].sort((a, b) => (b['DATA_OBJ'] || 0) - (a['DATA_OBJ'] || 0) || (a['USUARIO'] || '').localeCompare(b['USUARIO'] || '')); if (dadosOrdenados.length === 0) { tbody.innerHTML = '<tr><td colspan="17" class="text-center">Nenhum registro.</td></tr>'; return; } dadosOrdenados.forEach(item => { try { const row = tbody.insertRow(); let statusIcon = ''; let tooltipText = ''; if (item.TEM_ERRO) { row.classList.add('registro-erro'); tooltipText = escapeHtml(item.ERRO_MOTIVO.join('; ')); statusIcon = `<i class="fas fa-exclamation-triangle text-warning status-icon"></i>`; } else { statusIcon = '<i class="fas fa-check-circle text-success status-icon ok"></i>'; } row.innerHTML = `<td>${item['DATA'] || '-'}</td><td>${escapeHtml(item['USUARIO'] || '-')}</td><td>${item['TIPO'] || '-'}</td><td>${item['CARGO'] || '-'}</td><td>${item['KM INICIAL STR'] || '-'}</td><td>${item['KM FINAL STR'] || '-'}</td><td>${formatNumber(item['KM TOTAL'] || 0)} km</td><td>${item['ABAST. EMPRESA STR'] ? formatBRL(item['ABAST. EMPRESA']) : '-'}</td><td>${item['ABAST. EXTERNO STR'] ? formatBRL(item['ABAST. EXTERNO']) : '-'}</td><td>${item['PEDÁGIO STR'] ? formatBRL(item['PEDAGIO']) : '-'}</td><td>${item['ESTACIONAMENTO STR'] ? formatBRL(item['ESTACIONAMENTO']) : '-'}</td><td>${item['OUTROS STR'] ? formatBRL(item['OUTROS']) : '-'}</td><td>${escapeHtml(item['DESCREVA OUTROS'] || '-')}</td><td>${escapeHtml(item['CLIENTE'] || '-')}</td><td>${item['ENTRADA'] || '-'}</td><td>${item['SAIDA'] || '-'}</td><td class="text-center"><div class="tooltip-wrapper">${statusIcon}${tooltipText ? `<span class="tooltip-text">${tooltipText}</span>` : ''}</div></td>`; } catch (e) { console.error("Erro linha TabelaRelatorioCompleto:", e, item); } }); console.log(`Tabela Completa: ${dadosOrdenados.length} linhas.`); }
+  function atualizarTabelaDadosIgnorados(dadosComErro) { const tbody = document.querySelector('#tabelaDadosIgnorados tbody'); if (!tbody) return; tbody.innerHTML = ''; const dadosOrdenados = [...dadosComErro].sort((a, b) => (b['DATA_OBJ'] || 0) - (a['DATA_OBJ'] || 0) || (a['USUARIO'] || '').localeCompare(b['USUARIO'] || '')); if (dadosOrdenados.length === 0) { tbody.innerHTML = '<tr><td colspan="16" class="text-center">Nenhum registro ignorado.</td></tr>'; return; } dadosOrdenados.forEach(item => { try { const row = tbody.insertRow(); row.classList.add('registro-erro'); row.innerHTML = `<td>${item['DATA'] || '-'}</td><td>${escapeHtml(item['USUARIO'] || '-')}</td><td>${item['TIPO'] || '-'}</td><td>${item['KM INICIAL STR'] || '-'}</td><td>${item['KM FINAL STR'] || '-'}</td><td>${formatNumber(item['KM TOTAL'] || 0)} km</td><td class="${item.ERRO_MOTIVO.some(m => m.includes('Abast. Empresa')) ? 'text-danger fw-bold' : ''}">${item['ABAST. EMPRESA STR'] ? formatBRL(item['ABAST. EMPRESA']) : '-'}</td><td class="${item.ERRO_MOTIVO.some(m => m.includes('Abast. Externo')) ? 'text-danger fw-bold' : ''}">${item['ABAST. EXTERNO STR'] ? formatBRL(item['ABAST. EXTERNO']) : '-'}</td><td>${item['PEDÁGIO STR'] ? formatBRL(item['PEDAGIO']) : '-'}</td><td>${item['ESTACIONAMENTO STR'] ? formatBRL(item['ESTACIONAMENTO']) : '-'}</td><td>${item['OUTROS STR'] ? formatBRL(item['OUTROS']) : '-'}</td><td>${escapeHtml(item['DESCREVA OUTROS'] || '-')}</td><td>${escapeHtml(item['CLIENTE'] || '-')}</td><td>${item['ENTRADA'] || '-'}</td><td>${item['SAIDA'] || '-'}</td><td><strong>${escapeHtml(item.ERRO_MOTIVO.join('; '))}</strong></td>`; } catch (e) { console.error("Erro linha TabelaDadosIgnorados:", e, item); } }); console.log(`Tabela Ignorados: ${dadosOrdenados.length} linhas.`); }
+  function atualizarTabelaVeiculos(dadosValidos) { const tbody = document.querySelector('#tabelaVeiculos tbody'); if (!tbody) { console.error("TBODY #tabelaVeiculos não encontrado."); return; } tbody.innerHTML = ''; try { const dadosPorVeiculo = dadosValidos.reduce((acc, item) => { const veiculoId = item['ID_VEICULO']; if (!veiculoId || veiculoId === 'N/I' || veiculoId === '(Veículo Não Informado)') return acc; if (!acc[veiculoId]) { acc[veiculoId] = { ID_VEICULO: veiculoId, abEmp: 0, abExt: 0, ped: 0, est: 0, out: 0, km: 0, totalGastos: 0, registros: 0, usuarios: new Set() }; } acc[veiculoId].abEmp = addIfNumber(acc[veiculoId].abEmp, item['ABAST. EMPRESA']); acc[veiculoId].abExt = addIfNumber(acc[veiculoId].abExt, item['ABAST. EXTERNO']); acc[veiculoId].ped = addIfNumber(acc[veiculoId].ped, item['PEDAGIO']); acc[veiculoId].est = addIfNumber(acc[veiculoId].est, item['ESTACIONAMENTO']); acc[veiculoId].out = addIfNumber(acc[veiculoId].out, item['OUTROS']); acc[veiculoId].km = addIfNumber(acc[veiculoId].km, item['KM TOTAL']); acc[veiculoId].totalGastos = acc[veiculoId].abEmp + acc[veiculoId].abExt + acc[veiculoId].ped + acc[veiculoId].est + acc[veiculoId].out; acc[veiculoId].registros++; if(item['USUARIO']) acc[veiculoId].usuarios.add(item['USUARIO']); return acc; }, {}); const veiculosOrdenados = Object.keys(dadosPorVeiculo).sort((a, b) => dadosPorVeiculo[b].totalGastos - dadosPorVeiculo[a].totalGastos); if (veiculosOrdenados.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhum dado.</td></tr>'; return; } veiculosOrdenados.forEach(veiculoId => { const v = dadosPorVeiculo[veiculoId]; const custoKm = v.km > 0 ? v.totalGastos / v.km : 0; const usuariosStr = [...v.usuarios].slice(0, 3).join(', ') + (v.usuarios.size > 3 ? '...' : ''); const row = tbody.insertRow(); row.innerHTML = `<td>${escapeHtml(veiculoId)}</td><td class="text-center">${v.registros}</td><td>${formatBRL(v.abEmp + v.abExt)}</td><td>${formatBRL(v.ped + v.est + v.out)}</td><td><strong>${formatBRL(v.totalGastos)}</strong></td><td>${formatNumber(v.km)} km</td><td>${formatBRL(custoKm)} / km</td><td>${escapeHtml(usuariosStr)}</td>`; }); } catch (error) { console.error("Erro Tabela por Veículo:", error); tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro.</td></tr>'; } }
+
+
+    // --- NAVEGAÇÃO E EXPORTAÇÃO ---
+    function configurarNavegacao() { const menuItems = document.querySelectorAll('.sidebar li'); const sections = document.querySelectorAll('.dashboard-section'); menuItems.forEach(item => { item.addEventListener('click', () => { menuItems.forEach(i => i.classList.remove('active')); item.classList.add('active'); const sectionId = item.getAttribute('data-section'); sections.forEach(section => { section.classList.toggle('active', section.id === sectionId); }); console.log(`Navegando: ${sectionId}. Reaplicando filtros.`); aplicarFiltros(); atualizarInterface(); }); }); console.log("Navegação configurada."); }
+    function configurarExportacao() { const btnExportarRelatorio = document.getElementById('exportarRelatorio'); const btnExportarIgnorados = document.getElementById('exportarIgnorados'); const btnExportarVeiculos = document.getElementById('exportarVeiculos'); const exportToCsv = (filename, dataToExport, headers) => { if (!dataToExport || dataToExport.length === 0) { alert("Não há dados para exportar."); return; } const headerKeys = headers.map(h => h.key); const headerTitles = headers.map(h => h.title); let csvContent = 'data:text/csv;charset=utf-8,'; csvContent += headerTitles.join(';') + '\r\n'; dataToExport.forEach(item => { const row = headerKeys.map(key => { let value = item[key]; if (key === 'ERRO_MOTIVO' || key === 'USUARIOS_STR') { value = (value || []).join ? (value || []).join(' | ') : value; } if (typeof value === 'number' && !['KM TOTAL', 'originalIndex', 'REGISTROS'].includes(key)) { value = value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } else if (typeof value === 'number') { value = Math.round(value); } let stringValue = (value === null || value === undefined) ? '' : String(value); stringValue = stringValue.replace(/"/g, '""'); if (stringValue.includes(';') || stringValue.includes('"') || stringValue.includes('\n')) { stringValue = `"${stringValue}"`; } return stringValue; }); csvContent += row.join(';') + '\r\n'; }); const encodedUri = encodeURI(csvContent); const link = document.createElement('a'); link.setAttribute('href', encodedUri); link.setAttribute('download', filename); document.body.appendChild(link); link.click(); document.body.removeChild(link); }; const relatorioHeaders = [ { key: 'DATA', title: 'Data' }, { key: 'USUARIO', title: 'Usuário' }, { key: 'TIPO', title: 'Tipo' }, { key: 'CARGO', title: 'Cargo' }, { key: 'KM INICIAL STR', title: 'Km Inicial (Original)' }, { key: 'KM FINAL STR', title: 'Km Final (Original)' }, { key: 'KM TOTAL', title: 'Km Total (Calculado)' }, { key: 'ABAST. EMPRESA STR', title: 'Abast. Empresa (Original)' }, { key: 'ABAST. EXTERNO STR', title: 'Abast. Externo (Original)' }, { key: 'PEDÁGIO STR', title: 'Pedágio (Original)' }, { key: 'ESTACIONAMENTO STR', title: 'Estacionamento (Original)' }, { key: 'OUTROS STR', title: 'Outros (Original)' }, { key: 'DESCREVA OUTROS', title: 'Descrição Outros' }, { key: 'CLIENTE', title: 'Cliente' }, { key: 'ENTRADA', title: 'Entrada' }, { key: 'SAIDA', title: 'Saída' }, { key: 'ID_VEICULO', title: 'ID Veículo'}, { key: 'TEM_ERRO', title: 'Erro?' }, { key: 'ERRO_MOTIVO', title: 'Motivo(s) Erro' } ]; const ignoradosHeaders = [ { key: 'DATA', title: 'Data' }, { key: 'USUARIO', title: 'Usuário' }, { key: 'TIPO', title: 'Tipo' }, { key: 'KM INICIAL STR', title: 'Km Inicial (Original)' }, { key: 'KM FINAL STR', title: 'Km Final (Original)' }, { key: 'KM TOTAL', title: 'Km Total (Calculado)' }, { key: 'ABAST. EMPRESA STR', title: 'Abast. Empresa (Original)' }, { key: 'ABAST. EXTERNO STR', title: 'Abast. Externo (Original)' }, { key: 'PEDÁGIO STR', title: 'Pedágio (Original)' }, { key: 'ESTACIONAMENTO STR', title: 'Estacionamento (Original)' }, { key: 'OUTROS STR', title: 'Outros (Original)' }, { key: 'DESCREVA OUTROS', title: 'Descrição Outros' }, { key: 'CLIENTE', title: 'Cliente' }, { key: 'ENTRADA', title: 'Entrada' }, { key: 'SAIDA', title: 'Saída' }, { key: 'ID_VEICULO', title: 'ID Veículo'}, { key: 'ERRO_MOTIVO', title: 'Motivo(s) Erro' } ]; const veiculosHeaders = [ {key: 'ID_VEICULO', title: 'Veículo (Placa/Nome)'}, {key: 'REGISTROS', title: 'Nº Registros Válidos'}, {key: 'GASTO_ABAST', title: 'Gasto Abastecimento (R$)'}, {key: 'GASTO_OUTROS', title: 'Outros Gastos (R$)'}, {key: 'GASTO_TOTAL', title: 'Gasto Total (R$)'}, {key: 'KM_TOTAL', title: 'KM Total'}, {key: 'CUSTO_KM', title: 'Custo/KM (R$)'}, {key: 'USUARIOS_STR', title: 'Principais Usuários'} ]; if (btnExportarRelatorio) { btnExportarRelatorio.addEventListener('click', () => exportToCsv('relatorio_frota_completo.csv', dadosFiltrados, relatorioHeaders)); } if (btnExportarIgnorados) { btnExportarIgnorados.addEventListener('click', () => exportToCsv('relatorio_frota_ignorados.csv', dadosFiltrados.filter(item => item.TEM_ERRO), ignoradosHeaders)); } if (btnExportarVeiculos) { btnExportarVeiculos.addEventListener('click', () => { const dadosValidos = dadosFiltrados.filter(item => !item.TEM_ERRO); const dadosPorVeiculo = dadosValidos.reduce((acc, item) => { const veiculoId = item['ID_VEICULO']; if (!veiculoId || veiculoId === 'N/I' || veiculoId === '(Veículo Não Informado)') return acc; if (!acc[veiculoId]) { acc[veiculoId] = { ID_VEICULO: veiculoId, abEmp: 0, abExt: 0, ped: 0, est: 0, out: 0, km: 0, totalGastos: 0, registros: 0, usuarios: new Set() }; } acc[veiculoId].abEmp = addIfNumber(acc[veiculoId].abEmp, item['ABAST. EMPRESA']); acc[veiculoId].abExt = addIfNumber(acc[veiculoId].abExt, item['ABAST. EXTERNO']); acc[veiculoId].ped = addIfNumber(acc[veiculoId].ped, item['PEDAGIO']); acc[veiculoId].est = addIfNumber(acc[veiculoId].est, item['ESTACIONAMENTO']); acc[veiculoId].out = addIfNumber(acc[veiculoId].out, item['OUTROS']); acc[veiculoId].km = addIfNumber(acc[veiculoId].km, item['KM TOTAL']); acc[veiculoId].totalGastos = acc[veiculoId].abEmp + acc[veiculoId].abExt + acc[veiculoId].ped + acc[veiculoId].est + acc[veiculoId].out; acc[veiculoId].registros++; if(item['USUARIO']) acc[veiculoId].usuarios.add(item['USUARIO']); return acc; }, {}); const dataParaExportar = Object.values(dadosPorVeiculo).map(v => ({ ID_VEICULO: v.ID_VEICULO, REGISTROS: v.registros, GASTO_ABAST: v.abEmp + v.abExt, GASTO_OUTROS: v.ped + v.est + v.out, GASTO_TOTAL: v.totalGastos, KM_TOTAL: v.km, CUSTO_KM: v.km > 0 ? v.totalGastos / v.km : 0, USUARIOS_STR: [...v.usuarios].join(' | ') })).sort((a,b) => b.GASTO_TOTAL - a.GASTO_TOTAL); exportToCsv('relatorio_frota_por_veiculo.csv', dataParaExportar, veiculosHeaders); }); } console.log("Exportação configurada."); }
+
+    // --- INICIALIZAÇÃO ---
+    document.addEventListener('DOMContentLoaded', () => { console.log("DOM carregado. Inicializando sistema..."); configurarNavegacao(); configurarExportacao(); carregarDados(); });
+
+  </script>
+</body>
+</html>
