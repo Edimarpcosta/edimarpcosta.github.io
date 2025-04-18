@@ -526,6 +526,57 @@
             border: 1px solid rgba(220, 38, 38, 0.3); 
         }
         
+        /* Botão de atualização */
+        .refresh-button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 auto;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-weight: 500;
+        }
+        
+        .refresh-button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        
+        .refresh-button:active {
+            transform: translateY(0);
+        }
+        
+        .refresh-button i {
+            font-size: 0.9rem;
+        }
+        
+        .refresh-button.loading i {
+            animation: spin 1s linear infinite;
+        }
+        
+        .dark-theme .refresh-button {
+            background-color: var(--primary);
+        }
+        
+        .refresh-status {
+            font-size: 0.85rem;
+            color: var(--primary);
+            margin-top: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            text-align: center;
+        }
+        
+        .refresh-status.visible {
+            opacity: 1;
+        }
+        
         .dark-theme .menu-message { 
             color: #cbd5e1; 
             background-color: rgba(255, 255, 255, 0.05); 
@@ -598,6 +649,10 @@
             <div class="welcome-card">
                 <h2>Bem-vindo ao Sistema Ameripan</h2>
                 <p>Selecione uma opção no menu acima para navegar pelas ferramentas e relatórios.</p>
+                <button id="refreshMenu" class="refresh-button">
+                    <i class="fas fa-sync-alt"></i> Atualizar Menu
+                </button>
+                <div id="refreshStatus" class="refresh-status"></div>
             </div>
         </main>
     </div>
@@ -620,7 +675,11 @@
             // Delay mínimo para mostrar o loader (ms)
             minLoaderTime: 300,
             // Tempo de expiração do cache (ms)
-            cacheExpiration: 30 * 60 * 1000 // 30 minutos
+            cacheExpiration: 30 * 60 * 1000, // 30 minutos
+            // Nome da chave de cache no localStorage
+            cacheKey: 'ameripan_menu_data',
+            // Parâmetro URL para forçar atualização
+            refreshParam: 'refresh'
         };
         
         // Inicialização da aplicação
@@ -628,12 +687,18 @@
             // Inicializa o tema (antes de qualquer renderização)
             initTheme();
             
+            // Configura o botão de atualização do menu
+            setupRefreshButton();
+            
+            // Verifica se deve forçar atualização pela URL
+            const shouldForceRefresh = checkForceRefreshParam();
+            
             // Inicia o timestamp para rastrear o tempo mínimo do loader
             const loaderStartTime = Date.now();
             
             try {
                 // Tenta carregar dados do menu (do cache ou da API)
-                await loadMenu();
+                await loadMenu(shouldForceRefresh);
                 
                 // Garante tempo mínimo do loader para evitar flash
                 const loadTime = Date.now() - loaderStartTime;
@@ -723,18 +788,23 @@
         
         /**
          * Carrega o menu da planilha ou do cache
+         * @param {boolean} forceRefresh - Se verdadeiro, ignora o cache e busca dados novos
          */
-        async function loadMenu() {
+        async function loadMenu(forceRefresh = false) {
             try {
-                // Verifica se há dados em cache válidos
-                const cachedData = getCachedMenuData();
-                if (cachedData) {
-                    buildMenu(cachedData);
-                    setupMenuInteractions();
-                    return;
+                // Se não for forçar atualização, verifica se há dados em cache válidos
+                if (!forceRefresh) {
+                    const cachedData = getCachedMenuData();
+                    if (cachedData) {
+                        buildMenu(cachedData);
+                        setupMenuInteractions();
+                        return;
+                    }
+                } else {
+                    console.log("Forçando atualização, ignorando cache");
                 }
                 
-                // Se não houver cache, carrega dados da API
+                // Se não houver cache ou forçar atualização, carrega dados da API
                 await fetchMenuData();
             } catch (error) {
                 console.error("Erro ao carregar menu:", error);
@@ -748,7 +818,7 @@
          */
         function getCachedMenuData() {
             try {
-                const cached = localStorage.getItem('menu_data');
+                const cached = localStorage.getItem(CONFIG.cacheKey);
                 if (!cached) return null;
                 
                 const { timestamp, data } = JSON.parse(cached);
@@ -778,10 +848,83 @@
                     timestamp: Date.now(),
                     data: data
                 };
-                localStorage.setItem('menu_data', JSON.stringify(cacheObject));
+                localStorage.setItem(CONFIG.cacheKey, JSON.stringify(cacheObject));
             } catch (error) {
                 console.warn("Erro ao salvar cache:", error);
             }
+        }
+        
+        /**
+         * Limpa o cache do menu forçando atualização
+         */
+        function clearMenuCache() {
+            try {
+                localStorage.removeItem(CONFIG.cacheKey);
+                console.log("Cache do menu limpo com sucesso");
+            } catch (error) {
+                console.warn("Erro ao limpar cache:", error);
+            }
+        }
+        
+        /**
+         * Verifica se existe parâmetro de URL para forçar atualização
+         * @returns {boolean} Verdadeiro se deve forçar atualização
+         */
+        function checkForceRefreshParam() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.has(CONFIG.refreshParam);
+        }
+        
+        /**
+         * Configura o botão de atualização do menu
+         */
+        function setupRefreshButton() {
+            const refreshButton = document.getElementById('refreshMenu');
+            const statusEl = document.getElementById('refreshStatus');
+            
+            if (!refreshButton) return;
+            
+            refreshButton.addEventListener('click', async function() {
+                try {
+                    // Mostra feedback visual
+                    refreshButton.classList.add('loading');
+                    refreshButton.disabled = true;
+                    
+                    if (statusEl) {
+                        statusEl.textContent = "Atualizando menu...";
+                        statusEl.classList.add('visible');
+                    }
+                    
+                    // Limpa o cache
+                    clearMenuCache();
+                    
+                    // Busca novos dados (força atualização)
+                    await loadMenu(true);
+                    
+                    // Feedback de sucesso
+                    if (statusEl) {
+                        statusEl.textContent = "Menu atualizado com sucesso!";
+                        
+                        // Limpa a mensagem após 3 segundos
+                        setTimeout(() => {
+                            statusEl.classList.remove('visible');
+                            // Limpa o texto após a transição
+                            setTimeout(() => {
+                                statusEl.textContent = "";
+                            }, 300);
+                        }, 3000);
+                    }
+                } catch (error) {
+                    console.error("Erro ao atualizar menu:", error);
+                    if (statusEl) {
+                        statusEl.textContent = `Erro: ${error.message}`;
+                    }
+                } finally {
+                    // Restaura o botão
+                    refreshButton.classList.remove('loading');
+                    refreshButton.disabled = false;
+                }
+            });
         }
         
         /**
