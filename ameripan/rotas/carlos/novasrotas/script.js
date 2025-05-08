@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         range: "novas-rotas", // Aba da planilha
         geoJsonUrls: [ // URLs para fallback do GeoJSON
 		    'https://edimarpcosta.github.io/geojson/geojs-35-mun.json',
+			'https://gitlab.c3sl.ufpr.br/simcaq/geodata-br/-/raw/master/geojson/geojs-35-mun.json',
             'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json',
             'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/geojson/geojs-35-mun.json'
             // Adicione mais URLs de fallback confiáveis aqui, se disponíveis
