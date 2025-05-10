@@ -5,13 +5,43 @@ document.addEventListener('DOMContentLoaded', () => {
         apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo",
         range: "novas-rotas",
         distribuidoraAmeripanCoords: L.latLng(-22.730986246840104, -47.358144521713264),
-        geoJsonMunicipiosUrls: [
-            'https://edimarpcosta.github.io/geojson/geojs-35-mun.json',
-            'https://edimarpcosta.github.io/geojson/geojs-31-mun.json',
-        ],
-        geoJsonSpBoundaryUrls: [
-            'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json',
-            'http://edimarpcosta.github.io/geojson/UFs/br_sp.json'
+        geoJsonSources: [
+            {
+                id: 'municipiosSP',
+                description: 'Municípios de São Paulo',
+                urls: [
+                    'https://edimarpcosta.github.io/geojson/geojs-35-mun.json',
+                    'https://gitlab.c3sl.ufpr.br/simcaq/geodata-br/-/raw/master/geojson/geojs-35-mun.json',
+                    'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json'
+                ],
+                styleFunction: getCityStyle,
+                onFeatureCallback: onEachCityFeature,
+                paneName: null
+            },
+            {
+                id: 'municipiosMG',
+                description: 'Municípios de Minas Gerais',
+                urls: [
+                    'https://edimarpcosta.github.io/geojson/geojs-31-mun.json',
+                    'https://gitlab.c3sl.ufpr.br/simcaq/geodata-br/-/raw/master/geojson/geojs-31-mun.json',
+                    'https://raw.githubusercontent.com/tbrugz/geodata-br/refs/heads/master/geojson/geojs-31-mun.json'
+                ],
+                styleFunction: getCityStyle,
+                onFeatureCallback: onEachCityFeature,
+                paneName: null
+            },
+            {
+                id: 'limiteSP',
+                description: 'Limite do Estado de São Paulo',
+                urls: [
+				'http://edimarpcosta.github.io/geojson/UFs/br_sp.json',
+                'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json'
+                ],
+                styleFunction: () => CONSTANTS.SP_BOUNDARY_STYLE,
+                onFeatureCallback: null,
+                isBoundaryLayer: true,
+                paneName: 'boundaryPane'
+            }
         ],
         mapInitialView: { lat: -21.5, lng: -47.0 },
         mapInitialZoom: 7,
@@ -142,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeGroup: null, activeVendedorId: null, lastUpdateTime: null,
         cityInfoMarker: null, cityInfoMarkerTimeout: null, isMouseOverInfoIcon: false,
         currentRouteControl: null,
-        destinationMarkerForRoute: null, // Para guardar referência ao marcador de destino da rota
+        destinationMarkerForRoute: null,
     };
 
     const CONSTANTS = {
@@ -151,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
             VENDEDORES: 'sga_territoriale_vnd_v13_routing', LAST_UPDATE: 'sga_territoriale_upd_v13_routing',
             CITY_POPULATIONS: 'sga_territoriale_pop_v13_routing'
         },
-        DEFAULT_CITY_STYLE: { fillColor: '#3388ff', fillOpacity: 0, color: '#0000FF', weight: 0.3 },
+       DEFAULT_CITY_STYLE: { fillColor: '#3388ff', fillOpacity: 0, color: '#0000FF', weight: 0.3 },
         SELECTED_CITY_STYLE: { fillColor: '#ff7800', fillOpacity: 0.7, color: '#ff7800', weight: 3 },
         SP_BOUNDARY_STYLE: { color: "red", weight: 3, opacity: 0.8, fillOpacity: 0, dashArray: '5, 5', interactive: false },
         HIGHLIGHT_GROUP_STYLE: { fillColor: '#9b59b6', fillOpacity: 0.6, color: '#9b59b6', weight: 3 },
@@ -290,33 +320,56 @@ document.addEventListener('DOMContentLoaded', () => {
         AppState.map.getPane('routingPane').style.zIndex = 640;
     }
 
-    async function loadAndProcessGeoJson(urls, styleFunctionOrObject, onFeatureCallback, isBoundaryLayer = false, paneName) {
-        let combinedFeatures = []; let loadedCount = 0;
-        for (const url of urls) {
+    async function loadGeoJsonWithFallback(dataSet) {
+        showLoading(true, `Carregando: ${dataSet.description}...`);
+        let featuresLoaded = null;
+        console.log(`Iniciando carregamento para: ${dataSet.description}`);
+
+        for (const url of dataSet.urls) {
             try {
-                showLoading(true, `Carregando geo-dados (${++loadedCount} de ${urls.length})...`);
+                console.log(`Tentando carregar ${dataSet.description} de: ${url}`);
                 const response = await fetch(url);
-                if (!response.ok) throw new Error(`Falha ${response.status} ao carregar ${url}`);
+                if (!response.ok) {
+                    throw new Error(`Falha ${response.status} (${response.statusText}) ao carregar ${url}`);
+                }
                 const data = await response.json();
-                if (data.features) combinedFeatures.push(...data.features);
-                else if (["Feature", "Polygon", "MultiPolygon", "LineString", "MultiLineString"].includes(data.type)) combinedFeatures.push(data);
-                else console.warn(`GeoJSON de ${url} em formato inesperado.`);
-            } catch (error) { console.warn(`Erro GeoJSON ${url}:`, error.message); }
+                
+                if (data.features) {
+                    featuresLoaded = data.features;
+                } else if (["Feature", "Polygon", "MultiPolygon", "LineString", "MultiLineString"].includes(data.type)) {
+                    featuresLoaded = [data];
+                } else {
+                    console.warn(`GeoJSON de ${url} em formato inesperado.`, data);
+                    throw new Error(`Formato inesperado para ${url}`);
+                }
+                
+                console.log(`${dataSet.description} carregado com sucesso de: ${url}. Features: ${featuresLoaded.length}`);
+                break; 
+            } catch (error) {
+                console.warn(`Erro ao carregar ${dataSet.description} de ${url}:`, error.message);
+            }
         }
 
-        if (combinedFeatures.length === 0) {
-            const message = isBoundaryLayer ? 'Não foi possível carregar GeoJSON de fronteira.' : 'Falha ao carregar GeoJSON de municípios.';
-            if (isBoundaryLayer) console.warn(message); else throw new Error(message);
-            return null;
-        }
+        if (featuresLoaded && featuresLoaded.length > 0) {
+            const layerOptions = {
+                style: dataSet.styleFunction,
+                onEachFeature: dataSet.onFeatureCallback
+            };
+            if (dataSet.paneName && AppState.map.getPane(dataSet.paneName)) {
+                layerOptions.pane = dataSet.paneName;
+            }
 
-        const layerOptions = { style: styleFunctionOrObject, onEachFeature: onFeatureCallback };
-        if (paneName && AppState.map.getPane(paneName)) {
-            layerOptions.pane = paneName;
+            const geoJsonLayer = L.geoJSON({ type: "FeatureCollection", features: featuresLoaded }, layerOptions);
+            if (geoJsonLayer) {
+                geoJsonLayer.addTo(AppState.map);
+                console.log(`${dataSet.description} adicionado ao mapa.`);
+                return geoJsonLayer;
+            }
+        } else {
+            showNotification(`Falha ao carregar dados para: ${dataSet.description}`, 'danger', 7000);
+            console.error(`Não foi possível carregar ${dataSet.description} de nenhuma fonte.`);
         }
-        const geoJsonLayer = L.geoJSON({ type: "FeatureCollection", features: combinedFeatures }, layerOptions);
-        if (geoJsonLayer) geoJsonLayer.addTo(AppState.map);
-        return geoJsonLayer;
+        return null;
     }
 
     function onEachCityFeature(feature, layer) {
@@ -324,8 +377,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const cityId = feature.properties.id || feature.properties.CD_MUN || feature.properties.geocodigo || feature.properties.codarea || generateId();
 
         if (!cityName) { console.warn("Feature sem nome:", feature.properties); return; }
+        // console.log(`onEachCityFeature: Processando ${cityName}`); // LOG ADICIONADO
 
-        if (!AppState.cityLayers[cityName]) AppState.cityLayers[cityName] = layer;
+        if (!AppState.cityLayers[cityName]) {
+            AppState.cityLayers[cityName] = layer;
+        } else {
+            // console.warn(`Layer para a cidade ${cityName} já existe. Isso pode indicar dados duplicados de GeoJSON.`);
+        }
         AppState.normalizedCityNames[normalizeString(cityName)] = cityName;
 
         layer.on('click', (e) => handleCityClick(cityName, cityId, layer));
@@ -384,6 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayRouteToCity(destinationCoords, destinationCityName) {
+        console.log("displayRouteToCity - Iniciando para:", destinationCityName, "Coords:", destinationCoords); // LOG ADICIONADO
         if (!destinationCoords || typeof destinationCoords.lat === 'undefined' || typeof destinationCoords.lng === 'undefined') {
             console.error("Coordenadas de destino inválidas para roteamento:", destinationCoords);
             const routeDetailsEl = document.getElementById('route-details');
@@ -396,11 +455,10 @@ document.addEventListener('DOMContentLoaded', () => {
             AppState.map.removeControl(AppState.currentRouteControl);
             AppState.currentRouteControl = null;
         }
-        if (AppState.destinationMarkerForRoute) { // Remove marcador de destino anterior se existir
+        if (AppState.destinationMarkerForRoute) {
             AppState.map.removeLayer(AppState.destinationMarkerForRoute);
             AppState.destinationMarkerForRoute = null;
         }
-
 
         const routeDetailsEl = document.getElementById('route-details');
         if (routeDetailsEl) routeDetailsEl.innerHTML = '<p><em>Calculando rota... Por favor, aguarde.</em></p>';
@@ -412,14 +470,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ],
             routeWhileDragging: false,
             addWaypoints: false,
-            show: false, // Não mostra o painel de itinerário padrão
+            show: false, 
             fitSelectedRoutes: 'smart',
             lineOptions: {
                 styles: [{ color: '#03A9F4', opacity: 0.9, weight: 7 }],
                 pane: 'routingPane'
             },
             createMarker: function(i, waypoint, n) {
-                 // Marcador de Origem (Americana)
                 if (i === 0) {
                     return L.marker(waypoint.latLng, {
                         icon: L.icon({
@@ -431,27 +488,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: "Ameripan Distribuidora"
                     }).bindPopup("<b>Ameripan Distribuidora</b><br>Origem da Rota");
                 }
-                // Não criaremos o marcador de destino aqui diretamente, pois o faremos no 'routesfound'
-                // para poder adicionar o tooltip e popup com os dados da rota.
-                // No entanto, precisamos de um placeholder se o plugin precisar.
-                // Se quisermos controlar totalmente, podemos retornar null e adicionar os marcadores manualmente depois.
-                // Por simplicidade, vamos deixar o plugin criar o marcador visual de destino, e depois vamos recuperá-lo.
-                // Ou, melhor: não criar o marcador de destino aqui e criá-lo manualmente no routesfound.
-                // Para isso, precisamos que o plugin não falhe.
-                // Se o createMarker retorna null para o destino, o plugin pode não adicionar a interação padrão.
-                // Vamos criar um marcador simples aqui e atualizá-lo depois, ou criar um novo.
-                 if (i === n - 1) {
-                    // Criamos um marcador temporário ou apenas deixamos o plugin fazer o seu default
-                    // e o atualizaremos no routesfound. Vamos criar um novo marcador no routesfound.
-                    return null; // Não deixa o plugin criar o marcador de destino por padrão.
-                }
                 return null;
             }
         }).on('routesfound', function(e) {
             const routes = e.routes;
-            console.log("Rotas encontradas:", routes);
+            console.log("displayRouteToCity - Evento routesfound. Rotas:", routes); // LOG ADICIONADO
 
-            // Limpa marcador de destino anterior, caso exista de uma rota anterior
             if (AppState.destinationMarkerForRoute) {
                 AppState.map.removeLayer(AppState.destinationMarkerForRoute);
                 AppState.destinationMarkerForRoute = null;
@@ -476,8 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>Tempo estimado de viagem:</strong> ${timeStr}</p>
                     `;
                 }
-
-                // Adiciona o marcador de destino com tooltip e popup atualizados
+                
                 AppState.destinationMarkerForRoute = L.marker(destinationCoords, {
                     icon: L.icon({
                         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
@@ -490,15 +531,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 .bindTooltip(`<b>${destinationCityName}</b><br>${routeInfoText}`)
                 .bindPopup(`<b>Destino: ${destinationCityName}</b><br>${routeInfoText}`);
                 
-                // Ajusta o mapa se 'fitSelectedRoutes' não for suficiente ou para garantir padding
-                // AppState.map.fitBounds(routes[0].bounds, {padding: [70, 70]});
+                // Comentado para confiar no fitSelectedRoutes: 'smart'
+                /*
+                if (routes[0].bounds && typeof routes[0].bounds.isValid === 'function' && routes[0].bounds.isValid()) {
+                    AppState.map.fitBounds(routes[0].bounds, {padding: [70, 70]});
+                } else {
+                    console.warn("Route bounds are not valid for manual fitting, relying on fitSelectedRoutes if active.");
+                }
+                */
             } else {
                  if (routeDetailsEl) routeDetailsEl.innerHTML = '<p><em>Não foi possível calcular os detalhes da rota.</em></p>';
                  showNotification('Não foi possível encontrar uma rota para esta cidade (sem detalhes da rota).', 'warning');
                  console.warn("Nenhuma rota ou resumo encontrado:", routes);
             }
         }).on('routingerror', function(e) {
-            console.error("Erro de Roteamento Detalhado (routingerror event):", e); 
+            console.error("displayRouteToCity - Evento routingerror:", e);  // LOG ADICIONADO
             let errorMessage = "Erro ao calcular a rota.";
             if (e.error) {
                 errorMessage += ` (${e.error.message || 'Detalhes indisponíveis'})`;
@@ -517,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     async function handleCityClick(cityName, cityId, layer) {
+        console.log("handleCityClick - City:", cityName, "ID:", cityId, "Layer:", layer); // LOG ADICIONADO
         AppState.selectedCity = { name: cityName, id: cityId, layer: layer };
         removeCityInfoMarker();
         resetMapStyles();
@@ -527,7 +575,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (layer.getBounds && typeof layer.getBounds === 'function') {
             const destinationCoords = layer.getBounds().getCenter();
-            displayRouteToCity(destinationCoords, cityName);
+            console.log("handleCityClick - Destination Coords:", destinationCoords); // LOG ADICIONADO
+            if (destinationCoords && typeof destinationCoords.lat !== 'undefined' && typeof destinationCoords.lng !== 'undefined') {
+                displayRouteToCity(destinationCoords, cityName);
+            } else {
+                console.error("handleCityClick - Coordenadas de destino inválidas após getCenter()", destinationCoords);
+                const routeDetailsEl = document.getElementById('route-details');
+                if (routeDetailsEl) routeDetailsEl.innerHTML = '<p><em>Erro: Coordenadas de destino inválidas.</em></p>';
+                 showNotification('Erro interno: Coordenadas de destino inválidas para rota.', 'danger');
+            }
         } else {
             console.warn("Layer da cidade não possui getBounds(), não é possível obter centro para rota.", layer);
             const routeDetailsEl = document.getElementById('route-details');
@@ -760,7 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </a>
             </div>
             <div id="route-details" class="mt-15 bt-eee pt-15">
-                <p class="empty-message">Calculando rota desde Americana...</p>
+                <p class="empty-message">Clique em uma cidade para ver a rota desde Americana.</p>
             </div>`;
         DOMElements.selectedCityActions.classList.remove('hidden');
         DOMElements.assignVendedorButton.innerHTML = assignedVendedorIds?.length > 0 ? '<i class="fas fa-user-tie"></i> Gerenciar Vendedores' : '<i class="fas fa-user-tie"></i> Atribuir Vendedor';
@@ -915,25 +971,22 @@ document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners();
         try {
             loadSavedData();
-            const municipiosGeoJson = await loadAndProcessGeoJson(
-                AppConfig.geoJsonMunicipiosUrls,
-                getCityStyle,
-                onEachCityFeature,
-                false
-            );
 
-            if (!municipiosGeoJson || Object.keys(AppState.cityLayers).length === 0) {
-                 showNotification("Falha ao carregar dados geográficos dos municípios. Algumas funcionalidades podem ser limitadas.", "danger", 10000);
+            for (const dataSet of AppConfig.geoJsonSources) {
+                await loadGeoJsonWithFallback(dataSet);
             }
-
-            await loadAndProcessGeoJson(AppConfig.geoJsonSpBoundaryUrls, () => CONSTANTS.SP_BOUNDARY_STYLE, null, true, 'boundaryPane');
+            
+            if (Object.keys(AppState.cityLayers).length === 0 && 
+                (AppConfig.geoJsonSources.some(ds => ds.id.startsWith('municipios')))) {
+                 showNotification("Falha ao carregar dados geográficos dos municípios. Algumas funcionalidades podem ser limitadas.", "danger", 10000);
+                 console.error("Nenhuma camada de cidade (municípios) foi carregada. Verifique os URLs e a rede.");
+            }
 
             if (Object.keys(AppState.cityPopulations).length === 0) {
                  await fetchCityPopulation(null, true);
             }
 
             await loadDataFromSheets();
-
             updateUIAfterDataLoad();
 
         } catch (error) {
