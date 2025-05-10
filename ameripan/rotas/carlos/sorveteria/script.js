@@ -1,100 +1,172 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     // ========= CONFIGURAÇÃO DA APLICAÇÃO =========
     const AppConfig = {
-        spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk",
-        // ---------------------------------------------------------------------------
-        // !!!!! ALERTA DE SEGURANÇA !!!!!
-        // A API KEY ABAIXO ESTÁ EXPOSTA NO CÓDIGO DO CLIENTE.
-        // ISSO É UM RISCO DE SEGURANÇA.
-        // VOCÊ DEVE:
-        // 1. (IDEAL) Mover a lógica de acesso ao Google Sheets para um BACKEND.
-        // 2. (MÍNIMO) RESTRINGIR SEVERAMENTE esta API Key no Google Cloud Console:
-        //    - Apenas para a API do Google Sheets.
-        //    - Apenas para os domínios HTTP onde sua aplicação está hospedada.
-        //    - Se possível, para acesso de LEITURA apenas à planilha específica.
-        //    NÃO USE UMA API KEY NÃO RESTRITA EM PRODUÇÃO NO FRONTEND.
-        // SUBSTITUA "SUA_API_KEY_RESTRITA_AQUI" PELA SUA CHAVE CONFIGURADA.
-        // ---------------------------------------------------------------------------
-        apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // EXEMPLO: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo"
-        range: "sorveteria", // Aba da planilha
-        geoJsonUrls: [ // URLs para fallback do GeoJSON
-		    'https://edimarpcosta.github.io/geojson/geojs-35-mun.json',
-			'https://gitlab.c3sl.ufpr.br/simcaq/geodata-br/-/raw/master/geojson/geojs-35-mun.json',
-            'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json',
-            'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/geojson/geojs-35-mun.json'
-            // Adicione mais URLs de fallback confiáveis aqui, se disponíveis
+        spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk", // SEU ID DA PLANILHA
+        apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // !!!!! SUBSTITUA PELA SUA API KEY RESTRINGIDA !!!!!
+        range: "sorveteria", // Aba da planilha com os dados dos vendedores
+        geoJsonMunicipiosUrls: [
+            'https://edimarpcosta.github.io/geojson/geojs-35-mun.json', // SP
+            'https://edimarpcosta.github.io/geojson/geojs-31-mun.json', // MG
+            // Backups ou fontes alternativas, se necessário
+            // 'https://gitlab.c3sl.ufpr.br/simcaq/geodata-br/-/raw/master/geojson/geojs-35-mun.json',
+            // 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json',
         ],
-        weatherApiGeocode: 'https://geocoding-api.open-meteo.com/v1/search',
-        weatherApiForecast: 'https://api.open-meteo.com/v1/forecast',
-        mapInitialView: { lat: -23.5505, lng: -46.6333 },
-        mapInitialZoom: 7,
-        // Cores para os vendedores (excluindo vermelho, que é para destaque)
-        vendedorColors: [
-            '#ffd700', '#1f3a93', '#616a6b', '#7d3c98', '#27ae60', '#a04000', '#48d1cc',
-            '#f1c40f', '#8e44ad', '#95a5a6', '#196f3d', '#d68910', '#5dade2', '#40e0d0',
-            '#6e2c00', '#bb8fce', '#1e8449', '#808080', '#f39c12', '#21618c', '#c19a6b',
-            '#9b59b6', '#a9dfbf', '#566573', '#d35400', '#117a65', '#9370db', '#6495ed',
-            '#229954', '#d7bde2', '#5b2c6f', '#f8c471', '#4682b4', '#1abc9c', '#d2b48c',
-            '#7f8c8d', '#00fa9a', '#6a0dad', '#f4d03f', '#87ceeb', '#cd853f', '#2980b9',
-            '#76d7c4', '#00ced1', '#8a2be2', '#f5cba7', '#16a085', '#ffdb58', '#00a86b', '#5d6d7e'
+        geoJsonSpBoundaryUrls: [ // GeoJSON para a fronteira do estado de SP
+            'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json',
+            'http://edimarpcosta.github.io/geojson/UFs/br_sp.json'
         ],
-        diasSemana: ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'],
-        meses: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+        mapInitialView: { lat: -21.5, lng: -47.0 }, // Coordenadas centrais aproximadas de SP
+        mapInitialZoom: 7, // Zoom inicial do mapa
+       vendedorColors: [
+    // Grupo 1: Cores Primárias e Secundárias Fortes (Alto Contraste) - 12 cores
+    '#FF0000', // 1. Vermelho Puro
+    '#0000FF', // 2. Azul Puro
+    '#008000', // 3. Verde Puro
+    '#FFA500', // 4. Laranja Puro
+    '#800080', // 5. Roxo Puro
+    '#FFFF00', // 6. Amarelo Puro (ATENÇÃO: MUITO CLARO COM OPACIDADE 0.5, considere substituir)
+    // Substituição para Amarelo:
+    // '#FFD700', // Amarelo Ouro (um pouco menos claro)
+    // '#F9A825', // Âmbar (Ainda melhor, mais escuro)
+    '#F9A825', // 6. Âmbar (Substituindo Amarelo Puro)
+    '#FF00FF', // 7. Magenta Puro (Fúcsia)
+    '#00FFFF', // 8. Ciano Puro (Aqua) (ATENÇÃO: MUITO CLARO COM OPACIDADE 0.5, considere substituir)
+    // Substituição para Ciano:
+    // '#008080', // Teal (bem mais escuro e seguro)
+    '#008B8B', // 8. Ciano Escuro (DarkCyan, Substituindo Ciano Puro)
+    '#A52A2A', // 9. Marrom
+    '#800000', // 10. Vinho (Maroon)
+    '#000080', // 11. Azul Marinho (Navy)
+    '#808000', // 12. Oliva
+
+    // Grupo 2: Variações Fortes e Tons Escuros Distintos - 18 cores (Total 30)
+    '#E6194B', // 13. Vermelho Rubi
+    '#3CB44B', // 14. Verde Esmeralda
+    '#4363D8', // 15. Azul Cobalto
+    '#F58231', // 16. Laranja Abóbora
+    '#911EB4', // 17. Roxo Ametista
+    '#F032E6', // 18. Rosa Choque
+    '#008080', // 19. Teal (Verde-azulado Escuro)
+    '#9A6324', // 20. Marrom Sela
+    '#000000', // 21. Preto (Para contraste máximo, se aplicável) - Pode ser '#2F4F4F' (Cinza Ardósia Escuro) se preto puro for demais.
+    '#17A2B8', // 22. Azul Petróleo Claro / Ciano Escuro
+    '#FF1493', // 23. Rosa Pink Forte (DeepPink)
+    '#E6B333', // 24. Amarelo Mostarda Escuro
+    '#B34D4D', // 25. Terracota / Vermelho Queimado
+    '#809900', // 26. Verde Limão Escuro
+    '#6610F2', // 27. Roxo Índigo Vibrante
+    '#E6331A', // 28. Vermelho Tomate Intenso
+    '#005C00', // 29. Verde Muito Escuro
+    '#D23E9A', // 30. Rosa Forte / Fúcsia Médio
+
+    // Grupo 3: Mais Cores Vibrantes e Escuras - 20 cores (Total 50)
+    '#FF6B00', // 31. Laranja Vibrante Escuro
+    '#7000A0', // 32. Roxo Escuro Intenso
+    '#C20000', // 33. Vermelho Sangue Escuro
+    '#0075AC', // 34. Azul Aço
+    '#AD1457', // 35. Vinho Rosado Forte (Framboesa Escuro)
+    '#3B7A57', // 36. Verde Floresta Escuro
+    '#BF360C', // 37. Laranja Queimado Bem Escuro
+    '#4A148C', // 38. Roxo Bispo (Muito Escuro)
+    '#004D40', // 39. Teal Muito Escuro (Quase Preto-azulado)
+    '#880E4F', // 40. Magenta Escuro / Borgonha
+    '#2E7D32', // 41. Verde Escuro Sólido
+    '#D32F2F', // 42. Vermelho Cardinal Forte
+    '#4527A0', // 43. Roxo Azulado Escuro
+    '#EF6C00', // 44. Laranja Âmbar Forte
+    '#01579B', // 45. Azul Náutico Escuro
+    '#B71C1C', // 46. Vermelho Fogo Escuro
+    '#1B5E20', // 47. Verde Pinheiro Muito Escuro
+    '#E65100', // 48. Laranja Abóbora Escuro
+    '#C51162', // 49. Rosa Escuro Vibrante
+    '#006064', // 50. Ciano Muito Escuro
+
+    // Grupo 4: Tons Médios Fortes e Outras Variações - 20 cores (Total 70)
+    '#FF6F00', // 51. Laranja Manga Escuro
+    '#3E2723', // 52. Marrom Café Muito Escuro
+    '#B22222', // 53. Vermelho Tijolo (Firebrick)
+    '#556B2F', // 54. Verde Oliva Escuro (DarkOliveGreen)
+    '#483D8B', // 55. Azul Ardósia Escuro (DarkSlateBlue)
+    '#FF8C00', // 56. Laranja Escuro (DarkOrange)
+    '#9932CC', // 57. Orquídea Escura (DarkOrchid)
+    '#8B008B', // 58. Magenta Escuro (DarkMagenta) - pode ser similar a #880E4F
+    '#2F4F4F', // 58. Cinza Ardósia Escuro (DarkSlateGray) (Substituído)
+    '#9400D3', // 59. Violeta Escuro (DarkViolet)
+    '#DC143C', // 60. Vermelho Carmesim (Crimson)
+    '#228B22', // 61. Verde Floresta (ForestGreen)
+    '#4169E1', // 62. Azul Real (RoyalBlue)
+    '#8A2BE2', // 63. Azul Violeta (BlueViolet)
+    '#D2691E', // 64. Chocolate (Marrom Médio)
+    '#FF7F50', // 65. Coral (Laranja Rosado)
+    '#B8860B', // 66. Dourado Escuro (DarkGoldenrod)
+    '#006400', // 67. Verde Escuro (DarkGreen) - pode ser similar a #005C00 / #1B5E20
+    '#4B0082', // 68. Índigo (Indigo) - pode ser similar a #6610F2 / #4A148C
+    '#CD5C5C', // 69. Coral Indiano (IndianRed)
+    '#6B8E23', // 70. Verde Oliva Amarelado (OliveDrab)
+
+    // Grupo 5: Completando até 100 com mais variações, evitando os muito claros - 30 cores (Total 100)
+    '#4682B4', // 71. Azul Aço (SteelBlue)
+    '#A0522D', // 72. Siena (Marrom Avermelhado)
+    '#C71585', // 73. Violeta Vermelho Médio (MediumVioletRed)
+    '#32CD32', // 74. Verde Limão (LimeGreen)
+    '#DB7093', // 75. Vermelho Violeta Pálido (PaleVioletRed, mas ainda forte)
+    '#CD853F', // 76. Peru (Marrom Avermelhado Médio)
+    '#BA55D3', // 77. Orquídea Média (MediumOrchid)
+    '#7B68EE', // 78. Azul Ardósia Médio (MediumSlateBlue)
+    '#6A5ACD', // 79. Azul Ardósia (SlateBlue)
+    '#DAA520', // 80. Vareta Dourada (Goldenrod)
+    '#20B2AA', // 81. Verde Mar Claro (LightSeaGreen)
+    '#66CDAA', // 82. Água Marinha Média (MediumAquamarine)
+    '#E9967A', // 83. Salmão Escuro (DarkSalmon)
+    '#FF4500', // 84. Laranja Avermelhado (OrangeRed)
+    '#F08080', // 85. Coral Claro (LightCoral)
+    '#DDA0DD', // 86. Ameixa (Plum)
+    '#FFA07A', // 87. Salmão Claro (LightSalmon)
+    '#2E8B57', // 88. Verde Mar (SeaGreen)
+    '#708090', // 89. Cinza Ardósia (SlateGray)
+    '#6A0DAD', // 90. Roxo Brilhante Intenso
+    '#C04000', // 91. Marrom Mogno
+    '#BD572A', // 92. Marrom Argila
+    '#DE3163', // 93. Vermelho Cereja
+    '#FD6A02', // 94. Laranja Abóbora Brilhante
+    '#088F8F', // 95. Verde Azul Marinho
+    '#AA00FF', // 96. Roxo Elétrico
+    '#FFBF00', // 97. Âmbar Dourado
+    '#B03060', // 98. Vermelho Marrom (Maroon Red)
+    '#5F4B8B', // 99. Roxo Imperial Escuro (Novo)
+    '#00A86B'  // 100. Verde Jade Escuro (Novo)
+],
     };
 
-    // ========= ESTADO DA APLICAÇÃO =========
     const AppState = {
-        map: null,
-        selectedCity: null, // { name: string, id: string, layer: L.Layer }
-        cityLayers: {}, // { cityName: L.Layer }
-        normalizedCityNames: {}, // { normalizedName: originalName }
-        favorites: [], // Array de objetos { name: string, id: string }
-        groups: {}, // { groupName: [cityName1, cityName2] }
-        vendedores: [], // Array de objetos { id, nome, supervisor, email, telefone, color }
-        cityAssignments: {}, // { cityName: [vendedorId1, vendedorId2] }
-        activeGroup: null, // Nome do grupo ativo
-        activeVendedorId: null, // ID do vendedor ativo
-        lastUpdateTime: null, // Data da última atualização da planilha
-        weatherMarkers: [], // Array de marcadores de clima no mapa
-        currentWeatherModalCity: null // Guarda a cidade do modal de clima aberto
+        map: null, selectedCity: null, cityLayers: {}, normalizedCityNames: {},
+        cityPopulations: {}, favorites: [], groups: {}, vendedores: [], cityAssignments: {},
+        activeGroup: null, activeVendedorId: null, lastUpdateTime: null,
+        cityInfoMarker: null, cityInfoMarkerTimeout: null, isMouseOverInfoIcon: false,
     };
 
-    // ========= CONSTANTES =========
     const CONSTANTS = {
         LOCAL_STORAGE_KEYS: {
-            FAVORITES: 'sga territoriale_spMapFavorites',
-            GROUPS: 'sga territoriale_spMapGroups',
-            VENDEDORES: 'sga territoriale_spMapVendedores',
-            ASSIGNMENTS: 'sga territoriale_spMapAssignments',
-            LAST_UPDATE: 'sga territoriale_spMapLastUpdate'
+            FAVORITES: 'sga_territoriale_fav_v12_flexmatch', GROUPS: 'sga_territoriale_grp_v12_flexmatch',
+            VENDEDORES: 'sga_territoriale_vnd_v12_flexmatch', LAST_UPDATE: 'sga_territoriale_upd_v12_flexmatch',
+            CITY_POPULATIONS: 'sga_territoriale_pop_v12_flexmatch'
         },
-        DEFAULT_CITY_STYLE: {
-            fillColor: '#3388ff', fillOpacity: 0.2, color: '#3388ff', weight: 1, dashArray: ''
-        },
-        SELECTED_CITY_STYLE: {
-            fillColor: '#ff7800', fillOpacity: 0.7, color: '#ff7800', weight: 3, dashArray: ''
-        },
-        HIGHLIGHT_GROUP_STYLE: {
-            fillColor: '#9b59b6', fillOpacity: 0.6, color: '#9b59b6', weight: 3, dashArray: ''
-        },
-        HIGHLIGHT_VENDEDOR_STYLE: { // Cor para destacar cidades de um vendedor
-            fillColor: '#e74c3c', fillOpacity: 0.7, color: '#e74c3c', weight: 3, dashArray: ''
-        },
-        MULTIPLE_VENDEDORES_STYLE: { // Cor para cidades com múltiplos vendedores
-            fillColor: '#ff9800', fillOpacity: 0.6, color: '#ff9800', weight: 2, dashArray: '5, 5'
-        }
+         DEFAULT_CITY_STYLE: { fillColor: '#3388ff', fillOpacity: 0, color: '#0000FF', weight: 0.3 },
+        SELECTED_CITY_STYLE: { fillColor: '#ff7800', fillOpacity: 0.7, color: '#ff7800', weight: 3 },
+        SP_BOUNDARY_STYLE: { color: "red", weight: 3, opacity: 0.8, fillOpacity: 0, dashArray: '5, 5', interactive: false },
+        HIGHLIGHT_GROUP_STYLE: { fillColor: '#9b59b6', fillOpacity: 0.6, color: '#9b59b6', weight: 3 },
+        HIGHLIGHT_VENDEDOR_STYLE: { fillColor: '#e74c3c', fillOpacity: 0.7, color: '#e74c3c', weight: 3 },
+        MULTIPLE_VENDEDORES_STYLE: { fillColor: '#f39c12', fillOpacity: 0.6, color: '#f39c12', weight: 2, dashArray: '5, 5' }
     };
 
-    // ========= ELEMENTOS DO DOM (Cache) =========
-    const DOMElements = {}; // Será populado em initDOMElements
+    const DOMElements = {};
 
+    // ========= FUNÇÕES UTILITÁRIAS =========
     function initDOMElements() {
         DOMElements.loadingOverlay = document.getElementById('loading-overlay');
         DOMElements.loadingMessage = document.getElementById('loading-message');
         DOMElements.syncStatus = document.getElementById('sync-status');
         DOMElements.sidebar = document.getElementById('sidebar');
-        DOMElements.sidebarTitle = document.getElementById('sidebar-title');
         DOMElements.toggleSidebarButton = document.getElementById('toggle-sidebar');
         DOMElements.sidebarTabsContainer = document.getElementById('sidebar-tabs');
         DOMElements.tabButtons = document.querySelectorAll('.tab-button');
@@ -115,70 +187,69 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.lastUpdateSpan = document.getElementById('last-update');
         DOMElements.spreadsheetIdDisplay = document.getElementById('spreadsheet-id-display');
         DOMElements.configRangeNameDisplay = document.querySelector('.config-range-name');
-
-        DOMElements.weatherVendedorSelect = document.getElementById('weather-vendedor-select');
-        DOMElements.showWeatherForVendedorButton = document.getElementById('show-weather-for-vendedor');
-        DOMElements.clearWeatherMarkersButton = document.getElementById('clear-weather-markers');
-
         DOMElements.modalAssignVendedor = document.getElementById('modal-assign-vendedor');
         DOMElements.assignCityNameSpan = document.getElementById('assign-city-name').querySelector('strong');
         DOMElements.currentVendedoresContainer = document.getElementById('current-vendedores-container');
         DOMElements.assignedVendedoresList = document.getElementById('assigned-vendedores-list');
         DOMElements.assignVendedorSelect = document.getElementById('assign-vendedor-select');
         DOMElements.confirmAssignVendedorButton = document.getElementById('confirm-assign-vendedor');
-
         DOMElements.modalVendedorDetails = document.getElementById('modal-vendedor-details');
         DOMElements.vendedorDetailsModalTitle = document.getElementById('vendedor-details-modal-title');
-        DOMElements.detailVendedorNomeSpan = document.getElementById('detail-vendedor-nome');
-        DOMElements.detailVendedorSupervisorSpan = document.getElementById('detail-vendedor-supervisor');
+        DOMElements.vendedorInfoDiv = DOMElements.modalVendedorDetails.querySelector('#vendedor-info');
         DOMElements.vendedorCidadesList = document.getElementById('vendedor-cidades-list');
         DOMElements.highlightVendedorCitiesButton = document.getElementById('highlight-vendedor-cities-button');
-        
-        DOMElements.modalWeatherForecast = document.getElementById('modal-weather-forecast');
-        DOMElements.weatherModalTitle = document.getElementById('weather-modal-title');
-        DOMElements.weatherModalBody = document.getElementById('weather-modal-body');
-
+        DOMElements.modalCityDetails = document.getElementById('modal-city-details');
+        DOMElements.cityDetailsModalTitle = document.getElementById('city-details-modal-title');
+        DOMElements.cityDetailsModalBody = document.getElementById('city-details-modal-body');
         DOMElements.notificationContainer = document.getElementById('notification-container');
-        DOMElements.mapContainer = document.getElementById('map'); // O div que contém o mapa
+        DOMElements.mapContainer = document.getElementById('map');
     }
 
-    // ========= FUNÇÕES UTILITÁRIAS =========
     function normalizeString(str) {
         if (!str) return '';
-        str = String(str).toLowerCase();
-        str = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        // Cuidado: remove hífens e apóstrofos. Pode ser necessário ajustar para cidades como "Mogi-Guaçu".
-        str = str.replace(/[^\w\s-]/g, ''); // Mantém hífens
-        str = str.replace(/\s+/g, ' ').trim();
-        return str;
+        let s = String(str).toLowerCase();
+        s = s.replace(/\b([a-zà-ú]+)['’]([a-zà-ú])/gi, '$1 $2');
+        s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        s = s.replace(/['’]/g, '');
+        s = s.replace(/[^a-z0-9\s-]/g, ' ');
+        s = s.replace(/\s+/g, ' ').trim();
+        return s;
+    }
+
+    function toSimpleForm(normalizedName) {
+        if (!normalizedName) return '';
+        let simple = normalizedName;
+        simple = simple.replace(/\s+\b(d|de|do|da|dos|das)\b\s+/g, ' ');
+        simple = simple.replace(/^\b(d|de|do|da|dos|das)\b\s+/g, '');
+        simple = simple.replace(/\s+\b(d|de|do|da|dos|das)\b$/g, '');
+        if (!/^(d|de|do|da|dos|das)$/.test(simple.trim())) {
+             simple = simple.replace(/^(d|de|do|da|dos|das)$/, '');
+        }
+        return simple.trim();
     }
 
     function showNotification(message, type = 'success', duration = 5000) {
-        const notification = document.createElement('div');
-        notification.className = `alert alert-${type}`;
-        notification.textContent = message;
-        DOMElements.notificationContainer.appendChild(notification);
-
+        const el = document.createElement('div');
+        el.className = `alert alert-${type}`;
+        el.textContent = message;
+        DOMElements.notificationContainer.appendChild(el);
         setTimeout(() => {
-            notification.classList.add('fade-out');
-            setTimeout(() => {
-                if (DOMElements.notificationContainer.contains(notification)) {
-                    DOMElements.notificationContainer.removeChild(notification);
-                }
-            }, 500); // Tempo para a animação de fade-out
+            el.classList.add('fade-out');
+            setTimeout(() => el.remove(), 500);
         }, duration);
     }
 
     function openModal(modalElement) {
-        modalElement.classList.add('show');
+        if (modalElement) modalElement.classList.add('show');
     }
 
     function closeModal(modalElement) {
-        modalElement.classList.remove('show');
+        if (modalElement) modalElement.classList.remove('show');
     }
 
     function closeAllModals() {
-        document.querySelectorAll('.modal.show').forEach(modal => closeModal(modal));
+        document.querySelectorAll('.modal.show').forEach(closeModal);
+        removeCityInfoMarker();
     }
 
     function generateId() {
@@ -187,346 +258,294 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDateTime(date) {
         if (!date) return "Nunca";
-        const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-        return new Date(date).toLocaleDateString('pt-BR', options);
+        return new Date(date).toLocaleDateString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
     }
 
     function showLoading(show = true, message = "Carregando...") {
         DOMElements.loadingMessage.textContent = message;
-        if (show) {
-            DOMElements.loadingOverlay.classList.remove('hidden');
-        } else {
-            DOMElements.loadingOverlay.classList.add('hidden');
-        }
+        DOMElements.loadingOverlay.classList.toggle('hidden', !show);
     }
 
     function showSyncStatus(show = true) {
         DOMElements.syncStatus.style.display = show ? 'block' : 'none';
     }
 
-    // ========= FUNÇÕES DO MAPA =========
+    // ========= MAPA =========
     function initMap() {
-        AppState.map = L.map(DOMElements.mapContainer).setView([AppConfig.mapInitialView.lat, AppConfig.mapInitialView.lng], AppConfig.mapInitialZoom);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        AppState.map = L.map(DOMElements.mapContainer, {
+            dragging: true, touchZoom: true, doubleClickZoom: true,
+            scrollWheelZoom: true, boxZoom: true, keyboard: true, tap: true,
+        }).setView(AppConfig.mapInitialView, AppConfig.mapInitialZoom);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 18, keepBuffer: 2
         }).addTo(AppState.map);
+
+        AppState.map.createPane('boundaryPane');
+        AppState.map.getPane('boundaryPane').style.zIndex = 650;
     }
 
-    async function loadGeoJsonWithFallback() {
-        for (const url of AppConfig.geoJsonUrls) {
+    async function loadAndProcessGeoJson(urls, styleFunctionOrObject, onFeatureCallback, isBoundaryLayer = false, paneName) {
+        let combinedFeatures = []; let loadedCount = 0;
+        for (const url of urls) {
             try {
-                showLoading(true, `Carregando mapa de ${new URL(url).hostname}...`);
+                showLoading(true, `Carregando geo-dados (${++loadedCount} de ${urls.length})...`);
                 const response = await fetch(url);
-                if (!response.ok) {
-                    if (response.status === 429) {
-                        console.warn(`Erro 429 (Too Many Requests) para ${url}. Tentando próximo fallback.`);
-                    } else {
-                        throw new Error(`Falha ao carregar GeoJSON de ${url}: ${response.status} ${response.statusText}`);
-                    }
-                } else {
-                    const data = await response.json();
-                    showLoading(true, 'Mapa carregado. Processando cidades...');
-                    return data;
-                }
-            } catch (error) {
-                console.warn(`Erro ao carregar GeoJSON de ${url}:`, error.message);
-                 // Adiciona um pequeno delay antes de tentar a próxima URL
-                if (AppConfig.geoJsonUrls.indexOf(url) < AppConfig.geoJsonUrls.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                }
-            }
+                if (!response.ok) throw new Error(`Falha ${response.status} ao carregar ${url}`);
+                const data = await response.json();
+                if (data.features) combinedFeatures.push(...data.features);
+                else if (["Feature", "Polygon", "MultiPolygon", "LineString", "MultiLineString"].includes(data.type)) combinedFeatures.push(data);
+                else console.warn(`GeoJSON de ${url} em formato inesperado.`);
+            } catch (error) { console.warn(`Erro GeoJSON ${url}:`, error.message); }
         }
-        throw new Error('Falha ao carregar GeoJSON de todas as fontes de fallback.');
+
+        if (combinedFeatures.length === 0) {
+            const message = isBoundaryLayer ? 'Não foi possível carregar GeoJSON de fronteira.' : 'Falha ao carregar GeoJSON de municípios.';
+            if (isBoundaryLayer) console.warn(message); else throw new Error(message);
+            return null;
+        }
+
+        const layerOptions = { style: styleFunctionOrObject, onEachFeature: onFeatureCallback };
+        if (paneName && AppState.map.getPane(paneName)) layerOptions.pane = paneName;
+
+        const geoJsonLayer = L.geoJSON({ type: "FeatureCollection", features: combinedFeatures }, layerOptions);
+        if (geoJsonLayer) geoJsonLayer.addTo(AppState.map);
+        return geoJsonLayer;
     }
 
-    function processGeoJsonData(geoJsonData) {
-        L.geoJSON(geoJsonData, {
-            style: CONSTANTS.DEFAULT_CITY_STYLE,
-            onEachFeature: (feature, layer) => {
-                const cityName = feature.properties.name;
-                const cityId = feature.properties.id;
+    function onEachCityFeature(feature, layer) {
+        const cityName = feature.properties.name || feature.properties.NOME_MUN || feature.properties.NM_MUN;
+        const cityId = feature.properties.id || feature.properties.CD_MUN || feature.properties.geocodigo || feature.properties.codarea || generateId();
 
-                AppState.cityLayers[cityName] = layer;
-                AppState.normalizedCityNames[normalizeString(cityName)] = cityName;
+        if (!cityName) { console.warn("Feature sem nome:", feature.properties); return; }
 
-                layer.on('click', () => handleCityClick(cityName, cityId, layer));
-                layer.bindTooltip(cityName, {
-                    permanent: false, direction: 'center', className: 'city-tooltip'
+        if (!AppState.cityLayers[cityName]) AppState.cityLayers[cityName] = layer;
+        AppState.normalizedCityNames[normalizeString(cityName)] = cityName;
+
+        layer.on('click', (e) => handleCityClick(cityName, cityId, layer));
+        layer.on('dblclick', (e) => showCityDetailsModal(cityName, cityId));
+        layer.on('mouseover', function (eL) {
+            if (AppState.cityInfoMarkerTimeout) clearTimeout(AppState.cityInfoMarkerTimeout);
+            if (document.querySelector('.modal.show')) return;
+            if (!AppState.cityInfoMarker || AppState.cityInfoMarker.options.cityName !== cityName) {
+                removeCityInfoMarker();
+                const markerLatLng = this.getBounds().getCenter();
+                const customIcon = L.divIcon({ className: 'city-info-icon-marker', html: `<i class="fas fa-info-circle"></i>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+                AppState.cityInfoMarker = L.marker(markerLatLng, { icon: customIcon, interactive: true, cityName: cityName, bubblingMouseEvents: false }).addTo(AppState.map);
+                AppState.cityInfoMarker.on('mouseover', async function(evIcon) {
+                    AppState.isMouseOverInfoIcon = true; if (AppState.cityInfoMarkerTimeout) clearTimeout(AppState.cityInfoMarkerTimeout);
+                    const tooltip = this.getTooltip(); if (tooltip && typeof this.isTooltipOpen === 'function' && this.isTooltipOpen()) return;
+                    const tooltipContent = await generateCityTooltipContent(this.options.cityName);
+                    this.bindTooltip(tooltipContent, { permanent: false, direction: 'top', offset: L.point(0, -15), className: 'city-info-tooltip', interactive: true }).openTooltip();
                 });
+                AppState.cityInfoMarker.on('mouseout', function(evIcon) {
+                    AppState.isMouseOverInfoIcon = false; const self = this; if (AppState.cityInfoMarkerTimeout) clearTimeout(AppState.cityInfoMarkerTimeout);
+                    AppState.cityInfoMarkerTimeout = setTimeout(() => { const tooltip = self.getTooltip(); if (!AppState.isMouseOverInfoIcon && AppState.cityInfoMarker === self && !(tooltip && self.isTooltipOpen && self.isTooltipOpen())) removeCityInfoMarker(); }, 300);
+                });
+                AppState.cityInfoMarker.on('click', (eClickIcon) => { L.DomEvent.stopPropagation(eClickIcon); showCityDetailsModal(AppState.cityInfoMarker.options.cityName, cityId); });
             }
-        }).addTo(AppState.map);
+        });
+        layer.on('mouseout', function (eL) {
+            if (AppState.cityInfoMarkerTimeout) clearTimeout(AppState.cityInfoMarkerTimeout);
+            AppState.cityInfoMarkerTimeout = setTimeout(() => { if (!AppState.isMouseOverInfoIcon && AppState.cityInfoMarker && AppState.cityInfoMarker.options.cityName === cityName) removeCityInfoMarker(); }, 450);
+        });
+        layer.bindTooltip(cityName, { permanent: false, direction: 'center', className: 'city-tooltip' });
     }
 
-    function handleCityClick(cityName, cityId, layer) {
-        AppState.selectedCity = { name: cityName, id: cityId, layer: layer };
-        
-        resetMapStyles(); // Reseta todos
-        setLayerStyle(layer, CONSTANTS.SELECTED_CITY_STYLE); // Destaca o selecionado
-        if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-            layer.bringToFront();
+    function removeCityInfoMarker() {
+        if (AppState.cityInfoMarker) {
+            AppState.cityInfoMarker.off('mouseover').off('mouseout').off('click');
+            const tooltip = AppState.cityInfoMarker.getTooltip(); if (tooltip && typeof AppState.cityInfoMarker.isTooltipOpen === 'function' && AppState.cityInfoMarker.isTooltipOpen()) AppState.cityInfoMarker.closeTooltip().unbindTooltip();
+            if (AppState.map && AppState.map.hasLayer(AppState.cityInfoMarker)) AppState.map.removeLayer(AppState.cityInfoMarker);
+            AppState.cityInfoMarker = null;
         }
-
-        updateSelectedCityInfo();
-        
-        if (DOMElements.sidebar.classList.contains('collapsed')) {
-            DOMElements.toggleSidebarButton.click();
-        }
-        // Ativa a aba de busca
-        DOMElements.tabButtons.forEach(btn => btn.classList.remove('active'));
-        DOMElements.tabContents.forEach(content => content.classList.remove('active'));
-        document.querySelector('.tab-button[data-tab="search"]').classList.add('active');
-        document.getElementById('tab-search').classList.add('active');
+        if (AppState.cityInfoMarkerTimeout) { clearTimeout(AppState.cityInfoMarkerTimeout); AppState.cityInfoMarkerTimeout = null; }
+        AppState.isMouseOverInfoIcon = false;
     }
 
-    function setLayerStyle(layer, style) {
-        if (layer && typeof layer.setStyle === 'function') {
-            layer.setStyle(style);
-        }
+    async function generateCityTooltipContent(cityName) {
+        const population = await fetchCityPopulation(cityName);
+        let content = `<h6>${cityName}</h6>`;
+        content += `<p><strong>População:</strong> ${population ? population.toLocaleString('pt-BR') : 'N/D'}</p>`;
+        const assignedVendedorIds = AppState.cityAssignments[cityName];
+        if (assignedVendedorIds && assignedVendedorIds.length > 0) {
+            assignedVendedorIds.forEach(vId => {
+                const vendedor = AppState.vendedores.find(v => v.id === vId);
+                if (vendedor) content += `<div class="vendedor-tooltip-info"><p class="vendedor-name-indicator"><span class="vendedor-color-indicator" style="background-color:${vendedor.color};"></span>${vendedor.nome}</p><p>Cód: ${vendedor.codigoVendedor || 'N/A'}, Sup: ${vendedor.supervisor || 'N/A'}</p><p>Cad: ${(vendedor.totalCadastros || 0).toLocaleString('pt-BR')}, Posit: ${(vendedor.totalPositivados || 0).toLocaleString('pt-BR')}</p></div>`;
+            });
+        } else content += '<p><em>Nenhum vendedor atribuído.</em></p>';
+        return content;
     }
-    
-    function getCityStyle(cityName) {
-        let styleOptions = { ...CONSTANTS.DEFAULT_CITY_STYLE }; // Começa com o padrão
 
-        // Favorito (leve alteração se não tiver outra sobreposição mais forte)
-        if (AppState.favorites.some(fav => fav.name === cityName) && !AppState.cityAssignments[cityName]?.length) {
-            styleOptions.fillOpacity = 0.3; // Um pouco mais opaco que o padrão
-            styleOptions.weight = 1.5;
+    async function handleCityClick(cityName, cityId, layer) {
+        AppState.selectedCity = { name: cityName, id: cityId, layer: layer }; removeCityInfoMarker(); resetMapStyles();
+        setLayerStyle(layer, CONSTANTS.SELECTED_CITY_STYLE); if (layer.bringToFront) layer.bringToFront();
+        await updateSelectedCityInfo(); if (DOMElements.sidebar.classList.contains('collapsed')) DOMElements.toggleSidebarButton.click();
+        DOMElements.tabButtons.forEach(btn => btn.classList.remove('active')); DOMElements.tabContents.forEach(content => content.classList.remove('active'));
+        const searchTabButton = document.querySelector('.tab-button[data-tab="search"]'); const searchTabContent = document.getElementById('tab-search');
+        if (searchTabButton) searchTabButton.classList.add('active'); if (searchTabContent) searchTabContent.classList.add('active');
+    }
+
+    function setLayerStyle(layer, style) { if (layer?.setStyle) layer.setStyle(style); }
+
+    function getCityStyle(feature) {
+        const cityName = feature.properties.name || feature.properties.NOME_MUN || feature.properties.NM_MUN;
+        let styleOptions = { ...CONSTANTS.DEFAULT_CITY_STYLE };
+
+        if (AppState.favorites.some(fav => fav.name === cityName) && (!AppState.cityAssignments[cityName] || AppState.cityAssignments[cityName].length === 0)) {
+            styleOptions.fillOpacity = 0.05; styleOptions.weight = 1; styleOptions.color = '#a0a0a0';
         }
-
-        // Atribuída a vendedores
-        if (AppState.cityAssignments[cityName] && AppState.cityAssignments[cityName].length > 0) {
+        if (AppState.cityAssignments[cityName]?.length > 0) {
             if (AppState.cityAssignments[cityName].length === 1) {
-                const vendedorId = AppState.cityAssignments[cityName][0];
-                const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
-                if (vendedor && vendedor.color) {
-                    styleOptions.fillColor = vendedor.color;
-                    styleOptions.color = vendedor.color;
-                    styleOptions.fillOpacity = 0.5;
-                    styleOptions.weight = 2;
-                }
-            } else { // Múltiplos vendedores
-                styleOptions = { ...CONSTANTS.MULTIPLE_VENDEDORES_STYLE };
-            }
+                const vendedor = AppState.vendedores.find(v => v.id === AppState.cityAssignments[cityName][0]);
+                if (vendedor?.color) { styleOptions.fillColor = vendedor.color; styleOptions.color = vendedor.color; styleOptions.fillOpacity = 0.5; styleOptions.weight = 2; }
+            } else { styleOptions = { ...CONSTANTS.MULTIPLE_VENDEDORES_STYLE }; }
         }
-        
-        // Destaque de grupo ativo (sobrepõe outros, exceto seleção e vendedor ativo)
-        if (AppState.activeGroup && AppState.groups[AppState.activeGroup]?.includes(cityName)) {
-            styleOptions = { ...CONSTANTS.HIGHLIGHT_GROUP_STYLE };
-        }
-
-        // Destaque de vendedor ativo (sobrepõe outros, exceto seleção)
-        if (AppState.activeVendedorId && AppState.cityAssignments[cityName]?.includes(AppState.activeVendedorId)) {
-             styleOptions = { ...CONSTANTS.HIGHLIGHT_VENDEDOR_STYLE };
-        }
-
-        // Cidade selecionada (máxima prioridade de estilo)
-        if (AppState.selectedCity && AppState.selectedCity.name === cityName) {
-            styleOptions = { ...CONSTANTS.SELECTED_CITY_STYLE };
-        }
-        
+        if (AppState.activeGroup && AppState.groups[AppState.activeGroup]?.includes(cityName)) styleOptions = { ...CONSTANTS.HIGHLIGHT_GROUP_STYLE };
+        if (AppState.activeVendedorId && AppState.cityAssignments[cityName]?.includes(AppState.activeVendedorId)) styleOptions = { ...CONSTANTS.HIGHLIGHT_VENDEDOR_STYLE };
+        if (AppState.selectedCity?.name === cityName) styleOptions = { ...CONSTANTS.SELECTED_CITY_STYLE };
         return styleOptions;
     }
 
     function resetMapStyles() {
-        Object.entries(AppState.cityLayers).forEach(([cityName, layer]) => {
-            const style = getCityStyle(cityName);
-            setLayerStyle(layer, style);
+        Object.values(AppState.cityLayers).forEach(layer => {
+            if (layer.feature) {
+                setLayerStyle(layer, getCityStyle(layer.feature));
+            }
         });
     }
-    
+
     function highlightVendedorCitiesOnMap(vendedorId) {
-        clearWeatherMarkers();
-        AppState.activeVendedorId = vendedorId;
-        AppState.activeGroup = null; // Desativa destaque de grupo
-        DOMElements.groupSelect.value = '';
-        resetMapStyles(); // Recalcula todos os estilos
-
-        const cidadesDoVendedor = Object.keys(AppState.cityAssignments).filter(
-            cityName => AppState.cityAssignments[cityName]?.includes(vendedorId)
-        );
-
-        if (cidadesDoVendedor.length > 0) {
-            const layers = cidadesDoVendedor
-                .map(cityName => AppState.cityLayers[cityName])
-                .filter(Boolean);
-            
-            if (layers.length > 0) {
-                const groupOfLayers = L.featureGroup(layers);
-                AppState.map.fitBounds(groupOfLayers.getBounds(), { padding: [50, 50] });
-            }
-
-            // Adicionar clima (se a funcionalidade de clima estiver ativa)
-            // Isso pode ser feito de forma assíncrona para não bloquear
-            layers.forEach(layer => {
-                const cityName = Object.keys(AppState.cityLayers).find(key => AppState.cityLayers[key] === layer);
-                if (cityName) {
-                     const bounds = layer.getBounds();
-                     const center = bounds.getCenter();
-                     addWeatherToMap(cityName, center.lat, center.lng);
-                }
-            });
-        }
-         showNotification(`Cidades do vendedor destacadas.`, 'info');
+        AppState.activeVendedorId = vendedorId; AppState.activeGroup = null; if(DOMElements.groupSelect) DOMElements.groupSelect.value = ''; resetMapStyles();
+        const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
+        if (vendedor?.cidades.length > 0) { const layers = vendedor.cidades.map(name => AppState.cityLayers[name]).filter(Boolean); if (layers.length > 0) AppState.map.fitBounds(L.featureGroup(layers).getBounds(), { padding: [50, 50] }); }
+        showNotification(`Cidades do vendedor ${vendedor?.nome || ''} destacadas.`, 'info');
     }
 
     function highlightGroupOnMap(groupName) {
-        AppState.activeGroup = groupName;
-        AppState.activeVendedorId = null; // Desativa destaque de vendedor
-        resetMapStyles(); // Recalcula todos os estilos
-
-        if (groupName && AppState.groups[groupName]?.length > 0) {
-            const layers = AppState.groups[groupName]
-                .map(cityName => AppState.cityLayers[cityName])
-                .filter(Boolean);
-
-            if (layers.length > 0) {
-                const groupOfLayers = L.featureGroup(layers);
-                AppState.map.fitBounds(groupOfLayers.getBounds(), { padding: [50, 50] });
-            }
-        }
+        AppState.activeGroup = groupName; AppState.activeVendedorId = null; resetMapStyles();
+        if (groupName && AppState.groups[groupName]?.length > 0) { const layers = AppState.groups[groupName].map(name => AppState.cityLayers[name]).filter(Boolean); if (layers.length > 0) AppState.map.fitBounds(L.featureGroup(layers).getBounds(), { padding: [50, 50] }); }
         showNotification(`Grupo ${groupName || 'Nenhum'} destacado.`, 'info');
     }
 
-
-    // ========= FUNÇÕES DO GOOGLE SHEETS =========
-    function loadDataFromSheets() {
-        if (AppConfig.apiKey === "SUA_API_KEY_RESTRITA_AQUI" || !AppConfig.apiKey) {
-            showNotification("API Key do Google Sheets não configurada. Não é possível carregar dados da planilha.", "danger", 10000);
-            console.error("API Key do Google Sheets não configurada em AppConfig.apiKey.");
-            showLoading(false);
-            return Promise.resolve(); // Retorna uma promessa resolvida para não quebrar a cadeia
-        }
-
-        showLoading(true, "Carregando dados da planilha...");
-        showSyncStatus(true);
-
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${AppConfig.spreadsheetId}/values/${AppConfig.range}?key=${AppConfig.apiKey}`;
-
-        return fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    if (response.status === 403) {
-                         throw new Error("Erro de permissão (403) ao acessar a planilha. Verifique as permissões da API Key ou se a planilha é pública.");
-                    }
-                    throw new Error(`Erro ${response.status} na solicitação à API do Google Sheets.`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                processSheetsData(data);
-                AppState.lastUpdateTime = new Date();
-                DOMElements.lastUpdateSpan.textContent = formatDateTime(AppState.lastUpdateTime);
-                showNotification("Dados carregados com sucesso da planilha!", "success");
-                saveDataToLocalStorage(); // Salva os dados processados
-                updateUIAfterDataLoad(); // Atualiza todas as listas da UI
-            })
-            .catch(error => {
-                console.error("Erro ao obter dados da planilha:", error);
-                showNotification(`Erro ao carregar dados da planilha: ${error.message}`, "danger", 10000);
-            })
-            .finally(() => {
-                showLoading(false);
-                showSyncStatus(false);
-            });
+    // ========= DADOS (Planilha, LocalStorage) =========
+    async function loadDataFromSheets() {
+        if (AppConfig.apiKey === "SUA_API_KEY_RESTRITA_AQUI" || !AppConfig.apiKey) { showNotification("API Key do Google Sheets não configurada.", "danger", 10000); return; }
+        showLoading(true, "Carregando dados da planilha..."); showSyncStatus(true);
+        try {
+            const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${AppConfig.spreadsheetId}/values/${AppConfig.range}?key=${AppConfig.apiKey}`);
+            if (!response.ok) throw new Error(`Erro ${response.status} na API do Sheets.`);
+            const data = await response.json();
+            processSheetsData(data);
+            AppState.lastUpdateTime = new Date(); if(DOMElements.lastUpdateSpan) DOMElements.lastUpdateSpan.textContent = formatDateTime(AppState.lastUpdateTime);
+            saveDataToLocalStorage(); updateUIAfterDataLoad(); showNotification("Dados carregados com sucesso da planilha!", "success");
+        } catch (error) { console.error("Erro ao obter dados da planilha:", error); showNotification(`Erro ao carregar dados: ${error.message}`, "danger", 10000); updateUIAfterDataLoad(); }
+        finally { showLoading(false); showSyncStatus(false); }
     }
 
     function processSheetsData(data) {
-        AppState.vendedores = [];
-        AppState.cityAssignments = {}; // Resetar atribuições existentes vindas da planilha
-
-        if (!data.values || data.values.length < 2) { // Precisa de pelo menos linha de supervisor e vendedor
-            showNotification("Nenhum dado de vendedor encontrado na planilha ou formato incorreto.", "warning");
-            return;
+        const newVendedores = []; const newCityAssignments = {}; let cidadesNaoEncontradas = [];
+        if (!data.values || data.values.length < 6) {
+            showNotification("Formato da planilha incorreto. Verifique as instruções e se há dados suficientes.", "warning", 7000);
+            AppState.vendedores = []; AppState.cityAssignments = {}; return;
         }
+        const values = data.values; const numCols = values[0]?.length || 0; let colorIndex = 0;
 
-        let colorIndex = 0;
-        const supervisorsRow = data.values[0];
-        const vendedoresRow = data.values[1];
+        for (let col = 0; col < numCols; col++) {
+            const supervisor = values[0]?.[col]?.trim();
+            const vendedorNome = values[1]?.[col]?.trim();
+            if (!supervisor || !vendedorNome) continue;
 
-        for (let colIndex = 0; colIndex < supervisorsRow.length; colIndex++) {
-            const supervisor = supervisorsRow[colIndex]?.trim();
-            const vendedorNome = vendedoresRow[colIndex]?.trim();
+            const vendedorId = generateId();
+            const vendedor = {
+                id: vendedorId, nome: vendedorNome, supervisor: supervisor,
+                codigoVendedor: values[2]?.[col]?.trim() || 'N/A',
+                totalCadastros: parseInt(values[3]?.[col]?.trim(), 10) || 0,
+                totalPositivados: parseInt(values[4]?.[col]?.trim(), 10) || 0,
+                color: AppConfig.vendedorColors[colorIndex++ % AppConfig.vendedorColors.length],
+                cidades: []
+            };
 
-            if (supervisor && vendedorNome) {
-                const vendedorId = generateId();
-                const vendedorColor = AppConfig.vendedorColors[colorIndex % AppConfig.vendedorColors.length];
-                colorIndex++;
+            for (let row = 5; row < values.length; row++) {
+                const cidadeNomePlanilha = values[row]?.[col]?.trim();
+                if (cidadeNomePlanilha) {
+                    const normPlanilhaOriginal = normalizeString(cidadeNomePlanilha);
+                    let cidadeRealNoMapa = null;
 
-                AppState.vendedores.push({
-                    id: vendedorId,
-                    nome: vendedorNome,
-                    supervisor: supervisor,
-                    email: "", // Pode ser adicionado na planilha se necessário
-                    telefone: "", // Pode ser adicionado na planilha se necessário
-                    color: vendedorColor
-                });
+                    if (AppState.normalizedCityNames[normPlanilhaOriginal]) {
+                        cidadeRealNoMapa = AppState.normalizedCityNames[normPlanilhaOriginal];
+                    }
 
-                for (let rowIndex = 2; rowIndex < data.values.length; rowIndex++) {
-                    if (data.values[rowIndex] && data.values[rowIndex][colIndex]) {
-                        const cidadeNomePlanilha = data.values[rowIndex][colIndex].trim();
-                        const cidadeNomeNormalizadoPlanilha = normalizeString(cidadeNomePlanilha);
-                        
-                        // Tenta encontrar a cidade no nosso mapa
-                        let cidadeNomeRealNoMapa = AppState.normalizedCityNames[cidadeNomeNormalizadoPlanilha];
-
-                        if (!cidadeNomeRealNoMapa) {
-                            // Tentativa de correspondência parcial (menos robusta)
-                            for (const [normalizedMapName, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
-                                if (normalizedMapName.includes(cidadeNomeNormalizadoPlanilha) || cidadeNomeNormalizadoPlanilha.includes(normalizedMapName)) {
-                                    cidadeNomeRealNoMapa = originalMapName;
-                                    break;
-                                }
+                    if (!cidadeRealNoMapa) {
+                        const simplePlanilha = toSimpleForm(normPlanilhaOriginal);
+                        for (const [normMapKey, originalMapNameValue] of Object.entries(AppState.normalizedCityNames)) {
+                            if (normMapKey === normPlanilhaOriginal) {
+                                cidadeRealNoMapa = originalMapNameValue;
+                                break;
+                            }
+                            const simpleMap = toSimpleForm(normMapKey);
+                            if (simpleMap === simplePlanilha) {
+                                cidadeRealNoMapa = originalMapNameValue;
+                                break;
                             }
                         }
-                        
-                        if (cidadeNomeRealNoMapa) {
-                            if (!AppState.cityAssignments[cidadeNomeRealNoMapa]) {
-                                AppState.cityAssignments[cidadeNomeRealNoMapa] = [];
+                    }
+                    
+                    if (!cidadeRealNoMapa) {
+                        const simplePlanilha = toSimpleForm(normPlanilhaOriginal);
+                        for (const [normMapKey, originalMapNameValue] of Object.entries(AppState.normalizedCityNames)) {
+                            const simpleMap = toSimpleForm(normMapKey);
+                            if (simpleMap.includes(simplePlanilha) && (simplePlanilha.length / simpleMap.length > 0.7)) {
+                                cidadeRealNoMapa = originalMapNameValue;
+                                break;
                             }
-                            if (!AppState.cityAssignments[cidadeNomeRealNoMapa].includes(vendedorId)) {
-                                AppState.cityAssignments[cidadeNomeRealNoMapa].push(vendedorId);
-                            }
-                        } else {
-                            console.warn(`Cidade da planilha "${cidadeNomePlanilha}" não encontrada no mapa.`);
+                             else if (simpleMap.includes(normPlanilhaOriginal) && (normPlanilhaOriginal.length / simpleMap.length > 0.7)) {
+                                 cidadeRealNoMapa = originalMapNameValue;
+                                break;
+                             }
+                        }
+                    }
+
+                    if (cidadeRealNoMapa) {
+                        vendedor.cidades.push(cidadeRealNoMapa);
+                        if (!newCityAssignments[cidadeRealNoMapa]) newCityAssignments[cidadeRealNoMapa] = [];
+                        if (!newCityAssignments[cidadeRealNoMapa].includes(vendedorId)) newCityAssignments[cidadeRealNoMapa].push(vendedorId);
+                    } else {
+                        if (!cidadesNaoEncontradas.includes(cidadeNomePlanilha)) {
+                            cidadesNaoEncontradas.push(cidadeNomePlanilha);
+                            console.warn(`Cidade da planilha "${cidadeNomePlanilha}" (Normalizada: "${normPlanilhaOriginal}") (Vendedor: ${vendedorNome}) não encontrada no mapa.`);
                         }
                     }
                 }
             }
+            newVendedores.push(vendedor);
+        }
+        AppState.vendedores = newVendedores; AppState.cityAssignments = newCityAssignments;
+        if (cidadesNaoEncontradas.length > 0) {
+            const nomesExibicao = cidadesNaoEncontradas.slice(0, 3).join(', ');
+            const mais = cidadesNaoEncontradas.length > 3 ? ` e mais ${cidadesNaoEncontradas.length - 3}...` : '';
+            showNotification(`Algumas cidades (${nomesExibicao}${mais}) não encontradas. Verifique o console e a grafia dos nomes.`, "warning", 10000);
         }
     }
 
-    // ========= PERSISTÊNCIA DE DADOS (LocalStorage) =========
     function loadSavedData() {
         showLoading(true, "Carregando dados salvos...");
         try {
-            const savedFavorites = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.FAVORITES);
-            if (savedFavorites) AppState.favorites = JSON.parse(savedFavorites);
-
-            const savedGroups = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS);
-            if (savedGroups) AppState.groups = JSON.parse(savedGroups);
-            
-            // Vendedores e Assignments são primariamente da planilha, mas podemos carregar se não houver conexão
-            // Isso pode causar inconsistências se a planilha for a fonte da verdade.
-            // Decidi carregar da planilha sempre que possível. Se precisar de offline total, esta lógica muda.
-            const savedVendedores = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES);
-            if (savedVendedores) AppState.vendedores = JSON.parse(savedVendedores);
-
-            const savedAssignments = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.ASSIGNMENTS);
-            if (savedAssignments) AppState.cityAssignments = JSON.parse(savedAssignments);
-
-
-            const savedLastUpdate = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE);
-            if (savedLastUpdate) {
-                AppState.lastUpdateTime = new Date(savedLastUpdate);
-                DOMElements.lastUpdateSpan.textContent = formatDateTime(AppState.lastUpdateTime);
+            AppState.favorites = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.FAVORITES)) || [];
+            AppState.groups = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS)) || {};
+            AppState.vendedores = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES)) || [];
+            AppState.cityPopulations = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.CITY_POPULATIONS)) || {};
+            if (AppState.vendedores.length > 0 && Object.keys(AppState.cityAssignments).length === 0) {
+                AppState.cityAssignments = {}; AppState.vendedores.forEach(v => v.cidades.forEach(cName => { if (!AppState.cityAssignments[cName]) AppState.cityAssignments[cName] = []; if (!AppState.cityAssignments[cName].includes(v.id)) AppState.cityAssignments[cName].push(v.id); }));
             }
-        } catch (error) {
-            console.error('Erro ao carregar dados do localStorage:', error);
-            showNotification('Erro ao carregar dados salvos. Podem estar corrompidos.', 'warning');
-            // Limpar localStorage se corrompido? Ou apenas ignorar e carregar da planilha.
-            localStorage.removeItem(CONSTANTS.LOCAL_STORAGE_KEYS.FAVORITES);
-            localStorage.removeItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS);
-        }
+            const savedLastUpdate = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE);
+            if (savedLastUpdate) AppState.lastUpdateTime = new Date(savedLastUpdate);
+            if (DOMElements.lastUpdateSpan) DOMElements.lastUpdateSpan.textContent = formatDateTime(AppState.lastUpdateTime);
+        } catch (e) { console.error('Erro ao carregar dados do localStorage:', e); Object.values(CONSTANTS.LOCAL_STORAGE_KEYS).forEach(key => localStorage.removeItem(key)); }
     }
 
     function saveDataToLocalStorage() {
@@ -534,866 +553,246 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.FAVORITES, JSON.stringify(AppState.favorites));
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS, JSON.stringify(AppState.groups));
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES, JSON.stringify(AppState.vendedores));
-            localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(AppState.cityAssignments));
-            if (AppState.lastUpdateTime) {
-                localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE, AppState.lastUpdateTime.toISOString());
-            }
-        } catch (error) {
-            console.error('Erro ao salvar dados no localStorage:', error);
-            showNotification('Erro ao salvar dados localmente. Pode ser que o armazenamento esteja cheio.', 'danger');
-        }
+            if (AppState.lastUpdateTime) localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE, AppState.lastUpdateTime.toISOString());
+            if (Object.keys(AppState.cityPopulations).length > 0) localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.CITY_POPULATIONS, JSON.stringify(AppState.cityPopulations));
+        } catch (e) { console.error('Erro ao salvar dados no localStorage:', e); showNotification('Erro ao salvar dados localmente.', 'danger');}
     }
-    
+
+    async function fetchCityPopulation(cityName, forceLoadFile = false) {
+        const normalizedCityForPop = normalizeString(cityName);
+        if (normalizedCityForPop && AppState.cityPopulations[normalizedCityForPop] && !forceLoadFile) return AppState.cityPopulations[normalizedCityForPop];
+        if (forceLoadFile || Object.keys(AppState.cityPopulations).length === 0) {
+            try {
+                const response = await fetch('populacao_sp_mg.json'); if (!response.ok) { console.warn('Arquivo de população (populacao_sp_mg.json) não encontrado.'); return null; }
+                const allPopulations = await response.json(); AppState.cityPopulations = {};
+                for (const [key, value] of Object.entries(allPopulations)) AppState.cityPopulations[normalizeString(key)] = value;
+                saveDataToLocalStorage();
+            } catch (error) { console.error("Erro ao carregar arquivo de população:", error.message); return null; }
+        }
+        return normalizedCityForPop ? AppState.cityPopulations[normalizedCityForPop] || null : null;
+    }
+
     // ========= ATUALIZAÇÃO DA INTERFACE (UI) =========
-    function updateSelectedCityInfo() {
+    async function updateSelectedCityInfo() {
         if (!AppState.selectedCity) {
-            DOMElements.selectedCityInfo.innerHTML = '<p class="empty-message">Nenhuma cidade selecionada</p>';
+            DOMElements.selectedCityInfo.innerHTML = '<p class="empty-message">Nenhuma cidade selecionada.</p>';
             DOMElements.selectedCityActions.classList.add('hidden');
             return;
         }
-
-        const { name: cityName, id: cityId } = AppState.selectedCity;
+        const { name: cityName, id: cityId } = AppState.selectedCity; // cityId aqui é o código IBGE
+        const population = await fetchCityPopulation(cityName);
+        let populationInfo = `<p><strong>População:</strong> ${population ? population.toLocaleString('pt-BR') : 'Não disponível'}</p>`;
         let vendedorHtml = '';
         const assignedVendedorIds = AppState.cityAssignments[cityName];
 
-        if (assignedVendedorIds && assignedVendedorIds.length > 0) {
-            vendedorHtml = '<p><strong>Vendedores Atribuídos:</strong></p><ul class="vendedores-list" style="list-style-type: none; padding-left: 0;">';
-            assignedVendedorIds.forEach(vendedorId => {
-                const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
-                if (vendedor) {
-                    vendedorHtml += `
-                        <li style="display: flex; align-items: center; margin-bottom: 5px;">
-                            <div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div>
-                            <div>
-                                <div><strong>${vendedor.nome}</strong></div>
-                                <div><small>Supervisor: ${vendedor.supervisor || 'N/A'}</small></div>
-                            </div>
-                        </li>
-                    `;
-                }
+        if (assignedVendedorIds?.length > 0) {
+            vendedorHtml = '<p><strong>Vendedores Atendendo:</strong></p><ul class="vendedores-list" style="padding-left:0; list-style:none;">';
+            assignedVendedorIds.forEach(vId => {
+                const vend = AppState.vendedores.find(v => v.id === vId);
+                if (vend) vendedorHtml += `<li style="display:flex; align-items:center; margin-bottom:3px;"><div class="vendedor-color-indicator" style="background-color: ${vend.color};"></div> ${vend.nome} (Sup: ${vend.supervisor})</li>`;
             });
             vendedorHtml += '</ul>';
         } else {
-            vendedorHtml = '<p><em>Esta cidade não está atribuída a nenhum vendedor.</em></p>';
+            vendedorHtml = '<p><em>Nenhum vendedor atribuído.</em></p>';
         }
 
-        const ibgeLink = `https://cidades.ibge.gov.br/brasil/sp/${normalizeString(cityName).replace(/\s+/g, '-')}/panorama`;
-        // const ibgeLink = `https://cidades.ibge.gov.br/panorama-impresso?codmun=${cityId}`; // Se o ID for o código do IBGE de 7 dígitos
+        // ALTERAÇÃO DO LINK DO IBGE AQUI:
+        const ibgeLink = `https://cidades.ibge.gov.br/panorama-impresso?cod=${cityId}`;
 
         DOMElements.selectedCityInfo.innerHTML = `
             <h4>${cityName}</h4>
+            ${populationInfo}
             ${vendedorHtml}
-            <p><small>ID (GeoJSON): ${cityId}</small></p>
+            <p><small>ID Geo (IBGE): ${cityId}. (Duplo clique no mapa para mais detalhes)</small></p>
             <div class="btn-group" role="group">
-                <a href="${ibgeLink}" target="_blank" class="btn btn-info btn-sm mt-10" style="margin-right: 5px;">
-                    <i class="fas fa-info-circle"></i> Info IBGE
+                <a href="${ibgeLink}" target="_blank" class="btn btn-info btn-sm mt-10">
+                    <i class="fas fa-info-circle"></i> Info IBGE (Panorama Impresso)
                 </a>
-                <button type="button" id="show-weather-forecast-selected" class="btn btn-primary btn-sm mt-10">
-                    <i class="fas fa-cloud-sun"></i> Previsão do Tempo
-                </button>
-            </div>
-        `;
-        
-        document.getElementById('show-weather-forecast-selected').addEventListener('click', () => {
-            showWeatherForecastModal(AppState.selectedCity);
-        });
-
+            </div>`;
         DOMElements.selectedCityActions.classList.remove('hidden');
-        DOMElements.assignVendedorButton.innerHTML = (assignedVendedorIds && assignedVendedorIds.length > 0) ?
-            '<i class="fas fa-user-tie"></i> Gerenciar Vendedores' :
-            '<i class="fas fa-user-tie"></i> Atribuir a Vendedor';
+        DOMElements.assignVendedorButton.innerHTML = assignedVendedorIds?.length > 0 ? '<i class="fas fa-user-tie"></i> Gerenciar Vendedores' : '<i class="fas fa-user-tie"></i> Atribuir Vendedor';
     }
 
     function updateFavoritesList() {
-        DOMElements.favoritesList.innerHTML = '';
-        if (AppState.favorites.length === 0) {
-            DOMElements.favoritesList.innerHTML = '<li class="empty-message">Nenhuma cidade favorita</li>';
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        AppState.favorites.forEach(city => {
-            const li = document.createElement('li');
-            li.className = 'list-item';
-
-            const cityInfoDiv = document.createElement('div');
-            cityInfoDiv.innerHTML = `<strong>${city.name}</strong>`;
-            
-            const assignedVendedorIds = AppState.cityAssignments[city.name];
-            if (assignedVendedorIds && assignedVendedorIds.length > 0) {
-                const badgeClass = assignedVendedorIds.length === 1 ? 'badge-success' : 'badge-warning';
-                const iconClass = assignedVendedorIds.length === 1 ? 'fa-user-tie' : 'fa-users';
-                const title = assignedVendedorIds.length === 1 ? `Vendedor: ${AppState.vendedores.find(v => v.id === assignedVendedorIds[0])?.nome || 'N/A'}` : `${assignedVendedorIds.length} vendedores`;
-                cityInfoDiv.innerHTML += ` <span class="badge ${badgeClass}" title="${title}"><i class="fas ${iconClass}"></i></span>`;
-            }
-            li.appendChild(cityInfoDiv);
-
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'actions';
-
-            // Select de Grupo
-            const groupSelect = document.createElement('select');
-            groupSelect.className = 'form-control form-control-sm'; // Adicionar form-control-sm se tiver
-            groupSelect.style.maxWidth = '120px'; // Para não ocupar muito espaço
-            groupSelect.innerHTML = '<option value="">Sem grupo</option>';
-            Object.keys(AppState.groups).forEach(groupName => {
-                const option = document.createElement('option');
-                option.value = groupName;
-                option.textContent = groupName;
-                if (AppState.groups[groupName].includes(city.name)) {
-                    option.selected = true;
-                }
-                groupSelect.appendChild(option);
-            });
-            groupSelect.addEventListener('change', function() {
-                const selectedGroup = this.value;
-                // Remove de todos os grupos primeiro
-                Object.keys(AppState.groups).forEach(gName => {
-                    AppState.groups[gName] = AppState.groups[gName].filter(cName => cName !== city.name);
-                });
-                // Adiciona ao novo grupo, se houver
-                if (selectedGroup) {
-                    AppState.groups[selectedGroup].push(city.name);
-                }
-                saveDataToLocalStorage();
-                resetMapStyles(); // Atualiza estilos no mapa
-                showNotification(`Cidade ${city.name} ${selectedGroup ? 'adicionada ao grupo ' + selectedGroup : 'removida de grupos'}.`);
-            });
-            actionsDiv.appendChild(groupSelect);
-
-            // Botão Ver no Mapa
-            const viewButton = document.createElement('button');
-            viewButton.className = 'btn btn-primary btn-sm';
-            viewButton.innerHTML = '<i class="fas fa-eye"></i>';
-            viewButton.title = 'Ver no mapa';
-            viewButton.addEventListener('click', () => {
-                const cityLayer = AppState.cityLayers[city.name];
-                if (cityLayer) {
-                    AppState.map.fitBounds(cityLayer.getBounds());
-                    cityLayer.fire('click'); // Simula clique para selecionar
-                }
-            });
-            actionsDiv.appendChild(viewButton);
-
-            // Botão Remover Favorito
-            const removeButton = document.createElement('button');
-            removeButton.className = 'btn btn-danger btn-sm';
-            removeButton.innerHTML = '<i class="fas fa-trash"></i>';
-            removeButton.title = 'Remover dos favoritos';
-            removeButton.addEventListener('click', () => {
-                AppState.favorites = AppState.favorites.filter(fav => fav.name !== city.name);
-                // Também remove de todos os grupos se removido dos favoritos
-                Object.keys(AppState.groups).forEach(gName => {
-                    AppState.groups[gName] = AppState.groups[gName].filter(cName => cName !== city.name);
-                });
-                saveDataToLocalStorage();
-                updateFavoritesList(); // Re-renderiza esta lista
-                updateGroupsLists(); // Atualiza contagem nos grupos
-                resetMapStyles(); // Atualiza estilo no mapa
-                showNotification(`Cidade ${city.name} removida dos favoritos.`);
-            });
-            actionsDiv.appendChild(removeButton);
-            
-            li.appendChild(actionsDiv);
-            fragment.appendChild(li);
-        });
-        DOMElements.favoritesList.appendChild(fragment);
+        DOMElements.favoritesList.innerHTML = AppState.favorites.length === 0 ? '<li class="empty-message">Nenhuma cidade favorita</li>' : '';
+        AppState.favorites.forEach(city => { const li = document.createElement('li'); li.className = 'list-item'; const assignedIds = AppState.cityAssignments[city.name]; let badge = ''; if (assignedIds?.length) badge = ` <span class="badge ${assignedIds.length === 1 ? 'badge-success' : 'badge-warning'}" title="${assignedIds.length} vend."><i class="fas ${assignedIds.length === 1 ? 'fa-user-tie' : 'fa-users'}"></i></span>`; li.innerHTML = `<div><strong>${city.name}</strong>${badge}</div><div class="actions"></div>`; const groupSelect = document.createElement('select'); groupSelect.className = 'form-control form-control-sm'; groupSelect.style.maxWidth = '120px'; groupSelect.innerHTML = '<option value="">Sem grupo</option>'; Object.keys(AppState.groups).forEach(gName => groupSelect.innerHTML += `<option value="${gName}" ${AppState.groups[gName]?.includes(city.name) ? 'selected' : ''}>${gName}</option>`); groupSelect.onchange = function() { Object.keys(AppState.groups).forEach(g => { if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); if (this.value) { if(!AppState.groups[this.value]) AppState.groups[this.value] = []; AppState.groups[this.value].push(city.name); } saveDataToLocalStorage(); resetMapStyles(); showNotification(`Cidade ${city.name} ${this.value ? 'adicionada ao ' + this.value : 'removida de grupos'}.`); }; li.querySelector('.actions').appendChild(groupSelect); const viewBtn = document.createElement('button'); viewBtn.className = 'btn btn-primary btn-sm'; viewBtn.innerHTML = '<i class="fas fa-eye"></i>'; viewBtn.title = 'Ver no mapa'; viewBtn.onclick = () => { if (AppState.cityLayers[city.name]) { AppState.map.fitBounds(AppState.cityLayers[city.name].getBounds()); AppState.cityLayers[city.name].fire('click'); }}; li.querySelector('.actions').appendChild(viewBtn); const removeBtn = document.createElement('button'); removeBtn.className = 'btn btn-danger btn-sm'; removeBtn.innerHTML = '<i class="fas fa-trash"></i>'; removeBtn.title = 'Remover favorito'; removeBtn.onclick = () => { AppState.favorites = AppState.favorites.filter(f => f.name !== city.name); Object.keys(AppState.groups).forEach(g => {if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); saveDataToLocalStorage(); updateFavoritesList(); updateGroupsLists(); resetMapStyles(); showNotification(`${city.name} removida dos favoritos.`); }; li.querySelector('.actions').appendChild(removeBtn); DOMElements.favoritesList.appendChild(li); });
     }
 
     function updateGroupsLists() {
-        DOMElements.groupsList.innerHTML = '';
-        // Limpa select, mantendo a primeira opção
-        while (DOMElements.groupSelect.options.length > 1) DOMElements.groupSelect.remove(1);
-
-        if (Object.keys(AppState.groups).length === 0) {
-            DOMElements.groupsList.innerHTML = '<li class="empty-message">Nenhum grupo criado</li>';
-            return;
-        }
-
-        const fragmentList = document.createDocumentFragment();
-        const fragmentSelect = document.createDocumentFragment();
-
-        Object.keys(AppState.groups).sort().forEach(groupName => {
-            // Opção para o select
-            const option = document.createElement('option');
-            option.value = groupName;
-            option.textContent = groupName;
-            fragmentSelect.appendChild(option);
-
-            // Item para a lista
-            const li = document.createElement('li');
-            li.className = 'list-item';
-            li.innerHTML = `
-                <div>
-                    <strong>${groupName}</strong> 
-                    <span class="badge badge-primary">${AppState.groups[groupName].length}</span>
-                </div>
-                <div class="actions">
-                    <button type="button" class="btn btn-warning btn-sm btn-highlight-group" title="Destacar grupo no mapa">
-                        <i class="fas fa-highlighter"></i>
-                    </button>
-                    <button type="button" class="btn btn-danger btn-sm btn-remove-group" title="Remover grupo">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            li.querySelector('.btn-highlight-group').addEventListener('click', () => {
-                DOMElements.groupSelect.value = groupName; // Sincroniza o select
-                highlightGroupOnMap(groupName);
-            });
-            li.querySelector('.btn-remove-group').addEventListener('click', () => {
-                if (confirm(`Tem certeza que deseja remover o grupo "${groupName}"? As cidades não serão removidas dos favoritos.`)) {
-                    delete AppState.groups[groupName];
-                    saveDataToLocalStorage();
-                    updateGroupsLists(); // Re-renderiza esta lista
-                    updateFavoritesList(); // Re-renderiza selects de grupo nos favoritos
-                    if (AppState.activeGroup === groupName) {
-                        AppState.activeGroup = null;
-                        resetMapStyles();
-                    }
-                    showNotification(`Grupo ${groupName} removido.`);
-                }
-            });
-            fragmentList.appendChild(li);
-        });
-        DOMElements.groupSelect.appendChild(fragmentSelect);
-        DOMElements.groupsList.appendChild(fragmentList);
+        DOMElements.groupsList.innerHTML = Object.keys(AppState.groups).length === 0 ? '<li class="empty-message">Nenhum grupo criado</li>' : ''; if(DOMElements.groupSelect) DOMElements.groupSelect.innerHTML = '<option value="">Selecione um grupo</option>';
+        Object.keys(AppState.groups).sort().forEach(groupName => { if(DOMElements.groupSelect) DOMElements.groupSelect.innerHTML += `<option value="${groupName}">${groupName}</option>`; const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div><strong>${groupName}</strong> <span class="badge badge-primary">${AppState.groups[groupName]?.length || 0}</span></div> <div class="actions"> <button class="btn btn-warning btn-sm btn-highlight-group" title="Destacar"><i class="fas fa-highlighter"></i></button> <button class="btn btn-danger btn-sm btn-remove-group" title="Remover"><i class="fas fa-trash"></i></button> </div>`; li.querySelector('.btn-highlight-group').onclick = () => { if(DOMElements.groupSelect) DOMElements.groupSelect.value = groupName; highlightGroupOnMap(groupName); }; li.querySelector('.btn-remove-group').onclick = () => { if (confirm(`Remover grupo "${groupName}"?`)) { delete AppState.groups[groupName]; saveDataToLocalStorage(); updateGroupsLists(); updateFavoritesList(); if (AppState.activeGroup === groupName) { AppState.activeGroup = null; resetMapStyles(); } showNotification(`Grupo ${groupName} removido.`); } }; DOMElements.groupsList.appendChild(li); });
     }
 
     function updateVendedoresList() {
-        DOMElements.vendedoresList.innerHTML = '';
-        // Limpa select de atribuição de vendedor, mantendo a primeira opção
-        while (DOMElements.assignVendedorSelect.options.length > 1) DOMElements.assignVendedorSelect.remove(1);
-        // Limpa select de clima, mantendo a primeira opção
-        while (DOMElements.weatherVendedorSelect.options.length > 1) DOMElements.weatherVendedorSelect.remove(1);
-
-
-        if (AppState.vendedores.length === 0) {
-            DOMElements.vendedoresList.innerHTML = '<li class="empty-message">Nenhum vendedor cadastrado</li>';
-            return;
-        }
-
-        const fragmentList = document.createDocumentFragment();
-        const fragmentAssignSelect = document.createDocumentFragment();
-        const fragmentWeatherSelect = document.createDocumentFragment();
-
-        AppState.vendedores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(vendedor => {
-            // Opção para select de atribuição
-            const assignOption = document.createElement('option');
-            assignOption.value = vendedor.id;
-            assignOption.textContent = `${vendedor.nome} (${vendedor.supervisor})`;
-            fragmentAssignSelect.appendChild(assignOption);
-            
-            // Opção para select de clima
-            const weatherOption = document.createElement('option');
-            weatherOption.value = vendedor.id;
-            weatherOption.textContent = vendedor.nome;
-            fragmentWeatherSelect.appendChild(weatherOption);
-
-            // Item para a lista de vendedores
-            const li = document.createElement('li');
-            li.className = 'list-item';
-            const cidadesCount = Object.values(AppState.cityAssignments).flat().filter(id => id === vendedor.id).length;
-
-            li.innerHTML = `
-                <div>
-                    <div class="vendedor-list-item-info">
-                        <div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div>
-                        <strong>${vendedor.nome}</strong>
-                    </div>
-                    <div class="vendedor-list-item-details">
-                        <small>Supervisor: ${vendedor.supervisor || 'N/A'}</small>
-                        <span class="badge badge-primary">${cidadesCount} cidades</span>
-                    </div>
-                </div>
-                <div class="actions">
-                    <button type="button" class="btn btn-primary btn-sm btn-vendedor-details" title="Ver detalhes">
-                        <i class="fas fa-info-circle"></i>
-                    </button>
-                    <button type="button" class="btn btn-warning btn-sm btn-highlight-vendedor-map" title="Ver cidades no mapa">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </button>
-                </div>
-            `;
-            li.querySelector('.btn-vendedor-details').addEventListener('click', () => showVendedorDetailsModal(vendedor));
-            li.querySelector('.btn-highlight-vendedor-map').addEventListener('click', () => highlightVendedorCitiesOnMap(vendedor.id));
-            
-            fragmentList.appendChild(li);
-        });
-        DOMElements.assignVendedorSelect.appendChild(fragmentAssignSelect);
-        DOMElements.weatherVendedorSelect.appendChild(fragmentWeatherSelect);
-        DOMElements.vendedoresList.appendChild(fragmentList);
+        DOMElements.vendedoresList.innerHTML = AppState.vendedores.length === 0 ? '<li class="empty-message">Nenhum vendedor. Sincronize.</li>' : ''; if(DOMElements.assignVendedorSelect) DOMElements.assignVendedorSelect.innerHTML = '<option value="">Selecione um vendedor</option>';
+        AppState.vendedores.sort((a,b) => a.nome.localeCompare(b.nome)).forEach(vendedor => { if(DOMElements.assignVendedorSelect) DOMElements.assignVendedorSelect.innerHTML += `<option value="${vendedor.id}">${vendedor.nome} (Sup: ${vendedor.supervisor})</option>`; const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = ` <div> <div class="vendedor-list-item-info"> <div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div> <strong>${vendedor.nome}</strong> </div> <div class="vendedor-list-item-details"> <small>Sup: ${vendedor.supervisor || 'N/A'}</small> <small>Cód: ${vendedor.codigoVendedor || 'N/A'}</small> <small>Cad: ${(vendedor.totalCadastros || 0).toLocaleString('pt-BR')}</small> <small>Posit: ${(vendedor.totalPositivados || 0).toLocaleString('pt-BR')}</small> <span class="badge badge-primary">${vendedor.cidades.length} cidades</span> </div> </div> <div class="actions"> <button class="btn btn-primary btn-sm btn-vendedor-details" title="Detalhes"><i class="fas fa-info-circle"></i></button> <button class="btn btn-warning btn-sm btn-highlight-vendedor-map" title="No mapa"><i class="fas fa-map-marker-alt"></i></button> </div>`; li.querySelector('.btn-vendedor-details').onclick = () => showVendedorDetailsModal(vendedor); li.querySelector('.btn-highlight-vendedor-map').onclick = () => highlightVendedorCitiesOnMap(vendedor.id); DOMElements.vendedoresList.appendChild(li); });
     }
-    
+
     function updateUIAfterDataLoad() {
         updateFavoritesList();
         updateGroupsLists();
-        updateVendedoresList(); // Isso também popula os selects de clima e atribuição
-        resetMapStyles(); // Aplicar estilos iniciais às cidades
+        updateVendedoresList();
+        resetMapStyles();
     }
 
-    // ========= MODAIS ESPECÍFICOS =========
+    // ========= MODAIS E INTERAÇÕES DE USUÁRIO =========
     function prepareAssignVendedorModal() {
-        if (!AppState.selectedCity) return;
-        DOMElements.assignCityNameSpan.textContent = AppState.selectedCity.name;
-        DOMElements.assignVendedorSelect.value = ''; // Reseta o select
-
-        const assignedVendedorIds = AppState.cityAssignments[AppState.selectedCity.name];
-        DOMElements.assignedVendedoresList.innerHTML = '';
-
-        if (assignedVendedorIds && assignedVendedorIds.length > 0) {
-            const fragment = document.createDocumentFragment();
-            assignedVendedorIds.forEach(vendedorId => {
-                const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
-                if (vendedor) {
-                    const li = document.createElement('li');
-                    li.className = 'list-item';
-                    li.innerHTML = `
-                        <div class="vendedor-list-item-info">
-                            <div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div>
-                            <span>${vendedor.nome}</span>
-                        </div>
-                        <button type="button" class="btn btn-danger btn-sm btn-remove-assignment" title="Remover atribuição">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    `;
-                    li.querySelector('.btn-remove-assignment').addEventListener('click', () => {
-                        AppState.cityAssignments[AppState.selectedCity.name] = AppState.cityAssignments[AppState.selectedCity.name].filter(id => id !== vendedorId);
-                        if (AppState.cityAssignments[AppState.selectedCity.name].length === 0) {
-                            delete AppState.cityAssignments[AppState.selectedCity.name];
-                        }
-                        saveDataToLocalStorage();
-                        prepareAssignVendedorModal(); // Re-renderiza este modal
-                        updateSelectedCityInfo();   // Atualiza info na sidebar
-                        updateVendedoresList();     // Atualiza contagem de cidades dos vendedores
-                        resetMapStyles();           // Atualiza estilo no mapa
-                        showNotification(`Vendedor ${vendedor.nome} removido da cidade ${AppState.selectedCity.name}.`);
-                    });
-                    fragment.appendChild(li);
-                }
-            });
-            DOMElements.assignedVendedoresList.appendChild(fragment);
-            DOMElements.currentVendedoresContainer.classList.remove('hidden');
-        } else {
-            DOMElements.currentVendedoresContainer.classList.add('hidden');
-        }
-        openModal(DOMElements.modalAssignVendedor);
+        if (!AppState.selectedCity) return; DOMElements.assignCityNameSpan.textContent = AppState.selectedCity.name; DOMElements.assignVendedorSelect.value = ''; DOMElements.assignedVendedoresList.innerHTML = '';
+        const assignedIds = AppState.cityAssignments[AppState.selectedCity.name];
+        if (assignedIds?.length > 0) { assignedIds.forEach(vId => { const vend = AppState.vendedores.find(v => v.id === vId); if (vend) { const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div class="vendedor-list-item-info"><div class="vendedor-color-indicator" style="background-color: ${vend.color};"></div>${vend.nome}</div> <button class="btn btn-danger btn-sm btn-remove-assignment" title="Remover"><i class="fas fa-trash"></i></button>`; li.querySelector('.btn-remove-assignment').onclick = () => { vend.cidades = vend.cidades.filter(c => c !== AppState.selectedCity.name); AppState.cityAssignments[AppState.selectedCity.name] = AppState.cityAssignments[AppState.selectedCity.name].filter(id => id !== vId); if (AppState.cityAssignments[AppState.selectedCity.name].length === 0) delete AppState.cityAssignments[AppState.selectedCity.name]; saveDataToLocalStorage(); prepareAssignVendedorModal(); updateSelectedCityInfo(); updateVendedoresList(); resetMapStyles(); showNotification(`Vendedor ${vend.nome} removido de ${AppState.selectedCity.name}.`); }; DOMElements.assignedVendedoresList.appendChild(li); } }); DOMElements.currentVendedoresContainer.classList.remove('hidden'); }
+        else { DOMElements.currentVendedoresContainer.classList.add('hidden'); } openModal(DOMElements.modalAssignVendedor);
     }
 
     function showVendedorDetailsModal(vendedor) {
-        DOMElements.vendedorDetailsModalTitle.innerHTML = `
-            <div class="vendedor-list-item-info">
-                <div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div>
-                Detalhes do Vendedor
-            </div>`;
-        DOMElements.detailVendedorNomeSpan.textContent = vendedor.nome;
-        DOMElements.detailVendedorSupervisorSpan.textContent = vendedor.supervisor || 'N/A';
-
-        DOMElements.vendedorCidadesList.innerHTML = '';
-        const cidadesAtribuidas = Object.keys(AppState.cityAssignments).filter(
-            cityName => AppState.cityAssignments[cityName]?.includes(vendedor.id)
-        ).sort();
-
-        if (cidadesAtribuidas.length === 0) {
-            DOMElements.vendedorCidadesList.innerHTML = '<li class="empty-message">Nenhuma cidade atribuída</li>';
-        } else {
-            const fragment = document.createDocumentFragment();
-            cidadesAtribuidas.forEach(cityName => {
-                const li = document.createElement('li');
-                li.className = 'list-item';
-                
-                let cityHtml = cityName;
-                const cityTotalAssignments = AppState.cityAssignments[cityName]?.length || 0;
-                if (cityTotalAssignments > 1) {
-                    cityHtml += ` <span class="badge badge-warning" title="Atendida por ${cityTotalAssignments} vendedores"><i class="fas fa-users"></i> ${cityTotalAssignments}</span>`;
-                }
-
-                li.innerHTML = `
-                    <div>${cityHtml}</div>
-                    <div class="actions">
-                        <button type="button" class="btn btn-primary btn-sm btn-view-city-on-map" title="Ver cidade no mapa">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </div>
-                `;
-                li.querySelector('.btn-view-city-on-map').addEventListener('click', () => {
-                    const cityLayer = AppState.cityLayers[cityName];
-                    if (cityLayer) {
-                        closeAllModals();
-                        AppState.map.fitBounds(cityLayer.getBounds());
-                        cityLayer.fire('click');
-                    }
-                });
-                fragment.appendChild(li);
-            });
-            DOMElements.vendedorCidadesList.appendChild(fragment);
-        }
-        // Atualiza o handler do botão para o vendedor atual
-        DOMElements.highlightVendedorCitiesButton.onclick = () => {
-            highlightVendedorCitiesOnMap(vendedor.id);
-            closeAllModals();
-        };
-        openModal(DOMElements.modalVendedorDetails);
-    }
-    
-    // ========= FUNÇÕES DE CLIMA =========
-    async function getCityCoordinatesForWeather(cityName) {
-        try {
-            // Tenta pegar do GeoJSON primeiro, se a cidade foi clicada ou é conhecida
-            if (AppState.cityLayers[cityName]) {
-                 const bounds = AppState.cityLayers[cityName].getBounds();
-                 const center = bounds.getCenter();
-                 return { name: cityName, lat: center.lat, lon: center.lng, admin1: 'São Paulo', country: 'Brasil' };
-            }
-            // Se não, usa a API de geocodificação
-            const response = await fetch(`${AppConfig.weatherApiGeocode}?name=${encodeURIComponent(cityName)}&count=1&language=pt&format=json`);
-            if (!response.ok) throw new Error('Erro ao obter coordenadas da cidade para clima.');
-            const data = await response.json();
-            if (data.results && data.results.length > 0) {
-                return {
-                    name: data.results[0].name,
-                    lat: data.results[0].latitude,
-                    lon: data.results[0].longitude,
-                    admin1: data.results[0].admin1,
-                    country: data.results[0].country
-                };
-            } else {
-                throw new Error('Cidade não encontrada para clima.');
-            }
-        } catch (error) {
-            console.error('Erro na geocodificação para clima:', error);
-            return null;
-        }
+        DOMElements.vendedorDetailsModalTitle.innerHTML = `<div class="vendedor-list-item-info"><div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div>Detalhes do Vendedor</div>`; DOMElements.vendedorInfoDiv.innerHTML = ` <p><strong>Nome:</strong> ${vendedor.nome}</p> <p><strong>Supervisor:</strong> ${vendedor.supervisor || 'N/A'}</p> <p><strong>Código:</strong> ${vendedor.codigoVendedor || 'N/A'}</p> <p><strong>Total Cadastros:</strong> ${(vendedor.totalCadastros || 0).toLocaleString('pt-BR')}</p> <p><strong>Total Positivados:</strong> ${(vendedor.totalPositivados || 0).toLocaleString('pt-BR')}</p>`; DOMElements.vendedorCidadesList.innerHTML = vendedor.cidades.length === 0 ? '<li class="empty-message">Nenhuma cidade</li>' : '';
+        vendedor.cidades.sort().forEach(cityName => { const li = document.createElement('li'); li.className = 'list-item'; const totalAssignments = AppState.cityAssignments[cityName]?.length || 0; let badge = totalAssignments > 1 ? ` <span class="badge badge-warning" title="${totalAssignments} vend."><i class="fas fa-users"></i> ${totalAssignments}</span>` : ''; li.innerHTML = `<div>${cityName}${badge}</div><button class="btn btn-primary btn-sm btn-view-city" title="Ver no mapa"><i class="fas fa-eye"></i></button>`; li.querySelector('.btn-view-city').onclick = () => { if (AppState.cityLayers[cityName]) { closeAllModals(); AppState.map.fitBounds(AppState.cityLayers[cityName].getBounds()); AppState.cityLayers[cityName].fire('click');} }; DOMElements.vendedorCidadesList.appendChild(li); });
+        DOMElements.highlightVendedorCitiesButton.onclick = () => { highlightVendedorCitiesOnMap(vendedor.id); closeAllModals(); }; openModal(DOMElements.modalVendedorDetails);
     }
 
-    async function getWeatherForecast(lat, lon) {
-        try {
-            const params = new URLSearchParams({
-                latitude: lat, longitude: lon,
-                hourly: 'temperature_2m,relativehumidity_2m,precipitation,weathercode,windspeed_10m',
-                daily: 'weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum',
-                timezone: 'America/Sao_Paulo', forecast_days: 7, // 7 dias para não ser muito pesado
-                current_weather: 'true' // Corrigido para string 'true'
-            });
-            const response = await fetch(`${AppConfig.weatherApiForecast}?${params.toString()}`);
-            if (!response.ok) throw new Error('Erro ao obter previsão meteorológica.');
-            return await response.json();
-        } catch (error) {
-            console.error('Erro na API de previsão do tempo:', error);
-            showNotification('Erro ao carregar previsão meteorológica.', 'warning');
-            return null;
-        }
+    async function showCityDetailsModal(cityName, cityId) {
+        DOMElements.cityDetailsModalTitle.textContent = `Detalhes - ${cityName}`; DOMElements.cityDetailsModalBody.innerHTML = '<p class="empty-message">Carregando...</p>'; openModal(DOMElements.modalCityDetails); removeCityInfoMarker();
+        const population = await fetchCityPopulation(cityName); let detailsHTML = `<div class="city-general-info"><h4>${cityName}</h4><p><strong>População:</strong> ${population ? population.toLocaleString('pt-BR') : 'Não disponível'}</p></div>`;
+        const assignedVendedorIds = AppState.cityAssignments[cityName]; let totalCadastrosCidade = 0; let totalPositivadosCidade = 0;
+        if (assignedVendedorIds && assignedVendedorIds.length > 0) { detailsHTML += '<h5>Vendedores Atuantes:</h5>'; assignedVendedorIds.forEach(vId => { const vendedor = AppState.vendedores.find(v => v.id === vId); if (vendedor) { totalCadastrosCidade += (vendedor.totalCadastros || 0); totalPositivadosCidade += (vendedor.totalPositivados || 0); detailsHTML += ` <div class="vendedor-details-card"> <h5><div class="vendedor-color-indicator" style="background-color: ${vendedor.color};"></div> ${vendedor.nome}</h5> <p><strong>Supervisor:</strong> ${vendedor.supervisor || 'N/A'}</p> <p><strong>Código Vendedor:</strong> ${vendedor.codigoVendedor || 'N/A'}</p> <p><strong>Cadastros (Indiv.):</strong> ${(vendedor.totalCadastros || 0).toLocaleString('pt-BR')}</p> <p><strong>Positivados (Indiv.):</strong> ${(vendedor.totalPositivados || 0).toLocaleString('pt-BR')}</p> </div> `; } });
+            if (assignedVendedorIds.length > 0) { const faltouPositivar = totalCadastrosCidade - totalPositivadosCidade; detailsHTML += ` <div class="city-summary-card"> <h5>Sumário da Cidade (${cityName})</h5> <p><strong>Total de Cadastros (Soma):</strong> ${totalCadastrosCidade.toLocaleString('pt-BR')}</p> <p><strong>Total de Positivados (Soma):</strong> ${totalPositivadosCidade.toLocaleString('pt-BR')}</p> <p><strong>Clientes Não Positivados:</strong> ${faltouPositivar.toLocaleString('pt-BR')}</p> </div> `; }
+        } else { detailsHTML += '<p><em>Nenhum vendedor atribuído a esta cidade.</em></p>'; } DOMElements.cityDetailsModalBody.innerHTML = detailsHTML;
     }
 
-    function formatForecastDate(dateString, formatType = 'full') {
-        const date = new Date(dateString);
-        const dia = date.getDate();
-        const mes = AppConfig.meses[date.getMonth()];
-        const diaSemana = AppConfig.diasSemana[date.getDay()];
-        if (formatType === 'short') return `${diaSemana.substring(0,3)}, ${dia}/${date.getMonth()+1}`;
-
-        const hora = date.getHours().toString().padStart(2, '0');
-        const minuto = date.getMinutes().toString().padStart(2, '0');
-        return `${diaSemana}, ${dia} de ${mes} ${hora}:${minuto}`;
-    }
-    
-    function getWeatherInfo(code) {
-        const weatherCodes = {
-            0: { description: 'Céu limpo', icon: 'sun' }, 1: { description: 'Principalmente limpo', icon: 'sun' },
-            2: { description: 'Parcialmente nublado', icon: 'cloud-sun' }, 3: { description: 'Nublado', icon: 'cloud' },
-            45: { description: 'Nevoeiro', icon: 'smog' }, 48: { description: 'Nevoeiro com geada', icon: 'smog' },
-            51: { description: 'Garoa leve', icon: 'cloud-rain' }, 53: { description: 'Garoa moderada', icon: 'cloud-rain' },
-            55: { description: 'Garoa densa', icon: 'cloud-rain' },
-            61: { description: 'Chuva fraca', icon: 'cloud-rain' }, 63: { description: 'Chuva moderada', icon: 'cloud-showers-heavy' },
-            65: { description: 'Chuva forte', icon: 'cloud-showers-heavy' },
-            71: { description: 'Neve leve', icon: 'snowflake' }, 73: { description: 'Neve moderada', icon: 'snowflake' },
-            75: { description: 'Neve intensa', icon: 'snowflake' },
-            80: { description: 'Pancadas de chuva leves', icon: 'cloud-rain' }, 81: { description: 'Pancadas de chuva moderadas', icon: 'cloud-showers-heavy' },
-            82: { description: 'Pancadas de chuva violentas', icon: 'cloud-showers-heavy' },
-            95: { description: 'Tempestade', icon: 'bolt' }, 96: { description: 'Tempestade com granizo leve', icon: 'cloud-bolt' },
-            99: { description: 'Tempestade com granizo forte', icon: 'cloud-bolt' }
-        };
-        return weatherCodes[code] || { description: 'Desconhecido', icon: 'question' };
-    }
-
-    async function showWeatherForecastModal(city) { // city é {name, id, layer}
-        AppState.currentWeatherModalCity = city; // Salva a cidade para o modal
-        DOMElements.weatherModalTitle.textContent = `Previsão - ${city.name}`;
-        DOMElements.weatherModalBody.innerHTML = `
-            <div style="text-align: center;">
-                <div class="loader-spinner" style="margin: 20px auto;"></div>
-                <p>Carregando previsão meteorológica...</p>
-            </div>`;
-        openModal(DOMElements.modalWeatherForecast);
-
-        let coords;
-        if (city.layer) { // Se temos a layer, usamos o centro dela
-            const bounds = city.layer.getBounds();
-            const center = bounds.getCenter();
-            coords = { lat: center.lat, lon: center.lng };
-        } else { // Senão, tentamos geocodificar pelo nome
-            const cityData = await getCityCoordinatesForWeather(city.name);
-            if (!cityData) {
-                DOMElements.weatherModalBody.innerHTML = `<div class="alert alert-warning">Não foi possível obter as coordenadas de ${city.name}.</div>`;
-                return;
-            }
-            coords = { lat: cityData.lat, lon: cityData.lon };
-        }
-        
-        const forecast = await getWeatherForecast(coords.lat, coords.lon);
-        if (!forecast) {
-            DOMElements.weatherModalBody.innerHTML = `<div class="alert alert-warning">Não foi possível obter a previsão para ${city.name}.</div>`;
-            return;
-        }
-
-        let forecastHTML = `<div class="weather-city-info"><h5>${city.name}</h5></div>`;
-
-        if (forecast.current_weather) {
-            const cw = forecast.current_weather;
-            const wi = getWeatherInfo(cw.weathercode);
-            forecastHTML += `
-                <div class="card">
-                    <div class="card-header"><strong>Clima Atual</strong> (${formatForecastDate(cw.time)})</div>
-                    <div class="card-body" style="display: flex; align-items: center; justify-content: space-between;">
-                        <div style="display: flex; align-items: center;">
-                            <i class="fas fa-${wi.icon}" style="font-size: 2.5rem; margin-right: 15px; color: var(--primary-color);"></i>
-                            <div>
-                                <div style="font-size: 1.8rem; font-weight: bold;">${cw.temperature.toFixed(0)}°C</div>
-                                <div>${wi.description}</div>
-                            </div>
-                        </div>
-                        <div>
-                            <div><i class="fas fa-wind"></i> ${cw.windspeed.toFixed(1)} km/h</div>
-                        </div>
-                    </div>
-                </div>`;
-        }
-
-        if (forecast.daily) {
-            forecastHTML += `
-                <div class="card mt-15">
-                    <div class="card-header"><strong>Próximos Dias</strong></div>
-                    <div class="card-body" style="padding: 0;">
-                        <div class="daily-forecast">`;
-            for (let i = 0; i < forecast.daily.time.length; i++) {
-                const date = forecast.daily.time[i];
-                const wi = getWeatherInfo(forecast.daily.weathercode[i]);
-                forecastHTML += `
-                    <div class="list-item" style="font-size: 0.9rem;">
-                        <div style="flex: 1.5;"><strong>${formatForecastDate(date, 'short')}</strong></div>
-                        <div style="flex: 1; text-align: center;">
-                            <i class="fas fa-${wi.icon}" title="${wi.description}" style="font-size: 1.1rem;"></i>
-                        </div>
-                        <div style="flex: 2; text-align: left; padding-left: 5px;">${wi.description}</div>
-                        <div style="flex: 1; text-align: right;">
-                            ${forecast.daily.temperature_2m_max[i].toFixed(0)}° / ${forecast.daily.temperature_2m_min[i].toFixed(0)}°
-                        </div>
-                         <div style="flex: 1; text-align: right; font-size:0.8rem">
-                            <i class="fas fa-tint"></i> ${forecast.daily.precipitation_sum[i].toFixed(1)}mm
-                        </div>
-                    </div>`;
-            }
-            forecastHTML += `</div></div></div>`;
-        }
-        // Poderia adicionar previsão horária aqui se necessário (fica extenso)
-        DOMElements.weatherModalBody.innerHTML = forecastHTML;
-    }
-
-    async function addWeatherToMap(cityName, lat, lon) {
-        try {
-            const forecast = await getWeatherForecast(lat, lon);
-            if (!forecast || !forecast.current_weather) return null;
-
-            const cw = forecast.current_weather;
-            const wi = getWeatherInfo(cw.weathercode);
-            const temp = cw.temperature;
-
-            const weatherIcon = L.divIcon({
-                html: `
-                    <div style="background-color: white; border-radius: 50%; padding: 5px; border: 2px solid var(--secondary-color); width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">
-                        <i class="fas fa-${wi.icon}" style="font-size: 1.2rem; color: var(--secondary-color);"></i>
-                        <span style="position: absolute; bottom: -5px; right: -5px; background-color: var(--secondary-color); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; border: 1px solid white;">
-                            ${temp.toFixed(0)}°
-                        </span>
-                    </div>`,
-                className: 'weather-map-icon', iconSize: [40, 40], iconAnchor: [20, 40] // Anchor no pé do ícone
-            });
-            
-            const marker = L.marker([lat, lon], { icon: weatherIcon }).addTo(AppState.map);
-            marker.bindTooltip(`
-                <strong>${cityName}</strong><br>
-                <i class="fas fa-${wi.icon}"></i> ${wi.description}, ${temp.toFixed(1)}°C<br>
-                Vento: ${cw.windspeed.toFixed(1)} km/h
-            `);
-            AppState.weatherMarkers.push(marker);
-            return marker;
-        } catch (error) {
-            console.error('Erro ao adicionar clima ao mapa:', error);
-            return null;
-        }
-    }
-
-    function clearWeatherMarkers() {
-        AppState.weatherMarkers.forEach(marker => AppState.map.removeLayer(marker));
-        AppState.weatherMarkers = [];
-    }
-
-    async function showWeatherForVendedorCities(vendedorId) {
-        clearWeatherMarkers();
-        const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
-        if (!vendedor) return;
-
-        const cidadesDoVendedor = Object.keys(AppState.cityAssignments).filter(
-            cityName => AppState.cityAssignments[cityName]?.includes(vendedorId)
-        );
-
-        if (cidadesDoVendedor.length === 0) {
-            showNotification(`Nenhuma cidade atribuída a ${vendedor.nome}.`, 'warning');
-            return;
-        }
-        showNotification(`Carregando clima para ${cidadesDoVendedor.length} cidades de ${vendedor.nome}...`, 'info');
-        
-        let markersAdded = 0;
-        for (const cityName of cidadesDoVendedor) {
-            if (AppState.cityLayers[cityName]) {
-                const bounds = AppState.cityLayers[cityName].getBounds();
-                const center = bounds.getCenter();
-                if (await addWeatherToMap(cityName, center.lat, center.lng)) {
-                    markersAdded++;
-                }
-            }
-        }
-        if (markersAdded > 0) {
-             showNotification(`Clima exibido para ${markersAdded} cidades.`, 'success');
-        } else {
-             showNotification('Não foi possível exibir o clima para as cidades.', 'warning');
-        }
-    }
-
-
-    // ========= MANIPULADORES DE EVENTOS GLOBAIS =========
     function setupEventListeners() {
-        // Toggle Sidebar
-        DOMElements.toggleSidebarButton.addEventListener('click', () => {
-            DOMElements.sidebar.classList.toggle('collapsed');
-            const icon = DOMElements.toggleSidebarButton.querySelector('i');
-            icon.className = DOMElements.sidebar.classList.contains('collapsed') ? 'fas fa-bars' : 'fas fa-chevron-left';
-            // Força o redimensionamento do mapa após a animação da sidebar
-            setTimeout(() => AppState.map.invalidateSize(), 310);
-        });
-
-        // Abas da Sidebar
-        DOMElements.sidebarTabsContainer.addEventListener('click', (event) => {
-            const button = event.target.closest('.tab-button');
-            if (!button) return;
-
-            DOMElements.tabButtons.forEach(btn => btn.classList.remove('active'));
-            DOMElements.tabContents.forEach(content => content.classList.remove('active'));
-
-            button.classList.add('active');
-            const tabId = `tab-${button.dataset.tab}`;
-            const activeContent = document.getElementById(tabId);
-            if (activeContent) activeContent.classList.add('active');
-        });
-
-        // Busca de Cidade
-        DOMElements.searchButton.addEventListener('click', handleSearchCity);
-        DOMElements.searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleSearchCity();
-        });
-
-        // Ações da Cidade Selecionada
+        DOMElements.toggleSidebarButton.addEventListener('click', () => { DOMElements.sidebar.classList.toggle('collapsed'); DOMElements.toggleSidebarButton.querySelector('i').className = DOMElements.sidebar.classList.contains('collapsed') ? 'fas fa-bars' : 'fas fa-chevron-left'; setTimeout(() => { if(AppState.map) AppState.map.invalidateSize(); }, 310); });
+        DOMElements.sidebarTabsContainer.addEventListener('click', e => { const btn = e.target.closest('.tab-button'); if (!btn) return; DOMElements.tabButtons.forEach(b => b.classList.remove('active')); DOMElements.tabContents.forEach(c => c.classList.remove('active')); btn.classList.add('active'); const targetTab = document.getElementById(`tab-${btn.dataset.tab}`); if(targetTab) targetTab.classList.add('active'); });
+        DOMElements.searchButton.addEventListener('click', handleSearchCity); DOMElements.searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearchCity(); });
         DOMElements.addFavoriteButton.addEventListener('click', handleAddFavorite);
-        DOMElements.assignVendedorButton.addEventListener('click', () => {
-             if (!AppState.selectedCity) return;
-             if (AppState.vendedores.length === 0) {
-                showNotification('Nenhum vendedor cadastrado. Carregue os dados da planilha primeiro.', 'warning');
-                return;
-             }
-             prepareAssignVendedorModal();
-        });
-
-        // Modal de Atribuição de Vendedor
-        DOMElements.confirmAssignVendedorButton.addEventListener('click', handleConfirmAssignVendedor);
-
-        // Grupos
-        DOMElements.createGroupButton.addEventListener('click', handleCreateGroup);
-        DOMElements.groupSelect.addEventListener('change', (event) => {
-            highlightGroupOnMap(event.target.value);
-        });
-
-        // Sincronização
-        DOMElements.reloadDataButton.addEventListener('click', () => {
-            if (confirm("Isso irá recarregar os dados da planilha, sobrescrevendo vendedores e atribuições locais. Deseja continuar?")) {
-                loadDataFromSheets();
-            }
-        });
-        
-        // Clima
-        DOMElements.showWeatherForVendedorButton.addEventListener('click', () => {
-            const vendedorId = DOMElements.weatherVendedorSelect.value;
-            if (!vendedorId) {
-                showNotification('Selecione um vendedor para ver o clima.', 'warning');
-                return;
-            }
-            showWeatherForVendedorCities(vendedorId);
-        });
-        DOMElements.clearWeatherMarkersButton.addEventListener('click', clearWeatherMarkers);
-
-
-        // Fechar Modais (delegação de evento)
-        document.addEventListener('click', (event) => {
-            if (event.target.matches('.modal-close')) {
-                const modal = event.target.closest('.modal');
-                if (modal) closeModal(modal);
-            }
-            // Clicar no backdrop para fechar
-            if (event.target.matches('.modal.show')) {
-                 closeModal(event.target);
-            }
-        });
-        document.addEventListener('keydown', (event) => {
-            if (event.key === "Escape") {
-                closeAllModals();
-            }
-        });
+        DOMElements.assignVendedorButton.addEventListener('click', () => { if (!AppState.selectedCity) {showNotification('Nenhuma cidade selecionada.', 'info'); return;} if (AppState.vendedores.length === 0) { showNotification('Nenhum vendedor cadastrado. Sincronize os dados.', 'warning'); return; } prepareAssignVendedorModal(); });
+        DOMElements.confirmAssignVendedorButton.addEventListener('click', handleConfirmAssignVendedor); DOMElements.createGroupButton.addEventListener('click', handleCreateGroup);
+        if(DOMElements.groupSelect) DOMElements.groupSelect.addEventListener('change', e => highlightGroupOnMap(e.target.value));
+        DOMElements.reloadDataButton.addEventListener('click', () => { if (confirm("Recarregar dados da planilha? Isso pode sobrescrever alterações locais não sincronizadas.")) loadDataFromSheets(); });
+        document.addEventListener('click', e => { if (e.target.matches('.modal-close') || e.target.matches('.modal.show')) { const modal = e.target.closest('.modal') || e.target; if (modal) closeModal(modal); } });
+        document.addEventListener('keydown', e => { if (e.key === "Escape") closeAllModals(); });
+        if(AppState.map) { AppState.map.on('zoomstart movestart', removeCityInfoMarker); AppState.map.on('click', (e) => { if (AppState.cityInfoMarker && e.originalEvent.target === AppState.map.getContainer()) removeCityInfoMarker(); }); AppState.map.on('popupopen', removeCityInfoMarker); }
     }
 
-    // ========= LÓGICA DOS HANDLERS DE EVENTO =========
     function handleSearchCity() {
-        const searchTerm = DOMElements.searchInput.value.trim();
-        if (!searchTerm) return;
-        const normalizedSearchTerm = normalizeString(searchTerm);
+        const searchTermOriginal = DOMElements.searchInput.value;
+        if (!searchTermOriginal) return;
 
-        let foundCityName = AppState.normalizedCityNames[normalizedSearchTerm]; // Tentativa exata
-        if (!foundCityName) { // Tentativa parcial
-            const partialMatchKey = Object.keys(AppState.normalizedCityNames).find(
-                key => key.includes(normalizedSearchTerm) || normalizedSearchTerm.includes(key)
-            );
-            if (partialMatchKey) foundCityName = AppState.normalizedCityNames[partialMatchKey];
+        const normalizedSearchTerm = normalizeString(searchTermOriginal);
+        const simpleSearchTerm = toSimpleForm(normalizedSearchTerm);
+
+        let foundName = null;
+        let foundLayer = null;
+        let bestMatchScore = 0;
+
+        for (const [normalizedCityNameFromMap, originalCityName] of Object.entries(AppState.normalizedCityNames)) {
+            if (normalizedCityNameFromMap === normalizedSearchTerm) {
+                foundName = originalCityName;
+                foundLayer = AppState.cityLayers[originalCityName];
+                bestMatchScore = 100;
+                break;
+            }
+            const simpleMapName = toSimpleForm(normalizedCityNameFromMap);
+            if (simpleMapName === simpleSearchTerm) {
+                if (bestMatchScore < 90) {
+                    foundName = originalCityName;
+                    foundLayer = AppState.cityLayers[originalCityName];
+                    bestMatchScore = 90;
+                }
+            }
+        }
+        
+        if (bestMatchScore < 90) {
+            for (const [normalizedCityNameFromMap, originalCityName] of Object.entries(AppState.normalizedCityNames)) {
+                const simpleMapName = toSimpleForm(normalizedCityNameFromMap);
+                if (simpleMapName.includes(simpleSearchTerm)) {
+                    const currentScore = (simpleSearchTerm.length / simpleMapName.length) * 70;
+                    if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalCityName;
+                        foundLayer = AppState.cityLayers[originalCityName];
+                    }
+                } 
+                else if (simpleSearchTerm.includes(simpleMapName) && simpleMapName.length > 3) {
+                     const currentScore = (simpleMapName.length / simpleSearchTerm.length) * 60;
+                     if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalCityName;
+                        foundLayer = AppState.cityLayers[originalCityName];
+                    }
+                }
+            }
         }
 
-        if (foundCityName && AppState.cityLayers[foundCityName]) {
-            const layer = AppState.cityLayers[foundCityName];
-            AppState.map.fitBounds(layer.getBounds());
-            layer.fire('click'); // Simula clique para selecionar
-            showNotification(`Cidade ${foundCityName} encontrada.`);
-            DOMElements.searchInput.value = ''; // Limpa busca
+        if (foundName && foundLayer) {
+            AppState.map.fitBounds(foundLayer.getBounds());
+            foundLayer.fire('click');
+            showNotification(`Cidade ${foundName} encontrada.`);
+            DOMElements.searchInput.value = '';
         } else {
-            showNotification(`Cidade "${searchTerm}" não encontrada.`, 'warning');
+            showNotification(`Cidade "${searchTermOriginal}" não encontrada. Verifique a grafia ou tente um nome mais simples.`, 'warning');
         }
     }
 
     function handleAddFavorite() {
-        if (!AppState.selectedCity) return;
-        const alreadyFavorite = AppState.favorites.some(fav => fav.name === AppState.selectedCity.name);
-        if (alreadyFavorite) {
-            showNotification(`${AppState.selectedCity.name} já está nos favoritos.`, 'info');
-        } else {
-            AppState.favorites.push({ name: AppState.selectedCity.name, id: AppState.selectedCity.id });
-            saveDataToLocalStorage();
-            updateFavoritesList();
-            resetMapStyles(); // Atualiza estilo da cidade no mapa
-            showNotification(`${AppState.selectedCity.name} adicionada aos favoritos.`);
-        }
+        if (!AppState.selectedCity) return; if (AppState.favorites.some(f => f.name === AppState.selectedCity.name)) { showNotification(`${AppState.selectedCity.name} já é favorito.`, 'info'); return; }
+        AppState.favorites.push({ name: AppState.selectedCity.name, id: AppState.selectedCity.id }); saveDataToLocalStorage(); updateFavoritesList(); resetMapStyles(); showNotification(`${AppState.selectedCity.name} adicionado aos favoritos.`);
     }
-    
+
     function handleConfirmAssignVendedor() {
-        const vendedorId = DOMElements.assignVendedorSelect.value;
-        if (!AppState.selectedCity || !vendedorId) {
-            showNotification('Selecione um vendedor.', 'warning');
-            return;
-        }
-
-        const cityName = AppState.selectedCity.name;
-        if (!AppState.cityAssignments[cityName]) {
-            AppState.cityAssignments[cityName] = [];
-        }
-
-        if (AppState.cityAssignments[cityName].includes(vendedorId)) {
-            showNotification('Este vendedor já está atribuído a esta cidade.', 'info');
-            closeModal(DOMElements.modalAssignVendedor);
-            return;
-        }
-
-        AppState.cityAssignments[cityName].push(vendedorId);
-        saveDataToLocalStorage();
-        
-        prepareAssignVendedorModal(); // Atualiza o próprio modal (para caso de adicionar outro)
-        updateSelectedCityInfo();
-        updateVendedoresList(); // Atualizar contagem de cidades
-        resetMapStyles();
-        
-        const vendedor = AppState.vendedores.find(v => v.id === vendedorId);
-        showNotification(`Cidade ${cityName} atribuída ao vendedor ${vendedor.nome}.`);
-        // Não fechar o modal automaticamente, o usuário pode querer adicionar mais
+        const vendedorId = DOMElements.assignVendedorSelect.value; if (!AppState.selectedCity || !vendedorId) { showNotification('Selecione um vendedor.', 'warning'); return; }
+        const cityName = AppState.selectedCity.name; const vendedor = AppState.vendedores.find(v => v.id === vendedorId); if (!vendedor) { showNotification('Vendedor não encontrado.', 'danger'); return; }
+        if (!vendedor.cidades.includes(cityName)) vendedor.cidades.push(cityName); else { showNotification('Este vendedor já está atribuído a esta cidade.', 'info'); return; }
+        if (!AppState.cityAssignments[cityName]) AppState.cityAssignments[cityName] = []; if (!AppState.cityAssignments[cityName].includes(vendedorId)) AppState.cityAssignments[cityName].push(vendedorId);
+        saveDataToLocalStorage(); prepareAssignVendedorModal(); updateSelectedCityInfo(); updateVendedoresList(); resetMapStyles(); showNotification(`${cityName} atribuída a ${vendedor.nome}.`);
     }
 
     function handleCreateGroup() {
-        const groupName = DOMElements.groupNameInput.value.trim();
-        if (!groupName) {
-            showNotification('Digite um nome para o grupo.', 'warning');
-            return;
-        }
-        if (AppState.groups[groupName]) {
-            showNotification('Já existe um grupo com este nome.', 'warning');
-            return;
-        }
-        AppState.groups[groupName] = [];
-        saveDataToLocalStorage();
-        updateGroupsLists();
-        updateFavoritesList(); // Para atualizar os selects de grupo nos favoritos
-        DOMElements.groupNameInput.value = '';
-        showNotification(`Grupo "${groupName}" criado com sucesso.`);
+        const groupName = DOMElements.groupNameInput.value.trim(); if (!groupName) { showNotification('Digite um nome para o grupo.', 'warning'); return; }
+        if (AppState.groups[groupName]) { showNotification('Grupo com este nome já existe.', 'warning'); return; }
+        AppState.groups[groupName] = []; saveDataToLocalStorage(); updateGroupsLists(); updateFavoritesList(); DOMElements.groupNameInput.value = ''; showNotification(`Grupo "${groupName}" criado com sucesso.`);
     }
-
 
     // ========= INICIALIZAÇÃO DA APLICAÇÃO =========
     async function initializeApp() {
-        initDOMElements(); // Cacheia os elementos do DOM
-        DOMElements.spreadsheetIdDisplay.textContent = AppConfig.spreadsheetId;
-        DOMElements.configRangeNameDisplay.textContent = AppConfig.range;
-
-
+        initDOMElements();
+        if (DOMElements.spreadsheetIdDisplay) DOMElements.spreadsheetIdDisplay.textContent = AppConfig.spreadsheetId;
+        if (DOMElements.configRangeNameDisplay) DOMElements.configRangeNameDisplay.textContent = AppConfig.range;
         if (AppConfig.apiKey === "SUA_API_KEY_RESTRITA_AQUI" || !AppConfig.apiKey) {
-             console.warn("***************************************************************************");
-             console.warn("ALERTA: API Key do Google Sheets não configurada ou usando valor padrão!");
-             console.warn("Acesse script.js, localize AppConfig.apiKey e insira sua chave restrita.");
-             console.warn("Sem uma API Key válida, a funcionalidade da planilha não funcionará.");
-             console.warn("***************************************************************************");
+             console.warn("ALERTA: API Key do Google Sheets não configurada!");
              showNotification("API Key do Google Sheets não configurada! Funcionalidades da planilha desabilitadas.", "danger", 15000);
         }
-
-
-        setupEventListeners();
         initMap();
-
+        setupEventListeners();
         try {
-            const geoJsonData = await loadGeoJsonWithFallback();
-            processGeoJsonData(geoJsonData); // Processa e adiciona ao mapa
+            loadSavedData();
+            const municipiosGeoJson = await loadAndProcessGeoJson(
+                AppConfig.geoJsonMunicipiosUrls,
+                getCityStyle,
+                onEachCityFeature,
+                false
+            );
 
-            loadSavedData(); // Carrega favoritos, grupos, etc. do localStorage
-            
-            // Se não houver vendedores do localStorage OU se for a primeira carga sem lastUpdate
-            // OU se o usuário explicitamente recarregar, então busca da planilha.
-            // Por padrão, agora sempre carrega da planilha na inicialização para manter dados atualizados.
-            // A lógica de só carregar se não tiver local foi removida para priorizar dados da planilha.
-            await loadDataFromSheets(); 
-            // loadDataFromSheets já chama updateUIAfterDataLoad e saveDataToLocalStorage
-            // Se loadDataFromSheets falhar ou não carregar, ainda precisamos atualizar UI com dados locais
-            if (AppState.vendedores.length === 0) { // Se a planilha falhou e não temos vendedores
-                 updateUIAfterDataLoad(); // Atualiza UI com o que foi carregado do localStorage
+            if (!municipiosGeoJson || Object.keys(AppState.cityLayers).length === 0) {
+                 showNotification("Falha ao carregar dados geográficos dos municípios. Algumas funcionalidades podem ser limitadas.", "danger", 10000);
             }
 
+            await loadAndProcessGeoJson(AppConfig.geoJsonSpBoundaryUrls, () => CONSTANTS.SP_BOUNDARY_STYLE, null, true, 'boundaryPane');
+
+            if (Object.keys(AppState.cityPopulations).length === 0) {
+                 await fetchCityPopulation(null, true);
+            }
+
+            await loadDataFromSheets();
+
+            if (AppState.vendedores.length === 0 && !localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES)) {
+                updateUIAfterDataLoad();
+            }
         } catch (error) {
-            console.error("Erro crítico na inicialização do mapa ou dados:", error);
-            showNotification(`Erro crítico: ${error.message}. Algumas funcionalidades podem não operar.`, "danger", 10000);
-            // Mesmo com erro, tenta atualizar a UI com o que tiver sido carregado do localStorage
+            console.error("Erro crítico na inicialização:", error.message, error.stack);
+            showNotification(`Erro crítico na inicialização: ${error.message}. Verifique o console.`, "danger", 10000);
             updateUIAfterDataLoad();
         } finally {
             showLoading(false);
         }
     }
-
     initializeApp();
 });
