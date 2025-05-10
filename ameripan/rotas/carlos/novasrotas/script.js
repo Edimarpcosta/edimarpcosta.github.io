@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: 'limiteSP',
                 description: 'Limite do Estado de São Paulo',
                 urls: [
-				'http://edimarpcosta.github.io/geojson/UFs/br_sp.json',
+				'https://edimarpcosta.github.io/geojson/UFs/br_sp.json',
                 'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json'
                 ],
                 styleFunction: () => CONSTANTS.SP_BOUNDARY_STYLE,
