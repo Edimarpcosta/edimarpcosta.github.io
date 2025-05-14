@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // ========= CONFIGURAÇÃO DA APLICAÇÃO =========
     const AppConfig = {
-        spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk", // SEU ID DA PLANILHA
+        spreadsheetId: "1f03fl_8HI5V6moTLYNMsQLFoi3EsLYZQI23CKkHqsow", // SEU ID DA PLANILHA
         apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // !!!!! SUBSTITUA PELA SUA API KEY RESTRINGIDA !!!!!
         range: "sorveteria", // Aba da planilha com os dados dos vendedores
         geoJsonMunicipiosUrls: [
