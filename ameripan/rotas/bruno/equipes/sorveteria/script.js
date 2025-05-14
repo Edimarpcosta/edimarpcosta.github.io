@@ -12,8 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-35-mun.json',
         ],
         geoJsonSpBoundaryUrls: [ // GeoJSON para a fronteira do estado de SP
-            'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json',
-            'http://edimarpcosta.github.io/geojson/UFs/br_sp.json'
+            'http://edimarpcosta.github.io/geojson/UFs/br_sp.json',
+            'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json'
+            
         ],
         mapInitialView: { lat: -21.5, lng: -47.0 }, // Coordenadas centrais aproximadas de SP
         mapInitialZoom: 7, // Zoom inicial do mapa
