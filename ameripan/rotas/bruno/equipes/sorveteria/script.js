@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AppConfig = {
         spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk", // SEU ID DA PLANILHA
         apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // !!!!! SUBSTITUA PELA SUA API KEY RESTRINGIDA !!!!!
-        range: "novas-rotas", // Aba da planilha com os dados dos vendedores
+        range: "sorveteria", // Aba da planilha com os dados dos vendedores
         geoJsonMunicipiosUrls: [
             'https://edimarpcosta.github.io/geojson/geojs-35-mun.json', // SP
             'https://edimarpcosta.github.io/geojson/geojs-31-mun.json', // MG
