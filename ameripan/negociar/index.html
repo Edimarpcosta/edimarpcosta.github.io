@@ -3,22 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gerador de Resumo (WhatsApp)</title>
+    <title>Gerador de Resumo de Negociação</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
-            background-color: #f8f9fa; /* Light gray background */
-            font-size: 16px; /* Ensure base font size for mobile */
+            background-color: #f0f2f5;
+            font-size: 16px;
+            padding-bottom: 70px; /* Space for the clear vendor button in footer */
         }
         .card {
             margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        /* Ensure inputs are easily tappable on mobile */
-        .form-control, .input-group-text {
-            padding: 0.6rem 0.75rem;
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            font-weight: 500;
+        }
+        .form-control, .input-group-text, .form-select {
+            padding: 0.75rem;
             font-size: 1rem;
             height: auto;
+            border-radius: 0.375rem;
         }
         input[type="number"] {
             -moz-appearance: textfield;
@@ -28,36 +36,164 @@
             -webkit-appearance: none;
             margin: 0;
         }
-        .produto-item {
-            border: 1px solid #dee2e6;
+        .produto-item-lista {
+            border: 1px solid #e0e0e0;
             border-radius: 0.375rem;
-            padding: 0.8rem;
-            margin-bottom: 0.8rem;
-            background-color: #fff;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .produto-item-lista span {
+            margin-right: 10px;
         }
         label {
-            margin-bottom: 0.2rem; /* Less space below labels */
+            margin-bottom: 0.3rem;
             font-weight: 500;
         }
-        .btn-danger {
-             padding: 0.2rem 0.5rem; /* Smaller remove button */
+        .btn-danger.btn-remove-produto-lista {
+             padding: 0.2rem 0.5rem;
              font-size: 0.8rem;
         }
-         @media (max-width: 768px) {
-             h1 { font-size: 1.5rem; }
-             .container { padding: 0.5rem; }
-             .card-body { padding: 0.8rem; }
+        .radio-group-title {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        .form-check-inline {
+            margin-right: 1rem;
+        }
+        .hidden-field {
+            display: none;
+            margin-top: 0.5rem;
+        }
+        .footer-actions {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+            z-index: 1000;
+        }
+         .btn-footer-action {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
          }
+         hr.divisor-produtos {
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            border-top: 2px solid #007bff;
+         }
+         .area-cadastro-produto {
+            background-color: #e9ecef;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+         }
+         .header-actions { /* Container para o botão no topo */
+            display: flex;
+            justify-content: space-between; /* Alinha o título à esquerda e o botão à direita */
+            align-items: center; /* Alinha verticalmente */
+            margin-bottom: 1.5rem; /* Espaçamento abaixo do cabeçalho */
+         }
+         .header-actions h1 {
+             margin-bottom: 0; /* Remove margem inferior do h1 se ele estiver dentro */
+         }
+         .btn-apagar-topo { /* Estilo para o botão de apagar no topo */
+            font-size: 0.85rem;
+            padding: 0.375rem 0.75rem;
+         }
+
+        @media (max-width: 768px) {
+             .header-actions {
+                 flex-direction: column; /* Empilha título e botão em telas pequenas */
+                 align-items: flex-start; /* Alinha itens à esquerda */
+             }
+             .header-actions h1 {
+                 margin-bottom: 0.5rem; /* Adiciona espaço abaixo do título em mobile */
+             }
+             .header-actions .btn-apagar-topo {
+                 align-self: flex-end; /* Mantém o botão à direita abaixo do título */
+                 margin-top: 0.5rem;
+             }
+             .container { padding: 0.75rem; }
+             .card-body { padding: 1rem; }
+             .btn { font-size: 0.95rem; padding: 0.6rem 1rem;}
+        }
     </style>
 </head>
 <body>
     <div class="container mt-3">
-        <h1 class="text-center mb-4">Gerar Resumo para Gerência</h1>
+        <div class="header-actions">
+            <h1 class="text-center">Gerar Resumo de Negociação</h1>
+            <button class="btn btn-outline-danger btn-sm btn-apagar-topo" onclick="apagarTodosDados()">
+                <i class="fas fa-trash-alt me-1"></i>Apagar Tudo
+            </button>
+        </div>
 
         <div class="card">
-            <div class="card-header">
-                Dados Gerais
+            <div class="card-header">Status e Tipo da Negociação</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <span class="radio-group-title">Status da Aprovação:</span>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="statusAprovacao" id="statusSolicitacao" value="solicitacao" checked onchange="toggleAutorizanteFields()">
+                        <label class="form-check-label" for="statusSolicitacao">SOLICITAÇÃO DE APROVAÇÃO</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="statusAprovacao" id="statusAprovada" value="aprovada" onchange="toggleAutorizanteFields()">
+                        <label class="form-check-label" for="statusAprovada">Aprovada</label>
+                    </div>
+                </div>
+                <div id="autorizanteFields" class="mb-3 hidden-field">
+                    <span class="radio-group-title">Autorizante:</span>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="autorizante" id="autorizanteBruno" value="Bruno" checked onchange="toggleOutroAutorizante()">
+                        <label class="form-check-label" for="autorizanteBruno">Bruno</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="autorizante" id="autorizanteCarlos" value="Carlos" onchange="toggleOutroAutorizante()">
+                        <label class="form-check-label" for="autorizanteCarlos">Carlos</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="autorizante" id="autorizanteOutroRadio" value="Outro" onchange="toggleOutroAutorizante()">
+                        <label class="form-check-label" for="autorizanteOutroRadio">Outro</label>
+                    </div>
+                    <div id="outroAutorizanteField" class="mt-2 hidden-field">
+                        <input type="text" class="form-control form-control-sm" id="outroAutorizanteNome" placeholder="Nome do Autorizante">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <span class="radio-group-title">Tipo de Negociação:</span>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="tipoNegociacao" id="tipoClienteEspecial" value="Cliente Especial" checked onchange="toggleTipoNegociacaoFields()">
+                        <label class="form-check-label" for="tipoClienteEspecial">Cliente Especial</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="tipoNegociacao" id="tipoCombo" value="Combo" onchange="toggleTipoNegociacaoFields()">
+                        <label class="form-check-label" for="tipoCombo">Combo</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="tipoNegociacao" id="tipoOutros" value="Outros" onchange="toggleTipoNegociacaoFields()">
+                        <label class="form-check-label" for="tipoOutros">Outros</label>
+                    </div>
+                    <div id="comboField" class="mt-2 hidden-field">
+                        <input type="text" class="form-control form-control-sm" id="dadosCombo" placeholder="Dados do Combo (ex: Combo 300 a 500 LC)">
+                    </div>
+                    <div id="outrosNegociacaoField" class="mt-2 hidden-field">
+                        <input type="text" class="form-control form-control-sm" id="outrasInfosNegociacao" placeholder="Outras informações da negociação">
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Dados Gerais da Negociação</div>
             <div class="card-body">
                 <div class="mb-3">
                     <label for="vendedor" class="form-label">Vendedor:</label>
@@ -75,22 +211,40 @@
         </div>
 
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Produtos da Negociação</span>
-                <button class="btn btn-sm btn-success" onclick="adicionarProduto()">
-                    <i class="fas fa-plus me-1"></i>Adicionar
-                </button>
-            </div>
-            <div class="card-body" id="lista-produtos">
+            <div class="card-header">Produtos da Negociação</div>
+            <div class="card-body">
+                <div class="area-cadastro-produto">
+                    <div class="mb-2">
+                        <label for="produtoCodigoAtual" class="form-label">Cód produto:</label>
+                        <input type="text" class="form-control" id="produtoCodigoAtual" placeholder="Código">
+                    </div>
+                    <div class="mb-2">
+                        <label for="produtoValorAtual" class="form-label">Valor:</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="number" inputmode="decimal" step="0.01" class="form-control" id="produtoValorAtual" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="produtoQuantidadeAtual" class="form-label">Quantidade:</label>
+                        <input type="number" inputmode="decimal" class="form-control" id="produtoQuantidadeAtual" value="1">
+                    </div>
+                    <button class="btn btn-sm btn-success w-100" onclick="adicionarProdutoNaLista()">
+                        <i class="fas fa-plus me-1"></i>Adicionar Produto à Lista
+                    </button>
                 </div>
+                <hr class="divisor-produtos">
+                <h5 class="mt-3 mb-2 text-center">Produtos Adicionados</h5>
+                <div id="lista-produtos-adicionados">
+                </div>
+            </div>
         </div>
 
         <div class="card">
-            <div class="card-header">
-                Motivo da Negociação
-            </div>
+            <div class="card-header">Motivo da Negociação</div>
             <div class="card-body">
-                <div class="mb-2"> <label for="motivoNegociacao" class="form-label">Descreva o motivo:</label>
+                <div class="mb-2">
+                    <label for="motivoNegociacao" class="form-label">Descreva o motivo:</label>
                     <textarea class="form-control" id="motivoNegociacao" rows="3" placeholder="Ex: Cliente antigo, grande volume, queima de estoque..."></textarea>
                 </div>
             </div>
@@ -98,177 +252,324 @@
 
         <div class="card">
              <div class="card-body text-center">
-                 <button class="btn btn-primary w-100" onclick="compartilharResumoGerencia()">
-                    <i class="fab fa-whatsapp me-2"></i>Gerar Mensagem para WhatsApp
+                 <button class="btn btn-success w-100 mb-2" onclick="copiarNegociacao()">
+                    <i class="fas fa-copy me-2"></i>Copiar Negociação
+                </button>
+                <button class="btn btn-primary w-100" onclick="compartilharWhatsApp()">
+                    <i class="fab fa-whatsapp me-2"></i>Enviar para WhatsApp
                 </button>
             </div>
         </div>
 
+        </div>
+
+    <div class="footer-actions">
+        <button class="btn btn-outline-danger btn-footer-action" onclick="apagarVendedor()">
+            Apagar Vendedor Salvo
+        </button>
     </div>
 
     <script>
         let produtos = [];
 
-        // --- Funções de Gerenciamento de Produtos ---
+        function salvarDados() {
+            const dados = {
+                vendedor: document.getElementById('vendedor').value,
+                codPedido: document.getElementById('codPedido').value,
+                codCliente: document.getElementById('codCliente').value,
+                statusAprovacao: document.querySelector('input[name="statusAprovacao"]:checked')?.value,
+                autorizante: document.querySelector('input[name="autorizante"]:checked')?.value,
+                outroAutorizanteNome: document.getElementById('outroAutorizanteNome').value,
+                tipoNegociacao: document.querySelector('input[name="tipoNegociacao"]:checked')?.value,
+                dadosCombo: document.getElementById('dadosCombo').value,
+                outrasInfosNegociacao: document.getElementById('outrasInfosNegociacao').value,
+                produtos: produtos,
+                motivoNegociacao: document.getElementById('motivoNegociacao').value
+            };
+            localStorage.setItem('dadosNegociacao', JSON.stringify(dados));
+        }
 
-        function adicionarProduto() {
+        function carregarDados() {
+            const dadosSalvos = localStorage.getItem('dadosNegociacao');
+            if (dadosSalvos) {
+                const dados = JSON.parse(dadosSalvos);
+                document.getElementById('vendedor').value = dados.vendedor || '';
+                document.getElementById('codPedido').value = dados.codPedido || '';
+                document.getElementById('codCliente').value = dados.codCliente || '';
+
+                if (dados.statusAprovacao) {
+                    document.querySelector(`input[name="statusAprovacao"][value="${dados.statusAprovacao}"]`).checked = true;
+                }
+                toggleAutorizanteFields();
+
+                if (dados.autorizante) {
+                    const autorizanteRadio = document.querySelector(`input[name="autorizante"][value="${dados.autorizante}"]`);
+                    if (autorizanteRadio) autorizanteRadio.checked = true;
+                }
+                document.getElementById('outroAutorizanteNome').value = dados.outroAutorizanteNome || '';
+                toggleOutroAutorizante();
+
+                if (dados.tipoNegociacao) {
+                     const tipoNegRadio = document.querySelector(`input[name="tipoNegociacao"][value="${dados.tipoNegociacao}"]`);
+                     if(tipoNegRadio) tipoNegRadio.checked = true;
+                }
+                document.getElementById('dadosCombo').value = dados.dadosCombo || '';
+                document.getElementById('outrasInfosNegociacao').value = dados.outrasInfosNegociacao || '';
+                toggleTipoNegociacaoFields();
+
+                produtos = dados.produtos || [];
+                document.getElementById('motivoNegociacao').value = dados.motivoNegociacao || '';
+            }
+            document.getElementById('produtoQuantidadeAtual').value = 1;
+            renderizarListaDeProdutos();
+            configurarNavegacaoCamposProduto();
+        }
+
+        function apagarTodosDados() {
+            if (confirm("Tem certeza que deseja apagar todos os dados, exceto o nome do vendedor?")) {
+                const vendedorSalvo = document.getElementById('vendedor').value;
+                localStorage.removeItem('dadosNegociacao');
+                produtos = [];
+
+                document.getElementById('codPedido').value = '';
+                document.getElementById('codCliente').value = '';
+                document.getElementById('motivoNegociacao').value = '';
+                document.getElementById('statusSolicitacao').checked = true;
+                toggleAutorizanteFields();
+                document.getElementById('autorizanteBruno').checked = true;
+                document.getElementById('outroAutorizanteNome').value = '';
+                toggleOutroAutorizante();
+                document.getElementById('tipoClienteEspecial').checked = true;
+                document.getElementById('dadosCombo').value = '';
+                document.getElementById('outrasInfosNegociacao').value = '';
+                toggleTipoNegociacaoFields();
+                
+                limparCamposCadastroProduto();
+                renderizarListaDeProdutos();
+                document.getElementById('vendedor').value = vendedorSalvo;
+                salvarDados();
+                alert("Dados apagados, exceto o vendedor.");
+            }
+        }
+
+        function apagarVendedor() {
+            if (confirm("Tem certeza que deseja apagar o nome do vendedor salvo?")) {
+                document.getElementById('vendedor').value = '';
+                salvarDados();
+                alert("Nome do vendedor apagado.");
+            }
+        }
+
+        function toggleAutorizanteFields() {
+            const statusAprovada = document.getElementById('statusAprovada').checked;
+            document.getElementById('autorizanteFields').style.display = statusAprovada ? 'block' : 'none';
+            if (!statusAprovada) {
+                document.getElementById('outroAutorizanteField').style.display = 'none';
+            } else {
+                toggleOutroAutorizante();
+            }
+            salvarDados();
+        }
+
+        function toggleOutroAutorizante() {
+            const autorizanteOutro = document.getElementById('autorizanteOutroRadio').checked;
+            const statusAprovada = document.getElementById('statusAprovada').checked;
+            document.getElementById('outroAutorizanteField').style.display = (autorizanteOutro && statusAprovada) ? 'block' : 'none';
+            if (autorizanteOutro && statusAprovada) {
+                document.getElementById('outroAutorizanteNome').focus();
+            }
+            salvarDados();
+        }
+
+        function toggleTipoNegociacaoFields() {
+            const tipoCombo = document.getElementById('tipoCombo').checked;
+            const tipoOutros = document.getElementById('tipoOutros').checked;
+            document.getElementById('comboField').style.display = tipoCombo ? 'block' : 'none';
+            document.getElementById('outrosNegociacaoField').style.display = tipoOutros ? 'block' : 'none';
+            if (tipoCombo) document.getElementById('dadosCombo').focus();
+            if (tipoOutros) document.getElementById('outrasInfosNegociacao').focus();
+            salvarDados();
+        }
+
+        function limparCamposCadastroProduto() {
+            document.getElementById('produtoCodigoAtual').value = '';
+            document.getElementById('produtoValorAtual').value = '';
+            document.getElementById('produtoQuantidadeAtual').value = 1;
+            document.getElementById('produtoCodigoAtual').focus();
+        }
+
+        function adicionarProdutoNaLista() {
+            const codigo = document.getElementById('produtoCodigoAtual').value.trim();
+            const valor = document.getElementById('produtoValorAtual').value;
+            const quantidade = document.getElementById('produtoQuantidadeAtual').value;
+
+            if (!codigo) {
+                alert("Por favor, informe o código do produto.");
+                document.getElementById('produtoCodigoAtual').focus();
+                return;
+            }
+            if (parseFloat(quantidade) <= 0 || parseFloat(valor) < 0) { // Permite valor 0
+                alert("Quantidade deve ser positiva. Valor não pode ser negativo.");
+                 if (parseFloat(quantidade) <= 0) document.getElementById('produtoQuantidadeAtual').focus();
+                 else document.getElementById('produtoValorAtual').focus();
+                return;
+            }
+
             const novoProduto = {
-                id: Date.now(), // ID único baseado no tempo
-                codigo: '',
-                quantidade: '',
-                valor: ''
+                id: Date.now(),
+                codigo: codigo,
+                valor: parseFloat(valor) || 0,
+                quantidade: parseFloat(quantidade) || 1
             };
             produtos.push(novoProduto);
-            renderizarProdutos();
-
-             // Focar no primeiro campo do novo produto adicionado
-             setTimeout(() => {
-                const novoProdutoElement = document.getElementById(`produto-${novoProduto.id}`);
-                if (novoProdutoElement) {
-                    const firstInput = novoProdutoElement.querySelector('input[data-field="codigo"]');
-                    if(firstInput) firstInput.focus();
-                }
-            }, 50); // Pequeno delay para garantir a renderização
+            renderizarListaDeProdutos();
+            limparCamposCadastroProduto();
+            salvarDados();
         }
 
-        function removerProduto(id) {
-            produtos = produtos.filter(p => p.id !== id);
-            renderizarProdutos();
+        function removerProdutoDaLista(idProduto) {
+            produtos = produtos.filter(p => p.id !== idProduto);
+            renderizarListaDeProdutos();
+            salvarDados();
         }
 
-        function atualizarProduto(id, campo, valor) {
-            const produto = produtos.find(p => p.id === id);
-            if (produto) {
-                produto[campo] = valor;
-                // Não precisamos recalcular nada aqui nesta versão minimalista
-            }
-        }
-
-        // --- Renderização ---
-
-        function renderizarProdutos() {
-            const listaContainer = document.getElementById('lista-produtos');
-            listaContainer.innerHTML = ''; // Limpa a lista antes de renderizar
+        function renderizarListaDeProdutos() {
+            const containerLista = document.getElementById('lista-produtos-adicionados');
+            containerLista.innerHTML = '';
 
             if (produtos.length === 0) {
-                 listaContainer.innerHTML = '<p class="text-muted text-center">Nenhum produto adicionado.</p>';
-                 return;
+                containerLista.innerHTML = '<p class="text-muted text-center small mt-2">Nenhum produto adicionado à lista.</p>';
+                return;
             }
 
-
             produtos.forEach(produto => {
-                const produtoDiv = document.createElement('div');
-                produtoDiv.className = 'produto-item';
-                produtoDiv.id = `produto-${produto.id}`; // ID para referência
-
-                produtoDiv.innerHTML = `
-                    <div class="d-flex justify-content-end mb-2">
-                         <button class="btn btn-danger btn-sm" onclick="removerProduto(${produto.id})" aria-label="Remover Produto">
-                             <i class="fas fa-times"></i>
-                         </button>
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'produto-item-lista';
+                itemDiv.innerHTML = `
+                    <div>
+                        <span>Cód: <strong>${produto.codigo}</strong></span>
+                        <span>Val: <strong>R$ ${produto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                        <span>Qtd: <strong>${produto.quantidade}</strong></span>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Cód produto:</label>
-                        <input type="text" class="form-control" value="${produto.codigo}"
-                               data-field="codigo" oninput="atualizarProduto(${produto.id}, 'codigo', this.value)">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Quantidade:</label>
-                        <input type="number" inputmode="decimal" class="form-control" value="${produto.quantidade}"
-                               data-field="quantidade" oninput="atualizarProduto(${produto.id}, 'quantidade', this.value)">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Valor:</label>
-                        <div class="input-group">
-                             <span class="input-group-text">R$</span>
-                             <input type="number" inputmode="decimal" step="0.01" class="form-control" value="${produto.valor}"
-                                    data-field="valor" oninput="atualizarProduto(${produto.id}, 'valor', this.value)">
-                        </div>
-                    </div>
+                    <button class="btn btn-danger btn-remove-produto-lista btn-sm" onclick="removerProdutoDaLista(${produto.id})" aria-label="Remover Produto">
+                        <i class="fas fa-times"></i>
+                    </button>
                 `;
-                listaContainer.appendChild(produtoDiv);
-
-                // Adiciona listener de teclado para navegação com Enter
-                const inputs = produtoDiv.querySelectorAll('input');
-                inputs.forEach(input => configNavegacaoPorEnterEmProduto(input, produto.id));
+                containerLista.appendChild(itemDiv);
             });
         }
+        
+        function configurarNavegacaoCamposProduto() {
+            const codInput = document.getElementById('produtoCodigoAtual');
+            const valorInput = document.getElementById('produtoValorAtual');
+            const qtdInput = document.getElementById('produtoQuantidadeAtual');
 
-        // --- Navegação e WhatsApp ---
-
-        function configNavegacaoPorEnterEmProduto(inputElement, produtoId) {
-            inputElement.addEventListener('keydown', function(e) {
+            codInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
-                    e.preventDefault(); // Previne envio de formulário ou quebra de linha
-
-                    const produtoContainer = this.closest('.produto-item');
-                    if (!produtoContainer) return;
-
-                    // Pegar todos os inputs visíveis dentro do container do produto
-                    const inputs = Array.from(produtoContainer.querySelectorAll('input[type="text"], input[type="number"]'));
-                    const currentIndex = inputs.indexOf(this);
-                    const isLastInput = currentIndex === inputs.length - 1; // O último é o 'valor'
-
-                    if (isLastInput) {
-                        // Se Enter no último campo (Valor), adiciona novo produto
-                        adicionarProduto();
-                    } else if (currentIndex !== -1 && currentIndex < inputs.length - 1) {
-                        // Se não for o último, foca no próximo campo do mesmo produto
-                        inputs[currentIndex + 1].focus();
-                    }
+                    e.preventDefault();
+                    valorInput.focus();
+                }
+            });
+            valorInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    qtdInput.focus();
+                }
+            });
+            qtdInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    adicionarProdutoNaLista();
                 }
             });
         }
 
-        function compartilharResumoGerencia() {
-            const vendedor = document.getElementById('vendedor').value;
-            const codCliente = document.getElementById('codCliente').value;
-            const codPedido = document.getElementById('codPedido').value;
-            const motivo = document.getElementById('motivoNegociacao').value;
+        function gerarMensagemBase() {
+            const vendedor = document.getElementById('vendedor').value || 'N/A';
+            const codPedido = document.getElementById('codPedido').value || 'N/A';
+            const codCliente = document.getElementById('codCliente').value || 'N/A';
+            const motivo = document.getElementById('motivoNegociacao').value.trim();
+            const statusAprovacao = document.querySelector('input[name="statusAprovacao"]:checked').value;
+            const tipoNegociacao = document.querySelector('input[name="tipoNegociacao"]:checked').value;
 
-            let mensagem = `*SOLICITAÇÃO DE APROVAÇÃO* 📝\n\n`;
-            mensagem += `Vendedor: *${vendedor || 'N/A'}*\n`;
-            mensagem += `Pedido: ${codPedido || 'N/A'}\n`;
-            mensagem += `Cliente: ${codCliente || 'N/A'}\n`;
-            mensagem += `-\n`; // Separador inicial
+            let mensagem = "";
+
+            if (statusAprovacao === 'solicitacao') {
+                mensagem += `*SOLICITAÇÃO DE APROVAÇÃO*\n`;
+            } else {
+                let autorizante = document.querySelector('input[name="autorizante"]:checked').value;
+                if (autorizante === 'Outro') {
+                    autorizante = document.getElementById('outroAutorizanteNome').value.trim() || 'Outro (Não especificado)';
+                }
+                mensagem += `Aprovada ${autorizante}\n`;
+            }
+
+            if (tipoNegociacao === 'Combo') {
+                const dadosCombo = document.getElementById('dadosCombo').value.trim();
+                mensagem += `${dadosCombo || 'Combo (sem detalhes)'}\n`;
+            } else if (tipoNegociacao === 'Outros') {
+                const outrasInfos = document.getElementById('outrasInfosNegociacao').value.trim();
+                mensagem += `${outrasInfos || tipoNegociacao}\n`;
+            } else {
+                mensagem += `${tipoNegociacao}\n`;
+            }
+            mensagem += `-\n`;
+            mensagem += `Vendedor: *${vendedor}*\n`;
+            mensagem += `Pedido: ${codPedido}\n`;
+            mensagem += `Cliente: ${codCliente}\n`;
 
             if (produtos.length === 0) {
                  mensagem += `Nenhum produto informado.\n`;
-                 // Remove o separador inicial se não houver produtos
-                 mensagem = mensagem.replace('-\n', '');
             } else {
+                mensagem += `-\n`;
                 produtos.forEach((produto) => {
-                    const qtd = parseFloat(produto.quantidade) || 0;
-                    const valor = parseFloat(produto.valor) || 0;
-                    const codigo = produto.codigo || 'N/A';
-
-                    mensagem += `Cód produto: ${codigo}\n`;
-                    mensagem += `Quantidade: ${qtd}\n`;
-                    mensagem += `Valor: R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-                    mensagem += `-\n`; // Separador de item
+                    mensagem += `Cód produto: ${produto.codigo}\n`;
+                    mensagem += `Valor: R$ ${produto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+                    mensagem += `Quantidade: ${produto.quantidade}\n`;
+                    mensagem += `-\n`;
                 });
-                 // Remover o último separador '-'
-                 mensagem = mensagem.substring(0, mensagem.lastIndexOf('-\n'));
+                mensagem = mensagem.substring(0, mensagem.lastIndexOf('-\n'));
             }
 
-
-            if (motivo && motivo.trim() !== '') {
-                 mensagem += `--------------------\n`; // Separador antes do motivo
-                 mensagem += `*Motivo da Negociação:*\n${motivo.trim()}\n`;
-            } else if (produtos.length > 0) { // Adiciona N/A apenas se houver produtos e nenhum motivo
+            if (motivo) {
+                 mensagem += `--------------------\n`;
+                 mensagem += `*Motivo da Negociação:*\n${motivo}\n`;
+            } else if (produtos.length > 0) {
                  mensagem += `--------------------\n`;
                  mensagem += `*Motivo da Negociação:* N/A\n`;
             }
+            return mensagem.trim();
+        }
 
-            const mensagemCodificada = encodeURIComponent(mensagem.trim());
+        function copiarNegociacao() {
+            salvarDados();
+            const mensagem = gerarMensagemBase();
+            navigator.clipboard.writeText(mensagem)
+                .then(() => {
+                    alert('Negociação copiada para a área de transferência!');
+                })
+                .catch(err => {
+                    console.error('Erro ao copiar texto: ', err);
+                    alert('Erro ao copiar. Verifique as permissões do navegador ou copie manualmente.');
+                });
+        }
+
+        function compartilharWhatsApp() {
+            salvarDados();
+            const mensagem = gerarMensagemBase();
+            const mensagemCodificada = encodeURIComponent(mensagem);
             window.open(`https://wa.me/?text=${mensagemCodificada}`, '_blank');
         }
 
-        // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
-             adicionarProduto(); // Começa com um produto vazio
+             carregarDados();
+             document.querySelectorAll('#vendedor, #codPedido, #codCliente, #motivoNegociacao, input[name="statusAprovacao"], input[name="autorizante"], #outroAutorizanteNome, input[name="tipoNegociacao"], #dadosCombo, #outrasInfosNegociacao').forEach(el => {
+                el.addEventListener('input', salvarDados);
+                el.addEventListener('change', salvarDados);
+             });
+             toggleAutorizanteFields();
+             toggleTipoNegociacaoFields();
         });
-
     </script>
 </body>
 </html>
