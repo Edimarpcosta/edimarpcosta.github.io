@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AppConfig = {
         spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk",
         apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // Mantenha sua chave aqui
-        range: "novas-rotas",
+        range: "sorveteria",
         distribuidoraAmeripanCoords: L.latLng(-22.730986246840104, -47.358144521713264),
         geoJsonSources: [
             {
