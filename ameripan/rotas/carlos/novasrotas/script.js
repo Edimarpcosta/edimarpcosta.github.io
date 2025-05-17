@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========= CONFIGURAÇÃO DA APLICAÇÃO =========
     const AppConfig = {
         spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk",
-        apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo",
+        apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // Mantenha sua chave aqui
         range: "novas-rotas",
         distribuidoraAmeripanCoords: L.latLng(-22.730986246840104, -47.358144521713264),
         geoJsonSources: [
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ],
                 styleFunction: getCityStyle,
                 onFeatureCallback: onEachCityFeature,
-                paneName: null
+                paneName: 'cityFillPane' // Atribuído ao pane correto
             },
             {
                 id: 'municipiosMG',
@@ -28,14 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 ],
                 styleFunction: getCityStyle,
                 onFeatureCallback: onEachCityFeature,
-                paneName: null
+                paneName: 'cityFillPane' // Atribuído ao pane correto
             },
             {
                 id: 'limiteSP',
                 description: 'Limite do Estado de São Paulo',
                 urls: [
-				'https://edimarpcosta.github.io/geojson/UFs/br_sp.json',
-                'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json'
+				    'https://edimarpcosta.github.io/geojson/UFs/br_sp.json',
+                    'https://raw.githubusercontent.com/giuliano-macedo/geodata-br-states/main/geojson/br_states/br_sp.json'
                 ],
                 styleFunction: () => CONSTANTS.SP_BOUNDARY_STYLE,
                 onFeatureCallback: null,
@@ -46,124 +46,54 @@ document.addEventListener('DOMContentLoaded', () => {
         mapInitialView: { lat: -21.5, lng: -47.0 },
         mapInitialZoom: 7,
         vendedorColors: [
-    // Grupo 1: Cores Primárias e Secundárias Fortes (Alto Contraste) - 12 cores
-    '#FF0000', // 1. Vermelho Puro
-    '#0000FF', // 2. Azul Puro
-    '#008000', // 3. Verde Puro
-    '#FFA500', // 4. Laranja Puro
-    '#800080', // 5. Roxo Puro
-    '#FFFF00', // 6. Amarelo Puro (ATENÇÃO: MUITO CLARO COM OPACIDADE 0.5, considere substituir)
-    // Substituição para Amarelo:
-    // '#FFD700', // Amarelo Ouro (um pouco menos claro)
-    // '#F9A825', // Âmbar (Ainda melhor, mais escuro)
-    '#F9A825', // 6. Âmbar (Substituindo Amarelo Puro)
-    '#FF00FF', // 7. Magenta Puro (Fúcsia)
-    '#00FFFF', // 8. Ciano Puro (Aqua) (ATENÇÃO: MUITO CLARO COM OPACIDADE 0.5, considere substituir)
-    // Substituição para Ciano:
-    // '#008080', // Teal (bem mais escuro e seguro)
-    '#008B8B', // 8. Ciano Escuro (DarkCyan, Substituindo Ciano Puro)
-    '#A52A2A', // 9. Marrom
-    '#800000', // 10. Vinho (Maroon)
-    '#000080', // 11. Azul Marinho (Navy)
-    '#808000', // 12. Oliva
+            // Grupo 1: Cores Primárias e Secundárias Fortes (Alto Contraste) - 12 cores
+            '#FF0000', // 1. Vermelho Puro
+            '#0000FF', // 2. Azul Puro
+            '#008000', // 3. Verde Puro
+            '#FFA500', // 4. Laranja Puro
+            '#800080', // 5. Roxo Puro
+            '#F9A825', // 6. Âmbar (Substituindo Amarelo Puro)
+            '#FF00FF', // 7. Magenta Puro (Fúcsia)
+            '#008B8B', // 8. Ciano Escuro (DarkCyan, Substituindo Ciano Puro)
+            '#A52A2A', // 9. Marrom
+            '#800000', // 10. Vinho (Maroon)
+            '#000080', // 11. Azul Marinho (Navy)
+            '#808000', // 12. Oliva
 
-    // Grupo 2: Variações Fortes e Tons Escuros Distintos - 18 cores (Total 30)
-    '#E6194B', // 13. Vermelho Rubi
-    '#3CB44B', // 14. Verde Esmeralda
-    '#4363D8', // 15. Azul Cobalto
-    '#F58231', // 16. Laranja Abóbora
-    '#911EB4', // 17. Roxo Ametista
-    '#F032E6', // 18. Rosa Choque
-    '#008080', // 19. Teal (Verde-azulado Escuro)
-    '#9A6324', // 20. Marrom Sela
-    '#000000', // 21. Preto (Para contraste máximo, se aplicável) - Pode ser '#2F4F4F' (Cinza Ardósia Escuro) se preto puro for demais.
-    '#17A2B8', // 22. Azul Petróleo Claro / Ciano Escuro
-    '#FF1493', // 23. Rosa Pink Forte (DeepPink)
-    '#E6B333', // 24. Amarelo Mostarda Escuro
-    '#B34D4D', // 25. Terracota / Vermelho Queimado
-    '#809900', // 26. Verde Limão Escuro
-    '#6610F2', // 27. Roxo Índigo Vibrante
-    '#E6331A', // 28. Vermelho Tomate Intenso
-    '#005C00', // 29. Verde Muito Escuro
-    '#D23E9A', // 30. Rosa Forte / Fúcsia Médio
+            // Grupo 2: Variações Fortes e Tons Escuros Distintos - 18 cores (Total 30)
+            '#E6194B', // 13. Vermelho Rubi
+            '#3CB44B', // 14. Verde Esmeralda
+            '#4363D8', // 15. Azul Cobalto
+            '#F58231', // 16. Laranja Abóbora
+            '#911EB4', // 17. Roxo Ametista
+            '#F032E6', // 18. Rosa Choque
+            '#008080', // 19. Teal (Verde-azulado Escuro)
+            '#9A6324', // 20. Marrom Sela
+            '#2F4F4F', // 21. Cinza Ardósia Escuro (Substituindo Preto)
+            '#17A2B8', // 22. Azul Petróleo Claro / Ciano Escuro
+            '#FF1493', // 23. Rosa Pink Forte (DeepPink)
+            '#E6B333', // 24. Amarelo Mostarda Escuro
+            '#B34D4D', // 25. Terracota / Vermelho Queimado
+            '#809900', // 26. Verde Limão Escuro
+            '#6610F2', // 27. Roxo Índigo Vibrante
+            '#E6331A', // 28. Vermelho Tomate Intenso
+            '#005C00', // 29. Verde Muito Escuro
+            '#D23E9A', // 30. Rosa Forte / Fúcsia Médio
 
-    // Grupo 3: Mais Cores Vibrantes e Escuras - 20 cores (Total 50)
-    '#FF6B00', // 31. Laranja Vibrante Escuro
-    '#7000A0', // 32. Roxo Escuro Intenso
-    '#C20000', // 33. Vermelho Sangue Escuro
-    '#0075AC', // 34. Azul Aço
-    '#AD1457', // 35. Vinho Rosado Forte (Framboesa Escuro)
-    '#3B7A57', // 36. Verde Floresta Escuro
-    '#BF360C', // 37. Laranja Queimado Bem Escuro
-    '#4A148C', // 38. Roxo Bispo (Muito Escuro)
-    '#004D40', // 39. Teal Muito Escuro (Quase Preto-azulado)
-    '#880E4F', // 40. Magenta Escuro / Borgonha
-    '#2E7D32', // 41. Verde Escuro Sólido
-    '#D32F2F', // 42. Vermelho Cardinal Forte
-    '#4527A0', // 43. Roxo Azulado Escuro
-    '#EF6C00', // 44. Laranja Âmbar Forte
-    '#01579B', // 45. Azul Náutico Escuro
-    '#B71C1C', // 46. Vermelho Fogo Escuro
-    '#1B5E20', // 47. Verde Pinheiro Muito Escuro
-    '#E65100', // 48. Laranja Abóbora Escuro
-    '#C51162', // 49. Rosa Escuro Vibrante
-    '#006064', // 50. Ciano Muito Escuro
+            // Grupo 3: Mais Cores Vibrantes e Escuras - 20 cores (Total 50)
+            '#FF6B00', '#7000A0', '#C20000', '#0075AC', '#AD1457', '#3B7A57', '#BF360C', '#4A148C', '#004D40', '#880E4F',
+            '#2E7D32', '#D32F2F', '#4527A0', '#EF6C00', '#01579B', '#B71C1C', '#1B5E20', '#E65100', '#C51162', '#006064',
 
-    // Grupo 4: Tons Médios Fortes e Outras Variações - 20 cores (Total 70)
-    '#FF6F00', // 51. Laranja Manga Escuro
-    '#3E2723', // 52. Marrom Café Muito Escuro
-    '#B22222', // 53. Vermelho Tijolo (Firebrick)
-    '#556B2F', // 54. Verde Oliva Escuro (DarkOliveGreen)
-    '#483D8B', // 55. Azul Ardósia Escuro (DarkSlateBlue)
-    '#FF8C00', // 56. Laranja Escuro (DarkOrange)
-    '#9932CC', // 57. Orquídea Escura (DarkOrchid)
-    '#8B008B', // 58. Magenta Escuro (DarkMagenta) - pode ser similar a #880E4F
-    '#2F4F4F', // 58. Cinza Ardósia Escuro (DarkSlateGray) (Substituído)
-    '#9400D3', // 59. Violeta Escuro (DarkViolet)
-    '#DC143C', // 60. Vermelho Carmesim (Crimson)
-    '#228B22', // 61. Verde Floresta (ForestGreen)
-    '#4169E1', // 62. Azul Real (RoyalBlue)
-    '#8A2BE2', // 63. Azul Violeta (BlueViolet)
-    '#D2691E', // 64. Chocolate (Marrom Médio)
-    '#FF7F50', // 65. Coral (Laranja Rosado)
-    '#B8860B', // 66. Dourado Escuro (DarkGoldenrod)
-    '#006400', // 67. Verde Escuro (DarkGreen) - pode ser similar a #005C00 / #1B5E20
-    '#4B0082', // 68. Índigo (Indigo) - pode ser similar a #6610F2 / #4A148C
-    '#CD5C5C', // 69. Coral Indiano (IndianRed)
-    '#6B8E23', // 70. Verde Oliva Amarelado (OliveDrab)
+            // Grupo 4: Tons Médios Fortes e Outras Variações - 20 cores (Total 70)
+            '#FF6F00', '#3E2723', '#B22222', '#556B2F', '#483D8B', '#FF8C00', '#9932CC', '#2F4F4F', // DarkSlateGray (já usado, ok repetir ou variar)
+            '#9400D3', '#DC143C', '#228B22', '#4169E1', '#8A2BE2', '#D2691E', '#FF7F50', '#B8860B', '#006400', '#4B0082',
+            '#CD5C5C', '#6B8E23',
 
-    // Grupo 5: Completando até 100 com mais variações, evitando os muito claros - 30 cores (Total 100)
-    '#4682B4', // 71. Azul Aço (SteelBlue)
-    '#A0522D', // 72. Siena (Marrom Avermelhado)
-    '#C71585', // 73. Violeta Vermelho Médio (MediumVioletRed)
-    '#32CD32', // 74. Verde Limão (LimeGreen)
-    '#DB7093', // 75. Vermelho Violeta Pálido (PaleVioletRed, mas ainda forte)
-    '#CD853F', // 76. Peru (Marrom Avermelhado Médio)
-    '#BA55D3', // 77. Orquídea Média (MediumOrchid)
-    '#7B68EE', // 78. Azul Ardósia Médio (MediumSlateBlue)
-    '#6A5ACD', // 79. Azul Ardósia (SlateBlue)
-    '#DAA520', // 80. Vareta Dourada (Goldenrod)
-    '#20B2AA', // 81. Verde Mar Claro (LightSeaGreen)
-    '#66CDAA', // 82. Água Marinha Média (MediumAquamarine)
-    '#E9967A', // 83. Salmão Escuro (DarkSalmon)
-    '#FF4500', // 84. Laranja Avermelhado (OrangeRed)
-    '#F08080', // 85. Coral Claro (LightCoral)
-    '#DDA0DD', // 86. Ameixa (Plum)
-    '#FFA07A', // 87. Salmão Claro (LightSalmon)
-    '#2E8B57', // 88. Verde Mar (SeaGreen)
-    '#708090', // 89. Cinza Ardósia (SlateGray)
-    '#6A0DAD', // 90. Roxo Brilhante Intenso
-    '#C04000', // 91. Marrom Mogno
-    '#BD572A', // 92. Marrom Argila
-    '#DE3163', // 93. Vermelho Cereja
-    '#FD6A02', // 94. Laranja Abóbora Brilhante
-    '#088F8F', // 95. Verde Azul Marinho
-    '#AA00FF', // 96. Roxo Elétrico
-    '#FFBF00', // 97. Âmbar Dourado
-    '#B03060', // 98. Vermelho Marrom (Maroon Red)
-    '#5F4B8B', // 99. Roxo Imperial Escuro (Novo)
-    '#00A86B'  // 100. Verde Jade Escuro (Novo)
-],
+            // Grupo 5: Completando até 100 com mais variações, evitando os muito claros - 30 cores (Total 100)
+            '#4682B4', '#A0522D', '#C71585', '#32CD32', '#DB7093', '#CD853F', '#BA55D3', '#7B68EE', '#6A5ACD', '#DAA520',
+            '#20B2AA', '#66CDAA', '#E9967A', '#FF4500', '#F08080', '#DDA0DD', '#FFA07A', '#2E8B57', '#708090', '#6A0DAD',
+            '#C04000', '#BD572A', '#DE3163', '#FD6A02', '#088F8F', '#AA00FF', '#FFBF00', '#B03060', '#5F4B8B', '#00A86B'
+        ],
     };
 
     const AppState = {
@@ -177,11 +107,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONSTANTS = {
         LOCAL_STORAGE_KEYS: {
-            FAVORITES: 'sga_territoriale_fav_v13_routing', GROUPS: 'sga_territoriale_grp_v13_routing',
-            VENDEDORES: 'sga_territoriale_vnd_v13_routing', LAST_UPDATE: 'sga_territoriale_upd_v13_routing',
-            CITY_POPULATIONS: 'sga_territoriale_pop_v13_routing'
+            FAVORITES: 'sga_territoriale_fav_v14_autocomplete',
+            GROUPS: 'sga_territoriale_grp_v14_autocomplete',
+            VENDEDORES: 'sga_territoriale_vnd_v14_autocomplete',
+            LAST_UPDATE: 'sga_territoriale_upd_v14_autocomplete',
+            CITY_POPULATIONS: 'sga_territoriale_pop_v14_autocomplete'
         },
-       DEFAULT_CITY_STYLE: { fillColor: '#3388ff', fillOpacity: 0, color: '#0000FF', weight: 0.3 },
+       DEFAULT_CITY_STYLE: { fillColor: '#3388ff', fillOpacity: 0.05, color: '#0000FF', weight: 0.5 }, // Mais sutil
         SELECTED_CITY_STYLE: { fillColor: '#ff7800', fillOpacity: 0.7, color: '#ff7800', weight: 3 },
         SP_BOUNDARY_STYLE: { color: "red", weight: 3, opacity: 0.8, fillOpacity: 0, dashArray: '5, 5', interactive: false },
         HIGHLIGHT_GROUP_STYLE: { fillColor: '#9b59b6', fillOpacity: 0.6, color: '#9b59b6', weight: 3 },
@@ -202,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.tabContents = document.querySelectorAll('.tab-content');
         DOMElements.searchInput = document.getElementById('search-input');
         DOMElements.searchButton = document.getElementById('search-button');
+        DOMElements.autocompleteResultsContainer = document.getElementById('autocomplete-results');
         DOMElements.selectedCityInfo = document.getElementById('selected-city-info');
         DOMElements.selectedCityActions = document.getElementById('selected-city-actions');
         DOMElements.addFavoriteButton = document.getElementById('add-favorite');
@@ -309,15 +242,41 @@ document.addEventListener('DOMContentLoaded', () => {
             scrollWheelZoom: true, boxZoom: true, keyboard: true, tap: true,
         }).setView(AppConfig.mapInitialView, AppConfig.mapInitialZoom);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 18, keepBuffer: 2
-        }).addTo(AppState.map);
+            maxZoom: 18,
+            keepBuffer: 2
+        });
 
-        AppState.map.createPane('boundaryPane');
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 18
+        });
+
+        openStreetMap.addTo(AppState.map);
+
+        const baseLayers = {
+            "Padrão (Ruas)": openStreetMap,
+            "Satélite": esriSatellite
+        };
+
+        L.control.layers(baseLayers, null, { position: 'bottomright' }).addTo(AppState.map);
+
+        AppState.map.createPane('boundaryPane'); // Limites estaduais mais proeminentes
         AppState.map.getPane('boundaryPane').style.zIndex = 650;
-        AppState.map.createPane('routingPane');
-        AppState.map.getPane('routingPane').style.zIndex = 640;
+
+        AppState.map.createPane('cityFillPane'); // Preenchimento das cidades
+        AppState.map.getPane('cityFillPane').style.zIndex = 420; // Abaixo das rotas e marcadores
+
+        // Pane para as bordas das cidades (se precisar de controle separado)
+        // AppState.map.createPane('cityBoundaryPane');
+        // AppState.map.getPane('cityBoundaryPane').style.zIndex = 430;
+
+        AppState.map.createPane('routingPane'); // Rotas
+        AppState.map.getPane('routingPane').style.zIndex = 640; // Acima das cidades, abaixo de marcadores info
+
+        AppState.map.createPane('cityInfoIconPane'); // Ícone de info
+        AppState.map.getPane('cityInfoIconPane').style.zIndex = 660; // Acima das rotas, mas abaixo de popups/modais
     }
 
     async function loadGeoJsonWithFallback(dataSet) {
@@ -333,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(`Falha ${response.status} (${response.statusText}) ao carregar ${url}`);
                 }
                 const data = await response.json();
-                
+
                 if (data.features) {
                     featuresLoaded = data.features;
                 } else if (["Feature", "Polygon", "MultiPolygon", "LineString", "MultiLineString"].includes(data.type)) {
@@ -342,9 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn(`GeoJSON de ${url} em formato inesperado.`, data);
                     throw new Error(`Formato inesperado para ${url}`);
                 }
-                
+
                 console.log(`${dataSet.description} carregado com sucesso de: ${url}. Features: ${featuresLoaded.length}`);
-                break; 
+                break;
             } catch (error) {
                 console.warn(`Erro ao carregar ${dataSet.description} de ${url}:`, error.message);
             }
@@ -355,9 +314,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 style: dataSet.styleFunction,
                 onEachFeature: dataSet.onFeatureCallback
             };
+            // Garante que o pane correto seja usado
             if (dataSet.paneName && AppState.map.getPane(dataSet.paneName)) {
                 layerOptions.pane = dataSet.paneName;
+            } else if (dataSet.id.startsWith('municipios')) { // Fallback para camadas de município
+                 layerOptions.pane = 'cityFillPane';
             }
+
 
             const geoJsonLayer = L.geoJSON({ type: "FeatureCollection", features: featuresLoaded }, layerOptions);
             if (geoJsonLayer) {
@@ -377,12 +340,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const cityId = feature.properties.id || feature.properties.CD_MUN || feature.properties.geocodigo || feature.properties.codarea || generateId();
 
         if (!cityName) { console.warn("Feature sem nome:", feature.properties); return; }
-        // console.log(`onEachCityFeature: Processando ${cityName}`); // LOG ADICIONADO
 
         if (!AppState.cityLayers[cityName]) {
             AppState.cityLayers[cityName] = layer;
-        } else {
-            // console.warn(`Layer para a cidade ${cityName} já existe. Isso pode indicar dados duplicados de GeoJSON.`);
         }
         AppState.normalizedCityNames[normalizeString(cityName)] = cityName;
 
@@ -395,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeCityInfoMarker();
                 const markerLatLng = this.getBounds().getCenter();
                 const customIcon = L.divIcon({ className: 'city-info-icon-marker', html: `<i class="fas fa-info-circle"></i>`, iconSize: [30, 30], iconAnchor: [15, 15] });
-                AppState.cityInfoMarker = L.marker(markerLatLng, { icon: customIcon, interactive: true, cityName: cityName, bubblingMouseEvents: false }).addTo(AppState.map);
+                AppState.cityInfoMarker = L.marker(markerLatLng, { icon: customIcon, interactive: true, cityName: cityName, bubblingMouseEvents: false, pane: 'cityInfoIconPane' }).addTo(AppState.map);
                 AppState.cityInfoMarker.on('mouseover', async function(evIcon) {
                     AppState.isMouseOverInfoIcon = true; if (AppState.cityInfoMarkerTimeout) clearTimeout(AppState.cityInfoMarkerTimeout);
                     const tooltip = this.getTooltip(); if (tooltip && typeof this.isTooltipOpen === 'function' && this.isTooltipOpen()) return;
@@ -442,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayRouteToCity(destinationCoords, destinationCityName) {
-        console.log("displayRouteToCity - Iniciando para:", destinationCityName, "Coords:", destinationCoords); // LOG ADICIONADO
+        console.log("displayRouteToCity - Iniciando para:", destinationCityName, "Coords:", destinationCoords);
         if (!destinationCoords || typeof destinationCoords.lat === 'undefined' || typeof destinationCoords.lng === 'undefined') {
             console.error("Coordenadas de destino inválidas para roteamento:", destinationCoords);
             const routeDetailsEl = document.getElementById('route-details');
@@ -470,14 +430,14 @@ document.addEventListener('DOMContentLoaded', () => {
             ],
             routeWhileDragging: false,
             addWaypoints: false,
-            show: false, 
+            show: false,
             fitSelectedRoutes: 'smart',
             lineOptions: {
                 styles: [{ color: '#03A9F4', opacity: 0.9, weight: 7 }],
                 pane: 'routingPane'
             },
             createMarker: function(i, waypoint, n) {
-                if (i === 0) {
+                if (i === 0) { // Marcador da origem (Ameripan)
                     return L.marker(waypoint.latLng, {
                         icon: L.icon({
                             iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -488,11 +448,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: "Ameripan Distribuidora"
                     }).bindPopup("<b>Ameripan Distribuidora</b><br>Origem da Rota");
                 }
+                // Não criar marcador para o destino aqui, pois já temos o AppState.destinationMarkerForRoute
                 return null;
             }
         }).on('routesfound', function(e) {
             const routes = e.routes;
-            console.log("displayRouteToCity - Evento routesfound. Rotas:", routes); // LOG ADICIONADO
+            console.log("displayRouteToCity - Evento routesfound. Rotas:", routes);
 
             if (AppState.destinationMarkerForRoute) {
                 AppState.map.removeLayer(AppState.destinationMarkerForRoute);
@@ -503,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const summary = routes[0].summary;
                 const distanceKm = (summary.totalDistance / 1000).toFixed(1);
                 const timeMinutes = Math.round(summary.totalTime / 60);
-                
+
                 const hours = Math.floor(timeMinutes / 60);
                 const minutes = timeMinutes % 60;
                 let timeStr = '';
@@ -518,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>Tempo estimado de viagem:</strong> ${timeStr}</p>
                     `;
                 }
-                
+
                 AppState.destinationMarkerForRoute = L.marker(destinationCoords, {
                     icon: L.icon({
                         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
@@ -530,33 +491,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 .addTo(AppState.map)
                 .bindTooltip(`<b>${destinationCityName}</b><br>${routeInfoText}`)
                 .bindPopup(`<b>Destino: ${destinationCityName}</b><br>${routeInfoText}`);
-                
-                // Comentado para confiar no fitSelectedRoutes: 'smart'
-                /*
-                if (routes[0].bounds && typeof routes[0].bounds.isValid === 'function' && routes[0].bounds.isValid()) {
-                    AppState.map.fitBounds(routes[0].bounds, {padding: [70, 70]});
-                } else {
-                    console.warn("Route bounds are not valid for manual fitting, relying on fitSelectedRoutes if active.");
-                }
-                */
+
             } else {
                  if (routeDetailsEl) routeDetailsEl.innerHTML = '<p><em>Não foi possível calcular os detalhes da rota.</em></p>';
                  showNotification('Não foi possível encontrar uma rota para esta cidade (sem detalhes da rota).', 'warning');
                  console.warn("Nenhuma rota ou resumo encontrado:", routes);
             }
         }).on('routingerror', function(e) {
-            console.error("displayRouteToCity - Evento routingerror:", e);  // LOG ADICIONADO
+            console.error("displayRouteToCity - Evento routingerror:", e);
             let errorMessage = "Erro ao calcular a rota.";
             if (e.error) {
                 errorMessage += ` (${e.error.message || 'Detalhes indisponíveis'})`;
-                if (e.error.code) { 
+                if (e.error.code) {
                     console.error(`Código do Erro de Roteamento: ${e.error.code}`);
                     errorMessage += ` Código: ${e.error.code}.`;
                 }
             } else {
                 errorMessage += " Detalhes técnicos indisponíveis.";
             }
-            
+
             if (routeDetailsEl) routeDetailsEl.innerHTML = `<p><em>${errorMessage}</em></p>`;
             showNotification(errorMessage, 'danger', 7000);
         }).addTo(AppState.map);
@@ -564,18 +517,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     async function handleCityClick(cityName, cityId, layer) {
-        console.log("handleCityClick - City:", cityName, "ID:", cityId, "Layer:", layer); // LOG ADICIONADO
+        console.log("handleCityClick - City:", cityName, "ID:", cityId, "Layer:", layer);
         AppState.selectedCity = { name: cityName, id: cityId, layer: layer };
-        removeCityInfoMarker();
-        resetMapStyles();
+        removeCityInfoMarker(); // Remove o ícone de info ao clicar
+        resetMapStyles(); // Reseta estilos antes de aplicar o novo
         setLayerStyle(layer, CONSTANTS.SELECTED_CITY_STYLE);
-        if (layer.bringToFront) layer.bringToFront();
-        
-        await updateSelectedCityInfo(); 
+        if (layer.bringToFront) layer.bringToFront(); // Traz a camada selecionada para frente
 
+        await updateSelectedCityInfo(); // Atualiza as informações na sidebar
+
+        // Lógica de roteamento
         if (layer.getBounds && typeof layer.getBounds === 'function') {
             const destinationCoords = layer.getBounds().getCenter();
-            console.log("handleCityClick - Destination Coords:", destinationCoords); // LOG ADICIONADO
+            console.log("handleCityClick - Destination Coords:", destinationCoords);
             if (destinationCoords && typeof destinationCoords.lat !== 'undefined' && typeof destinationCoords.lng !== 'undefined') {
                 displayRouteToCity(destinationCoords, cityName);
             } else {
@@ -590,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (routeDetailsEl) routeDetailsEl.innerHTML = '<p><em>Não foi possível obter coordenadas da cidade para rota.</em></p>';
         }
 
+        // Abre a sidebar e a aba de busca se estiverem fechadas/inativas
         if (DOMElements.sidebar.classList.contains('collapsed')) DOMElements.toggleSidebarButton.click();
         DOMElements.tabButtons.forEach(btn => btn.classList.remove('active'));
         DOMElements.tabContents.forEach(content => content.classList.remove('active'));
@@ -617,15 +572,43 @@ document.addEventListener('DOMContentLoaded', () => {
         if (AppState.activeGroup && AppState.groups[AppState.activeGroup]?.includes(cityName)) styleOptions = { ...CONSTANTS.HIGHLIGHT_GROUP_STYLE };
         if (AppState.activeVendedorId && AppState.cityAssignments[cityName]?.includes(AppState.activeVendedorId)) styleOptions = { ...CONSTANTS.HIGHLIGHT_VENDEDOR_STYLE };
         if (AppState.selectedCity?.name === cityName) styleOptions = { ...CONSTANTS.SELECTED_CITY_STYLE };
+
+        // Exemplo para Mapa de Densidade Populacional (requer dados de área e população)
+        // const normalizedCityForPop = normalizeString(cityName);
+        // if (AppState.cityPopulations[normalizedCityForPop] && feature.properties.AREA_KM2) { // Supondo que 'AREA_KM2' exista no GeoJSON
+        //     const population = AppState.cityPopulations[normalizedCityForPop];
+        //     const area = parseFloat(feature.properties.AREA_KM2);
+        //     if (area > 0) {
+        //         const density = population / area;
+        //         // Defina suas classes de densidade e cores aqui
+        //         if (density > 1000) { styleOptions.fillColor = '#a50026'; styleOptions.fillOpacity = 0.7;} // Muito denso
+        //         else if (density > 500) { styleOptions.fillColor = '#d73027'; styleOptions.fillOpacity = 0.6;}
+        //         else if (density > 200) { styleOptions.fillColor = '#f46d43'; styleOptions.fillOpacity = 0.5;}
+        //         else if (density > 100) { styleOptions.fillColor = '#fdae61'; styleOptions.fillOpacity = 0.4;}
+        //         else if (density > 50) { styleOptions.fillColor = '#fee090'; styleOptions.fillOpacity = 0.3;}
+        //         else { styleOptions.fillColor = '#e0f3f8'; styleOptions.fillOpacity = 0.2;} // Baixa densidade
+        //     }
+        // }
         return styleOptions;
     }
 
     function resetMapStyles() {
         Object.values(AppState.cityLayers).forEach(layer => {
-            if (layer.feature) {
+            if (layer.feature) { // Verifica se a camada tem uma feature associada
                 setLayerStyle(layer, getCityStyle(layer.feature));
             }
         });
+        // Redesenha a borda de SP, caso tenha sido afetada por algum reset global não intencional
+        const spBoundaryLayer = AppConfig.geoJsonSources.find(s => s.id === 'limiteSP');
+        if (spBoundaryLayer && AppState.cityLayers['limiteSP']) { // Supondo que a camada do limite seja armazenada com essa chave
+            setLayerStyle(AppState.cityLayers['limiteSP'], CONSTANTS.SP_BOUNDARY_STYLE);
+        } else { // Tenta encontrar a camada pelo ID se não estiver em cityLayers (o que é mais provável)
+            AppState.map.eachLayer(layer => {
+                if (layer.options && layer.options.id === 'limiteSPGeoJSON') { // Adicione uma option.id ao criar a camada
+                     setLayerStyle(layer, CONSTANTS.SP_BOUNDARY_STYLE);
+                }
+            });
+        }
     }
 
     function highlightVendedorCitiesOnMap(vendedorId) {
@@ -657,8 +640,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function processSheetsData(data) {
         const newVendedores = []; const newCityAssignments = {}; let cidadesNaoEncontradas = [];
-        if (!data.values || data.values.length < 6) {
-            showNotification("Formato da planilha incorreto. Verifique as instruções e se há dados suficientes.", "warning", 7000);
+        if (!data.values || data.values.length < 6) { // Linha 0-based, então 6 linhas = índice 0 a 5
+            showNotification("Formato da planilha incorreto. Verifique as instruções e se há dados suficientes (mínimo 6 linhas).", "warning", 10000);
             AppState.vendedores = []; AppState.cityAssignments = {}; return;
         }
         const values = data.values; const numCols = values[0]?.length || 0; let colorIndex = 0;
@@ -666,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let col = 0; col < numCols; col++) {
             const supervisor = values[0]?.[col]?.trim();
             const vendedorNome = values[1]?.[col]?.trim();
-            if (!supervisor || !vendedorNome) continue;
+            if (!supervisor || !vendedorNome) continue; // Pula coluna se não houver supervisor ou nome do vendedor
 
             const vendedorId = generateId();
             const vendedor = {
@@ -678,45 +661,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 cidades: []
             };
 
-            for (let row = 5; row < values.length; row++) {
+            for (let row = 5; row < values.length; row++) { // Cidades começam da linha 6 (índice 5)
                 const cidadeNomePlanilha = values[row]?.[col]?.trim();
                 if (cidadeNomePlanilha) {
                     const normPlanilhaOriginal = normalizeString(cidadeNomePlanilha);
                     let cidadeRealNoMapa = null;
 
+                    // Tentativa 1: Match exato normalizado
                     if (AppState.normalizedCityNames[normPlanilhaOriginal]) {
                         cidadeRealNoMapa = AppState.normalizedCityNames[normPlanilhaOriginal];
                     }
 
+                    // Tentativa 2: Match exato simplificado
                     if (!cidadeRealNoMapa) {
                         const simplePlanilha = toSimpleForm(normPlanilhaOriginal);
                         for (const [normMapKey, originalMapNameValue] of Object.entries(AppState.normalizedCityNames)) {
-                            if (normMapKey === normPlanilhaOriginal) {
-                                cidadeRealNoMapa = originalMapNameValue;
-                                break;
-                            }
-                            const simpleMap = toSimpleForm(normMapKey);
-                            if (simpleMap === simplePlanilha) {
+                            if (toSimpleForm(normMapKey) === simplePlanilha) {
                                 cidadeRealNoMapa = originalMapNameValue;
                                 break;
                             }
                         }
                     }
-                    
+
+                    // Tentativa 3: "Includes" no nome simplificado (mais flexível, mas pode gerar falsos positivos)
                     if (!cidadeRealNoMapa) {
                         const simplePlanilha = toSimpleForm(normPlanilhaOriginal);
-                        for (const [normMapKey, originalMapNameValue] of Object.entries(AppState.normalizedCityNames)) {
-                            const simpleMap = toSimpleForm(normMapKey);
-                            if (simpleMap.includes(simplePlanilha) && (simplePlanilha.length / simpleMap.length > 0.7)) {
-                                cidadeRealNoMapa = originalMapNameValue;
-                                break;
+                         // Apenas se o termo da planilha for razoavelmente longo para evitar matches muito genéricos
+                        if (simplePlanilha.length > 3) {
+                            for (const [normMapKey, originalMapNameValue] of Object.entries(AppState.normalizedCityNames)) {
+                                const simpleMap = toSimpleForm(normMapKey);
+                                // Se o nome simplificado do mapa CONTÉM o nome simplificado da planilha
+                                // E há uma sobreposição significativa de caracteres
+                                if (simpleMap.includes(simplePlanilha) && (simplePlanilha.length / simpleMap.length > 0.7)) {
+                                    cidadeRealNoMapa = originalMapNameValue;
+                                    console.log(`Match flexível (mapa contém planilha): "${cidadeNomePlanilha}" -> "${originalMapNameValue}" via "${simplePlanilha}" in "${simpleMap}"`);
+                                    break;
+                                }
+                                // Se o nome simplificado da planilha CONTÉM o nome simplificado do mapa
+                                else if (simplePlanilha.includes(simpleMap) && (simpleMap.length / simplePlanilha.length > 0.7)) {
+                                     cidadeRealNoMapa = originalMapNameValue;
+                                     console.log(`Match flexível (planilha contém mapa): "${cidadeNomePlanilha}" -> "${originalMapNameValue}" via "${simpleMap}" in "${simplePlanilha}"`);
+                                     break;
+                                }
                             }
-                             else if (simpleMap.includes(normPlanilhaOriginal) && (normPlanilhaOriginal.length / simpleMap.length > 0.7)) {
-                                 cidadeRealNoMapa = originalMapNameValue;
-                                break;
-                             }
                         }
                     }
+
 
                     if (cidadeRealNoMapa) {
                         vendedor.cidades.push(cidadeRealNoMapa);
@@ -734,9 +724,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         AppState.vendedores = newVendedores; AppState.cityAssignments = newCityAssignments;
         if (cidadesNaoEncontradas.length > 0) {
-            const nomesExibicao = cidadesNaoEncontradas.slice(0, 3).join(', ');
-            const mais = cidadesNaoEncontradas.length > 3 ? ` e mais ${cidadesNaoEncontradas.length - 3}...` : '';
-            showNotification(`Algumas cidades (${nomesExibicao}${mais}) não encontradas. Verifique o console e a grafia dos nomes.`, "warning", 10000);
+            const nomesExibicao = cidadesNaoEncontradas.slice(0, 5).join(', '); // Mostra até 5
+            const mais = cidadesNaoEncontradas.length > 5 ? ` e mais ${cidadesNaoEncontradas.length - 5}...` : '';
+            showNotification(`Algumas cidades (${nomesExibicao}${mais}) não foram encontradas no mapa. Verifique o console e a grafia dos nomes na planilha.`, "warning", 15000);
         }
     }
 
@@ -747,13 +737,35 @@ document.addEventListener('DOMContentLoaded', () => {
             AppState.groups = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS)) || {};
             AppState.vendedores = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES)) || [];
             AppState.cityPopulations = JSON.parse(localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.CITY_POPULATIONS)) || {};
-            if (AppState.vendedores.length > 0 && Object.keys(AppState.cityAssignments).length === 0) {
-                AppState.cityAssignments = {}; AppState.vendedores.forEach(v => v.cidades.forEach(cName => { if (!AppState.cityAssignments[cName]) AppState.cityAssignments[cName] = []; if (!AppState.cityAssignments[cName].includes(v.id)) AppState.cityAssignments[cName].push(v.id); }));
+
+            // Recria AppState.cityAssignments a partir de AppState.vendedores se estiver vazio mas vendedores existirem
+            // Isso garante consistência se a estrutura de cityAssignments for perdida ou não salva anteriormente.
+            if (AppState.vendedores.length > 0 && (Object.keys(AppState.cityAssignments).length === 0 || !localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES))) { // Checa se VENDEDORES foi explicitamente salvo, indicando que cityAssignments também deveria.
+                console.warn("Recriando 'cityAssignments' a partir dos dados de vendedores salvos.");
+                AppState.cityAssignments = {};
+                AppState.vendedores.forEach(v => {
+                    if (v.cidades && Array.isArray(v.cidades)) {
+                        v.cidades.forEach(cName => {
+                            if (!AppState.cityAssignments[cName]) AppState.cityAssignments[cName] = [];
+                            if (!AppState.cityAssignments[cName].includes(v.id)) AppState.cityAssignments[cName].push(v.id);
+                        });
+                    }
+                });
             }
+
+
             const savedLastUpdate = localStorage.getItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE);
             if (savedLastUpdate) AppState.lastUpdateTime = new Date(savedLastUpdate);
             if (DOMElements.lastUpdateSpan) DOMElements.lastUpdateSpan.textContent = formatDateTime(AppState.lastUpdateTime);
-        } catch (e) { console.error('Erro ao carregar dados do localStorage:', e); Object.values(CONSTANTS.LOCAL_STORAGE_KEYS).forEach(key => localStorage.removeItem(key)); }
+        } catch (e) {
+            console.error('Erro ao carregar dados do localStorage:', e);
+            // Limpa todas as chaves relacionadas à aplicação em caso de erro de parsing,
+            // para evitar loops de erro em futuras inicializações.
+            Object.values(CONSTANTS.LOCAL_STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+            showNotification('Erro ao carregar dados salvos. Os dados locais foram resetados.', 'danger', 7000);
+            // Reinicializa os estados para evitar que a aplicação quebre
+            AppState.favorites = []; AppState.groups = {}; AppState.vendedores = []; AppState.cityAssignments = {}; AppState.cityPopulations = {}; AppState.lastUpdateTime = null;
+        }
     }
 
     function saveDataToLocalStorage() {
@@ -761,22 +773,44 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.FAVORITES, JSON.stringify(AppState.favorites));
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.GROUPS, JSON.stringify(AppState.groups));
             localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.VENDEDORES, JSON.stringify(AppState.vendedores));
+            // É crucial salvar cityAssignments também, pois é derivado mas pode ser modificado independentemente
+            // localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.CITY_ASSIGNMENTS, JSON.stringify(AppState.cityAssignments)); // Descomentar se decidir salvar separadamente
             if (AppState.lastUpdateTime) localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.LAST_UPDATE, AppState.lastUpdateTime.toISOString());
             if (Object.keys(AppState.cityPopulations).length > 0) localStorage.setItem(CONSTANTS.LOCAL_STORAGE_KEYS.CITY_POPULATIONS, JSON.stringify(AppState.cityPopulations));
         } catch (e) { console.error('Erro ao salvar dados no localStorage:', e); showNotification('Erro ao salvar dados localmente.', 'danger');}
     }
 
     async function fetchCityPopulation(cityName, forceLoadFile = false) {
-        const normalizedCityForPop = normalizeString(cityName);
-        if (normalizedCityForPop && AppState.cityPopulations[normalizedCityForPop] && !forceLoadFile) return AppState.cityPopulations[normalizedCityForPop];
+        const normalizedCityForPop = normalizeString(cityName); // Normaliza o nome da cidade para busca
+        // Se já temos a população e não é para forçar, retorna o valor
+        if (normalizedCityForPop && AppState.cityPopulations[normalizedCityForPop] && !forceLoadFile) {
+            return AppState.cityPopulations[normalizedCityForPop];
+        }
+
+        // Se for para forçar o carregamento OU se o objeto de populações estiver vazio
         if (forceLoadFile || Object.keys(AppState.cityPopulations).length === 0) {
             try {
-                const response = await fetch('populacao_sp_mg.json'); if (!response.ok) { console.warn('Arquivo de população (populacao_sp_mg.json) não encontrado.'); return null; }
-                const allPopulations = await response.json(); AppState.cityPopulations = {};
-                for (const [key, value] of Object.entries(allPopulations)) AppState.cityPopulations[normalizeString(key)] = value;
-                saveDataToLocalStorage();
-            } catch (error) { console.error("Erro ao carregar arquivo de população:", error.message); return null; }
+                // Tenta carregar o arquivo JSON de populações
+                const response = await fetch('populacao_sp_mg.json'); // Certifique-se que este arquivo existe no local correto
+                if (!response.ok) {
+                    console.warn('Arquivo de população (populacao_sp_mg.json) não encontrado ou falha ao carregar.');
+                    return null; // Retorna nulo se o arquivo não for encontrado
+                }
+                const allPopulations = await response.json(); // Converte a resposta para JSON
+
+                // Limpa o estado atual de populações e preenche com os novos dados normalizados
+                AppState.cityPopulations = {};
+                for (const [key, value] of Object.entries(allPopulations)) {
+                    AppState.cityPopulations[normalizeString(key)] = value; // Armazena com chave normalizada
+                }
+                saveDataToLocalStorage(); // Salva os dados de população no localStorage
+                console.log("Dados de população carregados e salvos.");
+            } catch (error) {
+                console.error("Erro ao carregar arquivo de população:", error.message);
+                return null; // Retorna nulo em caso de erro
+            }
         }
+        // Retorna a população da cidade específica (ou nulo se não encontrada)
         return normalizedCityForPop ? AppState.cityPopulations[normalizedCityForPop] || null : null;
     }
 
@@ -784,10 +818,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!AppState.selectedCity) {
             DOMElements.selectedCityInfo.innerHTML = '<p class="empty-message">Nenhuma cidade selecionada.</p>';
             DOMElements.selectedCityActions.classList.add('hidden');
+            const routeDetailsEl = document.getElementById('route-details');
+            if(routeDetailsEl) routeDetailsEl.innerHTML = '<p class="empty-message">Clique em uma cidade para ver a rota desde Americana.</p>';
             return;
         }
         const { name: cityName, id: cityId } = AppState.selectedCity;
-        const population = await fetchCityPopulation(cityName);
+        const population = await fetchCityPopulation(cityName); // Busca a população da cidade
         let populationInfo = `<p><strong>População:</strong> ${population ? population.toLocaleString('pt-BR') : 'Não disponível'}</p>`;
         let vendedorHtml = '';
         const assignedVendedorIds = AppState.cityAssignments[cityName];
@@ -803,20 +839,24 @@ document.addEventListener('DOMContentLoaded', () => {
             vendedorHtml = '<p><em>Nenhum vendedor atribuído.</em></p>';
         }
 
-        const ibgeLink = `https://cidades.ibge.gov.br/panorama-impresso?cod=${cityId}`;
+        const ibgeLink = `https://cidades.ibge.gov.br/brasil/sp/${normalizeString(cityName).replace(/\s+/g, '-')}/panorama`; // Link mais direto para panorama se disponível
+        // Tentar um link mais genérico se o de cima falhar ou para cidades de MG
+        // const ibgeFallbackLink = `https://cidades.ibge.gov.br/panorama?codmun=${cityId}`; // cityId deve ser o código IBGE de 7 dígitos
+        const ibgePanoramaImpressoLink = `https://cidades.ibge.gov.br/panorama-impresso?cod=${cityId}`;
+
 
         DOMElements.selectedCityInfo.innerHTML = `
             <h4>${cityName}</h4>
             ${populationInfo}
             ${vendedorHtml}
-            <p><small>ID Geo (IBGE): ${cityId}. (Duplo clique no mapa para mais detalhes)</small></p>
+            <p><small>ID Geo (Ref.): ${cityId}. (Duplo clique no mapa para mais detalhes)</small></p>
             <div class="btn-group" role="group">
-                <a href="${ibgeLink}" target="_blank" class="btn btn-info btn-sm mt-10">
-                    <i class="fas fa-info-circle"></i> Info IBGE (Panorama Impresso)
+                <a href="${ibgePanoramaImpressoLink}" target="_blank" class="btn btn-info btn-sm mt-10" title="Abre o panorama impresso do IBGE para esta cidade em nova aba">
+                    <i class="fas fa-info-circle"></i> Info IBGE
                 </a>
             </div>
             <div id="route-details" class="mt-15 bt-eee pt-15">
-                <p class="empty-message">Clique em uma cidade para ver a rota desde Americana.</p>
+                <p class="empty-message">Calculando rota...</p> {/* Mensagem inicial enquanto a rota é calculada */}
             </div>`;
         DOMElements.selectedCityActions.classList.remove('hidden');
         DOMElements.assignVendedorButton.innerHTML = assignedVendedorIds?.length > 0 ? '<i class="fas fa-user-tie"></i> Gerenciar Vendedores' : '<i class="fas fa-user-tie"></i> Atribuir Vendedor';
@@ -824,12 +864,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateFavoritesList() {
         DOMElements.favoritesList.innerHTML = AppState.favorites.length === 0 ? '<li class="empty-message">Nenhuma cidade favorita</li>' : '';
-        AppState.favorites.forEach(city => { const li = document.createElement('li'); li.className = 'list-item'; const assignedIds = AppState.cityAssignments[city.name]; let badge = ''; if (assignedIds?.length) badge = ` <span class="badge ${assignedIds.length === 1 ? 'badge-success' : 'badge-warning'}" title="${assignedIds.length} vend."><i class="fas ${assignedIds.length === 1 ? 'fa-user-tie' : 'fa-users'}"></i></span>`; li.innerHTML = `<div><strong>${city.name}</strong>${badge}</div><div class="actions"></div>`; const groupSelect = document.createElement('select'); groupSelect.className = 'form-control form-control-sm'; groupSelect.style.maxWidth = '120px'; groupSelect.innerHTML = '<option value="">Sem grupo</option>'; Object.keys(AppState.groups).forEach(gName => groupSelect.innerHTML += `<option value="${gName}" ${AppState.groups[gName]?.includes(city.name) ? 'selected' : ''}>${gName}</option>`); groupSelect.onchange = function() { Object.keys(AppState.groups).forEach(g => { if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); if (this.value) { if(!AppState.groups[this.value]) AppState.groups[this.value] = []; AppState.groups[this.value].push(city.name); } saveDataToLocalStorage(); resetMapStyles(); showNotification(`Cidade ${city.name} ${this.value ? 'adicionada ao ' + this.value : 'removida de grupos'}.`); }; li.querySelector('.actions').appendChild(groupSelect); const viewBtn = document.createElement('button'); viewBtn.className = 'btn btn-primary btn-sm'; viewBtn.innerHTML = '<i class="fas fa-eye"></i>'; viewBtn.title = 'Ver no mapa'; viewBtn.onclick = () => { if (AppState.cityLayers[city.name]) { AppState.map.fitBounds(AppState.cityLayers[city.name].getBounds()); AppState.cityLayers[city.name].fire('click'); }}; li.querySelector('.actions').appendChild(viewBtn); const removeBtn = document.createElement('button'); removeBtn.className = 'btn btn-danger btn-sm'; removeBtn.innerHTML = '<i class="fas fa-trash"></i>'; removeBtn.title = 'Remover favorito'; removeBtn.onclick = () => { AppState.favorites = AppState.favorites.filter(f => f.name !== city.name); Object.keys(AppState.groups).forEach(g => {if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); saveDataToLocalStorage(); updateFavoritesList(); updateGroupsLists(); resetMapStyles(); showNotification(`${city.name} removida dos favoritos.`); }; li.querySelector('.actions').appendChild(removeBtn); DOMElements.favoritesList.appendChild(li); });
+        AppState.favorites.forEach(city => { const li = document.createElement('li'); li.className = 'list-item'; const assignedIds = AppState.cityAssignments[city.name]; let badge = ''; if (assignedIds?.length) badge = ` <span class="badge ${assignedIds.length === 1 ? 'badge-success' : 'badge-warning'}" title="${assignedIds.length} vend."><i class="fas ${assignedIds.length === 1 ? 'fa-user-tie' : 'fa-users'}"></i></span>`; li.innerHTML = `<div><strong>${city.name}</strong>${badge}</div><div class="actions"></div>`; const groupSelect = document.createElement('select'); groupSelect.className = 'form-control form-control-sm'; groupSelect.style.maxWidth = '120px'; groupSelect.innerHTML = '<option value="">Sem grupo</option>'; Object.keys(AppState.groups).sort().forEach(gName => groupSelect.innerHTML += `<option value="${gName}" ${AppState.groups[gName]?.includes(city.name) ? 'selected' : ''}>${gName}</option>`); groupSelect.onchange = function() { Object.keys(AppState.groups).forEach(g => { if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); if (this.value) { if(!AppState.groups[this.value]) AppState.groups[this.value] = []; AppState.groups[this.value].push(city.name); } saveDataToLocalStorage(); resetMapStyles(); showNotification(`Cidade ${city.name} ${this.value ? 'adicionada ao ' + this.value : 'removida de grupos'}.`); }; li.querySelector('.actions').appendChild(groupSelect); const viewBtn = document.createElement('button'); viewBtn.className = 'btn btn-primary btn-sm'; viewBtn.innerHTML = '<i class="fas fa-eye"></i>'; viewBtn.title = 'Ver no mapa'; viewBtn.onclick = () => { if (AppState.cityLayers[city.name]) { AppState.map.fitBounds(AppState.cityLayers[city.name].getBounds()); AppState.cityLayers[city.name].fire('click'); }}; li.querySelector('.actions').appendChild(viewBtn); const removeBtn = document.createElement('button'); removeBtn.className = 'btn btn-danger btn-sm'; removeBtn.innerHTML = '<i class="fas fa-trash"></i>'; removeBtn.title = 'Remover favorito'; removeBtn.onclick = () => { AppState.favorites = AppState.favorites.filter(f => f.name !== city.name); Object.keys(AppState.groups).forEach(g => {if(AppState.groups[g]) AppState.groups[g] = AppState.groups[g].filter(c => c !== city.name)}); saveDataToLocalStorage(); updateFavoritesList(); updateGroupsLists(); resetMapStyles(); showNotification(`${city.name} removida dos favoritos.`); }; li.querySelector('.actions').appendChild(removeBtn); DOMElements.favoritesList.appendChild(li); });
     }
 
     function updateGroupsLists() {
         DOMElements.groupsList.innerHTML = Object.keys(AppState.groups).length === 0 ? '<li class="empty-message">Nenhum grupo criado</li>' : ''; if(DOMElements.groupSelect) DOMElements.groupSelect.innerHTML = '<option value="">Selecione um grupo</option>';
-        Object.keys(AppState.groups).sort().forEach(groupName => { if(DOMElements.groupSelect) DOMElements.groupSelect.innerHTML += `<option value="${groupName}">${groupName}</option>`; const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div><strong>${groupName}</strong> <span class="badge badge-primary">${AppState.groups[groupName]?.length || 0}</span></div> <div class="actions"> <button class="btn btn-warning btn-sm btn-highlight-group" title="Destacar"><i class="fas fa-highlighter"></i></button> <button class="btn btn-danger btn-sm btn-remove-group" title="Remover"><i class="fas fa-trash"></i></button> </div>`; li.querySelector('.btn-highlight-group').onclick = () => { if(DOMElements.groupSelect) DOMElements.groupSelect.value = groupName; highlightGroupOnMap(groupName); }; li.querySelector('.btn-remove-group').onclick = () => { if (confirm(`Remover grupo "${groupName}"?`)) { delete AppState.groups[groupName]; saveDataToLocalStorage(); updateGroupsLists(); updateFavoritesList(); if (AppState.activeGroup === groupName) { AppState.activeGroup = null; resetMapStyles(); } showNotification(`Grupo ${groupName} removido.`); } }; DOMElements.groupsList.appendChild(li); });
+        Object.keys(AppState.groups).sort().forEach(groupName => { if(DOMElements.groupSelect) DOMElements.groupSelect.innerHTML += `<option value="${groupName}">${groupName}</option>`; const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div><strong>${groupName}</strong> <span class="badge badge-primary">${AppState.groups[groupName]?.length || 0}</span></div> <div class="actions"> <button class="btn btn-warning btn-sm btn-highlight-group" title="Destacar"><i class="fas fa-highlighter"></i></button> <button class="btn btn-danger btn-sm btn-remove-group" title="Remover"><i class="fas fa-trash"></i></button> </div>`; li.querySelector('.btn-highlight-group').onclick = () => { if(DOMElements.groupSelect) DOMElements.groupSelect.value = groupName; highlightGroupOnMap(groupName); }; li.querySelector('.btn-remove-group').onclick = () => { if (confirm(`Remover grupo "${groupName}"? As cidades não serão removidas dos favoritos, apenas do grupo.`)) { delete AppState.groups[groupName]; saveDataToLocalStorage(); updateGroupsLists(); updateFavoritesList(); if (AppState.activeGroup === groupName) { AppState.activeGroup = null; resetMapStyles(); } showNotification(`Grupo ${groupName} removido.`); } }; DOMElements.groupsList.appendChild(li); });
     }
 
     function updateVendedoresList() {
@@ -841,13 +881,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFavoritesList();
         updateGroupsLists();
         updateVendedoresList();
-        resetMapStyles();
+        resetMapStyles(); // Garante que o mapa reflita os dados carregados (cores de vendedores, etc.)
     }
 
     function prepareAssignVendedorModal() {
         if (!AppState.selectedCity) return; DOMElements.assignCityNameSpan.textContent = AppState.selectedCity.name; DOMElements.assignVendedorSelect.value = ''; DOMElements.assignedVendedoresList.innerHTML = '';
         const assignedIds = AppState.cityAssignments[AppState.selectedCity.name];
-        if (assignedIds?.length > 0) { assignedIds.forEach(vId => { const vend = AppState.vendedores.find(v => v.id === vId); if (vend) { const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div class="vendedor-list-item-info"><div class="vendedor-color-indicator" style="background-color: ${vend.color};"></div>${vend.nome}</div> <button class="btn btn-danger btn-sm btn-remove-assignment" title="Remover"><i class="fas fa-trash"></i></button>`; li.querySelector('.btn-remove-assignment').onclick = () => { vend.cidades = vend.cidades.filter(c => c !== AppState.selectedCity.name); AppState.cityAssignments[AppState.selectedCity.name] = AppState.cityAssignments[AppState.selectedCity.name].filter(id => id !== vId); if (AppState.cityAssignments[AppState.selectedCity.name].length === 0) delete AppState.cityAssignments[AppState.selectedCity.name]; saveDataToLocalStorage(); prepareAssignVendedorModal(); updateSelectedCityInfo(); updateVendedoresList(); resetMapStyles(); showNotification(`Vendedor ${vend.nome} removido de ${AppState.selectedCity.name}.`); }; DOMElements.assignedVendedoresList.appendChild(li); } }); DOMElements.currentVendedoresContainer.classList.remove('hidden'); }
+        if (assignedIds?.length > 0) { assignedIds.forEach(vId => { const vend = AppState.vendedores.find(v => v.id === vId); if (vend) { const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<div class="vendedor-list-item-info"><div class="vendedor-color-indicator" style="background-color: ${vend.color};"></div>${vend.nome}</div> <button class="btn btn-danger btn-sm btn-remove-assignment" title="Remover atribuição"><i class="fas fa-user-minus"></i></button>`; li.querySelector('.btn-remove-assignment').onclick = () => { vend.cidades = vend.cidades.filter(c => c !== AppState.selectedCity.name); AppState.cityAssignments[AppState.selectedCity.name] = AppState.cityAssignments[AppState.selectedCity.name].filter(id => id !== vId); if (AppState.cityAssignments[AppState.selectedCity.name].length === 0) delete AppState.cityAssignments[AppState.selectedCity.name]; saveDataToLocalStorage(); prepareAssignVendedorModal(); updateSelectedCityInfo(); updateVendedoresList(); resetMapStyles(); showNotification(`Vendedor ${vend.nome} removido de ${AppState.selectedCity.name}.`); }; DOMElements.assignedVendedoresList.appendChild(li); } }); DOMElements.currentVendedoresContainer.classList.remove('hidden'); }
         else { DOMElements.currentVendedoresContainer.classList.add('hidden'); } openModal(DOMElements.modalAssignVendedor);
     }
 
@@ -869,20 +909,122 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupEventListeners() {
         DOMElements.toggleSidebarButton.addEventListener('click', () => { DOMElements.sidebar.classList.toggle('collapsed'); DOMElements.toggleSidebarButton.querySelector('i').className = DOMElements.sidebar.classList.contains('collapsed') ? 'fas fa-bars' : 'fas fa-chevron-left'; setTimeout(() => { if(AppState.map) AppState.map.invalidateSize(); }, 310); });
         DOMElements.sidebarTabsContainer.addEventListener('click', e => { const btn = e.target.closest('.tab-button'); if (!btn) return; DOMElements.tabButtons.forEach(b => b.classList.remove('active')); DOMElements.tabContents.forEach(c => c.classList.remove('active')); btn.classList.add('active'); const targetTab = document.getElementById(`tab-${btn.dataset.tab}`); if(targetTab) targetTab.classList.add('active'); });
-        DOMElements.searchButton.addEventListener('click', handleSearchCity); DOMElements.searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearchCity(); });
+
+        DOMElements.searchInput.addEventListener('input', handleAutocompleteSearchInput);
+        DOMElements.searchInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (DOMElements.autocompleteResultsContainer && !DOMElements.autocompleteResultsContainer.matches(':hover')) { // Só esconde se o mouse não estiver sobre os resultados
+                    DOMElements.autocompleteResultsContainer.innerHTML = '';
+                    DOMElements.autocompleteResultsContainer.classList.remove('active');
+                }
+            }, 200);
+        });
+        DOMElements.searchButton.addEventListener('click', () => handleSearchCity(DOMElements.searchInput.value));
+        DOMElements.searchInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                handleSearchCity(DOMElements.searchInput.value);
+                if (DOMElements.autocompleteResultsContainer) {
+                     DOMElements.autocompleteResultsContainer.innerHTML = '';
+                     DOMElements.autocompleteResultsContainer.classList.remove('active');
+                }
+            }
+        });
+
         DOMElements.addFavoriteButton.addEventListener('click', handleAddFavorite);
         DOMElements.assignVendedorButton.addEventListener('click', () => { if (!AppState.selectedCity) {showNotification('Nenhuma cidade selecionada.', 'info'); return;} if (AppState.vendedores.length === 0) { showNotification('Nenhum vendedor cadastrado. Sincronize os dados.', 'warning'); return; } prepareAssignVendedorModal(); });
         DOMElements.confirmAssignVendedorButton.addEventListener('click', handleConfirmAssignVendedor); DOMElements.createGroupButton.addEventListener('click', handleCreateGroup);
         if(DOMElements.groupSelect) DOMElements.groupSelect.addEventListener('change', e => highlightGroupOnMap(e.target.value));
-        DOMElements.reloadDataButton.addEventListener('click', () => { if (confirm("Recarregar dados da planilha? Isso pode sobrescrever alterações locais não sincronizadas.")) loadDataFromSheets(); });
+        DOMElements.reloadDataButton.addEventListener('click', () => { if (confirm("Recarregar dados da planilha? Alterações locais não sincronizadas (como atribuições de vendedores feitas na interface) podem ser sobrescritas se não estiverem refletidas na planilha.")) loadDataFromSheets(); });
         document.addEventListener('click', e => { if (e.target.matches('.modal-close') || e.target.matches('.modal.show')) { const modal = e.target.closest('.modal') || e.target; if (modal) closeModal(modal); } });
         document.addEventListener('keydown', e => { if (e.key === "Escape") closeAllModals(); });
         if(AppState.map) { AppState.map.on('zoomstart movestart', removeCityInfoMarker); AppState.map.on('click', (e) => { if (AppState.cityInfoMarker && e.originalEvent.target === AppState.map.getContainer()) removeCityInfoMarker(); }); AppState.map.on('popupopen', removeCityInfoMarker); }
     }
 
-    function handleSearchCity() {
-        const searchTermOriginal = DOMElements.searchInput.value;
-        if (!searchTermOriginal) return;
+    function handleAutocompleteSearchInput(event) {
+        const searchTerm = event.target.value;
+        const resultsContainer = DOMElements.autocompleteResultsContainer;
+        resultsContainer.innerHTML = '';
+
+        if (searchTerm.length < 2) {
+            resultsContainer.classList.remove('active');
+            return;
+        }
+
+        const normalizedSearchTerm = normalizeString(searchTerm);
+        const matchingCities = new Set(); // Usar Set para evitar duplicatas facilmente
+
+        // Prioridade 1: Começa com o termo (normalizado)
+        for (const [normalizedMapName, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+            if (normalizedMapName.startsWith(normalizedSearchTerm)) {
+                matchingCities.add(originalMapName);
+            }
+            if (matchingCities.size >= 15) break;
+        }
+
+        // Prioridade 2: Contém o termo (normalizado), se ainda não chegou a 15
+        if (matchingCities.size < 15) {
+            for (const [normalizedMapName, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                if (normalizedMapName.includes(normalizedSearchTerm)) {
+                    matchingCities.add(originalMapName);
+                }
+                if (matchingCities.size >= 15) break;
+            }
+        }
+        
+        // Prioridade 3: Se ainda não tem 15, tenta com `toSimpleForm`
+        if (matchingCities.size < 15) {
+            const simpleSearchTerm = toSimpleForm(normalizedSearchTerm);
+            if (simpleSearchTerm !== normalizedSearchTerm && simpleSearchTerm.length > 1) { // Evita busca redundante ou por termos muito curtos
+                // "Começa com" simplificado
+                for (const [normalizedMapName, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                    if (toSimpleForm(normalizedMapName).startsWith(simpleSearchTerm)) {
+                        matchingCities.add(originalMapName);
+                    }
+                    if (matchingCities.size >= 15) break;
+                }
+                // "Contém" simplificado, se ainda não chegou a 15
+                if (matchingCities.size < 15) {
+                    for (const [normalizedMapName, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                        if (toSimpleForm(normalizedMapName).includes(simpleSearchTerm)) {
+                            matchingCities.add(originalMapName);
+                        }
+                        if (matchingCities.size >= 15) break;
+                    }
+                }
+            }
+        }
+
+        const sortedMatchingCities = Array.from(matchingCities); // Converte Set para Array para exibir
+        // Poderia adicionar um sort aqui se desejado, ex: alfabético
+        // sortedMatchingCities.sort((a,b) => a.localeCompare(b));
+
+
+        if (sortedMatchingCities.length > 0) {
+            sortedMatchingCities.forEach(cityName => {
+                const item = document.createElement('div');
+                item.classList.add('autocomplete-item');
+                item.textContent = cityName;
+                // Usar mousedown em vez de click para que dispare antes do blur do input
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // Previne que o input perca o foco imediatamente
+                    DOMElements.searchInput.value = cityName;
+                    resultsContainer.innerHTML = '';
+                    resultsContainer.classList.remove('active');
+                    handleSearchCity(cityName);
+                });
+                resultsContainer.appendChild(item);
+            });
+            resultsContainer.classList.add('active');
+        } else {
+            resultsContainer.classList.remove('active');
+        }
+    }
+
+    function handleSearchCity(searchTermOriginal) {
+        if (!searchTermOriginal || searchTermOriginal.trim() === "") {
+             showNotification("Por favor, digite o nome de uma cidade.", "info");
+            return;
+        }
 
         const normalizedSearchTerm = normalizeString(searchTermOriginal);
         const simpleSearchTerm = toSimpleForm(normalizedSearchTerm);
@@ -891,65 +1033,112 @@ document.addEventListener('DOMContentLoaded', () => {
         let foundLayer = null;
         let bestMatchScore = 0;
 
-        for (const [normalizedCityNameFromMap, originalCityName] of Object.entries(AppState.normalizedCityNames)) {
-            if (normalizedCityNameFromMap === normalizedSearchTerm) {
-                foundName = originalCityName;
-                foundLayer = AppState.cityLayers[originalCityName];
-                bestMatchScore = 100;
-                break;
-            }
-            const simpleMapName = toSimpleForm(normalizedCityNameFromMap);
-            if (simpleMapName === simpleSearchTerm) {
-                if (bestMatchScore < 90) {
-                    foundName = originalCityName;
-                    foundLayer = AppState.cityLayers[originalCityName];
-                    bestMatchScore = 90;
-                }
-            }
+        // Nível 1: Correspondência exata do nome original (caso o usuário clique num autocompletar)
+        if (AppState.cityLayers[searchTermOriginal]) {
+            foundName = searchTermOriginal;
+            foundLayer = AppState.cityLayers[searchTermOriginal];
+            bestMatchScore = 100;
         }
-        
-        if (bestMatchScore < 90) {
-            for (const [normalizedCityNameFromMap, originalCityName] of Object.entries(AppState.normalizedCityNames)) {
-                const simpleMapName = toSimpleForm(normalizedCityNameFromMap);
-                if (simpleMapName.includes(simpleSearchTerm)) {
-                    const currentScore = (simpleSearchTerm.length / simpleMapName.length) * 70;
-                    if (currentScore > bestMatchScore) {
-                        bestMatchScore = currentScore;
-                        foundName = originalCityName;
-                        foundLayer = AppState.cityLayers[originalCityName];
-                    }
-                } 
-                else if (simpleSearchTerm.includes(simpleMapName) && simpleMapName.length > 3) {
-                     const currentScore = (simpleMapName.length / simpleSearchTerm.length) * 60;
-                     if (currentScore > bestMatchScore) {
-                        bestMatchScore = currentScore;
-                        foundName = originalCityName;
-                        foundLayer = AppState.cityLayers[originalCityName];
+        // Nível 2: Correspondência exata normalizada
+        else if (AppState.normalizedCityNames[normalizedSearchTerm]) {
+            foundName = AppState.normalizedCityNames[normalizedSearchTerm];
+            foundLayer = AppState.cityLayers[foundName];
+            bestMatchScore = 95;
+        }
+        // Nível 3: Correspondência exata simplificada
+        else {
+            for (const [normMapKey, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                if (toSimpleForm(normMapKey) === simpleSearchTerm) {
+                    if (bestMatchScore < 90) {
+                        foundName = originalMapName;
+                        foundLayer = AppState.cityLayers[originalMapName];
+                        bestMatchScore = 90;
                     }
                 }
             }
         }
 
+        // Nível 4: "Começa com" (normalizado)
+        if (bestMatchScore < 90) {
+            for (const [normMapKey, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                if (normMapKey.startsWith(normalizedSearchTerm)) {
+                    const currentScore = 80 + (normalizedSearchTerm.length / normMapKey.length * 5); // Dá mais peso se for quase completo
+                     if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalMapName;
+                        foundLayer = AppState.cityLayers[originalMapName];
+                    }
+                }
+            }
+        }
+        // Nível 5: "Contém" (normalizado)
+        if (bestMatchScore < 80) {
+             for (const [normMapKey, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                if (normMapKey.includes(normalizedSearchTerm)) {
+                    const currentScore = 70 + (normalizedSearchTerm.length / normMapKey.length * 5);
+                     if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalMapName;
+                        foundLayer = AppState.cityLayers[originalMapName];
+                    }
+                }
+            }
+        }
+        // Nível 6: "Começa com" (simplificado) e "Contém" (simplificado) - com menor prioridade
+        if (bestMatchScore < 70 && simpleSearchTerm.length > 1) {
+            for (const [normMapKey, originalMapName] of Object.entries(AppState.normalizedCityNames)) {
+                const simpleMapKey = toSimpleForm(normMapKey);
+                if (simpleMapKey.startsWith(simpleSearchTerm)) {
+                     const currentScore = 60 + (simpleSearchTerm.length / simpleMapKey.length * 5);
+                     if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalMapName;
+                        foundLayer = AppState.cityLayers[originalMapName];
+                    }
+                } else if (simpleMapKey.includes(simpleSearchTerm)) {
+                    const currentScore = 50 + (simpleSearchTerm.length / simpleMapKey.length * 5);
+                     if (currentScore > bestMatchScore) {
+                        bestMatchScore = currentScore;
+                        foundName = originalMapName;
+                        foundLayer = AppState.cityLayers[originalMapName];
+                    }
+                }
+            }
+        }
+
+
         if (foundName && foundLayer) {
-            AppState.map.fitBounds(foundLayer.getBounds());
+            AppState.map.fitBounds(foundLayer.getBounds(), {padding: [70,70], maxZoom: 12});
             foundLayer.fire('click');
             showNotification(`Cidade ${foundName} encontrada.`);
-            DOMElements.searchInput.value = '';
+            DOMElements.searchInput.value = foundName;
+            if (DOMElements.autocompleteResultsContainer) {
+                DOMElements.autocompleteResultsContainer.innerHTML = '';
+                DOMElements.autocompleteResultsContainer.classList.remove('active');
+            }
         } else {
             showNotification(`Cidade "${searchTermOriginal}" não encontrada. Verifique a grafia ou tente um nome mais simples.`, 'warning');
         }
     }
 
     function handleAddFavorite() {
-        if (!AppState.selectedCity) return; if (AppState.favorites.some(f => f.name === AppState.selectedCity.name)) { showNotification(`${AppState.selectedCity.name} já é favorito.`, 'info'); return; }
+        if (!AppState.selectedCity) { showNotification('Nenhuma cidade selecionada para adicionar aos favoritos.', 'info'); return; }
+        if (AppState.favorites.some(f => f.name === AppState.selectedCity.name)) { showNotification(`${AppState.selectedCity.name} já está nos favoritos.`, 'info'); return; }
         AppState.favorites.push({ name: AppState.selectedCity.name, id: AppState.selectedCity.id }); saveDataToLocalStorage(); updateFavoritesList(); resetMapStyles(); showNotification(`${AppState.selectedCity.name} adicionado aos favoritos.`);
     }
 
     function handleConfirmAssignVendedor() {
-        const vendedorId = DOMElements.assignVendedorSelect.value; if (!AppState.selectedCity || !vendedorId) { showNotification('Selecione um vendedor.', 'warning'); return; }
+        const vendedorId = DOMElements.assignVendedorSelect.value; if (!AppState.selectedCity || !vendedorId) { showNotification('Selecione uma cidade e um vendedor.', 'warning'); return; }
         const cityName = AppState.selectedCity.name; const vendedor = AppState.vendedores.find(v => v.id === vendedorId); if (!vendedor) { showNotification('Vendedor não encontrado.', 'danger'); return; }
-        if (!vendedor.cidades.includes(cityName)) vendedor.cidades.push(cityName); else { showNotification('Este vendedor já está atribuído a esta cidade.', 'info'); return; }
-        if (!AppState.cityAssignments[cityName]) AppState.cityAssignments[cityName] = []; if (!AppState.cityAssignments[cityName].includes(vendedorId)) AppState.cityAssignments[cityName].push(vendedorId);
+
+        // Adiciona a cidade ao vendedor
+        if (!vendedor.cidades.includes(cityName)) vendedor.cidades.push(cityName);
+        else { showNotification('Este vendedor já está atribuído a esta cidade.', 'info'); return; } // Já estava, não faz nada
+
+        // Adiciona o vendedor à cidade em AppState.cityAssignments
+        if (!AppState.cityAssignments[cityName]) AppState.cityAssignments[cityName] = [];
+        if (!AppState.cityAssignments[cityName].includes(vendedorId)) AppState.cityAssignments[cityName].push(vendedorId);
+
         saveDataToLocalStorage(); prepareAssignVendedorModal(); updateSelectedCityInfo(); updateVendedoresList(); resetMapStyles(); showNotification(`${cityName} atribuída a ${vendedor.nome}.`);
     }
 
@@ -967,32 +1156,42 @@ document.addEventListener('DOMContentLoaded', () => {
              console.warn("ALERTA: API Key do Google Sheets não configurada!");
              showNotification("API Key do Google Sheets não configurada! Funcionalidades da planilha desabilitadas.", "danger", 15000);
         }
+
         initMap();
         setupEventListeners();
-        try {
-            loadSavedData();
 
+        try {
+            loadSavedData(); // Carrega dados do localStorage primeiro
+
+            // Carrega os GeoJSONs
             for (const dataSet of AppConfig.geoJsonSources) {
-                await loadGeoJsonWithFallback(dataSet);
+                // Se for uma camada de limite, adicione uma ID para referência posterior se necessário
+                if (dataSet.id === 'limiteSP') {
+                    const layer = await loadGeoJsonWithFallback(dataSet);
+                    if (layer) layer.options.id = 'limiteSPGeoJSON'; // Para referência em resetMapStyles
+                } else {
+                    await loadGeoJsonWithFallback(dataSet);
+                }
             }
-            
-            if (Object.keys(AppState.cityLayers).length === 0 && 
+
+            if (Object.keys(AppState.cityLayers).length === 0 &&
                 (AppConfig.geoJsonSources.some(ds => ds.id.startsWith('municipios')))) {
-                 showNotification("Falha ao carregar dados geográficos dos municípios. Algumas funcionalidades podem ser limitadas.", "danger", 10000);
-                 console.error("Nenhuma camada de cidade (municípios) foi carregada. Verifique os URLs e a rede.");
+                 showNotification("Falha ao carregar dados geográficos dos municípios. Funcionalidades podem ser limitadas.", "danger", 10000);
+                 console.error("Nenhuma camada de cidade (municípios) foi carregada. Verifique URLs, rede e a lógica em onEachCityFeature.");
             }
 
             if (Object.keys(AppState.cityPopulations).length === 0) {
-                 await fetchCityPopulation(null, true);
+                 await fetchCityPopulation(null, true); // Força o carregamento se não houver dados de população
             }
 
+            // Carrega dados da planilha (que podem sobrescrever/complementar os dados locais)
             await loadDataFromSheets();
-            updateUIAfterDataLoad();
+            updateUIAfterDataLoad(); // Atualiza a UI com todos os dados carregados
 
         } catch (error) {
             console.error("Erro crítico na inicialização:", error.message, error.stack);
             showNotification(`Erro crítico na inicialização: ${error.message}. Verifique o console.`, "danger", 10000);
-            updateUIAfterDataLoad();
+            updateUIAfterDataLoad(); // Tenta atualizar a UI mesmo em caso de erro parcial
         } finally {
             showLoading(false);
         }
