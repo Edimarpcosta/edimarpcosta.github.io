@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // ========= CONFIGURAÇÃO DA APLICAÇÃO =========
     const AppConfig = {
-        spreadsheetId: "1vWWvnYGgZyqVYMoBfcciCCGgEN1FLzSrmXYPBOPKUjk",
+        spreadsheetId: "1f03fl_8HI5V6moTLYNMsQLFoi3EsLYZQI23CKkHqsow",
         apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", // Mantenha sua chave aqui
         range: "novas-rotas",
         distribuidoraAmeripanCoords: L.latLng(-22.730986246840104, -47.358144521713264),
