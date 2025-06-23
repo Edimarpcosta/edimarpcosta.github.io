@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Duplicados (V7 - Corrigido)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* O CSS permanece o mesmo */
+        :root {
+            --bg-color: #1a1a1a; --text-color: #e0e0e0; --panel-bg-color: #2c2c2c;
+            --border-color: #444; --button-bg-color: #007bff; --button-export-bg-color: #4CAF50;
+            --button-clear-bg-color: #f44336; --button-text-color: #ffffff;
+            --scrollbar-color: #555; --scrollbar-bg-color: #2c2c2c;
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: var(--font-family); margin: 0; padding: 1rem; box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; background-color: var(--panel-bg-color); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px; }
+        .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 15px; }
+        .toolbar label { cursor: pointer; display: flex; align-items: center; gap: 5px; }
+        .toolbar button { padding: 8px 12px; border: none; border-radius: 5px; color: var(--button-text-color); cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+        .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #save-button { background-color: var(--button-bg-color); }
+        #export-button { background-color: var(--button-export-bg-color); }
+        #clear-button { background-color: var(--button-clear-bg-color); }
+        .container { display: flex; flex-grow: 1; gap: 1rem; height: calc(100vh - 155px); }
+        .editor-pane, .results-pane { background-color: var(--panel-bg-color); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+        .editor-pane { flex: 3; }
+        .results-pane { flex: 1; }
+        .pane-header { padding: 0.75rem; background-color: #333; font-weight: bold; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        .editor-content-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
+        #text-input, #highlight-output { position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-sizing: border-box; padding: 1rem; font-family: 'Courier New', Courier, monospace; font-size: 16px; font-weight: 600; line-height: 1.5; border: none; background: transparent; color: var(--text-color); resize: none; outline: none; white-space: pre-wrap; word-wrap: break-word; overflow: auto; }
+        #text-input { z-index: 2; color: transparent; caret-color: var(--text-color); }
+        #highlight-output { z-index: 1; pointer-events: none; }
+        #duplicates-list { list-style: none; padding: 1rem; margin: 0; overflow-y: auto; flex-grow: 1; }
+        #duplicates-list .normal-item { display: flex; align-items: center; gap: 10px; padding: 8px; margin-bottom: 8px; border-radius: 5px; font-size: 14px; }
+        #duplicates-list .normal-item .count, .cnpj-group-header .count { font-weight: bold; padding: 4px 8px; border-radius: 4px; color: #111; }
+        #duplicates-list .normal-item .value { flex-grow: 1; word-break: break-all; font-weight: bold; }
+        .cnpj-group { border: 1px solid #555; border-radius: 5px; padding: 10px; margin-bottom: 15px; }
+        .cnpj-group-header { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .cnpj-members-list { list-style: none; padding-left: 10px; margin: 0; }
+        .cnpj-members-list li { margin-bottom: 5px; font-family: 'Courier New', Courier, monospace; font-weight: 600; }
+        #no-duplicates-message { text-align: center; padding: 2rem; color: #888; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-color); border-radius: 5px; }
+        mark { color: #000; font-weight: bold; padding: 2px 0; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <label><input type="checkbox" id="cnpj-mode-toggle"> Encontrar filiais por Raiz CNPJ</label>
+        </div>
+        <div class="toolbar-right">
+            <button id="export-button" title="Exportar o resultado da direita para um arquivo .xlsx">Exportar para Excel</button>
+            <button id="save-button" title="Salvar o conteúdo do editor em um arquivo .txt">Salvar em Arquivo</button>
+            <button id="clear-button" title="Apagar conteúdo e dados salvos">Apagar Tudo</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="editor-pane"><div class="pane-header">Seu Texto</div><div class="editor-content-wrapper"><div id="highlight-output"></div><textarea id="text-input" spellcheck="false" placeholder="Cole sua lista aqui... Os dados são salvos automaticamente no navegador."></textarea></div></div><div class="results-pane"><div class="pane-header">Resultados</div><ul id="duplicates-list"><div id="no-duplicates-message">Nenhum item duplicado encontrado.</div></ul></div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- ELEMENTOS DO DOM ---
+        const textInput = document.getElementById('text-input');
+        const highlightOutput = document.getElementById('highlight-output');
+        const duplicatesList = document.getElementById('duplicates-list');
+        const noDuplicatesMessage = document.getElementById('no-duplicates-message');
+        const cnpjModeToggle = document.getElementById('cnpj-mode-toggle');
+        const saveButton = document.getElementById('save-button');
+        const clearButton = document.getElementById('clear-button');
+        const exportButton = document.getElementById('export-button');
+
+        const highContrastColors = ['#FF4136', '#0074D9', '#2ECC40', '#FF851B', '#B10DC9', '#3D9970', '#FFDC00', '#F012BE', '#7FDBFF', '#39CCCC', '#FF6347', '#4682B4'];
+        let currentResults = null;
+
+        const saveData = () => { localStorage.setItem('editorText', textInput.value); localStorage.setItem('isCnpjMode', cnpjModeToggle.checked); };
+        const loadData = () => { textInput.value = localStorage.getItem('editorText') || ''; cnpjModeToggle.checked = localStorage.getItem('isCnpjMode') === 'true'; };
+        const processInput = () => { if (cnpjModeToggle.checked) { currentResults = processCnpjMode(); } else { currentResults = processNormalMode(); } exportButton.disabled = !currentResults || currentResults.size === 0; saveData(); };
+
+        // --- LÓGICA MODO NORMAL (FRONT-END) ---
+        const processNormalMode = () => { const items = textInput.value.match(/\S+/g) || []; const counts = new Map(); items.forEach(item => counts.set(item, (counts.get(item) || 0) + 1)); const duplicates = new Map(); for (let [item, count] of counts.entries()) { if (count > 1) duplicates.set(item, count); } renderNormalHighlights(textInput.value, duplicates); renderNormalList(duplicates); return duplicates; };
+        const renderNormalHighlights = (text, duplicates) => { let colorIndex = 0; const duplicateColors = new Map(); duplicates.forEach((count, item) => { duplicateColors.set(item, highContrastColors[colorIndex % highContrastColors.length]); colorIndex++; }); const escapeRegex = (str) => str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"); let highlightedText = text; duplicates.forEach((count, item) => { const color = duplicateColors.get(item); const regex = new RegExp(`\\b${escapeRegex(item)}\\b`, 'g'); highlightedText = highlightedText.replace(regex, `<mark style="background-color: ${color};">${item}</mark>`); }); highlightOutput.innerHTML = highlightedText; };
+        const renderNormalList = (duplicates) => {
+            duplicatesList.innerHTML = '';
+            if (duplicates.size === 0) {
+                duplicatesList.appendChild(noDuplicatesMessage);
+                noDuplicatesMessage.style.display = 'block';
+                return;
+            }
+            noDuplicatesMessage.style.display = 'none';
+            let colorIndex = 0;
+            const sortedDuplicates = [...duplicates.entries()].sort((a, b) => b[1] - a[1]);
+            sortedDuplicates.forEach(([item, count]) => { const color = highContrastColors[colorIndex % highContrastColors.length]; const listItem = document.createElement('li'); listItem.className = 'normal-item'; listItem.innerHTML = `<span class="count" style="background-color: ${color};">${count}x</span><span class="value" style="color: ${color};">${item}</span>`; duplicatesList.appendChild(listItem); colorIndex++; });
+        };
+
+        // --- LÓGICA MODO CNPJ (FRONT-END) ---
+        const getCnpjRoot = (str) => { const cleaned = str.replace(/\D/g, ''); if (cleaned.length === 14) return cleaned.substring(0, 8); if (cleaned.length === 13) return cleaned.substring(0, 7); if (cleaned.length === 8 || cleaned.length === 7) return cleaned; return null; };
+        const processCnpjMode = () => { const items = textInput.value.match(/\S+/g) || []; const rootGroups = new Map(); items.forEach(item => { const root = getCnpjRoot(item); if (root) { if (!rootGroups.has(root)) rootGroups.set(root, { members: [] }); rootGroups.get(root).members.push(item); } }); const duplicateRoots = new Map(); let colorIndex = 0; for (let [root, group] of rootGroups.entries()) { if (group.members.length > 1) { duplicateRoots.set(root, { members: group.members, color: highContrastColors[colorIndex % highContrastColors.length] }); colorIndex++; } } renderCnpjHighlights(textInput.value, duplicateRoots); renderCnpjGroups(duplicateRoots); return duplicateRoots; };
+        const renderCnpjHighlights = (text, duplicateRoots) => { const parts = text.split(/(\s+)/); const highlightedParts = parts.map(part => { const root = getCnpjRoot(part); if (root && duplicateRoots.has(root)) { const group = duplicateRoots.get(root); const rootInPart = getCnpjRoot(part); const rootLength = rootInPart.length; return `<mark style="background-color: ${group.color};">${part.substring(0, rootLength)}</mark>${part.substring(rootLength)}`; } return part; }); highlightOutput.innerHTML = highlightedParts.join(''); };
+        const renderCnpjGroups = (duplicateRoots) => {
+            duplicatesList.innerHTML = '';
+            if (duplicateRoots.size === 0) {
+                duplicatesList.appendChild(noDuplicatesMessage);
+                noDuplicatesMessage.style.display = 'block';
+                return;
+            }
+            noDuplicatesMessage.style.display = 'none';
+            duplicateRoots.forEach((group, root) => {
+                const groupContainer = document.createElement('div');
+                groupContainer.className = 'cnpj-group';
+                const header = document.createElement('div');
+                header.className = 'cnpj-group-header';
+                header.innerHTML = `<span class="count" style="background-color: ${group.color};">${group.members.length}x</span><span>Raiz: ${root}</span>`;
+                const membersList = document.createElement('ul');
+                membersList.className = 'cnpj-members-list';
+                group.members.forEach(member => { const memberItem = document.createElement('li'); const rootInMember = getCnpjRoot(member); memberItem.innerHTML = `<mark style="background-color: ${group.color};">${rootInMember}</mark>${member.substring(rootInMember.length)}`; membersList.appendChild(memberItem); });
+                groupContainer.appendChild(header);
+                groupContainer.appendChild(membersList);
+                duplicatesList.appendChild(groupContainer);
+            });
+        };
+
+        // --- LÓGICA DE EXPORTAÇÃO PARA EXCEL COM BORDAS ---
+        const exportToXlsx = () => {
+            if (!currentResults || currentResults.size === 0 || typeof XLSX === 'undefined') {
+                alert("Nenhum resultado para exportar ou a biblioteca de exportação não foi carregada.");
+                return;
+            }
+            const wb = XLSX.utils.book_new();
+            let ws_data = [];
+            const borderStyle = { style: 'thick', color: { rgb: "FF000000" } };
+
+            if (cnpjModeToggle.checked) {
+                ws_data.push([{v: "Raiz", s: {font: {bold: true}}}, {v: "CNPJ Completo", s: {font: {bold: true}}}]);
+                currentResults.forEach((group, root) => {
+                    const groupSize = group.members.length;
+                    group.members.forEach((member, index) => {
+                        const rootCell = { v: root, t: 's' };
+                        const memberCell = { v: member, t: 's' };
+                        const border = {};
+                        if (index === 0) border.top = borderStyle;
+                        if (index === groupSize - 1) border.bottom = borderStyle;
+                        border.left = borderStyle;
+                        rootCell.s = { border: border };
+                        memberCell.s = { border: { ...border, right: borderStyle } };
+                        ws_data.push([rootCell, memberCell]);
+                    });
+                });
+            } else {
+                ws_data.push([{v: "Item", s: {font: {bold: true}}}, {v: "Contagem", s: {font: {bold: true}}}]);
+                currentResults.forEach((count, item) => { ws_data.push([{v: item, t: 's'}, {v: count, t: 'n'}]); });
+            }
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            ws['!cols'] = [{ wch: 25 }, { wch: 25 }];
+            XLSX.utils.book_append_sheet(wb, ws, "Resultados");
+            XLSX.writeFile(wb, "resultado_analise.xlsx");
+        };
+
+        // --- EVENTOS E INICIALIZAÇÃO ---
+        textInput.addEventListener('scroll', () => { highlightOutput.scrollTop = textInput.scrollTop; highlightOutput.scrollLeft = textInput.scrollLeft; });
+        textInput.addEventListener('input', processInput);
+        cnpjModeToggle.addEventListener('change', processInput);
+        exportButton.addEventListener('click', exportToXlsx);
+        saveButton.addEventListener('click', () => { const blob = new Blob([textInput.value], { type: 'text/plain' }); const anchor = document.createElement('a'); anchor.download = 'lista.txt'; anchor.href = window.URL.createObjectURL(blob); anchor.style.display = 'none'; document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); window.URL.revokeObjectURL(anchor.href); });
+        clearButton.addEventListener('click', () => { textInput.value = ''; localStorage.removeItem('editorText'); localStorage.removeItem('isCnpjMode'); cnpjModeToggle.checked = false; processInput(); });
+        
+        loadData();
+        processInput();
+    });
+    </script>
+</body>
+</html>
