@@ -13,6 +13,7 @@
             --primary-button-bg-color: #007bff;
             --success-button-bg-color: #28a745;
             --danger-button-bg-color: #dc3545;
+            --info-button-bg-color: #17a2b8;
             --button-text-color: #ffffff;
             --input-bg-color: #3a3a3a;
             --scrollbar-color: #555;
@@ -37,7 +38,7 @@
             display: flex;
             flex-grow: 1;
             gap: 1rem;
-            height: calc(100vh - 4rem); /* Ajustado para não ter toolbar */
+            height: calc(100vh - 4rem);
         }
 
         .pane {
@@ -58,6 +59,9 @@
             font-weight: bold;
             border-bottom: 1px solid var(--border-color);
             flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .pane-content {
@@ -91,7 +95,7 @@
         
         textarea.form-control {
             resize: vertical;
-            min-height: 120px;
+            min-height: 80px;
         }
 
         .btn {
@@ -105,14 +109,20 @@
             width: 100%;
             font-size: 1rem;
         }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            width: auto;
+        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary { background-color: var(--primary-button-bg-color); }
         .btn-success { background-color: var(--success-button-bg-color); }
         .btn-danger { background-color: var(--danger-button-bg-color); }
+        .btn-info { background-color: var(--info-button-bg-color); }
         
         #add-contact-form {
-            display: grid;
-            grid-template-columns: 1fr 1fr auto;
+            display: flex;
+            flex-direction: column;
             gap: 10px;
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);
@@ -128,7 +138,7 @@
         .contact-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);
         }
@@ -137,18 +147,51 @@
         .contact-info p { margin: 0; }
         .contact-info .contact-name { font-weight: bold; font-size: 1.1rem; }
         .contact-info .contact-phone { font-family: var(--font-mono); color: #aaa; }
-        .contact-actions button {
-            padding: 5px 10px;
-            font-size: 0.8rem;
-            margin-left: 5px;
-            width: auto;
+        .contact-info .contact-comments { font-size: 0.9rem; color: #ccc; margin-top: 5px; white-space: pre-wrap; }
+        .contact-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex-shrink: 0;
+            margin-left: 1rem;
         }
         
         .contact-item.editing .contact-info {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 8px;
         }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--panel-bg-color);
+            margin: auto;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .modal-header h2 { margin: 0; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover, .close-btn:focus { color: var(--text-color); text-decoration: none; }
 
         ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: var(--scrollbar-bg-color); }
@@ -182,15 +225,31 @@
 
         <!-- PAINEL DE CONTATOS (DIREITA) -->
         <div class="pane contacts-pane">
-            <div class="pane-header">Lista de Contatos</div>
+            <div class="pane-header">
+                <span>Lista de Contatos</span>
+                <button id="openImportModalBtn" class="btn btn-info btn-sm">Importar em Lote</button>
+            </div>
             <form id="add-contact-form">
                 <input type="text" id="newContactName" class="form-control" placeholder="Nome do Contato" required>
                 <input type="tel" id="newContactPhone" class="form-control" placeholder="Número (ex: 199...)" required>
-                <button type="submit" class="btn btn-primary" style="width: auto;">Adicionar</button>
+                <textarea id="newContactComments" class="form-control" placeholder="Comentários (opcional)"></textarea>
+                <button type="submit" class="btn btn-primary">Adicionar Contato</button>
             </form>
-            <ul id="contacts-list">
-                <!-- Contatos serão inseridos aqui pelo JavaScript -->
-            </ul>
+            <ul id="contacts-list"></ul>
+        </div>
+    </div>
+
+    <!-- MODAL DE IMPORTAÇÃO -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Importar Contatos em Lote</h2>
+                <span id="closeImportModalBtn" class="close-btn">&times;</span>
+            </div>
+            <p>Cole uma lista de números abaixo. A ferramenta irá extrair e adicionar apenas os números válidos e que ainda não existem na sua lista.</p>
+            <textarea id="batch-import-text" class="form-control" rows="10" placeholder="19999552244&#10;(19) 98868-4858&#10;..."></textarea>
+            <br>
+            <button id="importContactsBtn" class="btn btn-success">Importar</button>
         </div>
     </div>
 
@@ -205,18 +264,25 @@
         const addContactForm = document.getElementById('add-contact-form');
         const newContactNameInput = document.getElementById('newContactName');
         const newContactPhoneInput = document.getElementById('newContactPhone');
+        const newContactCommentsInput = document.getElementById('newContactComments');
         const contactsListContainer = document.getElementById('contacts-list');
+        
+        const importModal = document.getElementById('importModal');
+        const openImportModalBtn = document.getElementById('openImportModalBtn');
+        const closeImportModalBtn = document.getElementById('closeImportModalBtn');
+        const importContactsBtn = document.getElementById('importContactsBtn');
+        const batchImportText = document.getElementById('batch-import-text');
 
         let contacts = [];
 
         // --- FUNÇÕES DE GERENCIAMENTO DE DADOS (localStorage) ---
         const loadContacts = () => {
-            const storedContacts = localStorage.getItem('whatsappContactsList');
+            const storedContacts = localStorage.getItem('whatsappContactsList_v2');
             contacts = storedContacts ? JSON.parse(storedContacts) : [];
         };
 
         const saveContacts = () => {
-            localStorage.setItem('whatsappContactsList', JSON.stringify(contacts));
+            localStorage.setItem('whatsappContactsList_v2', JSON.stringify(contacts));
         };
         
         // --- FUNÇÕES DE RENDERIZAÇÃO ---
@@ -230,14 +296,16 @@
                 const listItem = document.createElement('li');
                 listItem.className = 'contact-item';
                 listItem.dataset.index = index;
+                const commentsHTML = contact.comments ? `<p class="contact-comments">${contact.comments}</p>` : '';
                 listItem.innerHTML = `
                     <div class="contact-info">
                         <p class="contact-name">${contact.name}</p>
                         <p class="contact-phone">${contact.phone}</p>
+                        ${commentsHTML}
                     </div>
                     <div class="contact-actions">
-                        <button class="btn-edit btn btn-primary">Editar</button>
-                        <button class="btn-delete btn btn-danger">Excluir</button>
+                        <button class="btn-edit btn btn-primary btn-sm">Editar</button>
+                        <button class="btn-delete btn btn-danger btn-sm">Excluir</button>
                     </div>
                 `;
                 contactsListContainer.appendChild(listItem);
@@ -246,7 +314,7 @@
 
         const renderContactsSelect = () => {
             contactSelect.innerHTML = '<option value="">Selecione um contato...</option>';
-            contacts.forEach(contact => {
+            contacts.sort((a, b) => a.name.localeCompare(b.name)).forEach(contact => {
                 const option = document.createElement('option');
                 option.value = contact.phone;
                 option.textContent = contact.name;
@@ -264,31 +332,66 @@
             event.preventDefault();
             const name = newContactNameInput.value.trim();
             const phone = newContactPhoneInput.value.trim();
+            const comments = newContactCommentsInput.value.trim();
             if (name && phone) {
-                contacts.push({ name, phone });
+                contacts.push({ name, phone, comments });
                 saveContacts();
                 updateAll();
                 addContactForm.reset();
             }
         };
+        
+        const handleBatchImport = () => {
+            const text = batchImportText.value;
+            const lines = text.split(/\r?\n/).filter(line => line.trim() !== ''); // Divide por linhas e remove vazias
+            
+            let addedCount = 0;
+            const existingPhones = new Set(contacts.map(c => c.phone.replace(/\D/g, '')));
+
+            lines.forEach(line => {
+                const originalLine = line.trim();
+                const cleanedPhone = originalLine.replace(/\D/g, '');
+                
+                // Adiciona apenas se for um número válido (10 ou 11 dígitos para Brasil) e não existente
+                if ((cleanedPhone.length >= 10 && cleanedPhone.length <= 11) && !existingPhones.has(cleanedPhone)) {
+                    contacts.push({
+                        name: `Contato ${cleanedPhone}`,
+                        phone: originalLine, // Salva a linha original formatada
+                        comments: 'Importado em lote'
+                    });
+                    existingPhones.add(cleanedPhone); // Adiciona o número limpo ao set para checagem de duplicatas
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                saveContacts();
+                updateAll();
+            }
+            alert(`${addedCount} novo(s) contato(s) adicionado(s).`);
+            importModal.style.display = "none";
+            batchImportText.value = '';
+        };
 
         const handleListClick = (event) => {
             const target = event.target;
             const listItem = target.closest('.contact-item');
-            if (!listItem) return;
+            if (!listItem || listItem.classList.contains('editing')) return;
             
             const index = parseInt(listItem.dataset.index);
 
             if (target.classList.contains('btn-delete')) {
-                contacts.splice(index, 1);
-                saveContacts();
-                updateAll();
+                if (confirm(`Tem certeza que deseja excluir o contato "${contacts[index].name}"?`)) {
+                    contacts.splice(index, 1);
+                    saveContacts();
+                    updateAll();
+                }
             } else if (target.classList.contains('btn-edit')) {
                 enterEditMode(listItem, index);
             } else if (target.classList.contains('btn-save-edit')) {
                 saveEdit(listItem, index);
             } else if (target.classList.contains('btn-cancel-edit')) {
-                updateAll(); // Simplesmente re-renderiza a lista para cancelar
+                updateAll();
             }
         };
 
@@ -299,10 +402,11 @@
                 <div class="contact-info">
                     <input type="text" class="form-control edit-name" value="${contact.name}">
                     <input type="tel" class="form-control edit-phone" value="${contact.phone}">
+                    <textarea class="form-control edit-comments" placeholder="Comentários...">${contact.comments || ''}</textarea>
                 </div>
                 <div class="contact-actions">
-                    <button class="btn-save-edit btn btn-success">Salvar</button>
-                    <button class="btn-cancel-edit btn btn-danger">Cancelar</button>
+                    <button class="btn-save-edit btn btn-success btn-sm">Salvar</button>
+                    <button class="btn-cancel-edit btn btn-danger btn-sm">Cancelar</button>
                 </div>
             `;
         };
@@ -310,8 +414,9 @@
         const saveEdit = (listItem, index) => {
             const newName = listItem.querySelector('.edit-name').value.trim();
             const newPhone = listItem.querySelector('.edit-phone').value.trim();
+            const newComments = listItem.querySelector('.edit-comments').value.trim();
             if (newName && newPhone) {
-                contacts[index] = { name: newName, phone: newPhone };
+                contacts[index] = { name: newName, phone: newPhone, comments: newComments };
                 saveContacts();
                 updateAll();
             }
@@ -321,6 +426,10 @@
         const redirectToWhatsApp = (event) => {
             event.preventDefault();
             const phone = phoneInput.value;
+            if (!phone) {
+                alert("Por favor, selecione ou digite um número de telefone.");
+                return;
+            }
             const message = messageInput.value;
 
             let cleanedPhone = phone.replace(/\D/g, '');
@@ -350,6 +459,16 @@
         contactSelect.addEventListener('change', (e) => {
             phoneInput.value = e.target.value;
         });
+        
+        // Modal listeners
+        openImportModalBtn.onclick = () => { importModal.style.display = "flex"; }
+        closeImportModalBtn.onclick = () => { importModal.style.display = "none"; }
+        importContactsBtn.onclick = handleBatchImport;
+        window.onclick = (event) => {
+            if (event.target == importModal) {
+                importModal.style.display = "none";
+            }
+        }
 
         // --- INICIALIZAÇÃO ---
         const init = () => {
