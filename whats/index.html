@@ -3,107 +3,362 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Link para WhatsApp</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Gerenciador de Contatos WhatsApp</title>
     <style>
-        /* Estilo customizado para usar a fonte Inter */
-        body {
-            font-family: 'Inter', sans-serif;
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --panel-bg-color: #2c2c2c;
+            --border-color: #444;
+            --primary-button-bg-color: #007bff;
+            --success-button-bg-color: #28a745;
+            --danger-button-bg-color: #dc3545;
+            --button-text-color: #ffffff;
+            --input-bg-color: #3a3a3a;
+            --scrollbar-color: #555;
+            --scrollbar-bg-color: #2c2c2c;
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --font-mono: 'Courier New', Courier, monospace;
         }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            display: flex;
+            flex-grow: 1;
+            gap: 1rem;
+            height: calc(100vh - 4rem); /* Ajustado para não ter toolbar */
+        }
+
+        .pane {
+            background-color: var(--panel-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .actions-pane { flex: 2; }
+        .contacts-pane { flex: 3; }
+
+        .pane-header {
+            padding: 0.75rem 1rem;
+            background-color: #333;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .pane-content {
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .contacts-pane .pane-content {
+            padding: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--input-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-color);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        
+        textarea.form-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .btn {
+            padding: 12px 18px;
+            border: none;
+            border-radius: 5px;
+            color: var(--button-text-color);
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+            width: 100%;
+            font-size: 1rem;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background-color: var(--primary-button-bg-color); }
+        .btn-success { background-color: var(--success-button-bg-color); }
+        .btn-danger { background-color: var(--danger-button-bg-color); }
+        
+        #add-contact-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        #contacts-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .contact-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .contact-item:last-child { border-bottom: none; }
+        .contact-info { flex-grow: 1; }
+        .contact-info p { margin: 0; }
+        .contact-info .contact-name { font-weight: bold; font-size: 1.1rem; }
+        .contact-info .contact-phone { font-family: var(--font-mono); color: #aaa; }
+        .contact-actions button {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            margin-left: 5px;
+            width: auto;
+        }
+        
+        .contact-item.editing .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-color); border-radius: 5px; }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-500">
+<body>
 
-    <div class="w-full max-w-md mx-auto p-6 md:p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl">
-        <div class="text-center mb-8">
-            <!-- Ícone do WhatsApp -->
-            <svg class="mx-auto h-12 w-12 text-green-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.894 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.886-.001 2.269.655 4.357 1.846 6.067l-1.225 4.429 4.575-1.195z" />
-            </svg>
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-white mt-4">Iniciar Conversa no WhatsApp</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-2">Digite o número e uma mensagem opcional para abrir a conversa.</p>
+    <div class="container">
+        <!-- PAINEL DE AÇÕES (ESQUERDA) -->
+        <div class="pane actions-pane">
+            <div class="pane-header">Ações</div>
+            <div class="pane-content">
+                <form id="whatsappForm">
+                    <div class="form-group">
+                        <label for="contactSelect">Contatos Salvos</label>
+                        <select id="contactSelect" class="form-control"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Número de Telefone</label>
+                        <input type="tel" id="phone" class="form-control" placeholder="Selecione ou digite um número" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Mensagem Padrão (Opcional)</label>
+                        <textarea id="message" class="form-control" placeholder="Sua mensagem aqui..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Abrir no WhatsApp</button>
+                </form>
+            </div>
         </div>
 
-        <!-- Formulário -->
-        <form id="whatsappForm" class="space-y-6">
-            <div>
-                <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Número de Telefone</label>
-                <input type="tel" id="phone" name="phone" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" placeholder="(19) 98765-4321" required>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Formatos aceitos: +55199..., 55199..., (19)9..., etc.</p>
-            </div>
-
-            <div>
-                <label for="message" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mensagem Padrão (Opcional)</label>
-                <textarea id="message" name="message" rows="4" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" placeholder="Olá! Gostaria de mais informações..."></textarea>
-            </div>
-
-            <div>
-                <button type="submit" class="w-full flex justify-center items-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800 transition-transform transform hover:scale-105">
-                    <span>Abrir no WhatsApp</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-        </form>
+        <!-- PAINEL DE CONTATOS (DIREITA) -->
+        <div class="pane contacts-pane">
+            <div class="pane-header">Lista de Contatos</div>
+            <form id="add-contact-form">
+                <input type="text" id="newContactName" class="form-control" placeholder="Nome do Contato" required>
+                <input type="tel" id="newContactPhone" class="form-control" placeholder="Número (ex: 199...)" required>
+                <button type="submit" class="btn btn-primary" style="width: auto;">Adicionar</button>
+            </form>
+            <ul id="contacts-list">
+                <!-- Contatos serão inseridos aqui pelo JavaScript -->
+            </ul>
+        </div>
     </div>
 
     <script>
-        // Seleciona o formulário
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- SELETORES DE ELEMENTOS ---
         const whatsappForm = document.getElementById('whatsappForm');
+        const phoneInput = document.getElementById('phone');
+        const messageInput = document.getElementById('message');
+        const contactSelect = document.getElementById('contactSelect');
+        
+        const addContactForm = document.getElementById('add-contact-form');
+        const newContactNameInput = document.getElementById('newContactName');
+        const newContactPhoneInput = document.getElementById('newContactPhone');
+        const contactsListContainer = document.getElementById('contacts-list');
 
-        // Adiciona um ouvinte de evento para o envio do formulário
-        whatsappForm.addEventListener('submit', function(event) {
-            // Previne o comportamento padrão de envio do formulário
+        let contacts = [];
+
+        // --- FUNÇÕES DE GERENCIAMENTO DE DADOS (localStorage) ---
+        const loadContacts = () => {
+            const storedContacts = localStorage.getItem('whatsappContactsList');
+            contacts = storedContacts ? JSON.parse(storedContacts) : [];
+        };
+
+        const saveContacts = () => {
+            localStorage.setItem('whatsappContactsList', JSON.stringify(contacts));
+        };
+        
+        // --- FUNÇÕES DE RENDERIZAÇÃO ---
+        const renderContactsList = () => {
+            contactsListContainer.innerHTML = '';
+            if (contacts.length === 0) {
+                contactsListContainer.innerHTML = `<li class="contact-item"><p>Nenhum contato salvo.</p></li>`;
+                return;
+            }
+            contacts.forEach((contact, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'contact-item';
+                listItem.dataset.index = index;
+                listItem.innerHTML = `
+                    <div class="contact-info">
+                        <p class="contact-name">${contact.name}</p>
+                        <p class="contact-phone">${contact.phone}</p>
+                    </div>
+                    <div class="contact-actions">
+                        <button class="btn-edit btn btn-primary">Editar</button>
+                        <button class="btn-delete btn btn-danger">Excluir</button>
+                    </div>
+                `;
+                contactsListContainer.appendChild(listItem);
+            });
+        };
+
+        const renderContactsSelect = () => {
+            contactSelect.innerHTML = '<option value="">Selecione um contato...</option>';
+            contacts.forEach(contact => {
+                const option = document.createElement('option');
+                option.value = contact.phone;
+                option.textContent = contact.name;
+                contactSelect.appendChild(option);
+            });
+        };
+
+        const updateAll = () => {
+            renderContactsList();
+            renderContactsSelect();
+        };
+
+        // --- LÓGICA DE CRUD (Create, Read, Update, Delete) ---
+        const handleAddContact = (event) => {
             event.preventDefault();
-            redirectToWhatsApp();
-        });
+            const name = newContactNameInput.value.trim();
+            const phone = newContactPhoneInput.value.trim();
+            if (name && phone) {
+                contacts.push({ name, phone });
+                saveContacts();
+                updateAll();
+                addContactForm.reset();
+            }
+        };
 
-        function redirectToWhatsApp() {
-            // Pega os valores dos campos de telefone e mensagem
-            const phoneInput = document.getElementById('phone').value;
-            const messageInput = document.getElementById('message').value;
+        const handleListClick = (event) => {
+            const target = event.target;
+            const listItem = target.closest('.contact-item');
+            if (!listItem) return;
+            
+            const index = parseInt(listItem.dataset.index);
 
-            // 1. Limpa o número de telefone
-            let cleanedPhone = phoneInput.replace(/\D/g, '');
+            if (target.classList.contains('btn-delete')) {
+                contacts.splice(index, 1);
+                saveContacts();
+                updateAll();
+            } else if (target.classList.contains('btn-edit')) {
+                enterEditMode(listItem, index);
+            } else if (target.classList.contains('btn-save-edit')) {
+                saveEdit(listItem, index);
+            } else if (target.classList.contains('btn-cancel-edit')) {
+                updateAll(); // Simplesmente re-renderiza a lista para cancelar
+            }
+        };
 
-            // 2. Adiciona o DDI do Brasil (55) se necessário
-            if (cleanedPhone.length <= 11) {
+        const enterEditMode = (listItem, index) => {
+            const contact = contacts[index];
+            listItem.classList.add('editing');
+            listItem.innerHTML = `
+                <div class="contact-info">
+                    <input type="text" class="form-control edit-name" value="${contact.name}">
+                    <input type="tel" class="form-control edit-phone" value="${contact.phone}">
+                </div>
+                <div class="contact-actions">
+                    <button class="btn-save-edit btn btn-success">Salvar</button>
+                    <button class="btn-cancel-edit btn btn-danger">Cancelar</button>
+                </div>
+            `;
+        };
+        
+        const saveEdit = (listItem, index) => {
+            const newName = listItem.querySelector('.edit-name').value.trim();
+            const newPhone = listItem.querySelector('.edit-phone').value.trim();
+            if (newName && newPhone) {
+                contacts[index] = { name: newName, phone: newPhone };
+                saveContacts();
+                updateAll();
+            }
+        };
+        
+        // --- FUNÇÃO PRINCIPAL DE REDIRECIONAMENTO ---
+        const redirectToWhatsApp = (event) => {
+            event.preventDefault();
+            const phone = phoneInput.value;
+            const message = messageInput.value;
+
+            let cleanedPhone = phone.replace(/\D/g, '');
+            if (cleanedPhone.length <= 11 && !cleanedPhone.startsWith('55')) {
                 cleanedPhone = '55' + cleanedPhone;
             }
 
-            // 3. Codifica a mensagem para a URL
-            const encodedMessage = encodeURIComponent(messageInput);
-
-            // 4. Detecta se o dispositivo é móvel
+            const encodedMessage = encodeURIComponent(message);
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
+            
             let whatsappUrl = '';
-
-            // 5. Monta a URL correta com base no dispositivo
             if (isMobile) {
-                // URL para dispositivos móveis (tenta abrir o app)
                 whatsappUrl = `https://wa.me/${cleanedPhone}`;
-                if (encodedMessage) {
-                    whatsappUrl += `?text=${encodedMessage}`;
-                }
+                if (encodedMessage) whatsappUrl += `?text=${encodedMessage}`;
             } else {
-                // URL para web/desktop (abre o WhatsApp Web)
                 whatsappUrl = `https://web.whatsapp.com/send/?phone=${cleanedPhone}`;
-                if (encodedMessage) {
-                    whatsappUrl += `&text=${encodedMessage}`;
-                }
+                if (encodedMessage) whatsappUrl += `&text=${encodedMessage}`;
             }
 
-            // 6. Abre a URL do WhatsApp em uma nova aba/página
             window.open(whatsappUrl, '_blank');
-        }
-    </script>
+        };
 
+        // --- EVENT LISTENERS ---
+        whatsappForm.addEventListener('submit', redirectToWhatsApp);
+        addContactForm.addEventListener('submit', handleAddContact);
+        contactsListContainer.addEventListener('click', handleListClick);
+        contactSelect.addEventListener('change', (e) => {
+            phoneInput.value = e.target.value;
+        });
+
+        // --- INICIALIZAÇÃO ---
+        const init = () => {
+            loadContacts();
+            updateAll();
+        };
+
+        init();
+    });
+    </script>
 </body>
 </html>
