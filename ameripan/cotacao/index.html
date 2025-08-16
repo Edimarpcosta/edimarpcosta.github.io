@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ameripan | Cotação Expressa v5 (Ordem Ajustada)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+  <style>
+    :root{--brand:#0b66c3;--bg:#f6f7fb;--ink:#1f2937;--muted:#6b7280;--ok:#15803d;--danger:#b91c1c}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:var(--bg);color:var(--ink)}
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:.8rem 1rem;z-index:10}
+    header .row{display:flex;gap:.75rem;align-items:center;justify-content:space-between;max-width:1000px;margin:0 auto}
+    header h1{font-size:1.1rem;margin:0;color:var(--brand);display:flex;align-items:center;gap:.5rem}
+    .container{max-width:1000px;margin:1rem auto;padding:1rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:1rem}
+    .grid{display:grid;gap:.75rem}
+    @media(min-width:640px){.grid.cols-2{grid-template-columns:repeat(2,1fr)}}
+    label{display:block;font-size:.8rem;color:var(--muted);margin:0 0 .25rem}
+    input,textarea{width:100%;padding:.65rem .7rem;border:1px solid #d1d5db;border-radius:10px;font-size:.95rem}
+    input:focus,textarea:focus{outline:2px solid #cfe6ff;border-color:#93c5fd}
+    .actions{display:flex;flex-wrap:wrap;gap:.5rem; margin-top: .75rem;}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem .9rem;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer; font-weight: 500;}
+    .btn.btn-sm{padding: 0.35rem 0.6rem; font-size: 0.8rem;}
+    .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .btn.success{background:var(--ok);color:#fff;border-color:var(--ok)}
+    .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+    .btn i{font-size:.95rem}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #e5e7eb;padding:.45rem .6rem;text-align:left;font-size: .9rem;vertical-align: middle;}
+    td input{padding: .35rem; border-radius: 6px;}
+    th{background:#f3f4f6;font-weight:600;white-space:nowrap}
+    .tfoot{display:flex;justify-content:flex-end;padding:.75rem 0;color:var(--brand);font-weight:700; font-size: 1.1rem;}
+    .pill{font-size:.75rem;background:#eef6ff;color:#0b4ea2;border:1px solid #cfe2ff;padding:.15rem .5rem;border-radius:999px}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111827;color:#fff;padding:.6rem .8rem;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .3s}
+    .toast.show{opacity:1}
+    #entry-form { border: 1px solid #e5e7eb; padding: .75rem; border-radius: 10px; margin-bottom: 1rem; }
+    #entry-grid {
+      display: grid;
+      gap: .75rem;
+      /* CSS ALTERADO: Ordem das colunas ajustada para Preço (16ch) vir antes de Descrição (1fr) */
+      grid-template-columns: 14ch 10ch 16ch 1fr auto;
+      align-items: flex-end;
+    }
+    @media(max-width: 768px) {
+      #entry-grid { grid-template-columns: 1fr 1fr; }
+      /* CSS ALTERADO: Lógica mobile simplificada para empilhar os campos de forma lógica */
+      #entry_price { grid-column: span 2; }
+      #entry_desc { grid-column: span 2; }
+      #commitRowBtn { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <h1><img src="https://edimarpcosta.github.io/ameripan/assets/logo-ameripan.png" alt="Ameripan" style="height:36px"> Cotação Expressa</h1>
+      <span class="pill">Google Sheets • Mobile‑first</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <section class="card grid cols-2">
+      <div>
+        <label for="seller">Vendedor</label>
+        <input id="seller" placeholder="Seu nome"/>
+      </div>
+      <div>
+        <label for="buyer">Cliente</label>
+        <input id="buyer" placeholder="Nome do cliente"/>
+      </div>
+    </section>
+
+    <section class="card">
+      <div id="entry-form">
+        <label>Adicionar Item</label>
+        <div id="entry-grid">
+          <input id="entry_code" inputmode="latin" placeholder="Código"/>
+          <input id="entry_qty" inputmode="numeric" value="1"/>
+          <input id="entry_price" inputmode="decimal" placeholder="Preço (un)"/>
+          <input id="entry_desc" placeholder="Descrição do produto"/>
+          <button class="btn primary" id="commitRowBtn" title="Adicionar item à cotação"><i class="fa fa-plus"></i>Adicionar</button>
+        </div>
+      </div>
+
+      <div style="overflow:auto">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th style="width:14ch">Cód</th>
+              <th style="width:10ch">Qtde</th>
+              <th>Descrição</th>
+              <th style="width:16ch; text-align:right;">Preço (un)</th>
+              <th style="width:12ch;text-align:center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="tfoot">
+        <span id="grandTotal">Total: R$ 0,00</span>
+      </div>
+
+      <div class="actions" style="justify-content:space-between;gap:.75rem; border-top: 1px solid #e5e7eb; padding-top: .75rem;">
+        <div class="actions">
+          <button class="btn danger" id="clearAll"><i class="fa fa-trash"></i>Limpar tudo</button>
+          <span id="catStatus" class="status"></span>
+        </div>
+        <div class="actions">
+          <button class="btn" id="copyText"><i class="fa fa-copy"></i>Copiar</button>
+          <button class="btn" id="shareWa"><i class="fa-brands fa-whatsapp"></i>WhatsApp</button>
+          <button class="btn" id="dlXlsx"><i class="fa fa-file-excel"></i>Excel</button>
+          <button class="btn primary" id="dlPdf"><i class="fa fa-file-pdf"></i>PDF</button>
+        </div>
+      </div>
+      
+      <div class="grid" style="margin-top:.75rem">
+        <div>
+          <label for="notes">Observações (aparece no PDF e no WhatsApp)</label>
+          <textarea id="notes" rows="3" placeholder="Ex.: Valores válidos por 3 dias."></textarea>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // ==================== Estado, Configs, DOM ====================
+    const state = { map: new Map(), loaded: false };
+    const SPREADSHEET_ID = '1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q';
+    const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
+    const PRODUCTS_SHEET_NAME = 'produtos';
+    const PRODUCTS_RANGE = 'A2:B';
+
+    const tbody = document.querySelector('#tbl tbody');
+    const entryCode = document.getElementById('entry_code');
+    const entryQty = document.getElementById('entry_qty');
+    const entryDesc = document.getElementById('entry_desc');
+    const entryPrice = document.getElementById('entry_price');
+    
+    // ==================== Utilidades ====================
+    const fmtBRL = (n)=> (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    const parseBR = (s)=>{ if(!s) return 0; let v=(s+'').replace(/[^0-9,.-]/g,'').replace(/\./g, '').replace(',', '.'); const x=parseFloat(v); return isNaN(x)?0:x; };
+    const moneyMask = (el)=>{ let v=el.value.replace(/[^0-9]/g,''); if(!v) {el.value=''; return;} v=(parseInt(v,10)/100).toFixed(2).replace('.',','); let masked = v.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.'); el.value=masked; };
+    const toast=(msg)=>{const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1200)}
+
+    // ==================== Persistência ====================
+    function saveState() {
+      const stateToSave = {
+        seller: document.getElementById('seller').value.trim(),
+        buyer: document.getElementById('buyer').value.trim(),
+        notes: document.getElementById('notes').value.trim(),
+        items: getRows()
+      };
+      localStorage.setItem('cot_state_v5', JSON.stringify(stateToSave));
+    }
+
+    function loadState() {
+      const savedState = JSON.parse(localStorage.getItem('cot_state_v5') || '{}');
+      document.getElementById('seller').value = savedState.seller || '';
+      document.getElementById('buyer').value = savedState.buyer || '';
+      document.getElementById('notes').value = savedState.notes || '';
+      
+      if (savedState.items && savedState.items.length > 0) {
+        tbody.innerHTML = '';
+        savedState.items.forEach(renderRow);
+      }
+      updateTotal();
+    }
+    ['seller', 'buyer', 'notes'].forEach(id => document.getElementById(id).addEventListener('blur', saveState));
+
+    // ==================== Catálogo de Produtos ====================
+    function saveCache(){ try{ localStorage.setItem('cot_cache', JSON.stringify({ts:Date.now(), entries:[...state.map]})); }catch{} }
+    function tryLoadCache(){ try{ const c=JSON.parse(localStorage.getItem('cot_cache')||'{}'); if(c && c.entries){ state.map=new Map(c.entries); state.loaded=true; return true; } }catch{} return false; }
+
+    async function loadProducts(){
+      document.getElementById('catStatus').textContent='Carregando catálogo...';
+      state.map.clear();
+      try{
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(PRODUCTS_SHEET_NAME+'!'+PRODUCTS_RANGE)}?key=${API_KEY}`;
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('Falha ao acessar Google Sheets');
+        const data = await res.json();
+        const values = (data.values||[]);
+        values.forEach(row=>{
+          const code=(row[0]||'').trim();
+          const desc=(row[1]||'').trim();
+          if(code) state.map.set(code, desc);
+        });
+        state.loaded = true;
+        saveCache();
+        document.getElementById('catStatus').textContent = `${state.map.size} itens carregados`;
+      }catch(e){
+        if(tryLoadCache()){ document.getElementById('catStatus').textContent = `Catálogo offline (${state.map.size} itens)`; }
+        else{ document.getElementById('catStatus').textContent='Erro ao carregar'; toast('Erro: '+e.message); }
+      }
+    }
+
+    // ==================== Lógica da Tabela (CRIAR, EDITAR, SALVAR) ====================
+    function renderRow(item) {
+        const tr = document.createElement('tr');
+        tr.dataset.code = item.code || '';
+        tr.dataset.qty = item.qty || 1;
+        tr.dataset.desc = item.desc || '';
+        tr.dataset.price = item.price || 0;
+        switchToViewMode(tr);
+        tbody.appendChild(tr);
+    }
+    
+    function switchToViewMode(tr) {
+        const item = tr.dataset;
+        tr.innerHTML = `
+            <td>${item.code}</td>
+            <td style="text-align:center">${item.qty}</td>
+            <td>${item.desc}</td>
+            <td style="text-align:right">${fmtBRL(item.price)}</td>
+            <td style="text-align:center; display:flex; gap: 0.25rem; justify-content:center;">
+                <button class="btn btn-sm" data-action="edit" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                <button class="btn danger btn-sm" data-action="remove" title="Remover"><i class="fa-solid fa-times"></i></button>
+            </td>
+        `;
+    }
+
+    function switchToEditMode(tr) {
+        const item = tr.dataset;
+        tr.innerHTML = `
+            <td><input class="edit-code" value="${item.code}"></td>
+            <td><input class="edit-qty" type="number" value="${item.qty}" style="width:100%; text-align:center;"></td>
+            <td><input class="edit-desc" value="${item.desc}"></td>
+            <td><input class="edit-price" value="${(Number(item.price)||0).toFixed(2).replace('.',',')}" style="width:100%; text-align:right;"></td>
+            <td style="text-align:center; display:flex; gap: 0.25rem; justify-content:center;">
+                <button class="btn success btn-sm" data-action="save" title="Salvar"><i class="fa-solid fa-check"></i></button>
+                <button class="btn btn-sm" data-action="cancel" title="Cancelar"><i class="fa-solid fa-times"></i></button>
+            </td>
+        `;
+        const priceInput = tr.querySelector('.edit-price');
+        moneyMask(priceInput); // aplica a máscara inicial
+        priceInput.addEventListener('input', () => moneyMask(priceInput));
+    }
+
+    tbody.addEventListener('click', e => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+        
+        const tr = button.closest('tr');
+        const action = button.dataset.action;
+
+        if (action === 'remove') {
+            tr.remove();
+            updateTotal();
+            saveState();
+        } else if (action === 'edit') {
+            switchToEditMode(tr);
+        } else if (action === 'cancel') {
+            switchToViewMode(tr);
+        } else if (action === 'save') {
+            const code = tr.querySelector('.edit-code').value.trim();
+            const qty = parseInt(tr.querySelector('.edit-qty').value, 10) || 1;
+            const desc = tr.querySelector('.edit-desc').value.trim();
+            const price = parseBR(tr.querySelector('.edit-price').value);
+
+            tr.dataset.code = code;
+            tr.dataset.qty = qty;
+            tr.dataset.desc = desc;
+            tr.dataset.price = price;
+            
+            switchToViewMode(tr);
+            updateTotal();
+            saveState();
+        }
+    });
+
+    function commitAndAddRow() {
+      const item = {
+        code: entryCode.value.trim(),
+        qty: parseInt(entryQty.value, 10) || 1,
+        desc: entryDesc.value.trim(),
+        price: parseBR(entryPrice.value)
+      };
+      if (!item.desc && !item.code) {
+        toast('Informe o código ou a descrição do item.');
+        entryDesc.focus();
+        return;
+      }
+      renderRow(item);
+      entryCode.value = ''; entryQty.value = '1'; entryDesc.value = ''; entryPrice.value = '';
+      entryCode.focus();
+      updateTotal();
+      saveState();
+    }
+
+    function getRows(){
+      return [...tbody.querySelectorAll('tr')].map(tr => ({
+        code: tr.dataset.code,
+        qty: parseInt(tr.dataset.qty, 10) || 0,
+        desc: tr.dataset.desc,
+        price: parseFloat(tr.dataset.price) || 0,
+      }));
+    }
+
+    function updateTotal(){
+      const total = getRows().reduce((s, r) => s + (r.qty * r.price), 0);
+      document.getElementById('grandTotal').textContent = 'Total: ' + fmtBRL(total);
+    }
+    
+    // ==================== Event Listeners Gerais ====================
+    document.getElementById('commitRowBtn').addEventListener('click', commitAndAddRow);
+    document.getElementById('clearAll').addEventListener('click', () => {
+        if(confirm('Tem certeza que deseja limpar todos os itens da cotação?')){
+            tbody.innerHTML = '';
+            updateTotal();
+            saveState();
+            toast('Itens removidos');
+        }
+    });
+
+    entryCode.addEventListener('blur', async () => {
+      const code = entryCode.value.trim();
+      if (!state.loaded) { await loadProducts(); }
+      if (code && state.map.has(code) && !entryDesc.value.trim()) {
+        entryDesc.value = state.map.get(code);
+      }
+    });
+
+    entryPrice.addEventListener('input', () => moneyMask(entryPrice));
+    
+    // JAVASCRIPT ALTERADO: Ordem do array ajustada para a navegação com 'Enter'
+    const entryFields = [entryCode, entryQty, entryPrice, entryDesc];
+    entryFields.forEach((el, index) => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index === entryFields.length - 1) {
+                    commitAndAddRow();
+                } else {
+                    entryFields[index + 1].focus();
+                }
+            }
+        });
+    });
+
+    // ==================== Ações de Exportação e Compartilhamento ====================
+    function buildText(){
+      const rows=getRows();
+      const seller=document.getElementById('seller').value.trim();
+      const buyer=document.getElementById('buyer').value.trim();
+      const notes=document.getElementById('notes').value.trim();
+      const total=rows.reduce((s,r)=>s+r.qty*r.price,0);
+      let msg = `*COTAÇÃO AMERIPAN*%0A`;
+      if(buyer) msg+=`Cliente: ${encodeURIComponent(buyer)}%0A`;
+      if(seller) msg+=`Vendedor: ${encodeURIComponent(seller)}%0A`;
+      msg+=`%0A*Itens:*%0A`;
+      rows.forEach((r,i)=>{
+        const descText = r.code ? `${r.code} - ${r.desc}` : r.desc;
+        const priceText = r.price ? ` - ${fmtBRL(r.price)} (un)` : '';
+        const totalItemText = r.price ? ` = ${fmtBRL(r.qty * r.price)}` : '';
+        msg+=`*${r.qty}x* ${encodeURIComponent(descText)}${encodeURIComponent(priceText)}${encodeURIComponent(totalItemText)}%0A`;
+      })
+      msg+=`%0A*Total:* ${encodeURIComponent(fmtBRL(total))}%0A`;
+      if(notes) msg+=`%0A_${encodeURIComponent(notes)}_`;
+      return {raw: decodeURIComponent(msg.replace(/%0A/g,'\n')), wa: `https://wa.me/?text=${msg}`};
+    }
+
+    document.getElementById('copyText').addEventListener('click',()=>{
+      const {raw}=buildText();
+      if(getRows().length === 0) { toast('Adicione itens primeiro'); return; }
+      navigator.clipboard.writeText(raw).then(()=>toast('Texto copiado'))
+    });
+
+    document.getElementById('shareWa').addEventListener('click',()=>{
+      if(getRows().length === 0) { toast('Adicione itens primeiro'); return; }
+      const {wa}=buildText();
+      window.open(wa,'_blank');
+    });
+
+    document.getElementById('dlXlsx').addEventListener('click',()=>{
+      const rows=getRows();
+      if(rows.length===0){toast('Adicione itens primeiro');return}
+      const data=[['Código','Qtde','Descrição','Preço (un)','Total Item']];
+      rows.forEach(r=>data.push([r.code,r.qty,r.desc, (r.price||0), r.qty*(r.price||0)]));
+      const ws=XLSX.utils.aoa_to_sheet(data);
+      ws['!cols']=[{wch:12},{wch:6},{wch:50},{wch:15},{wch:15}];
+      for (let i = 2; i <= data.length; i++) {
+        ws[`D${i}`].t = 'n'; ws[`D${i}`].z = 'R$ #,##0.00';
+        ws[`E${i}`].t = 'n'; ws[`E${i}`].z = 'R$ #,##0.00';
+      }
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,'Cotação');
+      XLSX.writeFile(wb, `cotacao_ameripan_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+
+    document.getElementById('dlPdf').addEventListener('click',()=>{
+      const rows=getRows();
+      if(rows.length===0){toast('Adicione itens primeiro');return}
+      const { jsPDF } = window.jspdf; const doc = new jsPDF('p','mm','a4');
+      const seller=document.getElementById('seller').value.trim();
+      const buyer=document.getElementById('buyer').value.trim();
+      const notes=document.getElementById('notes').value.trim();
+      const total=rows.reduce((s,r)=>s+r.qty*r.price,0);
+      let y=14; doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text('COTAÇÃO — AMERIPAN',105,y,{align:'center'}); y+=6;
+      doc.setFontSize(10); doc.setFont('helvetica','normal');
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`,14,y); if(seller) doc.text(`Vendedor: ${seller}`,105,y,{align:'center'}); if(buyer) doc.text(`Cliente: ${buyer}`,196,y,{align:'right'}); y+=8;
+      const head=[["CÓD","QTDE","DESCRIÇÃO","PREÇO (UN)","TOTAL ITEM"]];
+      const body=rows.map(r=>[r.code,String(r.qty),r.desc,fmtBRL(r.price),fmtBRL(r.qty*r.price)]);
+      doc.autoTable({
+        head, body, startY:y,
+        styles:{fontSize:9,cellPadding:1.8},
+        headStyles:{fillColor:[230,230,230],textColor:[0,0,0],fontStyle:'bold'},
+        columnStyles:{0:{cellWidth:20},1:{cellWidth:14,halign:'center'},2:{cellWidth:'auto'},3:{cellWidth:30,halign:'right'},4:{cellWidth:30,halign:'right'}},
+        margin:{left:14,right:14}
+      });
+      y=doc.lastAutoTable.finalY+8;
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('TOTAL: '+fmtBRL(total),196,y,{align:'right'}); y+=8;
+      if(notes){
+        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        doc.text('Observações:',14,y);
+        doc.setFont('helvetica','normal');
+        doc.text(notes,14,y+4,{maxWidth:182});
+      }
+      doc.save(`cotacao_ameripan_${new Date().toISOString().slice(0,10)}.pdf`);
+    });
+
+    // ==================== Inicialização ====================
+    loadState();
+    (async ()=>{ 
+      if(!tryLoadCache()){ await loadProducts(); } else { document.getElementById('catStatus').textContent = `${state.map.size} itens (cache)`; loadProducts(); }
+    })();
+    entryCode.focus();
+  </script>
+</body>
+</html>
