@@ -124,8 +124,8 @@
         .remove-item-btn { background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; cursor: pointer; }
 
         /* --- Recipes View --- */
-        .recipe-source-tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 1rem; }
-        .recipe-source-tabs button { flex: 1; padding: 0.75rem; border: none; background: transparent; font-size: 1rem; font-weight: 500; cursor: pointer; color: var(--light-text-color); border-bottom: 3px solid transparent; }
+        .recipe-source-tabs { display: flex; border-bottom: none; margin-bottom: 0; }
+        .recipe-source-tabs button { flex-grow: 0; padding: 0.75rem; border: none; background: transparent; font-size: 1rem; font-weight: 500; cursor: pointer; color: var(--light-text-color); border-bottom: 3px solid transparent; }
         .recipe-source-tabs button.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
         #recipe-list-container { display: grid; gap: 1rem; }
         .recipe-card { background: var(--card-bg); border-radius: var(--border-radius); padding: 1rem; box-shadow: var(--shadow); }
@@ -258,11 +258,16 @@
         <!-- View: Receitas Salvas -->
         <section id="view-recipes" class="view">
             <div class="search-box">
-                <div class="recipe-source-tabs">
-                    <button id="tab-local" class="active" data-source="local">Locais</button>
-                    <button id="tab-sheet" data-source="sheet">Planilha</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee;">
+                    <div class="recipe-source-tabs">
+                        <button id="tab-local" class="active" data-source="local">Locais</button>
+                        <button id="tab-sheet" data-source="sheet">Planilha</button>
+                    </div>
+                    <a id="edit-sheet-link" href="#" target="_blank" title="Editar planilha de receitas" style="display: none; color: var(--primary-color); padding: 0.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                    </a>
                 </div>
-                <div class="input-group">
+                <div class="input-group" style="margin-top: 1rem;">
                     <span class="input-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
                     <input type="text" id="recipe-search-input" class="search-input" placeholder="Buscar receita ou ingrediente...">
                 </div>
@@ -347,6 +352,7 @@
             const API_URL_PRODUCTS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/prod-img?key=${API_KEY}`;
             const API_URL_RECIPES = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/receitas!A2:R?key=${API_KEY}`;
             const LOGO_URL = 'https://edimarpcosta.github.io/ameripan/retirada/logo.webp';
+            const SHEET_EDIT_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`;
 
             // --- DOM Selectors ---
             const $ = (selector) => document.querySelector(selector);
@@ -465,6 +471,7 @@
                 renderSkeletons(12);
                 loadFromLocalStorage();
                 renderBuilder();
+                $('#edit-sheet-link').href = SHEET_EDIT_URL;
                 try {
                     await getBase64Image(LOGO_URL).then(data => state.logoBase64 = data);
                     await fetchProducts();
@@ -701,6 +708,7 @@
                 $$('.recipe-source-tabs button').forEach(t => t.classList.remove('active'));
                 e.target.classList.add('active');
                 state.activeRecipeSource = e.target.dataset.source;
+                $('#edit-sheet-link').style.display = state.activeRecipeSource === 'sheet' ? 'block' : 'none';
                 renderRecipeList();
             }));
             $('#recipe-search-input').addEventListener('input', renderRecipeList);
@@ -724,27 +732,24 @@
             });
             $('#consolidate-search').addEventListener('input', e => renderConsolidateList(e.target.value));
             
-            // Add event listener for the new copy button in modal
-            $('#consolidate-modal').addEventListener('click', e => {
-                if (e.target.id === 'consolidate-copy-btn') {
-                    const selected = getSelectedConsolidateRecipes();
-                    if (selected.length === 0) {
-                        showToast('Selecione ao menos uma receita.');
-                        return;
-                    }
-                    const fullText = selected.map(recipe => generateWhatsappText(recipe)).join('\n\n===================================\n\n');
-                    copyToClipboard(fullText);
-                    $('#consolidate-modal').classList.remove('show');
+            $('#consolidate-copy-btn').addEventListener('click', () => {
+                const selected = getSelectedConsolidateRecipes();
+                if (selected.length === 0) {
+                    showToast('Selecione ao menos uma receita.');
+                    return;
                 }
-                if (e.target.id === 'consolidate-pdf-btn') {
-                    const selected = getSelectedConsolidateRecipes();
-                    const title = $('#consolidate-title').value.trim() || 'Receitas Consolidadas';
-                    if(selected.length > 0) {
-                        generateAndSharePdf(selected, title);
-                        $('#consolidate-modal').classList.remove('show');
-                    } else {
-                        showToast('Selecione ao menos uma receita.');
-                    }
+                const fullText = selected.map(recipe => generateWhatsappText(recipe)).join('\n\n===================================\n\n');
+                copyToClipboard(fullText);
+                $('#consolidate-modal').classList.remove('show');
+            });
+            $('#consolidate-pdf-btn').addEventListener('click', () => {
+                const selected = getSelectedConsolidateRecipes();
+                const title = $('#consolidate-title').value.trim() || 'Receitas Consolidadas';
+                if(selected.length > 0) {
+                    generateAndSharePdf(selected, title);
+                    $('#consolidate-modal').classList.remove('show');
+                } else {
+                    showToast('Selecione ao menos uma receita.');
                 }
             });
 
