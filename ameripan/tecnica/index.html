@@ -239,6 +239,7 @@
             <div class="builder-card">
                 <h2 class="section-title">Montar Receita</h2>
                 <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <input type="text" id="client-name" class="text-input" placeholder="Nome do Cliente (opcional)">
                     <input type="text" id="recipe-name" class="text-input" placeholder="Nome da Receita">
                     <textarea id="recipe-notes" class="text-input" rows="3" placeholder="Observações (opcional)"></textarea>
                 </div>
@@ -319,7 +320,7 @@
                 <div class="input-group">
                    <input type="text" id="consolidate-search" class="search-input" placeholder="Buscar receita..." style="margin-bottom: 1rem;">
                 </div>
-                <input type="text" id="consolidate-title" class="text-input" placeholder="Título do Documento" style="margin-bottom: 1rem;">
+                <input type="text" id="consolidate-client-name" class="text-input" placeholder="Nome do Cliente (Opcional)" style="margin-bottom: 1rem;">
                 <ul id="consolidate-recipe-list"></ul>
             </div>
             <div class="action-buttons">
@@ -570,6 +571,7 @@
             function clearCurrentRecipe() {
                 if(confirm('Limpar a receita atual?')) {
                     state.currentRecipe = { name: '', items: [], notes: '' };
+                    $('#client-name').value = '';
                     renderBuilder();
                 }
             }
@@ -579,6 +581,7 @@
                 const recipe = list.find(r => r.id === id);
                 if(recipe) {
                     state.currentRecipe = JSON.parse(JSON.stringify(recipe));
+                    $('#client-name').value = ''; // Clear client name when loading
                     renderBuilder();
                     switchView('builder');
                     showToast(`Receita "${recipe.name}" carregada.`);
@@ -595,12 +598,11 @@
                 }
             }
             
-            function generateWhatsappText(recipe) {
+            function formatRecipeForText(recipe) {
                 const recipeName = recipe.name || "Nova Receita";
                 let text = `🍨 *${recipeName}*\n`;
                 text += recipe.items.length > 0 ? recipe.items.map(item => `${item.sku} - ${item.produto}`).join('\n-----------------------------------\n') : "Nenhum ingrediente adicionado.";
                 if (recipe.notes) text += `\n\n*Observações:*\n${recipe.notes}`;
-                text += '\n\nAmeripan - Ingredientes';
                 return text;
             }
 
@@ -608,7 +610,7 @@
                 navigator.clipboard.writeText(text).then(() => showToast('Copiado!'), () => showToast('Erro ao copiar.'));
             }
 
-            async function generateAndSharePdf(recipes, docTitle) {
+            async function generateAndSharePdf(recipes, docTitle, clientName) {
                 if (recipes.length === 0 || (recipes.length === 1 && recipes[0].items.length === 0)) {
                     showToast('Adicione ingredientes para gerar o PDF.');
                     return;
@@ -623,15 +625,31 @@
                 };
                 const addFooter = () => {
                     doc.setFontSize(9); doc.setTextColor(150);
-                    doc.text(`${state.techInfo.name} | ${state.techInfo.contact}`, 15, pageHeight - 10);
+                    const contactText = `${state.techInfo.name} | ${state.techInfo.contact}`;
+                    doc.text(contactText, 15, pageHeight - 10);
                     doc.text(`Página ${pageNumber}`, 195, pageHeight - 10, { align: 'right' });
+
+                    const phone = state.techInfo.contact.replace(/\D/g, '');
+                    if (phone) {
+                        const whatsappLink = `https://wa.me/55${phone}`;
+                        const textWidth = doc.getTextWidth(contactText);
+                        doc.link(15, pageHeight - 14, textWidth, 5, { url: whatsappLink });
+                    }
                 };
                 
                 addHeader(); addFooter();
                 let y = 40;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(51, 51, 51);
                 doc.text(docTitle, 105, y, { align: 'center' });
-                y += 20;
+                y += 10;
+                
+                if (clientName) {
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(12);
+                    doc.setTextColor(102, 102, 102);
+                    doc.text(`Preparado para: ${clientName}`, 105, y, { align: 'center' });
+                    y += 10;
+                }
 
                 for (const recipe of recipes) {
                     const neededHeight = 10 + (recipe.items.length * 7) + (recipe.notes ? 15 : 0);
@@ -656,8 +674,10 @@
                 }
                 
                 // --- Sharing Logic ---
+                let fileName = docTitle.replace(/ /g, '_').replace(/"/g, '');
+                
                 const pdfBlob = doc.output('blob');
-                const pdfFile = new File([pdfBlob], `${docTitle.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
+                const pdfFile = new File([pdfBlob], `${fileName}.pdf`, { type: 'application/pdf' });
                 
                 if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
                     try {
@@ -673,7 +693,7 @@
                         }
                     }
                 } else {
-                    doc.save(`${docTitle.replace(/ /g, '_')}.pdf`);
+                    doc.save(`${fileName}.pdf`);
                     showToast('PDF baixado. Compartilhamento não suportado.');
                 }
             }
@@ -694,12 +714,18 @@
             $('#save-recipe-btn').addEventListener('click', saveCurrentRecipe);
             $('#clear-recipe-btn').addEventListener('click', clearCurrentRecipe);
             $('#copy-current-recipe-btn').addEventListener('click', () => {
-                const text = generateWhatsappText(state.currentRecipe);
-                copyToClipboard(text);
+                const clientName = $('#client-name').value.trim();
+                let fullText = "Ameripan - Ingredientes\n";
+                if (clientName) fullText += `Cliente: ${clientName}\n`;
+                fullText += "---\n";
+                fullText += formatRecipeForText(state.currentRecipe);
+                copyToClipboard(fullText);
             });
             $('#export-current-pdf-btn').addEventListener('click', () => {
-                const recipeName = state.currentRecipe.name.trim() || 'Receita Atual';
-                generateAndSharePdf([state.currentRecipe], recipeName);
+                const recipeName = $('#recipe-name').value.trim() || 'Receita Atual';
+                const clientName = $('#client-name').value.trim();
+                let docTitle = clientName ? `Ingredientes - Receita "${clientName}"` : recipeName;
+                generateAndSharePdf([state.currentRecipe], docTitle, clientName);
             });
 
             $('#tech-name').addEventListener('input', saveTechInfo);
@@ -721,6 +747,7 @@
             
             // Consolidate Modal
             $('#open-consolidate-modal-btn').addEventListener('click', () => {
+                $('#consolidate-client-name').value = ''; // Clear fields on open
                 renderConsolidateList();
                 $('#consolidate-modal').classList.add('show');
             });
@@ -738,15 +765,21 @@
                     showToast('Selecione ao menos uma receita.');
                     return;
                 }
-                const fullText = selected.map(recipe => generateWhatsappText(recipe)).join('\n\n===================================\n\n');
+                const clientName = $('#consolidate-client-name').value.trim();
+                let fullText = "Ameripan - Ingredientes\n";
+                if (clientName) fullText += `Cliente: ${clientName}\n`;
+                fullText += "---\n";
+                fullText += selected.map(recipe => formatRecipeForText(recipe)).join('\n===================================\n');
                 copyToClipboard(fullText);
                 $('#consolidate-modal').classList.remove('show');
             });
             $('#consolidate-pdf-btn').addEventListener('click', () => {
                 const selected = getSelectedConsolidateRecipes();
-                const title = $('#consolidate-title').value.trim() || 'Receitas Consolidadas';
+                const clientName = $('#consolidate-client-name').value.trim();
+                let docTitle = clientName ? `Ingredientes - Receita "${clientName}"` : 'Receitas Consolidadas';
+                
                 if(selected.length > 0) {
-                    generateAndSharePdf(selected, title);
+                    generateAndSharePdf(selected, docTitle, clientName);
                     $('#consolidate-modal').classList.remove('show');
                 } else {
                     showToast('Selecione ao menos uma receita.');
