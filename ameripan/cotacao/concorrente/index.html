@@ -51,7 +51,7 @@
         }
         .form-grid-full { grid-column: 1 / -1; }
 
-        /* --- Estilos de Campos de Formulário --- */
+        /* --- MUDANÇA AQUI (1/4): Adicionado 'select' ao estilo --- */
         label {
             display: block;
             margin-bottom: 6px;
@@ -61,7 +61,8 @@
         input[type="text"],
         input[type="date"],
         input[type="number"],
-        input[type="tel"] {
+        input[type="tel"],
+        select { /* <-- Adicionado 'select' */
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #ddd;
@@ -72,7 +73,8 @@
         input[type="text"]:focus,
         input[type="date"]:focus,
         input[type="number"]:focus,
-        input[type.="tel"]:focus {
+        input[type="tel"]:focus,
+        select:focus { /* <-- Adicionado 'select' */
             border-color: #005A9C;
             box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.1);
             outline: none;
@@ -121,7 +123,7 @@
         }
         .table-products {
             width: 100%;
-            min-width: 900px; /* Força scroll horizontal */
+            min-width: 1000px; /* <-- MUDANÇA AQUI (Aumentado de 900px) */
             border-collapse: collapse;
             word-wrap: break-word;
         }
@@ -140,21 +142,28 @@
             white-space: nowrap;
         }
         .table-products td { background-color: #fff; }
-        .table-products td input { padding: 6px; font-size: 13px; }
+        /* Ajuste para o novo select caber */
+        .table-products td input,
+        .table-products td select { 
+            padding: 6px; 
+            font-size: 13px; 
+            width: 100%;
+        }
         
-        /* CORREÇÃO: Ícone de Dica com cursor 'pointer' */
         .hint-icon {
             color: #007bff;
-            cursor: pointer; /* MUDADO de 'help' para 'pointer' */
+            cursor: pointer;
             font-size: 0.9em;
             margin-left: 4px;
         }
         
+        /* --- MUDANÇA AQUI (1/4): Ajuste de colunas --- */
         .col-cod { width: 10%; }
-        .col-nome { width: 28%; }
+        .col-nome { width: 27%; }
         .col-flex, .col-custo, .col-concorrente { width: 10%; }
-        .col-foto { width: 22%; }
-        .col-acao { width: 10%; text-align: center; }
+        .col-foto { width: 18%; }
+        .col-perdida { width: 10%; } /* <-- NOVA COLUNA */
+        .col-acao { width: 5%; text-align: center; }
 
         /* --- Botões --- */
         .btn {
@@ -274,7 +283,7 @@
                                 <th class="col-custo">Custo (Opc.)</th>
                                 <th class="col-concorrente">Preço Concorrente</th>
                                 <th class="col-foto">Link Foto NF (Opc.)</th>
-                                <th class="col-acao">Ação</th>
+                                <th class="col-perdida">Venda Perdida?</th> <th class="col-acao">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -302,26 +311,19 @@
         // PARTE 1: CONFIGURAÇÕES E INICIALIZAÇÃO
         // =======================================================================
 
-        // --- Configurações Google Sheets (LEITURA DE PRODUTOS) ---
         const SPREADSHEET_ID = '1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q';
         const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
         const PRODUCTS_SHEET_NAME = 'produtos';
         const PRODUCTS_RANGE = 'A2:B';
-
-        // --- Configurações Google Apps Script (GRAVAÇÃO DE COTAÇÃO) ---
-        const URL_DO_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbw3aHahFM5jItTRIaZKhmJl0E_XDKSKmMtFLjgpY61e6yOGNOYuj1qBXTG4I-TL5OAYWA/exec"; // Lembre-se de colar sua URL
-
-        // --- Configurações de Memória Local ---
+        const URL_DO_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbw3aHahFM5jItTRIaZKhmJl0E_XDKSKmMtFLjgpY61e6yOGNOYuj1qBXTG4I-TL5OAYWA/exec";
         const SUPERVISOR_STORAGE_KEY = 'cotacaoSupervisor_Session';
         const VENDEDOR_STORAGE_KEY = 'cotacaoVendedor_Session';
         const CIDADE_STORAGE_KEY = 'cotacaoCidade_Session';
         
-        // --- Variáveis Globais ---
         let productList = [];
         let activeSearchInput = null;
         let productLoadError = false;
 
-        // --- Inicialização da Página ---
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('dataCotacao').value = getTodayDateString();
             loadSavedData();
@@ -332,7 +334,6 @@
                 }
             });
 
-            // --- Event Listeners Globais ---
             document.getElementById('supervisorNome').addEventListener('blur', saveDataToMemory);
             document.getElementById('vendedorNome').addEventListener('blur', saveDataToMemory);
             document.getElementById('cidade').addEventListener('blur', saveDataToMemory);
@@ -397,12 +398,10 @@
             const input = event.target;
             const query = input.value.trim().toUpperCase();
             activeSearchInput = input;
-
             if (query.length < 2) {
                 document.getElementById('searchResults').style.display = 'none';
                 return;
             }
-
             const results = searchProducts(query);
             displaySearchResults(results, input);
         }
@@ -419,19 +418,16 @@
         function displaySearchResults(results, inputElement) {
             const resultsContainer = document.getElementById('searchResults');
             resultsContainer.innerHTML = '';
-
             if (results.length === 0) {
                 resultsContainer.style.display = 'none';
                 return;
             }
-
             results.forEach(product => {
                 const item = document.createElement('div');
                 item.innerHTML = `<strong>${product.sku}</strong> - ${product.name}`;
                 item.onclick = () => selectProduct(product);
                 resultsContainer.appendChild(item);
             });
-
             const rect = inputElement.getBoundingClientRect();
             resultsContainer.style.left = `${rect.left + window.scrollX}px`;
             resultsContainer.style.top = `${rect.bottom + window.scrollY}px`;
@@ -441,11 +437,9 @@
 
         function selectProduct(product) {
             if (!activeSearchInput) return;
-            
             const row = activeSearchInput.closest('tr');
             row.querySelector('.input-cod').value = product.sku;
             row.querySelector('.input-nome').value = product.name;
-
             document.getElementById('searchResults').style.display = 'none';
             activeSearchInput = null;
         }
@@ -455,7 +449,6 @@
             const codigo = codInput.value.trim();
             const row = codInput.closest('tr');
             const nomeInput = row.querySelector('.input-nome');
-
             if (codigo) {
                 const product = productList.find(p => p.sku === codigo);
                 if (product) {
@@ -468,6 +461,9 @@
         // PARTE 3: LÓGICA DO FORMULÁRIO (Adicionar/Remover/Enviar)
         // =======================================================================
 
+        /**
+         * MUDANÇA AQUI (3/4): Adicionado o campo <select> para Venda Perdida
+         */
         function adicionarProdutoLinha() {
             const tabelaCorpo = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0];
             const novaLinha = tabelaCorpo.insertRow();
@@ -479,6 +475,15 @@
                 <td class="col-custo"><input type="text" class="input-preco" placeholder="R$ (Opc.)"></td>
                 <td class="col-concorrente"><input type="text" class="input-preco" placeholder="R$"></td>
                 <td class="col-foto"><input type="text" class="input-foto" placeholder="Cole o link da foto/NF"></td>
+                
+                <td class="col-perdida">
+                    <select class="input-venda-perdida">
+                        <option value="">--</option>
+                        <option value="TRUE">Sim</option>
+                        <option value="FALSE">Não</option>
+                    </select>
+                </td>
+                
                 <td class="col-acao"><button type="button" class="btn btn-remove" onclick="removerProdutoLinha(this)">Remover</button></td>
             `;
 
@@ -499,7 +504,6 @@
         function validarFormulario() {
             let isValid = true;
             document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
-
             const camposCabecalho = ['dataCotacao', 'supervisorNome', 'vendedorNome', 'cidade'];
             camposCabecalho.forEach(id => {
                 const input = document.getElementById(id);
@@ -508,25 +512,20 @@
                     input.classList.add('error-input');
                 }
             });
-
             const linhasProdutos = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0].rows;
             if (linhasProdutos.length === 0) {
                 isValid = false;
                 alert("Você deve adicionar pelo menos um produto.");
                 return false;
             }
-
             let linhasValidas = 0;
             for (const linha of linhasProdutos) {
                 const cod = linha.querySelector('.input-cod');
                 const nome = linha.querySelector('.input-nome');
                 const flex = linha.querySelectorAll('.input-preco')[0];
                 const concorrente = linha.querySelectorAll('.input-preco')[2];
-
                 const camposLinha = [cod, nome, flex, concorrente];
-                
                 if (camposLinha.every(input => !input.value.trim())) continue;
-
                 let linhaValida = true;
                 camposLinha.forEach(input => {
                     if (!input.value.trim()) {
@@ -535,26 +534,24 @@
                         input.classList.add('error-input');
                     }
                 });
-                
                 if(linhaValida) linhasValidas++;
             }
-            
             if (linhasValidas === 0) {
                 isValid = false;
                 alert("Nenhuma linha de produto foi preenchida corretamente. (Campos obrigatórios: Cód., Nome, Preço Flex, Preço Concorrente).");
             }
-            
             return isValid;
         }
 
+        /**
+         * MUDANÇA AQUI (4/4): Adicionado 'vendaPerdida' ao objeto 'products.push'
+         */
         async function handleFormSubmit(event) {
             event.preventDefault(); 
-
             if (!validarFormulario()) {
                 alert("Por favor, corrija os campos destacados em vermelho.");
                 return;
             }
-            
             if (!URL_DO_APPS_SCRIPT.includes("script.google.com/macros")) {
                 alert("ERRO: A 'URL_DO_APPS_SCRIPT' no código JS não foi configurada.");
                 return;
@@ -562,7 +559,6 @@
 
             const btnSubmit = document.getElementById("btn-submit");
             const formStatus = document.getElementById("form-status");
-
             btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
             formStatus.style.display = 'none';
@@ -593,7 +589,8 @@
                         flex: parseValorUsuario(precos[0].value),
                         custo: parseValorUsuario(precos[1].value),
                         concorrente: parseValorUsuario(precos[2].value),
-                        foto: linha.querySelector('.input-foto').value.trim() 
+                        foto: linha.querySelector('.input-foto').value.trim(),
+                        vendaPerdida: linha.querySelector('.input-venda-perdida').value.trim() // <-- NOVO DADO
                     });
                 }
                 
@@ -601,7 +598,9 @@
                     throw new Error("Nenhum produto válido para enviar.");
                 }
 
-                const payload = JSON.stringify({ header, products });
+                // A função de Apps Script (do dashboard) já sabe lidar com 'type: cotacao'
+                // ou a ausência dele, então podemos enviar o 'type' para padronizar.
+                const payload = JSON.stringify({ type: 'cotacao', header, products });
                 
                 const response = await fetch(URL_DO_APPS_SCRIPT, {
                     method: "POST",
@@ -638,11 +637,7 @@
         // PARTE 4: FUNÇÕES UTILITÁRIAS (Memória, Formatação e Dica)
         // =======================================================================
 
-        /**
-         * NOVO: Exibe a dica de busca ao clicar no ícone.
-         */
         function showSearchHint(event) {
-            // Previne que o clique dispare outros eventos (ex: ordenar tabela)
             event.stopPropagation(); 
             alert(
                 "Dica de Pesquisa:\n\n" +
