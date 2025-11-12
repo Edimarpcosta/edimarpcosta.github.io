@@ -49,7 +49,6 @@
             z-index: 100;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        /* NOVO: Botão de Menu */
         .sidebar-toggle {
             font-size: 20px;
             margin-right: 15px;
@@ -82,7 +81,7 @@
             transition: background-color 0.2s;
             display: flex;
             align-items: center;
-            font-size: 14px;
+            font-size: 14px; /* Fonte padrão */
             white-space: nowrap; /* Impede quebra de texto */
             overflow: hidden; /* Esconde texto ao colapsar */
         }
@@ -109,7 +108,6 @@
             transition: var(--sidebar-transition);
         }
         
-        /* NOVO: Estilos do Sidebar Colapsado */
         body.sidebar-collapsed .sidebar {
             width: 0;
             padding: 20px 0;
@@ -289,6 +287,12 @@
         table th.sorted-asc .sort-icon::before { content: "\f0de"; color: var(--primary); }
         table th.sorted-desc .sort-icon::before { content: "\f0dd"; color: var(--primary); }
         
+        /* NOVO: Classe para tabelas compactas */
+        .table-compact th, .table-compact td {
+            font-size: 12px;
+            padding: 8px 10px;
+        }
+        
         .margin-ok { color: var(--secondary); font-weight: 600; }
         .margin-warn { color: var(--warning); font-weight: 600; }
         .margin-danger { color: var(--danger); font-weight: 600; }
@@ -315,7 +319,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         #loading-status { margin-top: 15px; font-weight: 500; }
         
-        /* NOVO: Estilos do Assistente de Análise */
+        /* --- Estilos do Assistente de Análise --- */
         #assistente-chat {
             display: flex;
             flex-direction: column;
@@ -360,14 +364,8 @@
             .main-content { margin-left: 60px; }
             .sidebar:hover { width: var(--sidebar-width); }
             .sidebar:hover span { display: inline; }
-            
-            body.sidebar-collapsed .sidebar {
-                width: 0;
-            }
-            body.sidebar-collapsed .main-content {
-                margin-left: 0;
-            }
-            
+            body.sidebar-collapsed .sidebar { width: 0; }
+            body.sidebar-collapsed .main-content { margin-left: 0; }
             .filter-container { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
         }
         @media (max-width: 576px) {
@@ -406,6 +404,9 @@
             </li>
             <li data-section="produtos">
                 <i class="fas fa-boxes"></i><span>Produtos Críticos</span>
+            </li>
+            <li data-section="risco">
+                <i class="fas fa-exclamation-triangle"></i><span>Pontos Críticos</span>
             </li>
             <li data-section="histograma">
                 <i class="fas fa-chart-bar"></i><span>Histograma de Perdas</span>
@@ -547,6 +548,51 @@
             </div>
         </div>
 
+        <div class="dashboard-section" id="risco">
+            <div class="card">
+                <div class="card-header"><h2>Top 20 Concorrentes Mais Agressivos</h2></div>
+                <div class="card-body">
+                    <p class="card-description">Classificado pela "Margem p/ Cobrir" (mais negativa = mais difícil de cobrir).</p>
+                    <div class="table-responsive">
+                        <table class="table-compact" id="tabela-risco-concorrentes">
+                            <thead>
+                                <tr>
+                                    <th>Concorrente</th>
+                                    <th>Cotações (Nº)</th>
+                                    <th>Meu Preço Médio</th>
+                                    <th>Preço Conc. Médio</th>
+                                    <th>Minha Margem Média</th>
+                                    <th>Margem p/ Cobrir</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h2>Top 30 Produtos Mais Citados (em Vendas Perdidas)</h2></div>
+                <div class="card-body">
+                    <p class="card-description">Lista os produtos que mais aparecem nas cotações perdidas, com suas respectivas margens.</p>
+                    <div class="table-responsive">
+                        <table class="table-compact" id="tabela-risco-produtos">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Cotações Perdidas (Nº)</th>
+                                    <th>Meu Preço Médio</th>
+                                    <th>Preço Conc. Médio</th>
+                                    <th>Minha Margem Média</th>
+                                    <th>Margem p/ Cobrir</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="dashboard-section" id="histograma">
             <div class="card">
                 <div class="card-header"><h2>Histograma de Diferença de Preço (Vendas Perdidas)</h2></div>
@@ -595,8 +641,7 @@
                                     <th data-key="vendaPerdida" data-type="string">Venda Perdida?<span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                </tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
@@ -639,7 +684,7 @@
         
         let globalData = [];
         let filteredData = [];
-        let charts = {}; // Objeto para armazenar instâncias de gráficos
+        let charts = {};
         let sortConfig = { key: 'dataCotacao', direction: 'desc' };
         
         const COLUMN_MAP = {
@@ -657,16 +702,11 @@
             configurarNavegacao();
             setupTableSorting();
             document.getElementById('btn-export').addEventListener('click', handleExportXLSX);
-            
-            // NOVO: Listener do Toggle do Sidebar
             document.getElementById('sidebar-toggle').addEventListener('click', toggleSidebar);
-            
-            // NOVO: Listeners do Assistente
             document.getElementById('assistente-btn').addEventListener('click', handleAssistenteQuery);
             document.getElementById('assistente-input').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') handleAssistenteQuery();
             });
-            
             loadDataFromSheet();
         });
 
@@ -678,25 +718,17 @@
                 item.addEventListener('click', () => {
                     menuItems.forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
-                    
                     const sectionId = item.getAttribute('data-section');
-                    
                     sections.forEach(section => {
                         section.classList.toggle('active', section.id === sectionId);
                     });
-                    
                     renderActiveChart(sectionId);
                 });
             });
         }
         
-        /**
-         * NOVO: Controla o menu lateral e redimensiona os gráficos
-         */
         function toggleSidebar() {
             document.body.classList.toggle('sidebar-collapsed');
-            
-            // Dá tempo para a animação CSS (300ms) e então redimensiona os gráficos
             setTimeout(() => {
                 Object.values(charts).forEach(chart => {
                     if (chart) chart.resize();
@@ -704,14 +736,8 @@
             }, 350);
         }
         
-        /**
-         * ATUALIZADO: Renderiza o gráfico da aba clicada
-         */
         function renderActiveChart(sectionId) {
-            destroyAllCharts(); // Limpa gráficos anteriores
-
-            // Atraso de 10ms para garantir que o contêiner do gráfico esteja visível
-            // antes de tentar desenhar, corrigindo bugs de renderização.
+            destroyAllCharts();
             setTimeout(() => {
                 if (sectionId === 'vendedores') {
                     updateChartGuerraPreco();
@@ -721,6 +747,8 @@
                     updateDashboardConcorrentes();
                 } else if (sectionId === 'produtos') {
                     updateDashboardProdutosCriticos();
+                } else if (sectionId === 'risco') { // NOVO
+                    updateDashboardRisco();
                 } else if (sectionId === 'histograma') {
                     updateDashboardHistograma();
                 } else if (sectionId === 'temporal') {
@@ -746,26 +774,19 @@
             const loadingOverlay = document.getElementById('loading-overlay');
             const loadingStatus = document.getElementById('loading-status');
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}!${DATA_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
-            
             try {
                 loadingStatus.textContent = 'Buscando dados na Planilha...';
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`Erro HTTP ${response.status}. Verifique API Key e permissões da planilha.`);
-                
                 const data = await response.json();
                 if (!data.values || data.values.length === 0) throw new Error('Planilha vazia ou sem dados (COTAÇÕES!A2:N).');
-
                 loadingStatus.textContent = 'Processando dados...';
                 globalData = parseSheetData(data.values);
-                
                 loadingStatus.textContent = 'Montando filtros...';
                 populateFilters();
-                
                 loadingStatus.textContent = 'Análise inicial...';
                 runAnalysis();
-                
                 loadingOverlay.style.display = 'none';
-                
             } catch (error) {
                 console.error('Erro fatal ao carregar dados:', error);
                 loadingStatus.innerHTML = `❌ Erro: ${error.message}<br><br>Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode VER".`;
@@ -780,39 +801,25 @@
                     const key = COLUMN_MAP[i];
                     if (key) {
                         let value = row[i];
-                        
                         if (['precoFlex', 'custo', 'precoConcorrente'].includes(key)) {
                             value = parseFloat(String(value).replace(',', '.')) || 0;
-                        
                         } else if (key === 'vendaPerdida') {
                             value = String(value).toUpperCase().trim();
-                            if (value === 'FALSE' || value === 'FALSO' || value === 'N') {
-                                value = 'FALSE';
-                            } else {
-                                value = 'TRUE';
-                            }
+                            if (value === 'FALSE' || value === 'FALSO' || value === 'N') value = 'FALSE';
+                            else value = 'TRUE';
                         }
-                        
                         obj[key] = value;
                     }
                 }
-                
                 obj.custo = obj.custo || 0;
                 obj.precoFlex = obj.precoFlex || 0;
                 obj.precoConcorrente = obj.precoConcorrente || 0;
                 obj.diffPreco = obj.precoFlex - obj.precoConcorrente;
-                
-                obj.minhaMargem = (obj.precoFlex > 0 && obj.custo > 0) 
-                    ? (obj.precoFlex - obj.custo) / obj.precoFlex : 0;
-                
-                obj.margemParaCobrir = (obj.precoConcorrente > 0 && obj.custo > 0)
-                    ? (obj.precoConcorrente - obj.custo) / obj.precoConcorrente : 0;
-                    
+                obj.minhaMargem = (obj.precoFlex > 0 && obj.custo > 0) ? (obj.precoFlex - obj.custo) / obj.precoFlex : 0;
+                obj.margemParaCobrir = (obj.precoConcorrente > 0 && obj.custo > 0) ? (obj.precoConcorrente - obj.custo) / obj.precoConcorrente : 0;
                 if (obj.dataCotacao) {
                     const parts = obj.dataCotacao.split('-');
-                    if (parts.length === 3) {
-                        obj.anoMes = `${parts[0]}-${parts[1]}`;
-                    }
+                    if (parts.length === 3) obj.anoMes = `${parts[0]}-${parts[1]}`;
                 }
                 return obj;
             });
@@ -824,7 +831,6 @@
             const concorrentes = new Set();
             let minDate = '9999-12-31';
             let maxDate = '2000-01-01';
-
             globalData.forEach(row => {
                 if (row.vendedor) vendedores.add(row.vendedor);
                 if (row.cidade) cidades.add(row.cidade);
@@ -834,11 +840,9 @@
                     if (row.dataCotacao > maxDate) maxDate = row.dataCotacao;
                 }
             });
-
             populateSelect('filter-vendedor', [...vendedores].sort());
             populateSelect('filter-cidade', [...cidades].sort());
             populateSelect('filter-concorrente', [...concorrentes].sort());
-            
             document.getElementById('filter-date-start').value = minDate;
             document.getElementById('filter-date-end').value = maxDate;
         }
@@ -860,7 +864,6 @@
         function runAnalysis() {
             const statusEl = document.getElementById('filter-status');
             statusEl.textContent = 'Filtrando dados...';
-            
             const filters = {
                 dateStart: document.getElementById('filter-date-start').value,
                 dateEnd: document.getElementById('filter-date-end').value,
@@ -869,7 +872,6 @@
                 concorrente: document.getElementById('filter-concorrente').value,
                 vendaPerdida: document.getElementById('filter-venda-perdida').value,
             };
-
             filteredData = globalData.filter(row => {
                 if (filters.dateStart && row.dataCotacao < filters.dateStart) return false;
                 if (filters.dateEnd && row.dataCotacao > filters.dateEnd) return false;
@@ -879,12 +881,9 @@
                 if (filters.vendaPerdida && row.vendaPerdida !== filters.vendaPerdida) return false;
                 return true;
             });
-            
             statusEl.textContent = `${filteredData.length} cotações encontradas.`;
-            
             updateKPIs();
             updateTable(); 
-            
             const activeSection = document.querySelector('.sidebar li.active').dataset.section;
             renderActiveChart(activeSection);
         }
@@ -895,7 +894,6 @@
             let somaMargemFlex = 0;
             let somaMargemConc = 0;
             let countComCusto = 0;
-
             filteredData.forEach(row => {
                 if (row.vendaPerdida === 'TRUE') totalPerdidas++;
                 if (row.custo > 0) {
@@ -904,16 +902,13 @@
                     countComCusto++;
                 }
             });
-
             const taxaPerda = totalCotacoes > 0 ? (totalPerdidas / totalCotacoes) : 0;
             const mediaMargemFlex = countComCusto > 0 ? (somaMargemFlex / countComCusto) : 0;
             const mediaMargemConc = countComCusto > 0 ? (somaMargemConc / countComCusto) : 0;
-
             document.getElementById('kpi-total-cotacoes').textContent = totalCotacoes;
             document.getElementById('kpi-taxa-perda').textContent = `${(taxaPerda * 100).toFixed(1)}%`;
             document.getElementById('kpi-margem-flex').textContent = `${(mediaMargemFlex * 100).toFixed(1)}%`;
             document.getElementById('kpi-margem-concorrente').textContent = `${(mediaMargemConc * 100).toFixed(1)}%`;
-            
             setClassByValue('kpi-taxa-perda', taxaPerda, 0.5, 'loss', 'margin-good');
             setClassByValue('kpi-margem-flex', mediaMargemFlex, 0.2, 'margin-good', 'margin-warn');
             setClassByValue('kpi-margem-concorrente', mediaMargemConc, 0.1, 'margin-warn', 'margin-bad');
@@ -930,10 +925,27 @@
         // ETAPA 3: GRÁFICOS (Chart.js)
         // =======================================================================
         
+        // --- Funções auxiliares de formatação ---
+        const formatPercent = (val) => {
+            const p = (val * 100).toFixed(1);
+            let cls = 'margin-ok';
+            if (p < 20) cls = 'margin-warn';
+            if (p < 0) cls = 'margin-danger';
+            return `<span class="${cls}">${p}%</span>`;
+        };
+        const formatCurrency = (val) => `R$ ${val.toFixed(2)}`;
+        const formatDiff = (val) => {
+            const cls = val > 0 ? 'margin-danger' : 'margin-ok';
+            return `<span class="${cls}">R$ ${val.toFixed(2)}</span>`;
+        };
+        const formatPerdida = (val) => {
+            if (val === 'TRUE') return `<span style="color: var(--danger); font-weight: 600;">Sim</span>`;
+            return `<span style="color: var(--secondary);">Não</span>`;
+        };
+        
         function updateChartGuerraPreco() {
             const ctx = document.getElementById('chart-guerra-preco')?.getContext('2d');
             if (!ctx) return;
-            
             const dataByVendedor = {};
             filteredData.forEach(row => {
                 if (row.custo > 0) {
@@ -949,7 +961,6 @@
                 mediaFlex: dataByVendedor[vendedor].somaFlex / dataByVendedor[vendedor].count,
                 mediaConc: dataByVendedor[vendedor].somaConc / dataByVendedor[vendedor].count
             })).sort((a, b) => b.mediaFlex - a.mediaFlex).slice(0, 5);
-
             charts['chart-guerra-preco'] = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -966,7 +977,6 @@
         function updateChartPerdasCidade() {
             const ctx = document.getElementById('chart-perdas-cidade')?.getContext('2d');
             if (!ctx) return;
-            
             const dataByCidade = {};
             filteredData.forEach(row => {
                 if (row.vendaPerdida === 'TRUE') {
@@ -977,44 +987,33 @@
             });
             const chartData = Object.keys(dataByCidade).map(cidade => ({ cidade: cidade, perdas: dataByCidade[cidade] }))
                 .sort((a, b) => b.perdas - a.perdas).slice(0, 5);
-
             charts['chart-perdas-cidade'] = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: chartData.map(d => d.cidade),
-                    datasets: [{
-                        label: 'Vendas Perdidas',
-                        data: chartData.map(d => d.perdas),
-                        backgroundColor: ['#e53935', '#ff9800', '#1e88e5', '#26a69a', '#6c757d'],
-                        hoverOffset: 4
-                    }]
+                    datasets: [{ label: 'Vendas Perdidas', data: chartData.map(d => d.perdas), backgroundColor: ['#e53935', '#ff9800', '#1e88e5', '#26a69a', '#6c757d'], hoverOffset: 4 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
         }
         
-        // ATUALIZADO: Renderiza Gráfico e Tabela
         function updateDashboardConcorrentes() {
             const ctxPie = document.getElementById('chart-perda-concorrente')?.getContext('2d');
             const tbody = document.getElementById('tabela-concorrentes')?.getElementsByTagName('tbody')[0];
             if (!ctxPie || !tbody) return;
-
             const dataByConcorrente = {};
             const perdas = filteredData.filter(row => row.vendaPerdida === 'TRUE' && row.concorrenteHeader);
-
             perdas.forEach(row => {
                 const concorrente = row.concorrenteHeader;
                 if (!dataByConcorrente[concorrente]) dataByConcorrente[concorrente] = { perdas: 0, somaDiff: 0, countDiff: 0, produtos: {} };
-                
                 dataByConcorrente[concorrente].perdas++;
-                if (row.diffPreco > 0) { // Só soma se eu estava mais caro
+                if (row.diffPreco > 0) {
                     dataByConcorrente[concorrente].somaDiff += row.diffPreco;
                     dataByConcorrente[concorrente].countDiff++;
                 }
                 const produto = row.nomeProduto || 'N/A';
                 dataByConcorrente[concorrente].produtos[produto] = (dataByConcorrente[concorrente].produtos[produto] || 0) + 1;
             });
-
             const chartData = Object.keys(dataByConcorrente).map(concorrente => {
                 const d = dataByConcorrente[concorrente];
                 const produtoTopEntry = Object.entries(d.produtos).sort((a,b) => b[1] - a[1])[0];
@@ -1025,22 +1024,14 @@
                     produtoTop: produtoTopEntry ? produtoTopEntry[0] : 'N/A'
                 };
             }).sort((a, b) => b.perdas - a.perdas);
-
-            // 1. Renderiza Gráfico de Torta
             charts['chart-perda-concorrente'] = new Chart(ctxPie, {
                 type: 'pie',
                 data: {
                     labels: chartData.map(d => d.concorrente),
-                    datasets: [{
-                        label: 'Vendas Perdidas',
-                        data: chartData.map(d => d.perdas),
-                        backgroundColor: ['#e53935', '#ff9800', '#1e88e5', '#26a69a', '#6c757d', '#ab47bc', '#fdd835'],
-                    }]
+                    datasets: [{ label: 'Vendas Perdidas', data: chartData.map(d => d.perdas), backgroundColor: ['#e53935', '#ff9800', '#1e88e5', '#26a69a', '#6c757d', '#ab47bc', '#fdd835'], }]
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
-            
-            // 2. Renderiza Tabela de Agressividade (COMPLETA)
             tbody.innerHTML = '';
             chartData.forEach(d => {
                 const tr = document.createElement('tr');
@@ -1057,7 +1048,6 @@
         function updateDashboardProdutosCriticos() {
             const ctxScatter = document.getElementById('chart-risco-oportunidade')?.getContext('2d');
             if (!ctxScatter) return;
-
             const dataByProduto = {};
             filteredData.forEach(row => {
                 if (row.custo > 0 && row.nomeProduto) {
@@ -1068,22 +1058,16 @@
                     if (row.vendaPerdida === 'TRUE') dataByProduto[produto].perdas++;
                 }
             });
-
             const scatterData = Object.keys(dataByProduto).map(produto => {
                 const d = dataByProduto[produto];
                 const avgMargem = (d.somaMargem / d.total) * 100;
                 const taxaPerda = (d.perdas / d.total) * 100;
                 return { x: avgMargem, y: taxaPerda, label: produto };
             });
-
             charts['chart-risco-oportunidade'] = new Chart(ctxScatter, {
                 type: 'scatter',
                 data: {
-                    datasets: [{
-                        label: 'Produtos',
-                        data: scatterData,
-                        backgroundColor: 'rgba(30, 136, 229, 0.7)'
-                    }]
+                    datasets: [{ label: 'Produtos', data: scatterData, backgroundColor: 'rgba(30, 136, 229, 0.7)' }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
@@ -1096,15 +1080,94 @@
             });
         }
 
+        // --- NOVO Dashboard: Pontos Críticos ---
+        function updateDashboardRisco() {
+            const tbodyConc = document.getElementById('tabela-risco-concorrentes')?.getElementsByTagName('tbody')[0];
+            const tbodyProd = document.getElementById('tabela-risco-produtos')?.getElementsByTagName('tbody')[0];
+            if (!tbodyConc || !tbodyProd) return;
+            
+            // 1. Análise de Concorrentes Agressivos
+            const dataComCusto = filteredData.filter(row => row.custo > 0 && row.concorrenteHeader);
+            const aggConc = {};
+            dataComCusto.forEach(row => {
+                const k = row.concorrenteHeader;
+                if (!aggConc[k]) aggConc[k] = { key: k, count: 0, sumFlex: 0, sumConc: 0, sumMinha: 0, sumCobrir: 0 };
+                aggConc[k].count++;
+                aggConc[k].sumFlex += row.precoFlex;
+                aggConc[k].sumConc += row.precoConcorrente;
+                aggConc[k].sumMinha += row.minhaMargem;
+                aggConc[k].sumCobrir += row.margemParaCobrir;
+            });
+            
+            const listaConc = Object.values(aggConc).map(c => ({
+                key: c.key,
+                count: c.count,
+                avgFlex: c.sumFlex / c.count,
+                avgConc: c.sumConc / c.count,
+                avgMinha: c.sumMinha / c.count,
+                avgCobrir: c.sumCobrir / c.count
+            }))
+            .sort((a,b) => a.avgCobrir - b.avgCobrir); // Ordena pela MAIS DIFÍCIL (menor margem)
+            
+            tbodyConc.innerHTML = '';
+            listaConc.slice(0, 20).forEach(d => { // Top 20
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><b>${d.key}</b></td>
+                    <td>${d.count}</td>
+                    <td>${formatCurrency(d.avgFlex)}</td>
+                    <td>${formatCurrency(d.avgConc)}</td>
+                    <td>${formatPercent(d.avgMinha)}</td>
+                    <td>${formatPercent(d.avgCobrir)}</td>
+                `;
+                tbodyConc.appendChild(tr);
+            });
+
+            // 2. Análise de Produtos Problemáticos
+            const dataPerdidaComCusto = filteredData.filter(row => row.vendaPerdida === 'TRUE' && row.custo > 0 && row.nomeProduto);
+            const aggProd = {};
+            dataPerdidaComCusto.forEach(row => {
+                const k = row.nomeProduto;
+                if (!aggProd[k]) aggProd[k] = { key: k, count: 0, sumFlex: 0, sumConc: 0, sumMinha: 0, sumCobrir: 0 };
+                aggProd[k].count++;
+                aggProd[k].sumFlex += row.precoFlex;
+                aggProd[k].sumConc += row.precoConcorrente;
+                aggProd[k].sumMinha += row.minhaMargem;
+                aggProd[k].sumCobrir += row.margemParaCobrir;
+            });
+
+            const listaProd = Object.values(aggProd).map(p => ({
+                key: p.key,
+                count: p.count,
+                avgFlex: p.sumFlex / p.count,
+                avgConc: p.sumConc / p.count,
+                avgMinha: p.sumMinha / p.count,
+                avgCobrir: p.sumCobrir / p.count
+            }))
+            .sort((a,b) => b.count - a.count); // Ordena pelo MAIS CITADO
+            
+            tbodyProd.innerHTML = '';
+            listaProd.slice(0, 30).forEach(d => { // Top 30
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><b>${d.key}</b></td>
+                    <td>${d.count}</td>
+                    <td>${formatCurrency(d.avgFlex)}</td>
+                    <td>${formatCurrency(d.avgConc)}</td>
+                    <td>${formatPercent(d.avgMinha)}</td>
+                    <td>${formatPercent(d.avgCobrir)}</td>
+                `;
+                tbodyProd.appendChild(tr);
+            });
+        }
+        
         function updateDashboardHistograma() {
             const ctxBar = document.getElementById('chart-histograma-preco')?.getContext('2d');
             if (!ctxBar) return;
-            
             const bins = {
                 'R$ 0,01-R$ 0,50': 0, 'R$ 0,51-R$ 1,00': 0, 'R$ 1,01-R$ 2,00': 0,
                 'R$ 2,01-R$ 5,00': 0, 'Acima de R$ 5,00': 0
             };
-            
             filteredData.forEach(row => {
                 if (row.vendaPerdida === 'TRUE' && row.diffPreco > 0) {
                     const diff = row.diffPreco;
@@ -1115,7 +1178,6 @@
                     else bins['Acima de R$ 5,00']++;
                 }
             });
-
             charts['chart-histograma-preco'] = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
@@ -1129,7 +1191,6 @@
         function updateDashboardTemporal() {
             const ctxLine = document.getElementById('chart-tendencia-temporal')?.getContext('2d');
             if (!ctxLine) return;
-            
             const dataByTime = {};
             filteredData.forEach(row => {
                 const mes = row.anoMes;
@@ -1142,11 +1203,9 @@
                     dataByTime[mes].custoCount++;
                 }
             });
-
             const labels = Object.keys(dataByTime).sort();
             const taxaPerdaData = labels.map(mes => (dataByTime[mes].perdas / dataByTime[mes].total) * 100);
             const margemMediaData = labels.map(mes => (dataByTime[mes].custoCount > 0 ? (dataByTime[mes].somaMargem / dataByTime[mes].custoCount) * 100 : 0));
-
             charts['chart-tendencia-temporal'] = new Chart(ctxLine, {
                 type: 'line',
                 data: {
@@ -1189,10 +1248,8 @@
         function updateTable() {
             const tbody = document.getElementById('products-table')?.getElementsByTagName('tbody')[0];
             if (!tbody) return;
-            
             tbody.innerHTML = ''; 
             document.getElementById('table-row-count').textContent = `(${filteredData.length} produtos filtrados)`;
-            
             const sortedData = [...filteredData].sort((a, b) => {
                 let valA = a[sortConfig.key];
                 let valB = b[sortConfig.key];
@@ -1203,24 +1260,6 @@
                 if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
-
-            const formatPercent = (val) => {
-                const p = (val * 100).toFixed(1);
-                let cls = 'margin-ok';
-                if (p < 20) cls = 'margin-warn';
-                if (p < 0) cls = 'margin-danger';
-                return `<span class="${cls}">${p}%</span>`;
-            };
-            const formatCurrency = (val) => `R$ ${val.toFixed(2)}`;
-            const formatDiff = (val) => {
-                const cls = val > 0 ? 'margin-danger' : 'margin-ok';
-                return `<span class="${cls}">R$ ${val.toFixed(2)}</span>`;
-            };
-            const formatPerdida = (val) => {
-                if (val === 'TRUE') return `<span style="color: var(--danger); font-weight: 600;">Sim</span>`;
-                return `<span style="color: var(--secondary);">Não</span>`;
-            };
-
             sortedData.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -1280,63 +1319,44 @@
         function handleAssistenteQuery() {
             const query = document.getElementById('assistente-input').value;
             const responseContainer = document.getElementById('assistente-response');
-            
             if (!query) {
                 responseContainer.innerHTML = `<p>Por favor, digite uma pergunta.</p>`;
                 return;
             }
-            
             const resposta = parseAssistenteQuery(query);
             responseContainer.innerHTML = resposta;
         }
 
-        /**
-         * "Cérebro" do Assistente. Interpreta a pergunta e chama a função de análise.
-         */
         function parseAssistenteQuery(query) {
             const q = query.toLowerCase()
-                         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
-                         .replace(/[?.,!]/g, ''); // remove pontuação
-
-            // --- Regras de Intenção ---
-            
-            // Pior Vendedor
+                         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                         .replace(/[?.,!]/g, '');
             if ((q.includes('pior') || q.includes('mais perdeu')) && q.includes('vendedor')) {
                 return assistente_findWorstVendedor();
             }
-            // Melhor Vendedor
             if ((q.includes('melhor') || q.includes('mais ganhou')) && q.includes('vendedor')) {
                 return assistente_findBestVendedor();
             }
-            // Pior Produto (Taxa de Perda)
             if ((q.includes('pior') || q.includes('mais perdido')) && q.includes('produto')) {
                 return assistente_findWorstProduct();
             }
-            // Melhor Produto (Margem)
             if ((q.includes('melhor') || q.includes('mais rentavel') || q.includes('melhor margem')) && q.includes('produto')) {
                 return assistente_findBestMarginProduct();
             }
-            // Pior Concorrente
             if ((q.includes('pior') || q.includes('mais agressivo') || q.includes('principal')) && q.includes('concorrente')) {
                 return assistente_findMostAggressiveCompetitor();
             }
-            // Taxa de Perda (Geral)
             if (q.includes('taxa de perda') && !q.includes('cidade') && !q.includes('vendedor')) {
                 return assistente_getGlobalLossRate();
             }
-            // Margem Média (Geral)
             if (q.includes('margem media') || q.includes('minha margem')) {
                 return assistente_getGlobalMargin();
             }
-            
-            // Pergunta Específica (ex: "taxa de perda em limeira")
             const cityMatch = q.match(/em ([\w\s]+)|de ([\w\s]+)/);
             if (q.includes('taxa de perda') && cityMatch) {
                 const cityName = cityMatch[1] || cityMatch[2];
                 return assistente_getLossRateForCity(cityName.trim());
             }
-
-            // --- Resposta Padrão ---
             return `<h4>Não entendi.</h4>
                     <p>Tente perguntar algo como:<br>
                     - "qual o pior vendedor?"<br>
@@ -1345,11 +1365,10 @@
                     - "taxa de perda em limeira?"</p>`;
         }
         
-        // --- Funções de Análise do Assistente (usam 'filteredData') ---
-        
+        // --- Funções de Análise do Assistente ---
         function assistente_findWorstVendedor() {
             const data = analyzeByGroup(filteredData, 'vendedor');
-            const worst = data.sort((a,b) => b.taxaPerda - a.taxaPerda)[0]; // Maior taxa de perda
+            const worst = data.sort((a,b) => b.taxaPerda - a.taxaPerda)[0];
             if (!worst) return `<p>Não há dados de vendedores para analisar.</p>`;
             return `<h4>Pior Vendedor (Taxa de Perda)</h4>
                     <p>O vendedor com a maior taxa de perda nos filtros atuais é 
@@ -1357,10 +1376,9 @@
                     <span class="highlight">${(worst.taxaPerda * 100).toFixed(1)}%</span> de perdas 
                     (${worst.perdas} de ${worst.total} cotações).</p>`;
         }
-        
         function assistente_findBestVendedor() {
             const data = analyzeByGroup(filteredData, 'vendedor');
-            const best = data.sort((a,b) => a.taxaPerda - b.taxaPerda)[0]; // Menor taxa de perda
+            const best = data.sort((a,b) => a.taxaPerda - b.taxaPerda)[0];
             if (!best) return `<p>Não há dados de vendedores para analisar.</p>`;
             return `<h4>Melhor Vendedor (Taxa de Ganho)</h4>
                     <p>O vendedor com a menor taxa de perda (maior taxa de ganho) é 
@@ -1368,7 +1386,6 @@
                     <span class="highlight">${(best.taxaPerda * 100).toFixed(1)}%</span> de perdas 
                     (${best.perdas} de ${best.total} cotações).</p>`;
         }
-
         function assistente_findWorstProduct() {
             const data = analyzeByGroup(filteredData, 'nomeProduto');
             const worst = data.sort((a,b) => b.taxaPerda - a.taxaPerda)[0];
@@ -1379,27 +1396,24 @@
                     <span class="highlight">${(worst.taxaPerda * 100).toFixed(1)}%</span> de perdas 
                     (${worst.perdas} de ${worst.total} cotações).</p>`;
         }
-
         function assistente_findBestMarginProduct() {
             const data = analyzeByGroup(filteredData, 'nomeProduto');
-            const best = data.sort((a,b) => b.avgMinhaMargem - a.avgMinhaMargem)[0]; // Maior margem
+            const best = data.sort((a,b) => b.avgMinhaMargem - a.avgMinhaMargem)[0];
             if (!best) return `<p>Não há dados de produtos para analisar.</p>`;
             return `<h4>Produto Mais Rentável (Margem Média)</h4>
                     <p>O produto com a maior margem média (com custo) é 
                     <span class="highlight">${best.key}</span>, com 
                     <span class="highlight">${(best.avgMinhaMargem * 100).toFixed(1)}%</span> de margem.</p>`;
         }
-        
         function assistente_findMostAggressiveCompetitor() {
             const data = analyzeByGroup(filteredData.filter(r => r.vendaPerdida === 'TRUE'), 'concorrenteHeader');
-            const worst = data.sort((a,b) => b.total - a.total)[0]; // Mais aparece em perdas
+            const worst = data.sort((a,b) => b.total - a.total)[0];
             if (!worst || !worst.key) return `<p>Não há dados de concorrentes nas vendas perdidas.</p>`;
             return `<h4>Concorrente Mais Agressivo</h4>
                     <p>O concorrente que mais aparece nas vendas perdidas é 
                     <span class="highlight">${worst.key}</span>, responsável por 
                     <span class="highlight">${worst.total}</span> cotações perdidas nos filtros atuais.</p>`;
         }
-        
         function assistente_getGlobalLossRate() {
             const total = filteredData.length;
             const perdas = filteredData.filter(r => r.vendaPerdida === 'TRUE').length;
@@ -1409,7 +1423,6 @@
                     <span class="highlight">${(taxa * 100).toFixed(1)}%</span> 
                     (${perdas} de ${total} cotações).</p>`;
         }
-        
         function assistente_getGlobalMargin() {
             let somaMargem = 0;
             let countComCusto = 0;
@@ -1424,7 +1437,6 @@
                     <p>A sua margem de lucro média (para produtos com custo) é de 
                     <span class="highlight">${(media * 100).toFixed(1)}%</span>.</p>`;
         }
-        
         function assistente_getLossRateForCity(cityName) {
             const cityData = filteredData.filter(r => r.cidade.toLowerCase().includes(cityName.toLowerCase()));
             if (cityData.length === 0) {
@@ -1456,7 +1468,6 @@
                     groups[groupName].custoCount++;
                 }
             });
-            
             return Object.keys(groups).map(k => {
                 const g = groups[k];
                 return {
