@@ -51,7 +51,6 @@
         }
         .form-grid-full { grid-column: 1 / -1; }
 
-        /* --- MUDANÇA AQUI (1/4): Adicionado 'select' ao estilo --- */
         label {
             display: block;
             margin-bottom: 6px;
@@ -62,7 +61,7 @@
         input[type="date"],
         input[type="number"],
         input[type="tel"],
-        select { /* <-- Adicionado 'select' */
+        select {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #ddd;
@@ -74,7 +73,7 @@
         input[type="date"]:focus,
         input[type="number"]:focus,
         input[type="tel"]:focus,
-        select:focus { /* <-- Adicionado 'select' */
+        select:focus {
             border-color: #005A9C;
             box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.1);
             outline: none;
@@ -123,7 +122,7 @@
         }
         .table-products {
             width: 100%;
-            min-width: 1000px; /* <-- MUDANÇA AQUI (Aumentado de 900px) */
+            min-width: 1000px;
             border-collapse: collapse;
             word-wrap: break-word;
         }
@@ -142,7 +141,6 @@
             white-space: nowrap;
         }
         .table-products td { background-color: #fff; }
-        /* Ajuste para o novo select caber */
         .table-products td input,
         .table-products td select { 
             padding: 6px; 
@@ -157,12 +155,11 @@
             margin-left: 4px;
         }
         
-        /* --- MUDANÇA AQUI (1/4): Ajuste de colunas --- */
         .col-cod { width: 10%; }
         .col-nome { width: 27%; }
         .col-flex, .col-custo, .col-concorrente { width: 10%; }
         .col-foto { width: 18%; }
-        .col-perdida { width: 10%; } /* <-- NOVA COLUNA */
+        .col-perdida { width: 10%; }
         .col-acao { width: 5%; text-align: center; }
 
         /* --- Botões --- */
@@ -210,6 +207,48 @@
         }
         .search-results-container div:hover { background-color: #f0f2f5; }
         .search-results-container div strong { color: #005A9C; }
+        
+        /* --- Estilos do Visualizador de Imagem --- */
+        #image-viewer-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f2f5;
+        }
+        #image-search-controls {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+            max-width: 400px; /* Limita a largura do input */
+            margin-bottom: 20px;
+        }
+        #image-search-btn {
+            padding: 10px 15px;
+            background-color: #1976d2; /* Um azul diferente */
+            color: white;
+            height: 40px; /* Alinha altura com input */
+        }
+        #image-search-btn:hover {
+            background-color: #135a9e;
+        }
+        #image-result-container {
+            width: 100%;
+            min-height: 50px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px dashed #ddd;
+            border-radius: 5px;
+            text-align: center;
+            color: #666;
+        }
+        #image-result-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            margin-top: 10px;
+        }
+        
     </style>
 </head>
 <body>
@@ -283,7 +322,8 @@
                                 <th class="col-custo">Custo (Opc.)</th>
                                 <th class="col-concorrente">Preço Concorrente</th>
                                 <th class="col-foto">Link Foto NF (Opc.)</th>
-                                <th class="col-perdida">Venda Perdida?</th> <th class="col-acao">Ação</th>
+                                <th class="col-perdida">Venda Perdida?</th>
+                                <th class="col-acao">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -304,9 +344,21 @@
             
             <div id="form-status" class="status-message"></div>
         </form>
-    </div>
 
-    <script>
+        <div id="image-viewer-section">
+            <h2><i class="fas fa-camera"></i> Verificar Imagem do Produto</h2>
+            <div id="image-search-controls">
+                <input type="text" id="image-sku-input" placeholder="Digite o código (SKU) do produto">
+                <button type="button" class="btn" id="image-search-btn">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
+            <div id="image-result-container">
+                <p>Digite um SKU acima para ver a imagem.</p>
+            </div>
+        </div>
+        
+    </div> <script>
         // =======================================================================
         // PARTE 1: CONFIGURAÇÕES E INICIALIZAÇÃO
         // =======================================================================
@@ -319,6 +371,7 @@
         const SUPERVISOR_STORAGE_KEY = 'cotacaoSupervisor_Session';
         const VENDEDOR_STORAGE_KEY = 'cotacaoVendedor_Session';
         const CIDADE_STORAGE_KEY = 'cotacaoCidade_Session';
+        const FALLBACK_IMAGE_URL = 'https://github.com/Edimarpcosta/edimarpcosta.github.io/blob/main/ameripan/img/{SKU}.jpg?raw=true';
         
         let productList = [];
         let activeSearchInput = null;
@@ -327,48 +380,46 @@
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('dataCotacao').value = getTodayDateString();
             loadSavedData();
-            
             loadProductsFromSheet().then(() => {
-                if (!productLoadError) {
-                    adicionarProdutoLinha();
-                }
+                if (!productLoadError) adicionarProdutoLinha();
             });
-
             document.getElementById('supervisorNome').addEventListener('blur', saveDataToMemory);
             document.getElementById('vendedorNome').addEventListener('blur', saveDataToMemory);
             document.getElementById('cidade').addEventListener('blur', saveDataToMemory);
             document.getElementById('btnClearMemory').addEventListener('click', clearSavedData);
             document.getElementById('btnAdicionarProduto').addEventListener('click', adicionarProdutoLinha);
-            
             document.addEventListener('click', (e) => {
                 if (!e.target.classList.contains('input-nome') && !e.target.closest('#searchResults')) {
                     document.getElementById('searchResults').style.display = 'none';
+                }
+            });
+            document.getElementById('image-search-btn').addEventListener('click', handleImageSearch);
+            document.getElementById('image-sku-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleImageSearch();
                 }
             });
         });
 
         // =======================================================================
         // PARTE 2: CARREGAMENTO E BUSCA DE PRODUTOS (PLANILHA 1)
+        // (Sem alterações)
         // =======================================================================
 
         async function loadProductsFromSheet() {
             const loadingOverlay = document.getElementById('tableLoadingOverlay');
             const productStatus = document.getElementById('product-load-status');
-            
             loadingOverlay.style.display = 'flex';
             productStatus.textContent = 'Carregando lista de produtos...';
             productStatus.className = 'status-message status-loading';
             productStatus.style.display = 'block';
-            
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${PRODUCTS_SHEET_NAME}!${PRODUCTS_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
-            
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
-                
                 const data = await response.json();
                 productList = [];
-                
                 if (data.values && data.values.length > 0) {
                     data.values.forEach(row => {
                         if (row[0] && row[1]) {
@@ -393,7 +444,6 @@
                 loadingOverlay.style.display = 'none';
             }
         }
-
         function handleNameInput(event) {
             const input = event.target;
             const query = input.value.trim().toUpperCase();
@@ -405,7 +455,6 @@
             const results = searchProducts(query);
             displaySearchResults(results, input);
         }
-
         function searchProducts(query) {
             const terms = query.split('*').filter(t => t); 
             const results = productList.filter(product => {
@@ -414,7 +463,6 @@
             });
             return results.slice(0, 10);
         }
-
         function displaySearchResults(results, inputElement) {
             const resultsContainer = document.getElementById('searchResults');
             resultsContainer.innerHTML = '';
@@ -434,7 +482,6 @@
             resultsContainer.style.width = `${rect.width}px`;
             resultsContainer.style.display = 'block';
         }
-
         function selectProduct(product) {
             if (!activeSearchInput) return;
             const row = activeSearchInput.closest('tr');
@@ -443,7 +490,6 @@
             document.getElementById('searchResults').style.display = 'none';
             activeSearchInput = null;
         }
-
         function handleSkuBlur(event) {
             const codInput = event.target;
             const codigo = codInput.value.trim();
@@ -459,15 +505,12 @@
 
         // =======================================================================
         // PARTE 3: LÓGICA DO FORMULÁRIO (Adicionar/Remover/Enviar)
+        // (Sem alterações)
         // =======================================================================
 
-        /**
-         * MUDANÇA AQUI (3/4): Adicionado o campo <select> para Venda Perdida
-         */
         function adicionarProdutoLinha() {
             const tabelaCorpo = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0];
             const novaLinha = tabelaCorpo.insertRow();
-
             novaLinha.innerHTML = `
                 <td class="col-cod"><input type="text" class="input-cod" placeholder="SKU"></td>
                 <td class="col-nome"><input type="text" class="input-nome" placeholder="Digite o nome (ex: bis*briga*)"></td>
@@ -475,7 +518,6 @@
                 <td class="col-custo"><input type="text" class="input-preco" placeholder="R$ (Opc.)"></td>
                 <td class="col-concorrente"><input type="text" class="input-preco" placeholder="R$"></td>
                 <td class="col-foto"><input type="text" class="input-foto" placeholder="Cole o link da foto/NF"></td>
-                
                 <td class="col-perdida">
                     <select class="input-venda-perdida">
                         <option value="">--</option>
@@ -483,24 +525,19 @@
                         <option value="FALSE">Não</option>
                     </select>
                 </td>
-                
                 <td class="col-acao"><button type="button" class="btn btn-remove" onclick="removerProdutoLinha(this)">Remover</button></td>
             `;
-
             novaLinha.querySelector('.input-cod').addEventListener('blur', handleSkuBlur);
             novaLinha.querySelector('.input-nome').addEventListener('input', handleNameInput);
             novaLinha.querySelector('.input-nome').addEventListener('focus', handleNameInput);
-            
             novaLinha.querySelectorAll('.input-preco').forEach(input => {
                 input.addEventListener('blur', (e) => formatarInputValorMonetario(e.target));
             });
         }
-
         function removerProdutoLinha(botao) {
             const linha = botao.closest('tr');
             linha.parentNode.removeChild(linha);
         }
-        
         function validarFormulario() {
             let isValid = true;
             document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
@@ -542,10 +579,6 @@
             }
             return isValid;
         }
-
-        /**
-         * MUDANÇA AQUI (4/4): Adicionado 'vendaPerdida' ao objeto 'products.push'
-         */
         async function handleFormSubmit(event) {
             event.preventDefault(); 
             if (!validarFormulario()) {
@@ -556,13 +589,11 @@
                 alert("ERRO: A 'URL_DO_APPS_SCRIPT' no código JS não foi configurada.");
                 return;
             }
-
             const btnSubmit = document.getElementById("btn-submit");
             const formStatus = document.getElementById("form-status");
             btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
             formStatus.style.display = 'none';
-
             try {
                 const header = {
                     data: document.getElementById('dataCotacao').value,
@@ -572,17 +603,13 @@
                     cliente: document.getElementById('cliente').value.trim(),
                     concorrente: document.getElementById('concorrenteHeader').value.trim()
                 };
-
                 const products = [];
                 const linhasProdutos = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0].rows;
-                
                 for (const linha of linhasProdutos) {
                     const cod = linha.querySelector('.input-cod').value.trim();
                     const nome = linha.querySelector('.input-nome').value.trim();
                     const precos = linha.querySelectorAll('.input-preco');
-                    
                     if (!cod && !nome) continue; 
-                    
                     products.push({
                         cod: cod,
                         nome: nome,
@@ -590,26 +617,19 @@
                         custo: parseValorUsuario(precos[1].value),
                         concorrente: parseValorUsuario(precos[2].value),
                         foto: linha.querySelector('.input-foto').value.trim(),
-                        vendaPerdida: linha.querySelector('.input-venda-perdida').value.trim() // <-- NOVO DADO
+                        vendaPerdida: linha.querySelector('.input-venda-perdida').value.trim()
                     });
                 }
-                
                 if (products.length === 0) {
                     throw new Error("Nenhum produto válido para enviar.");
                 }
-
-                // A função de Apps Script (do dashboard) já sabe lidar com 'type: cotacao'
-                // ou a ausência dele, então podemos enviar o 'type' para padronizar.
                 const payload = JSON.stringify({ type: 'cotacao', header, products });
-                
                 const response = await fetch(URL_DO_APPS_SCRIPT, {
                     method: "POST",
                     body: payload,
                     headers: { "Content-Type": "text/plain;charset=utf-8" },
                 });
-
                 const resultado = await response.json();
-
                 if (resultado.status === "sucesso") {
                     formStatus.textContent = `✅ Sucesso! ${resultado.linhasGravadas} linhas de cotação salvas.`;
                     formStatus.className = 'status-message status-success';
@@ -621,7 +641,6 @@
                 } else {
                     throw new Error(resultado.erro);
                 }
-
             } catch (error) {
                 console.error("Erro no envio:", error);
                 formStatus.textContent = `❌ Erro: ${error.message}`;
@@ -635,6 +654,7 @@
 
         // =======================================================================
         // PARTE 4: FUNÇÕES UTILITÁRIAS (Memória, Formatação e Dica)
+        // (Sem alterações)
         // =======================================================================
 
         function showSearchHint(event) {
@@ -647,35 +667,28 @@
                 "- 'LEITE*COND' (encontra: LEITE CONDENSADO)"
             );
         }
-        
         function getTodayDateString() {
             return new Date().toISOString().split('T')[0];
         }
-
         function saveDataToMemory() {
             sessionStorage.setItem(SUPERVISOR_STORAGE_KEY, document.getElementById('supervisorNome').value.trim());
             sessionStorage.setItem(VENDEDOR_STORAGE_KEY, document.getElementById('vendedorNome').value.trim());
             sessionStorage.setItem(CIDADE_STORAGE_KEY, document.getElementById('cidade').value.trim());
         }
-
         function loadSavedData() {
             document.getElementById('supervisorNome').value = sessionStorage.getItem(SUPERVISOR_STORAGE_KEY) || '';
             document.getElementById('vendedorNome').value = sessionStorage.getItem(VENDEDOR_STORAGE_KEY) || '';
             document.getElementById('cidade').value = sessionStorage.getItem(CIDADE_STORAGE_KEY) || '';
         }
-        
         function clearSavedData() {
             sessionStorage.removeItem(SUPERVISOR_STORAGE_KEY);
             sessionStorage.removeItem(VENDEDOR_STORAGE_KEY);
             sessionStorage.removeItem(CIDADE_STORAGE_KEY);
-            
             document.getElementById('supervisorNome').value = '';
             document.getElementById('vendedorNome').value = '';
             document.getElementById('cidade').value = '';
-            
             alert('Dados de Supervisor, Vendedor e Cidade foram limpos da memória.');
         }
-
         function parseValorUsuario(valorStr) {
             if (!valorStr || typeof valorStr !== 'string') return 0;
             let valorLimpo = valorStr.replace(/\./g, '');
@@ -684,15 +697,134 @@
             const numero = parseFloat(valorLimpo);
             return isNaN(numero) ? 0 : numero;
         }
-
         function formatarNumeroParaInput(numero) {
             if (typeof numero !== 'number' || isNaN(numero)) return '0,00';
             return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-
         function formatarInputValorMonetario(inputElement) {
             const valorNumerico = parseValorUsuario(inputElement.value || '0');
             inputElement.value = (valorNumerico === 0) ? '' : formatarNumeroParaInput(valorNumerico);
+        }
+
+        // =======================================================================
+        // PARTE 5: --- MUDANÇA --- LÓGICA DO VISUALIZADOR DE IMAGEM
+        // (Substituída pela sua função de fetch direto, sem proxy)
+        // =======================================================================
+
+        /**
+         * Função de Scraper (direto, sem proxy)
+         * Tenta buscar a imagem no site da Ameripan.
+         */
+        async function getProductInfoFromAmeripan(sku) {
+            try {
+                // Esta é a técnica de fetch direto que você solicitou
+                const url = `https://www.ameripan.com.br/buscar?q=${sku}`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar produto: ${response.status} ${response.statusText}`);
+                }
+                
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                const productDiv = doc.querySelector(`.listagem-item .produto-sku.hide`);
+                if (!productDiv) {
+                    console.error(`Produto com SKU ${sku} não encontrado na Ameripan.`);
+                    return null;
+                }
+                const skuText = productDiv.textContent.trim();
+                if(skuText !== sku){
+                    console.error(`SKU procurado (${sku}) difere do SKU encontrado (${skuText}).`);
+                    return null;
+                }
+                
+                const parentDiv = productDiv.closest('.listagem-item');
+                const imgSrc = parentDiv.querySelector('.imagem-produto img').src;
+                
+                // Conserta URLs relativas (ex: /Imagens/...)
+                let finalImageUrl = imgSrc;
+                if (imgSrc.startsWith('/')) {
+                    finalImageUrl = `https://www.ameripan.com.br${imgSrc}`;
+                }
+
+                return { imageUrl: finalImageUrl };
+
+            } catch (error) {
+                // Este erro (CORS) é esperado
+                console.error("Erro ao obter informações do produto (Scraper):", error);
+                return null; // Falha para permitir o fallback
+            }
+        }
+
+        /**
+         * Função principal que orquestra a busca da imagem.
+         */
+        async function handleImageSearch() {
+            const skuInput = document.getElementById('image-sku-input');
+            const resultContainer = document.getElementById('image-result-container');
+            const sku = skuInput.value.trim();
+
+            if (!sku) {
+                alert("Por favor, digite o código do produto.");
+                return;
+            }
+
+            resultContainer.innerHTML = `<p><i class="fas fa-spinner fa-spin"></i> Buscando imagem, por favor aguarde...</p>`;
+            let found = false;
+
+            // --- Tentativa 1: Scraper (Direto) ---
+            // AVISO: Isto irá falhar na maioria dos navegadores devido ao CORS.
+            try {
+                const productInfo = await getProductInfoFromAmeripan(sku);
+                if (productInfo && productInfo.imageUrl) {
+                    displayImage(productInfo.imageUrl, `Imagem do ${sku} (Fonte: Ameripan)`);
+                    found = true;
+                }
+            } catch (error) {
+                console.warn(`Scraper falhou (Erro de CORS esperado): ${error.message}. Tentando fallback.`);
+            }
+            
+            // --- Tentativa 2: Fallback (GitHub) ---
+            if (!found) {
+                console.log(`Scraper falhou. Tentando fallback no GitHub para SKU: ${sku}`);
+                displayFallbackImage(sku);
+            }
+        }
+        
+        /**
+         * Tenta carregar a imagem do repositório GitHub.
+         */
+        function displayFallbackImage(sku) {
+            const resultContainer = document.getElementById('image-result-container');
+            const fallbackUrl = FALLBACK_IMAGE_URL.replace('{SKU}', sku);
+            
+            const img = new Image();
+            
+            img.onload = function() {
+                img.alt = `Imagem do ${sku} (Fonte: GitHub)`;
+                resultContainer.innerHTML = '';
+                resultContainer.appendChild(img);
+            };
+            
+            img.onerror = function() {
+                resultContainer.innerHTML = `<p><i class="fas fa-exclamation-triangle"></i> Imagem não encontrada no site ou no GitHub para o SKU: <b>${sku}</b>.</p>`;
+            };
+            
+            img.src = fallbackUrl;
+        }
+
+        /**
+         * Função utilitária para exibir a imagem encontrada.
+         */
+        function displayImage(src, alt) {
+            const resultContainer = document.getElementById('image-result-container');
+            resultContainer.innerHTML = '';
+            const imgElement = document.createElement('img');
+            imgElement.src = src;
+            imgElement.alt = alt;
+            resultContainer.appendChild(imgElement);
         }
 
     </script>
