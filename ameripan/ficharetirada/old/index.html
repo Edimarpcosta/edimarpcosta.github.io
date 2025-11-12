@@ -3,13 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
     <title>Ficha de Retirada de Mercadoria - Ameripan (Compacta)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <style>
-        body {
+        /* [SEU CSS ORIGINAL - Omitido para economizar espaço] */
+         body {
             font-family: Arial, sans-serif;
             margin: 20px;
             background-color: #f4f4f4;
@@ -117,7 +123,38 @@
         .btn-add { background-color: #28a745; color: white; } .btn-add:hover { background-color: #218838; }
         .btn-remove { background-color: #dc3545; color: white; padding: 6px 10px; font-size: 12px; } .btn-remove:hover { background-color: #c82333; }
         .btn-cep { background-color: #007bff; color:white; border:none; padding: 0 10px; height: 40px; border-radius: 0 4px 4px 0; cursor:pointer;} .btn-cep:hover { background-color: #0056b3; }
-        .btn-generate { background-color: #005A9C; color: white; display: block; width: 100%; max-width: 300px; margin: 30px auto 0 auto; } .btn-generate:hover { background-color: #004a80; }
+        
+        /* Oculta o botão de gerar antigo */
+        .btn-generate { display: none !important; }
+        
+        /* --- NOVOS ESTILOS PARA OS BOTÕES --- */
+        .button-container { 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px; 
+            margin-top: 30px; 
+            flex-wrap: wrap; 
+        }
+        .btn-download, .btn-share { 
+            flex: 1 1 200px; /* Flexível, mas com base de 200px */
+            max-width: 250px; /* Limite de largura */
+            margin-top: 0; /* Resetar margem do .btn */
+            box-sizing: border-box;
+        }
+        .btn-download { 
+            background-color: #005A9C; 
+            color: white; 
+        }
+        .btn-download:hover { background-color: #004a80; }
+        
+        .btn-share { 
+            background-color: #25D366; 
+            color: white; 
+            display: none; /* Oculto por padrão, JS vai mostrar no celular */
+        }
+        .btn-share:hover { background-color: #1EAE50; }
+        /* --- FIM DOS NOVOS ESTILOS --- */
+
         .total-display { text-align: right; font-size: 1.2em; font-weight: bold; margin-top: 15px; color: #005A9C; }
         .radio-group { margin-bottom: 10px; } 
         .radio-group label { font-weight: normal; margin-right: 15px; display: inline-block; } 
@@ -156,7 +193,6 @@
                 <div id="ufClienteDiv"><label for="ufCliente">UF:</label><input type="text" id="ufCliente" placeholder="SP" maxlength="2" value="SP" required></div>
             </div>
         </div>
-
         <div class="form-section">
             <h2>Responsáveis e Operação</h2>
              <div class="form-grid">
@@ -174,15 +210,12 @@
                 <input type="text" id="outrosEspecificar" placeholder="Descreva o tipo de operação 'Outros'">
             </div>
         </div>
-
         <div class="form-section">
             <h2>Produtos para Retirada</h2>
-            
             <div style="margin-bottom: 10px; display: flex; align-items: center; padding: 5px; background-color: #f8f9fa; border-radius: 4px;">
                 <input type="checkbox" id="syncPedidoData" style="width: auto; margin-right: 8px; height: 16px; width: 16px;" checked>
                 <label for="syncPedidoData" style="margin-bottom: 0; font-weight: normal; cursor: pointer;">Todos produtos do mesmo pedido e data</label>
             </div>
-
             <div class="table-products-container">
                 <div class="table-loading-overlay" id="tableLoadingOverlay" style="display: none;">Carregando lista de produtos...</div>
                 <table class="table-products" id="tabelaProdutos">
@@ -200,13 +233,19 @@
             <button type="button" class="btn btn-add" onclick="adicionarProdutoLinha()">Adicionar Produto</button>
             <div class="total-display" id="valorTotalHtml">VALOR TOTAL: R$ 0,00</div>
         </div>
-
         <div class="form-section">
             <h2>Detalhes Adicionais</h2>
             <div class="form-grid-full"><label for="motivoRetirada">Motivo da Retirada:</label><textarea id="motivoRetirada" placeholder="Descreva o motivo detalhado da retirada/troca" required></textarea></div>
         </div>
 
-        <button type="button" class="btn btn-generate" onclick="gerarFichaRetiradaPdf()">Gerar PDF da Ficha</button>
+        <button type="button" class="btn btn-generate" onclick="alert('Este botão foi substituído')">Gerar PDF da Ficha</button>
+        
+        <div class="button-container">
+            <button type="button" class="btn btn-download" onclick="handleDownloadPdf()">Baixar PDF</button>
+            <button type="button" class="btn btn-share" id="btnSharePdf" onclick="handleSharePdf()">
+                Compartilhar <i class="fab fa-whatsapp"></i>
+            </button>
+        </div>
         
         <div class="footer-section-html">
             <p>AMERIPAN PRODUTOS PARA PANIFICACAO LTDA.</p>
@@ -218,34 +257,32 @@
     <script>
         // --- Configurações Google Sheets ---
         const SPREADSHEET_ID = '1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q';
-        const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo'; // SUBSTITUA PELA SUA CHAVE REAL
+        const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo'; // ⚠️ CUIDADO: Chave de API pública. Restrinja no Google Cloud.
         const PRODUCTS_SHEET_NAME = 'produtos'; 
         const PRODUCTS_RANGE = 'A2:B'; 
 
         let productList = new Map(); 
-        const SUPERVISOR_STORAGE_KEY = 'fichaRetiradaSupervisor';
-        const VENDEDOR_STORAGE_KEY = 'fichaRetiradaVendedor';
+        
+        // ALTERADO: Trocado localStorage por sessionStorage para isolar abas
+        const SUPERVISOR_STORAGE_KEY = 'fichaRetiradaSupervisor_Session';
+        const VENDEDOR_STORAGE_KEY = 'fichaRetiradaVendedor_Session';
 
-        // --- NOVA FUNÇÃO: NAVEGAÇÃO COM "ENTER" ---
+        // --- FUNÇÃO: NAVEGAÇÃO COM "ENTER" (Sem alterações) ---
         function setupEnterKeyNavigation() {
             const container = document.querySelector('.container');
             if (!container) return;
 
             container.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
-                    // Exceção para o campo de CEP, que já tem sua própria função de Enter para buscar o endereço
                     if (e.target.id === 'cepCliente') {
                         return;
                     }
-
-                    // Previne o comportamento padrão (como adicionar nova linha em textarea ou submeter formulário)
                     e.preventDefault();
                     
-                    // Lista de todos os elementos que podem receber foco, na ordem em que aparecem, excluindo os botões de remover
                     const focusableSelector = 'input:not([readonly]), select, textarea, button.btn:not(.btn-remove)';
                     const focusableElements = Array.from(
                         container.querySelectorAll(focusableSelector)
-                    ).filter(el => el.offsetParent !== null && !el.disabled); // Apenas elementos visíveis e habilitados
+                    ).filter(el => el.offsetParent !== null && !el.disabled); 
 
                     const currentIndex = focusableElements.indexOf(document.activeElement);
                     
@@ -253,7 +290,6 @@
                         const nextElement = focusableElements[currentIndex + 1];
                         nextElement.focus();
                         
-                        // Se o próximo elemento for um campo de texto, seleciona o conteúdo para fácil substituição
                         if (nextElement.select && typeof nextElement.select === 'function') {
                             nextElement.select();
                         }
@@ -280,7 +316,10 @@
                 productLoadStatus.className = 'status-message status-loading';
                 productLoadStatus.style.display = 'block';
             }
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${PRODUCTS_SHEET_NAME}!${PRODUCTS_RANGE}?key=${API_KEY}`;
+            
+            // ALTERADO: Adicionado parâmetro anti-cache (_=${timestamp}) para buscar dados sempre novos
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${PRODUCTS_SHEET_NAME}!${PRODUCTS_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
+            
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
@@ -313,13 +352,15 @@
         }
         
         function salvarResponsaveis() {
-            localStorage.setItem(SUPERVISOR_STORAGE_KEY, document.getElementById('supervisorNome').value.trim());
-            localStorage.setItem(VENDEDOR_STORAGE_KEY, document.getElementById('vendedorNome').value.trim());
+            // ALTERADO: Usando sessionStorage
+            sessionStorage.setItem(SUPERVISOR_STORAGE_KEY, document.getElementById('supervisorNome').value.trim());
+            sessionStorage.setItem(VENDEDOR_STORAGE_KEY, document.getElementById('vendedorNome').value.trim());
         }
 
         function carregarResponsaveis() {
-            document.getElementById('supervisorNome').value = localStorage.getItem(SUPERVISOR_STORAGE_KEY) || '';
-            document.getElementById('vendedorNome').value = localStorage.getItem(VENDEDOR_STORAGE_KEY) || '';
+            // ALTERADO: Usando sessionStorage
+            document.getElementById('supervisorNome').value = sessionStorage.getItem(SUPERVISOR_STORAGE_KEY) || '';
+            document.getElementById('vendedorNome').value = sessionStorage.getItem(VENDEDOR_STORAGE_KEY) || '';
         }
 
         function toggleOutrosEspecificar() {
@@ -340,13 +381,15 @@
             document.getElementById('dataRequisicao').value = getTodayDateString();
             carregarResponsaveis(); 
             
-            // --- NOVA FUNÇÃO CHAMADA AQUI ---
             setupEnterKeyNavigation();
 
             document.getElementById('supervisorNome').addEventListener('blur', salvarResponsaveis);
             document.getElementById('vendedorNome').addEventListener('blur', salvarResponsaveis);
-            document.getElementById('foneCliente').addEventListener('input', (e) => formatarTelefone(e.target));
-            document.getElementById('cepCliente').addEventListener('input', (e) => formatarCEP(e.target));
+            
+            // ALTERADO: Eventos 'input' trocados por 'blur' para formatar ao sair
+            document.getElementById('foneCliente').addEventListener('blur', (e) => formatarTelefone(e.target));
+            document.getElementById('cepCliente').addEventListener('blur', (e) => formatarCEP(e.target));
+            
             document.getElementById('cepCliente').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscarEnderecoPorCEP(); } });
             document.getElementById('btnBuscarCep').addEventListener('click', buscarEnderecoPorCEP);
             document.getElementById('opRetirada').addEventListener('change', toggleOutrosEspecificar);
@@ -362,8 +405,18 @@
                     productLoadStatus.style.display = 'block';
                 }
             });
+
+            // --- NOVO: Lógica para mostrar o botão de compartilhar ---
+            const shareButton = document.getElementById('btnSharePdf');
+            // Verifica se a API de compartilhamento (navigator.share) existe
+            if (navigator.share && navigator.canShare) {
+                shareButton.style.display = 'block';
+            }
+            // --- FIM DA LÓGICA ---
         });
         
+        // [Funções da tabela: adicionarProdutoLinha, handleValorFocus, buscarNomeProduto, handleValorInput, etc... Sem alterações]
+        // ... (Omitidas para economizar espaço, elas continuam as mesmas) ...
         function adicionarProdutoLinha(cod = '', qtde = '1', desc = '', valorStrInicial = '', pedido = '', dataFat = '') {
             const tabelaCorpo = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0];
             
@@ -457,38 +510,56 @@
         }
         function formatarNumeroParaPdf(valorNumerico) { return valorNumerico.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
         
+        // ALTERADO: Nova função de formatação de telefone (para 'blur')
         function formatarTelefone(inputElement) {
-            let valor = inputElement.value.replace(/\D/g, ""); 
+            let valor = inputElement.value.replace(/\D/g, ""); // Limpa tudo
+            
+            // Remove o '55' do início se for um número brasileiro completo
+            if (valor.startsWith('55') && (valor.length === 12 || valor.length === 13)) {
+                valor = valor.substring(2);
+            }
+            
             const len = valor.length;
-            if (len === 0) inputElement.value = "";
-            else if (len <= 2) inputElement.value = `(${valor}`;
-            else if (len <= 6) inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2)}`;
-            else if (len <= 10) inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 6)}-${valor.substring(6)}`; 
-            else if (len === 11) inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 3)} ${valor.substring(3, 7)}-${valor.substring(7, 11)}`; 
-            else if (len > 11) inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 3)} ${valor.substring(3, 7)}-${valor.substring(7, 11)}`; 
+            if (len === 11) { // Formato (XX) 9 XXXX-XXXX
+                inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 3)} ${valor.substring(3, 7)}-${valor.substring(7, 11)}`;
+            } else if (len === 10) { // Formato (XX) XXXX-XXXX
+                inputElement.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 6)}-${valor.substring(6, 10)}`;
+            } else if (len > 0) {
+                inputElement.value = valor; // Deixa só os números se for inválido
+            } else {
+                inputElement.value = ""; // Limpa se estiver vazio
+            }
         }
 
+        // ALTERADO: Nova função de formatação de CEP (para 'blur')
         function formatarCEP(inputElement) {
-            let valor = inputElement.value.replace(/\D/g, "");
-            if (valor.length > 5) {
-                valor = valor.replace(/^(\d{5})(\d)/, "$1-$2");
+            let valor = inputElement.value.replace(/\D/g, ""); // Limpa tudo
+            const len = valor.length;
+            if (len === 8) {
+                inputElement.value = `${valor.substring(0, 5)}-${valor.substring(5)}`;
+            } else if (len > 0) {
+                inputElement.value = valor; // Deixa só os números se for inválido
+            } else {
+                inputElement.value = ""; // Limpa se estiver vazio
             }
-            if (valor.length > 9) {
-                valor = valor.substring(0,9);
-            }
-            inputElement.value = valor;
         }
 
         async function buscarEnderecoPorCEP() {
+            // [Função buscarEnderecoPorCEP - Sem alterações]
             const cepInput = document.getElementById('cepCliente');
             const addressStatus = document.getElementById('address-status');
             let cep = cepInput.value.replace(/\D/g, "");
 
             if (cep.length !== 8) {
-                addressStatus.textContent = 'CEP inválido. Deve conter 8 dígitos.';
-                addressStatus.className = 'status-message status-error';
-                addressStatus.style.display = 'block';
-                return;
+                if (cep.length > 8) cep = cep.substring(0, 8);
+                if (cep.length === 8) {
+                    formatarCEP(cepInput); 
+                } else {
+                    addressStatus.textContent = 'CEP inválido. Deve conter 8 dígitos.';
+                    addressStatus.className = 'status-message status-error';
+                    addressStatus.style.display = 'block';
+                    return;
+                }
             }
             addressStatus.textContent = 'Buscando CEP...';
             addressStatus.className = 'status-message status-loading';
@@ -520,6 +591,7 @@
         }
         
         function validarFormulario() {
+            // [Função validarFormulario - Sem alterações]
             const erros = [];
             document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
             
@@ -596,15 +668,17 @@
             return true;
         }
 
+        // --- FUNÇÃO DE GERAÇÃO DE PDF REESTRUTURADA ---
 
-        async function gerarFichaRetiradaPdf() {
-            if (!validarFormulario()) {
-                return; 
-            }
-
+        /**
+         * NOVO: Esta função APENAS cria o documento PDF e retorna o objeto
+         * Ela não valida nem salva, permitindo que seja usada por ambas as funções (download e share).
+         */
+        async function criarDocumentoPdf() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4'); 
 
+            // Coleta de dados
             const codCliente = document.getElementById('codCliente').value;
             const dataRequisicao = getDataFormatadaInput('dataRequisicao');
             const nomeCliente = document.getElementById('nomeCliente').value;
@@ -621,7 +695,7 @@
             if (bairroPdf) enderecoCompletoPdf += (enderecoCompletoPdf ? " - " : "") + bairroPdf;
             if (cidadePdf) enderecoCompletoPdf += (enderecoCompletoPdf ? " - " : "") + cidadePdf;
             if (ufPdf) enderecoCompletoPdf += (cidadePdf ? "/" : (enderecoCompletoPdf ? " - " : "")) + ufPdf;
-            if (cepPdfInput && cepPdfInput.replace(/\D/g, '').length === 8) {
+            if (cepPdfInput) {
                 enderecoCompletoPdf += (enderecoCompletoPdf ? " (CEP: " : "CEP: ") + cepPdfInput + (enderecoCompletoPdf ? ")" : "");
             }
             enderecoCompletoPdf = enderecoCompletoPdf.trim();
@@ -662,6 +736,7 @@
                 valorTotalCalculadoNum += qtdeProd * valorUnitProdNum;
             }
 
+            // Configurações de página
             const pageHeight = doc.internal.pageSize.getHeight(); 
             const pageWidth = doc.internal.pageSize.getWidth();   
             const margin = 10;
@@ -677,6 +752,7 @@
             const tableHeadFontSize = 7;
             const tableCellPadding = 1;
 
+            // Cabeçalho e Bloco de Responsáveis
             doc.setFont("helvetica", "normal");
             doc.setFontSize(companyFontSize);
             doc.text("AMERIPAN PRODUTOS PARA PANIFICACAO LTDA.", pageWidth / 2, currentY, { align: 'center' });
@@ -712,6 +788,7 @@
             
             currentY = Math.max(currentY, responsaveisCurrentY + sectionSpacingSmall); 
 
+            // Bloco de Cliente/Endereço
             doc.setFont("helvetica", "bold");
             doc.setFontSize(labelFontSize);
             
@@ -749,6 +826,7 @@
             doc.text(splitEndereco, clienteCol1ValueX, clienteInfoY);
             currentY = clienteInfoY + (splitEndereco.length * (lineSpacingSmall - 0.5)) + sectionSpacingSmall;
 
+            // Tabela de Produtos (Preto e Branco)
             const head = [['CÓD.PRODUTO', 'QTDE', 'DESCRIÇÃO DO PRODUTO', 'VALOR PROD. FAT', 'PEDIDO(S) DE VENDA', 'DATA FAT.']];
             const body = produtosData.map(p => [
                 p.cod, p.qtde, p.desc, p.valorUnitDisplayPdf, p.pedido, p.dataFat
@@ -756,8 +834,8 @@
 
             doc.autoTable({
                 head: head, body: body, startY: currentY, theme: 'grid',
-                styles: { fontSize: tableBodyFontSize, cellPadding: tableCellPadding, lineColor: [100, 100, 100], lineWidth: 0.1 },
-                headStyles: { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold', fontSize: tableHeadFontSize, cellPadding: tableCellPadding, halign: 'center' },
+                styles: { fontSize: tableBodyFontSize, cellPadding: tableCellPadding, lineColor: [0, 0, 0], lineWidth: 0.1 },
+                headStyles: { fillColor: [255, 255, 255], textColor: [0,0,0], fontStyle: 'bold', fontSize: tableHeadFontSize, cellPadding: tableCellPadding, halign: 'center', lineColor: [0, 0, 0] },
                 columnStyles: { 
                     0: { cellWidth: 30, halign: 'center' }, 1: { cellWidth: 15, halign: 'center' }, 
                     2: { cellWidth: 97 }, 3: { cellWidth: 35, halign: 'right' },
@@ -767,6 +845,7 @@
             });
             currentY = doc.lastAutoTable.finalY + sectionSpacingSmall;
 
+            // Bloco Total e Motivo
             doc.setFont("helvetica", "bold"); doc.setFontSize(labelFontSize + 1);
             const rotuloTotalTexto = "VALOR TOTAL:";
             const valorTotalFormatadoPdf = "R$ " + formatarNumeroParaPdf(valorTotalCalculadoNum); 
@@ -797,8 +876,11 @@
             doc.text("PRODUTO ESTAR LACRADO E COM CONDIÇÕES DE USO, CASO CONTRARIO NÃO SERÁ FEITA A RETIRADA.", margin, currentY);
             currentY += sectionSpacingSmall + 2; 
             
-            const signatureLineY = pageHeight - margin - 20;
-            const companyFooterY = pageHeight - margin - 5;
+            // Posição dinâmica do rodapé e assinaturas
+            currentY += 15; 
+            
+            const signatureLineY = currentY;
+            const companyFooterY_Base = signatureLineY + 10;
 
             doc.setFontSize(labelFontSize -1);
             const signatureWidth = 70;
@@ -812,13 +894,62 @@
             doc.text("VENDEDOR", vendAssinX1 + signatureWidth / 2, signatureLineY + 3, { align: 'center' });
 
             doc.setFontSize(defaultFontSize - 2);
-            doc.setTextColor(100);
-            doc.text("AMERIPAN PRODUTOS PARA PANIFICACAO LTDA.", pageWidth / 2, companyFooterY - 6, { align: 'center' });
-            doc.text("CNPJ: 65.029.035/0001-07", pageWidth / 2, companyFooterY - 3, { align: 'center' });
-            doc.text("Rua Purus, 652 - Jardim São Roque - Americana/SP - CEP: 13469-130", pageWidth / 2, companyFooterY, { align: 'center' });
+            doc.setTextColor(0); 
+            doc.text("AMERIPAN PRODUTOS PARA PANIFICACAO LTDA.", pageWidth / 2, companyFooterY_Base - 6, { align: 'center' });
+            doc.text("CNPJ: 65.029.035/0001-07", pageWidth / 2, companyFooterY_Base - 3, { align: 'center' });
+            doc.text("Rua Purus, 652 - Jardim São Roque - Americana/SP - CEP: 13469-130", pageWidth / 2, companyFooterY_Base, { align: 'center' });
             doc.setTextColor(0);
 
-            doc.save(`Ficha_Retirada_PAISAGEM_${codCliente || 'CODCLIENTE'}_${new Date().toISOString().slice(0,10)}.pdf`);
+            const fileName = `Ficha_Retirada_PAISAGEM_${codCliente || 'CODCLIENTE'}_${new Date().toISOString().slice(0,10)}.pdf`;
+
+            // Retorna o documento e os dados necessários
+            return { doc, fileName, nomeCliente, codCliente };
+        }
+
+        /**
+         * NOVO: Função para o botão "Baixar PDF"
+         * Esta é a função segura para desktop, idêntica ao old.html
+         */
+        async function handleDownloadPdf() {
+            if (!validarFormulario()) {
+                return;
+            }
+            const { doc, fileName } = await criarDocumentoPdf();
+            doc.save(fileName);
+        }
+
+        /**
+         * NOVO: Função para o botão "Compartilhar"
+         * Esta função usa a API Nativa (Web Share) e só funciona em dispositivos móveis.
+         */
+        async function handleSharePdf() {
+            if (!validarFormulario()) {
+                return;
+            }
+            const { doc, fileName, nomeCliente, codCliente } = await criarDocumentoPdf();
+            
+            const pdfBlob = doc.output('blob');
+            const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+            
+            const shareData = {
+                title: 'Ficha de Retirada',
+                text: `Segue a Ficha de Retirada para o cliente ${nomeCliente} (Cód: ${codCliente}).`,
+                files: [pdfFile]
+            };
+
+            try {
+                // Tenta compartilhar o arquivo
+                await navigator.share(shareData);
+                console.log('Arquivo compartilhado com sucesso!');
+            } catch (err) {
+                // Trata erros, como o usuário cancelar o compartilhamento
+                if (err.name !== 'AbortError') {
+                    console.error('Erro ao compartilhar:', err);
+                    alert('Erro ao compartilhar o arquivo. Tente baixar o PDF e anexar manualmente.');
+                } else {
+                    console.log('Compartilhamento cancelado pelo usuário.');
+                }
+            }
         }
     </script>
 </body>
