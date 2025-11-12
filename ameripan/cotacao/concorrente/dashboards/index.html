@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Análise de Preços - Ameripan</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        /* --- Configuração Global --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            font-size: 14px;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: auto;
+            display: grid;
+            gap: 20px;
+        }
+        h1, h2 { color: #005A9C; margin-bottom: 15px; }
+        h1 { text-align: center; }
+        h2 { border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+
+        /* --- Módulos (Cards) --- */
+        .card {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        /* --- Módulo 1: Filtros --- */
+        #filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            align-items: flex-end;
+        }
+        .filter-group { display: flex; flex-direction: column; }
+        label { font-weight: 600; margin-bottom: 5px; color: #555; }
+        input[type="date"], select, button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .btn {
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #btn-analyze { background-color: #005A9C; }
+        #btn-analyze:hover { background-color: #004a80; }
+        #btn-export { background-color: #1a73e8; }
+        #btn-export:hover { background-color: #1765c4; }
+        #btn-export:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* --- Overlay de Carregamento --- */
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.85);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            color: #005A9C;
+        }
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #005A9C;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- Módulo 2: KPIs --- */
+        #kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+        .kpi-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .kpi-title { font-size: 0.9em; color: #666; font-weight: 600; }
+        .kpi-value { font-size: 2.2em; font-weight: 700; color: #005A9C; margin-top: 5px; }
+        .kpi-value.loss { color: #dc3545; } /* Vermelho para taxa de perda */
+        .kpi-value.margin-bad { color: #ffc107; } /* Amarelo para margem negativa */
+
+        /* --- Módulo 3: Gráficos --- */
+        #charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        /* --- Módulo 4: Tabela --- */
+        #table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        #products-table {
+            width: 100%;
+            min-width: 1000px;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        #products-table th, #products-table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            text-align: left;
+        }
+        #products-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer; /* Indica que é ordenável */
+            position: relative;
+        }
+        /* Ícone de ordenação */
+        #products-table th .sort-icon {
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            font-size: 0.8em;
+            margin-left: 5px;
+            color: #aaa;
+        }
+        #products-table th.sorted-asc .sort-icon::before { content: "\f0de"; color: #005A9C; } /* Seta p/ cima */
+        #products-table th.sorted-desc .sort-icon::before { content: "\f0dd"; color: #005A9C; } /* Seta p/ baixo */
+        
+        #products-table tbody tr:nth-child(even) { background-color: #f9f9f9; }
+        #products-table tbody tr:hover { background-color: #eef; }
+        
+        /* Cores para margens na tabela */
+        .margin-ok { color: #198754; font-weight: 600; } /* Verde */
+        .margin-warn { color: #ff9800; font-weight: 600; } /* Laranja */
+        .margin-danger { color: #dc3545; font-weight: 600; } /* Vermelho */
+
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-status">Carregando dados da planilha...</div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-chart-line"></i> Dashboard de Análise de Preços</h1>
+        </header>
+
+        <section class="card" id="filters-card">
+            <h2><i class="fas fa-filter"></i> Painel de Controle</h2>
+            <div id="filters-grid">
+                <div class="filter-group">
+                    <label for="filter-date-start">Data Início:</label>
+                    <input type="date" id="filter-date-start">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-date-end">Data Fim:</label>
+                    <input type="date" id="filter-date-end">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-vendedor">Vendedor:</label>
+                    <select id="filter-vendedor"><option value="">-- Todos --</option></select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-cidade">Cidade:</label>
+                    <select id="filter-cidade"><option value="">-- Todos --</option></select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-concorrente">Concorrente (Geral):</label>
+                    <select id="filter-concorrente"><option value="">-- Todos --</option></select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-venda-perdida">Venda Perdida?</label>
+                    <select id="filter-venda-perdida">
+                        <option value="">-- Todos --</option>
+                        <option value="TRUE">Sim (Perdida)</option>
+                        <option value="FALSE">Não (Ganha/Recuperada)</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button class="btn" id="btn-analyze" title="Aplicar filtros e recarregar painel">
+                        <i class="fas fa-search"></i> Analisar
+                    </button>
+                </div>
+                <div class="filter-group">
+                    <button class="btn" id="btn-export" title="Exportar dados filtrados para uma nova aba na planilha" disabled>
+                        <i class="fas fa-file-excel"></i> Exportar Visão
+                    </button>
+                </div>
+            </div>
+            <div id="filter-status" style="margin-top: 15px; text-align: center;"></div>
+        </section>
+
+        <section id="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">COTAÇÕES ANALISADAS</div>
+                <div class="kpi-value" id="kpi-total-cotacoes">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">TAXA DE PERDA</div>
+                <div class="kpi-value" id="kpi-taxa-perda">0%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">MINHA MARGEM MÉDIA (FLEX)</div>
+                <div class="kpi-value" id="kpi-margem-flex">0%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">MARGEM P/ COBRIR (CONC.)</div>
+                <div class="kpi-value" id="kpi-margem-concorrente">0%</div>
+            </div>
+        </section>
+
+        <section id="charts-grid">
+            <div class="card">
+                <h2><i class="fas fa-chart-bar"></i> Análise de "Guerra de Preço" (Top 5 Vendedores)</h2>
+                <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Compara sua margem média com a margem necessária para cobrir o concorrente.</p>
+                <canvas id="chart-guerra-preco" height="250"></canvas>
+            </div>
+            <div class="card">
+                <h2><i class="fas fa-map-marker-alt"></i> Análise por Cidade</h2>
+                <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Mostra as cidades com maior número de cotações perdidas.</p>
+                <canvas id="chart-perdas-cidade" height="250"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2><i class="fas fa-list-ul"></i> Análise Detalhada de Produtos</h2>
+                <span id="table-row-count" style="color: #666; font-size: 0.9em;"></span>
+            </div>
+            <div id="table-container">
+                <table id="products-table">
+                    <thead>
+                        <tr>
+                            <th data-key="dataCotacao" data-type="string">Data<span class="sort-icon"></span></th>
+                            <th data-key="nomeProduto" data-type="string">Produto<span class="sort-icon"></span></th>
+                            <th data-key="vendedor" data-type="string">Vendedor<span class="sort-icon"></span></th>
+                            <th data-key="custo" data-type="number">Custo<span class="sort-icon"></span></th>
+                            <th data-key="precoFlex" data-type="number">Preço Flex<span class="sort-icon"></span></th>
+                            <th data-key="precoConcorrente" data-type="number">Preço Conc.<span class="sort-icon"></span></th>
+                            <th data-key="diffPreco" data-type="number">Diferença (R$)<span class="sort-icon"></span></th>
+                            <th data-key="minhaMargem" data-type="number">Minha Margem (%)<span class="sort-icon"></span></th>
+                            <th data-key="margemParaCobrir" data-type="number">Margem p/ Cobrir (%)<span class="sort-icon"></span></th>
+                            <th data-key="vendaPerdida" data-type="string">Venda Perdida?<span class="sort-icon"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // =======================================================================
+        // CONFIGURAÇÕES
+        // =======================================================================
+        
+        // --- Configurações Google (Pré-preenchidas) ---
+        const SHEET_ID = '1IkpsIk9sJbHWyVMPn0T-lX9Aq3EVeCzvkwfEQwj9NS0';
+        const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo'; // Sua API Key
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw3aHahFM5jItTRIaZKhmJl0E_XDKSKmMtFLjgpY61e6yOGNOYuj1qBXTG4I-TL5OAYWA/exec'; // Sua URL
+        
+        // --- Configurações do Painel ---
+        const SHEET_NAME = 'COTAÇÕES';
+        const DATA_RANGE = 'A2:N'; // Inclui a nova Coluna N (Venda Perdida)
+        
+        // --- Variáveis Globais de Dados ---
+        let globalData = []; // Todos os dados brutos da planilha
+        let filteredData = []; // Dados após aplicação dos filtros
+        
+        // --- Variáveis Globais de Gráficos ---
+        let chartGuerraPreco = null;
+        let chartPerdasCidade = null;
+
+        // --- Mapeamento de Colunas (Índice p/ Chave) ---
+        // Crucial para converter o array da API em objetos fáceis de usar
+        const COLUMN_MAP = {
+            0: 'dataEnvio', 1: 'dataCotacao', 2: 'supervisor', 3: 'vendedor',
+            4: 'cidade', 5: 'cliente', 6: 'concorrenteHeader', 7: 'codProduto',
+            8: 'nomeProduto', 9: 'precoFlex', 10: 'custo', 11: 'precoConcorrente',
+            12: 'linkFoto', 13: 'vendaPerdida' // Coluna N (índice 13)
+        };
+        
+        // =======================================================================
+        // INICIALIZAÇÃO
+        // =======================================================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Associa eventos aos botões
+            document.getElementById('btn-analyze').addEventListener('click', runAnalysis);
+            document.getElementById('btn-export').addEventListener('click', handleExport);
+            
+            // Habilita a ordenação da tabela
+            setupTableSorting();
+
+            // Carga inicial dos dados
+            loadDataFromSheet();
+        });
+
+        // =======================================================================
+        // ETAPA 1: CARREGAMENTO DE DADOS (LEITURA)
+        // =======================================================================
+
+        async function loadDataFromSheet() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingStatus = document.getElementById('loading-status');
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}!${DATA_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
+            
+            try {
+                loadingStatus.textContent = 'Buscando dados na Planilha...';
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 403) throw new Error('Falha na API Key. Verifique se a chave está correta e se a API Google Sheets está ativada.');
+                    if (response.status === 404) throw new Error('Planilha ou Aba não encontrada. Verifique o ID e o nome da aba.');
+                    throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.values || data.values.length === 0) {
+                    throw new Error('Planilha vazia ou sem dados no intervalo A2:N.');
+                }
+
+                loadingStatus.textContent = 'Processando dados...';
+                globalData = parseSheetData(data.values);
+                
+                loadingStatus.textContent = 'Montando filtros...';
+                populateFilters();
+                
+                loadingStatus.textContent = 'Análise inicial...';
+                runAnalysis(); // Roda a primeira análise com todos os dados
+                
+                loadingOverlay.style.display = 'none'; // Esconde o overlay
+                document.getElementById('btn-export').disabled = false; // Habilita exportação
+                
+            } catch (error) {
+                console.error('Erro fatal ao carregar dados:', error);
+                loadingStatus.innerHTML = `❌ Erro: ${error.message}<br><br>Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode VER".`;
+                loadingStatus.style.color = 'red';
+            }
+        }
+        
+        /**
+         * Converte o Array[Array] da API em um Array[Object]
+         */
+        function parseSheetData(rows) {
+            return rows.map(row => {
+                let obj = {};
+                for (let i = 0; i < row.length; i++) {
+                    const key = COLUMN_MAP[i];
+                    if (key) {
+                        let value = row[i];
+                        
+                        // Converte valores numéricos
+                        if (['precoFlex', 'custo', 'precoConcorrente'].includes(key)) {
+                            // O Apps Script salva como número, então o parseFloat deve funcionar
+                            value = parseFloat(value) || 0;
+                        
+                        // Normaliza "Venda Perdida"
+                        } else if (key === 'vendaPerdida') {
+                            value = String(value).toUpperCase().trim();
+                            if (value === 'TRUE' || value === 'VERDADEIRO') value = 'TRUE';
+                            else if (value === 'FALSE' || value === 'FALSO') value = 'FALSE';
+                            else value = 'N/A'; // Dados não preenchidos
+                        }
+                        
+                        obj[key] = value;
+                    }
+                }
+                
+                // Cálculos de margem (feitos uma vez para performance)
+                obj.custo = obj.custo || 0;
+                obj.precoFlex = obj.precoFlex || 0;
+                obj.precoConcorrente = obj.precoConcorrente || 0;
+
+                obj.diffPreco = obj.precoFlex - obj.precoConcorrente;
+                
+                // Minha Margem
+                obj.minhaMargem = (obj.precoFlex > 0 && obj.custo > 0) 
+                    ? (obj.precoFlex - obj.custo) / obj.precoFlex 
+                    : 0;
+                
+                // Margem p/ Cobrir
+                obj.margemParaCobrir = (obj.precoConcorrente > 0 && obj.custo > 0)
+                    ? (obj.precoConcorrente - obj.custo) / obj.precoConcorrente
+                    : 0;
+                    
+                return obj;
+            });
+        }
+        
+        /**
+         * Preenche os <select> dos filtros com valores únicos da planilha
+         */
+        function populateFilters() {
+            const vendedores = new Set();
+            const cidades = new Set();
+            const concorrentes = new Set();
+            
+            // Pega datas min/max
+            let minDate = '9999-12-31';
+            let maxDate = '2000-01-01';
+
+            globalData.forEach(row => {
+                if (row.vendedor) vendedores.add(row.vendedor);
+                if (row.cidade) cidades.add(row.cidade);
+                if (row.concorrenteHeader) concorrentes.add(row.concorrenteHeader);
+                
+                if (row.dataCotacao) {
+                    if (row.dataCotacao < minDate) minDate = row.dataCotacao;
+                    if (row.dataCotacao > maxDate) maxDate = row.dataCotacao;
+                }
+            });
+
+            // Popula os <select>
+            populateSelect('filter-vendedor', [...vendedores].sort());
+            populateSelect('filter-cidade', [...cidades].sort());
+            populateSelect('filter-concorrente', [...concorrentes].sort());
+            
+            // Define o período padrão
+            document.getElementById('filter-date-start').value = minDate;
+            document.getElementById('filter-date-end').value = maxDate;
+        }
+
+        function populateSelect(elementId, items) {
+            const select = document.getElementById(elementId);
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                select.appendChild(option);
+            });
+        }
+
+        // =======================================================================
+        // ETAPA 2: FILTRAGEM E ANÁLISE
+        // =======================================================================
+        
+        /**
+         * Função principal chamada pelo botão "Analisar"
+         */
+        function runAnalysis() {
+            const statusEl = document.getElementById('filter-status');
+            statusEl.textContent = 'Filtrando dados...';
+            
+            // 1. Coleta os valores dos filtros
+            const filters = {
+                dateStart: document.getElementById('filter-date-start').value,
+                dateEnd: document.getElementById('filter-date-end').value,
+                vendedor: document.getElementById('filter-vendedor').value,
+                cidade: document.getElementById('filter-cidade').value,
+                concorrente: document.getElementById('filter-concorrente').value,
+                vendaPerdida: document.getElementById('filter-venda-perdida').value,
+            };
+
+            // 2. Aplica os filtros
+            filteredData = globalData.filter(row => {
+                if (filters.dateStart && row.dataCotacao < filters.dateStart) return false;
+                if (filters.dateEnd && row.dataCotacao > filters.dateEnd) return false;
+                if (filters.vendedor && row.vendedor !== filters.vendedor) return false;
+                if (filters.cidade && row.cidade !== filters.cidade) return false;
+                if (filters.concorrente && row.concorrenteHeader !== filters.concorrente) return false;
+                if (filters.vendaPerdida && row.vendaPerdida !== filters.vendaPerdida) return false;
+                return true;
+            });
+            
+            statusEl.textContent = `Análise concluída. ${filteredData.length} cotações encontradas.`;
+            
+            // 3. Atualiza todos os módulos do painel
+            updateKPIs();
+            updateCharts();
+            updateTable(); // Por padrão, ordena pela data
+        }
+        
+        /**
+         * Atualiza os 4 cards de KPI
+         */
+        function updateKPIs() {
+            let totalCotacoes = filteredData.length;
+            let totalPerdidas = 0;
+            let somaMargemFlex = 0;
+            let somaMargemConc = 0;
+            let countComCusto = 0;
+
+            filteredData.forEach(row => {
+                if (row.vendaPerdida === 'TRUE') {
+                    totalPerdidas++;
+                }
+                // Só calcula margem se tiver custo
+                if (row.custo > 0) {
+                    somaMargemFlex += row.minhaMargem;
+                    somaMargemConc += row.margemParaCobrir;
+                    countComCusto++;
+                }
+            });
+
+            const taxaPerda = totalCotacoes > 0 ? (totalPerdidas / totalCotacoes) : 0;
+            const mediaMargemFlex = countComCusto > 0 ? (somaMargemFlex / countComCusto) : 0;
+            const mediaMargemConc = countComCusto > 0 ? (somaMargemConc / countComCusto) : 0;
+
+            // Atualiza o HTML
+            document.getElementById('kpi-total-cotacoes').textContent = totalCotacoes;
+            document.getElementById('kpi-taxa-perda').textContent = `${(taxaPerda * 100).toFixed(1)}%`;
+            document.getElementById('kpi-margem-flex').textContent = `${(mediaMargemFlex * 100).toFixed(1)}%`;
+            document.getElementById('kpi-margem-concorrente').textContent = `${(mediaMargemConc * 100).toFixed(1)}%`;
+            
+            // Adiciona classes de cor
+            setClassByValue('kpi-taxa-perda', taxaPerda, 0.5, 'loss', 'margin-ok');
+            setClassByValue('kpi-margem-flex', mediaMargemFlex, 0, 'margin-ok', 'margin-bad');
+            setClassByValue('kpi-margem-concorrente', mediaMargemConc, 0.1, 'margin-ok', 'margin-bad');
+        }
+
+        function setClassByValue(elementId, value, threshold, classIfHigh, classIfLow) {
+            const el = document.getElementById(elementId);
+            el.classList.remove('loss', 'margin-ok', 'margin-bad');
+            if (value >= threshold) el.classList.add(classIfHigh);
+            else el.classList.add(classIfLow);
+        }
+
+        // =======================================================================
+        // ETAPA 3: GRÁFICOS (Chart.js)
+        // =======================================================================
+        
+        function updateCharts() {
+            updateChartGuerraPreco();
+            updateChartPerdasCidade();
+        }
+
+        /**
+         * Gráfico 1: Guerra de Preço por Vendedor
+         */
+        function updateChartGuerraPreco() {
+            const ctx = document.getElementById('chart-guerra-preco').getContext('2d');
+            
+            // Agrega dados por vendedor
+            const dataByVendedor = {};
+            filteredData.forEach(row => {
+                if (row.custo > 0) { // Só considera se tem custo
+                    const vendedor = row.vendedor || 'N/A';
+                    if (!dataByVendedor[vendedor]) {
+                        dataByVendedor[vendedor] = { somaFlex: 0, somaConc: 0, count: 0 };
+                    }
+                    dataByVendedor[vendedor].somaFlex += row.minhaMargem;
+                    dataByVendedor[vendedor].somaConc += row.margemParaCobrir;
+                    dataByVendedor[vendedor].count++;
+                }
+            });
+
+            // Calcula as médias e pega o Top 5
+            const chartData = Object.keys(dataByVendedor).map(vendedor => ({
+                vendedor: vendedor,
+                mediaFlex: dataByVendedor[vendedor].somaFlex / dataByVendedor[vendedor].count,
+                mediaConc: dataByVendedor[vendedor].somaConc / dataByVendedor[vendedor].count
+            }))
+            .sort((a, b) => b.mediaFlex - a.mediaFlex) // Ordena pela maior margem
+            .slice(0, 5); // Pega os 5 primeiros
+
+            // Monta os dados para o Chart.js
+            const labels = chartData.map(d => d.vendedor);
+            const dataFlex = chartData.map(d => d.mediaFlex * 100);
+            const dataConc = chartData.map(d => d.mediaConc * 100);
+
+            if (chartGuerraPreco) chartGuerraPreco.destroy(); // Destrói o gráfico anterior
+            
+            chartGuerraPreco = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Minha Margem Média (%)',
+                            data: dataFlex,
+                            backgroundColor: 'rgba(0, 90, 156, 0.7)', // Azul Ameripan
+                            borderColor: 'rgba(0, 90, 156, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Margem p/ Cobrir Conc. (%)',
+                            data: dataConc,
+                            backgroundColor: 'rgba(220, 53, 69, 0.7)', // Vermelho Perigo
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: value => `${value}%` }
+                        }
+                    },
+                    plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.raw.toFixed(1)}%` } } }
+                }
+            });
+        }
+        
+        /**
+         * Gráfico 2: Perdas por Cidade
+         */
+        function updateChartPerdasCidade() {
+            const ctx = document.getElementById('chart-perdas-cidade').getContext('2d');
+            
+            const dataByCidade = {};
+            filteredData.forEach(row => {
+                if (row.vendaPerdida === 'TRUE') {
+                    const cidade = row.cidade || 'N/A';
+                    if (!dataByCidade[cidade]) dataByCidade[cidade] = 0;
+                    dataByCidade[cidade]++;
+                }
+            });
+
+            const chartData = Object.keys(dataByCidade).map(cidade => ({
+                cidade: cidade,
+                perdas: dataByCidade[cidade]
+            }))
+            .sort((a, b) => b.perdas - a.perdas)
+            .slice(0, 5);
+
+            const labels = chartData.map(d => d.cidade);
+            const data = chartData.map(d => d.perdas);
+
+            if (chartPerdasCidade) chartPerdasCidade.destroy();
+            
+            chartPerdasCidade = new Chart(ctx, {
+                type: 'doughnut', // Tipo Torta/Rosquinha
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Vendas Perdidas',
+                        data: data,
+                        backgroundColor: [
+                            'rgba(220, 53, 69, 0.7)',
+                            'rgba(255, 193, 7, 0.7)',
+                            'rgba(25, 135, 84, 0.7)',
+                            'rgba(13, 110, 253, 0.7)',
+                            'rgba(111, 66, 193, 0.7)'
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        // =======================================================================
+        // ETAPA 4: TABELA DETALHADA
+        // =======================================================================
+
+        let sortConfig = { key: 'dataCotacao', direction: 'desc' };
+
+        function setupTableSorting() {
+            document.querySelectorAll('#products-table th').forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.key;
+                    if (!key) return; // Se não for uma coluna de dados
+
+                    let direction = 'asc';
+                    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortConfig = { key, direction, type: th.dataset.type };
+                    
+                    // Atualiza ícones
+                    document.querySelectorAll('#products-table th').forEach(t => t.className = '');
+                    th.classList.add(direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    
+                    // Re-renderiza a tabela com a nova ordenação
+                    updateTable();
+                });
+            });
+        }
+        
+        /**
+         * Preenche a tabela com os dados filtrados, aplicando ordenação
+         */
+        function updateTable() {
+            const tbody = document.getElementById('products-table').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = ''; // Limpa a tabela
+            
+            document.getElementById('table-row-count').textContent = `${filteredData.length} produtos filtrados`;
+            
+            // Aplica a ordenação
+            const sortedData = [...filteredData].sort((a, b) => {
+                let valA = a[sortConfig.key];
+                let valB = b[sortConfig.key];
+                
+                if (sortConfig.type === 'number') {
+                    return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+                } else {
+                    // Ordenação de string
+                    valA = String(valA || '').toLowerCase();
+                    valB = String(valB || '').toLowerCase();
+                    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                    return 0;
+                }
+            });
+
+            // Funções auxiliares de formatação
+            const formatPercent = (val) => {
+                const p = (val * 100).toFixed(1);
+                let cls = 'margin-ok';
+                if (p < 20) cls = 'margin-warn';
+                if (p < 0) cls = 'margin-danger';
+                return `<span class="${cls}">${p}%</span>`;
+            };
+            const formatCurrency = (val) => `R$ ${val.toFixed(2)}`;
+            const formatDiff = (val) => {
+                const cls = val > 0 ? 'margin-danger' : 'margin-ok'; // Se > 0, estou mais caro
+                return `<span class="${cls}">R$ ${val.toFixed(2)}</span>`;
+            };
+            const formatPerdida = (val) => {
+                if (val === 'TRUE') return `<span style="color: #dc3545; font-weight: 600;">Sim</span>`;
+                if (val === 'FALSE') return `<span style="color: #198754;">Não</span>`;
+                return `<i>N/A</i>`;
+            };
+
+            // Popula a tabela
+            sortedData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.dataCotacao}</td>
+                    <td><b>${row.codProduto}</b> - ${row.nomeProduto}</td>
+                    <td>${row.vendedor}</td>
+                    <td>${formatCurrency(row.custo)}</td>
+                    <td>${formatCurrency(row.precoFlex)}</td>
+                    <td>${formatCurrency(row.precoConcorrente)}</td>
+                    <td>${formatDiff(row.diffPreco)}</td>
+                    <td>${formatPercent(row.minhaMargem)}</td>
+                    <td>${formatPercent(row.margemParaCobrir)}</td>
+                    <td>${formatPerdida(row.vendaPerdida)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // =======================================================================
+        // ETAPA 5: EXPORTAÇÃO (ESCRITA)
+        // =======================================================================
+
+        async function handleExport() {
+            const statusEl = document.getElementById('filter-status');
+            const btnExport = document.getElementById('btn-export');
+
+            const exportName = prompt(
+                "Digite um nome para a nova aba que será criada na planilha:", 
+                `Exportação - ${new Date().toLocaleDateString('pt-BR')}`
+            );
+
+            if (!exportName) {
+                statusEl.textContent = 'Exportação cancelada.';
+                return;
+            }
+
+            statusEl.textContent = 'Preparando dados para exportação...';
+            btnExport.disabled = true;
+            btnExport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+
+            try {
+                // Prepara os dados para o Apps Script (array de arrays)
+                const headers = [
+                    "Data Cotação", "Produto", "Vendedor", "Custo", "Preço Flex", "Preço Conc.",
+                    "Diferença (R$)", "Minha Margem (%)", "Margem p/ Cobrir (%)", "Venda Perdida?"
+                ];
+                
+                const rows = filteredData.map(row => [
+                    row.dataCotacao,
+                    `${row.codProduto} - ${row.nomeProduto}`,
+                    row.vendedor,
+                    row.custo,
+                    row.precoFlex,
+                    row.precoConcorrente,
+                    row.diffPreco,
+                    row.minhaMargem,
+                    row.margemParaCobrir,
+                    row.vendaPerdida
+                ]);
+
+                // Monta o payload com o tipo 'export'
+                const payload = JSON.stringify({
+                    type: 'export',
+                    name: exportName,
+                    headers: headers,
+                    rows: rows
+                });
+
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: payload,
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                });
+
+                const resultado = await response.json();
+
+                if (resultado.status === "sucesso") {
+                    statusEl.innerHTML = `✅ Sucesso! <a href="${resultado.url}" target="_blank">Clique aqui para ver sua exportação</a>.`;
+                } else {
+                    throw new Error(resultado.erro);
+                }
+
+            } catch (error) {
+                console.error("Erro na exportação:", error);
+                statusEl.textContent = `❌ Erro ao exportar: ${error.message}`;
+            } finally {
+                btnExport.disabled = false;
+                btnExport.innerHTML = '<i class="fas fa-file-excel"></i> Exportar Visão';
+            }
+        }
+        
+    </script>
+</body>
+</html>
