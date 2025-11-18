@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        /* --- CSS BASE (Inspirado no seu exemplo "Frota") --- */
+        /* --- CSS BASE --- */
         :root {
             --primary: #1e88e5;      /* Azul Ameripan */
             --secondary: #26a69a;    /* Verde (Sucesso) */
@@ -81,9 +81,9 @@
             transition: background-color 0.2s;
             display: flex;
             align-items: center;
-            font-size: 14px; /* Fonte padrão */
-            white-space: nowrap; /* Impede quebra de texto */
-            overflow: hidden; /* Esconde texto ao colapsar */
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
         }
         .sidebar li:hover {
             background-color: rgba(0,0,0,0.05);
@@ -287,7 +287,7 @@
         table th.sorted-asc .sort-icon::before { content: "\f0de"; color: var(--primary); }
         table th.sorted-desc .sort-icon::before { content: "\f0dd"; color: var(--primary); }
         
-        /* NOVO: Classe para tabelas compactas */
+        /* Classe para tabelas compactas */
         .table-compact th, .table-compact td {
             font-size: 12px;
             padding: 8px 10px;
@@ -320,43 +320,82 @@
         #loading-status { margin-top: 15px; font-weight: 500; }
         
         /* --- Estilos do Assistente de Análise --- */
-        #assistente-chat {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        #assistente-input-group {
-            display: flex;
-            gap: 10px;
-        }
+        #assistente-chat { display: flex; flex-direction: column; gap: 15px; }
+        #assistente-input-group { display: flex; gap: 10px; }
         #assistente-input {
-            flex-grow: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 15px;
+            flex-grow: 1; padding: 12px; border: 1px solid #ddd;
+            border-radius: 4px; font-size: 15px;
         }
-        #assistente-btn {
-            padding: 0 20px;
-            font-size: 15px;
-        }
+        #assistente-btn { padding: 0 20px; font-size: 15px; }
         #assistente-response {
-            background-color: #f8f9fa;
-            border: 1px solid #e0e0e0;
+            background-color: #f8f9fa; border: 1px solid #e0e0e0;
+            border-radius: 5px; padding: 20px; min-height: 100px; line-height: 1.6;
+        }
+        #assistente-response h4 { color: var(--primary); margin-bottom: 10px; }
+        #assistente-response .highlight { font-weight: 700; color: var(--dark); }
+
+        /* --- Estilos da Aba "Análise por Produto" --- */
+        #produto-selector-card {
+            position: relative;
+        }
+        .product-search-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        /* CORREÇÃO DE LAYOUT DO DROPDOWN */
+        .product-search-results-container {
+            position: absolute;
+            z-index: 2000; /* Z-index alto para ficar sobre tudo */
+            background-color: #fff;
+            border: 1px solid #ccc;
             border-radius: 5px;
-            padding: 20px;
-            min-height: 100px;
-            line-height: 1.6;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            max-height: 250px;
+            overflow-y: auto;
         }
-        #assistente-response h4 {
-            color: var(--primary);
-            margin-bottom: 10px;
+        .product-search-results-container div {
+            padding: 10px;
+            cursor: pointer;
+            font-size: 13px;
         }
-        #assistente-response .highlight {
-            font-weight: 700;
-            color: var(--dark);
+        .product-search-results-container div:hover { background-color: #f0f2f5; }
+        .product-search-results-container div strong { color: var(--primary); }
+        
+        .hint-icon {
+            color: #007bff;
+            font-size: 0.9em;
+            margin-left: 4px;
+        }
+        
+        #produto-analytics-container {
+            display: none; /* Começa escondido */
+        }
+        
+        #produto-subfilter-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
         }
 
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            grid-column: 1 / -1; /* Ocupa a linha toda */
+            margin-top: 10px;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: 600;
+        }
+        
         /* --- Ajustes Responsivos --- */
         @media (max-width: 992px) {
             .sidebar { width: 60px; }
@@ -367,6 +406,7 @@
             body.sidebar-collapsed .sidebar { width: 0; }
             body.sidebar-collapsed .main-content { margin-left: 0; }
             .filter-container { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+            .product-search-grid { grid-template-columns: 1fr; } 
         }
         @media (max-width: 576px) {
             .dashboard-grid { grid-template-columns: 1fr; }
@@ -392,6 +432,9 @@
         <ul>
             <li class="active" data-section="resumo">
                 <i class="fas fa-chart-pie"></i><span>Resumo Geral</span>
+            </li>
+            <li data-section="produto_detalhe">
+                <i class="fas fa-search-dollar"></i><span>Análise por Produto</span>
             </li>
             <li data-section="vendedores">
                 <i class="fas fa-user-tie"></i><span>Análise Vendedores</span>
@@ -489,8 +532,116 @@
             </div>
         </div>
 
+        <div class="dashboard-section" id="produto_detalhe">
+            <div class="card" id="produto-selector-card">
+                <div class="card-header"><h2>Selecione um Produto para Análise</h2></div>
+                <div class="card-body">
+                    <div class="product-search-grid">
+                        <div class="filter-item">
+                            <label for="produto-sku-input">Buscar por Código (SKU)</label>
+                            <input type="text" id="produto-sku-input" placeholder="Digite o SKU...">
+                        </div>
+                        <div class="filter-item">
+                            <label for="produto-nome-input">Buscar por Nome (use *)
+                                <i class="fas fa-info-circle hint-icon" 
+                                   title="Dica: Use '*' como curinga. Ex: 'bisc*briga*'"></i>
+                            </label>
+                            <input type="text" id="produto-nome-input" placeholder="Digite o nome...">
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="produto-ignorar-sem-custo" onchange="runProductAnalysis()">
+                        <label for="produto-ignorar-sem-custo">Ignorar Itens sem Custo</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="produto-search-results" class="product-search-results-container" style="display: none;"></div>
+
+            <div id="produto-analytics-container">
+                <h2 id="produto-titulo-kpi" style="text-align: center; color: var(--primary);"></h2>
+                
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-header"><div class="stat-card-icon bg-blue"><i class="fas fa-dollar-sign"></i></div>
+                        <div><h3 class="stat-card-title">Meu Preço Médio (Flex)</h3></div></div>
+                        <p class="stat-card-value" id="kpi-produto-meu-preco">R$ 0,00</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-header"><div class="stat-card-icon bg-orange"><i class="fas fa-dollar-sign"></i></div>
+                        <div><h3 class="stat-card-title">Preço Conc. Médio</h3></div></div>
+                        <p class="stat-card-value" id="kpi-produto-conc-preco">R$ 0,00</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-header"><div class="stat-card-icon bg-green"><i class="fas fa-percentage"></i></div>
+                        <div><h3 class="stat-card-title">Minha Margem Média</h3></div></div>
+                        <p class="stat-card-value" id="kpi-produto-minha-margem">0%</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-header"><div class="stat-card-icon bg-red"><i class="fas fa-percentage"></i></div>
+                        <div><h3 class="stat-card-title">Margem p/ Cobrir (Conc.)</h3></div></div>
+                        <p class="stat-card-value" id="kpi-produto-conc-margem">0%</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-body" id="produto-subfilter-bar">
+                        <div class="filter-item">
+                            <label for="produto-filter-vendedor">Filtrar por Vendedor:</label>
+                            <select id="produto-filter-vendedor" onchange="runProductAnalysis()"><option value="">-- Todos --</option></select>
+                        </div>
+                        <div class="filter-item">
+                            <label for="produto-filter-cidade">Filtrar por Cidade:</label>
+                            <select id="produto-filter-cidade" onchange="runProductAnalysis()"><option value="">-- Todos --</option></select>
+                        </div>
+                        <div class="filter-item">
+                            <label for="produto-filter-concorrente">Filtrar por Concorrente:</label>
+                            <select id="produto-filter-concorrente" onchange="runProductAnalysis()"><option value="">-- Todos --</option></select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header"><h2>Evolução do Preço (Flex vs Conc.)</h2></div>
+                        <div class="card-body"><canvas id="chart-produto-temporal"></canvas></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Top Concorrentes (para este item)</h2></div>
+                        <div class="card-body"><canvas id="chart-produto-concorrentes"></canvas></div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header"><h2>Todas as Gravações (do Produto)</h2></div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table-compact" id="tabela-produto-detalhe">
+                                <thead>
+                                    <tr>
+                                        <th data-key="dataCotacao" data-type="string">Data</th>
+                                        <th data-key="vendedor" data-type="string">Vendedor</th>
+                                        <th data-key="cidade" data-type="string">Cidade</th>
+                                        <th data-key="concorrenteHeader" data-type="string">Concorrente</th>
+                                        <th data-key="marcaConcorrente" data-type="string">Marca Conc.</th>
+                                        <th data-key="precoFlex" data-type="number">Meu Preço</th>
+                                        <th data-key="precoConcorrente" data-type="number">Preço Conc.</th>
+                                        <th data-key="minhaMargem" data-type="number">Minha Margem</th>
+                                        <th data-key="margemParaCobrir" data-type="number">Margem p/ Cobrir</th>
+                                        <th data-key="vendaPerdida" data-type="string">Perdida?</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="dashboard-section" id="vendedores">
-            <div class="card">
+            <div class="card" data-help-key="chart-guerra-preco">
                 <div class="card-header"><h2>Análise de "Guerra de Preço" (Top Vendedores)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Compara sua margem média com a margem necessária para cobrir o concorrente.</p>
@@ -500,7 +651,7 @@
         </div>
 
         <div class="dashboard-section" id="cidades">
-            <div class="card">
+            <div class="card" data-help-key="chart-perdas-cidade">
                 <div class="card-header"><h2>Top Cidades com Vendas Perdidas</h2></div>
                 <div class="card-body">
                     <p class="card-description">Mostra as cidades com maior número absoluto de cotações perdidas.</p>
@@ -510,14 +661,14 @@
         </div>
 
         <div class="dashboard-section" id="concorrentes">
-            <div class="card">
+            <div class="card" data-help-key="chart-concorrente-share">
                 <div class="card-header"><h2>Market Share de Vendas Perdidas</h2></div>
                 <div class="card-body">
                     <p class="card-description">Percentual de perdas para cada concorrente (com base nos dados filtrados).</p>
                     <div class="chart-container"><canvas id="chart-perda-concorrente"></canvas></div>
                 </div>
             </div>
-            <div class="card">
+            <div class="card" data-help-key="table-concorrente-agressivo">
                 <div class="card-header"><h2>Análise de Agressividade (Tabela Completa)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Quão mais barato o concorrente está em média e quais produtos ele mais ataca.</p>
@@ -539,7 +690,7 @@
         </div>
 
         <div class="dashboard-section" id="produtos">
-            <div class="card">
+            <div class="card" data-help-key="chart-risco-oportunidade">
                 <div class="card-header"><h2>Análise de Oportunidade vs. Risco (Produtos)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Posicionamento de cada produto com base na margem e taxa de perda. (Apenas produtos com custo)</p>
@@ -549,7 +700,7 @@
         </div>
 
         <div class="dashboard-section" id="risco">
-            <div class="card">
+            <div class="card" data-help-key="table-risco-concorrentes">
                 <div class="card-header"><h2>Top 20 Concorrentes Mais Agressivos</h2></div>
                 <div class="card-body">
                     <p class="card-description">Classificado pela "Margem p/ Cobrir" (mais negativa = mais difícil de cobrir).</p>
@@ -559,9 +710,7 @@
                                 <tr>
                                     <th>Concorrente</th>
                                     <th>Cotações (Nº)</th>
-                                    <th>Meu Preço Médio</th>
-                                    <th>Preço Conc. Médio</th>
-                                    <th>Minha Margem Média</th>
+                                    <th>Marca Mais Agressiva</th>
                                     <th>Margem p/ Cobrir</th>
                                 </tr>
                             </thead>
@@ -570,7 +719,7 @@
                     </div>
                 </div>
             </div>
-            <div class="card">
+            <div class="card" data-help-key="table-risco-produtos">
                 <div class="card-header"><h2>Top 30 Produtos Mais Citados (em Vendas Perdidas)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Lista os produtos que mais aparecem nas cotações perdidas, com suas respectivas margens.</p>
@@ -580,9 +729,7 @@
                                 <tr>
                                     <th>Produto</th>
                                     <th>Cotações Perdidas (Nº)</th>
-                                    <th>Meu Preço Médio</th>
-                                    <th>Preço Conc. Médio</th>
-                                    <th>Minha Margem Média</th>
+                                    <th>Marca Concorrente + Citada</th>
                                     <th>Margem p/ Cobrir</th>
                                 </tr>
                             </thead>
@@ -594,7 +741,7 @@
         </div>
 
         <div class="dashboard-section" id="histograma">
-            <div class="card">
+            <div class="card" data-help-key="chart-histograma">
                 <div class="card-header"><h2>Histograma de Diferença de Preço (Vendas Perdidas)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Mostra *por quanto* estamos perdendo as vendas (quando somos mais caros).</p>
@@ -604,7 +751,7 @@
         </div>
 
         <div class="dashboard-section" id="temporal">
-            <div class="card">
+            <div class="card" data-help-key="chart-temporal">
                 <div class="card-header"><h2>Evolução de KPIs (Taxa de Perda vs. Margem Média)</h2></div>
                 <div class="card-body">
                     <p class="card-description">Acompanhe se suas ações estão melhorando os indicadores ao longo do tempo.</p>
@@ -614,7 +761,7 @@
         </div>
 
         <div class="dashboard-section" id="relatorio">
-            <div class="card">
+            <div class="card" data-help-key="table-relatorio-detalhado">
                 <div class="card-header">
                     <h2>Relatório Detalhado de Produtos</h2>
                     <button class="btn btn-primary" id="btn-export">
@@ -635,6 +782,7 @@
                                     <th data-key="custo" data-type="number">Custo<span class="sort-icon"></span></th>
                                     <th data-key="precoFlex" data-type="number">Preço Flex<span class="sort-icon"></span></th>
                                     <th data-key="precoConcorrente" data-type="number">Preço Conc.<span class="sort-icon"></span></th>
+                                    <th data-key="marcaConcorrente" data-type="string">Marca Conc.<span class="sort-icon"></span></th>
                                     <th data-key="diffPreco" data-type="number">Diferença (R$)<span class="sort-icon"></span></th>
                                     <th data-key="minhaMargem" data-type="number">Minha Margem (%)<span class="sort-icon"></span></th>
                                     <th data-key="margemParaCobrir" data-type="number">Margem p/ Cobrir (%)<span class="sort-icon"></span></th>
@@ -649,7 +797,7 @@
         </div>
         
         <div class="dashboard-section" id="assistente">
-            <div class="card">
+            <div class="card" data-help-key="assistente-ia">
                 <div class="card-header"><h2>Assistente de Análise</h2></div>
                 <div class="card-body">
                     <p class="card-description">
@@ -677,13 +825,23 @@
         // CONFIGURAÇÕES
         // =======================================================================
         
-        const SHEET_ID = '1IkpsIk9sJbHWyVMPn0T-lX9Aq3EVeCzvkwfEQwj9NS0';
+        const PRODUTOS_SHEET_ID = '1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q';
+        const PRODUTOS_SHEET_NAME = 'produtos';
+        const PRODUTOS_RANGE = 'A2:B';
+        
+        const COTACOES_SHEET_ID = '1IkpsIk9sJbHWyVMPn0T-lX9Aq3EVeCzvkwfEQwj9NS0';
+        const COTACOES_SHEET_NAME = 'COTAÇÕES';
+        const COTACOES_DATA_RANGE = 'A2:O'; 
+        
         const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
-        const SHEET_NAME = 'COTAÇÕES';
-        const DATA_RANGE = 'A2:N';
         
         let globalData = [];
+        let productList = [];
         let filteredData = [];
+        let currentSelectedProduct = null;
+        let activeProductData = [];
+        let productSortConfig = { key: 'dataCotacao', direction: 'desc' };
+        
         let charts = {};
         let sortConfig = { key: 'dataCotacao', direction: 'desc' };
         
@@ -691,7 +849,9 @@
             0: 'dataEnvio', 1: 'dataCotacao', 2: 'supervisor', 3: 'vendedor',
             4: 'cidade', 5: 'cliente', 6: 'concorrenteHeader', 7: 'codProduto',
             8: 'nomeProduto', 9: 'precoFlex', 10: 'custo', 11: 'precoConcorrente',
-            12: 'linkFoto', 13: 'vendaPerdida'
+            12: 'marcaConcorrente', // Coluna M
+            13: 'linkFoto',         // Coluna N
+            14: 'vendaPerdida'      // Coluna O
         };
         
         // =======================================================================
@@ -707,6 +867,9 @@
             document.getElementById('assistente-input').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') handleAssistenteQuery();
             });
+            
+            setupProductSearch();
+            
             loadDataFromSheet();
         });
 
@@ -747,12 +910,17 @@
                     updateDashboardConcorrentes();
                 } else if (sectionId === 'produtos') {
                     updateDashboardProdutosCriticos();
-                } else if (sectionId === 'risco') { // NOVO
+                } else if (sectionId === 'risco') {
                     updateDashboardRisco();
                 } else if (sectionId === 'histograma') {
                     updateDashboardHistograma();
                 } else if (sectionId === 'temporal') {
                     updateDashboardTemporal();
+                } else if (sectionId === 'produto_detalhe') {
+                    if (currentSelectedProduct) {
+                        updateChartProdutoTemporal(activeProductData);
+                        updateChartProdutoConcorrentes(activeProductData);
+                    }
                 }
             }, 10);
         }
@@ -773,23 +941,43 @@
         async function loadDataFromSheet() {
             const loadingOverlay = document.getElementById('loading-overlay');
             const loadingStatus = document.getElementById('loading-status');
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}!${DATA_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
+            
+            const urlCotacoes = `https://sheets.googleapis.com/v4/spreadsheets/${COTACOES_SHEET_ID}/values/${COTACOES_SHEET_NAME}!${COTACOES_DATA_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
+            const urlProdutos = `https://sheets.googleapis.com/v4/spreadsheets/${PRODUTOS_SHEET_ID}/values/${PRODUTOS_SHEET_NAME}!${PRODUTOS_RANGE}?key=${API_KEY}&_=${new Date().getTime()}`;
+
             try {
-                loadingStatus.textContent = 'Buscando dados na Planilha...';
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`Erro HTTP ${response.status}. Verifique API Key e permissões da planilha.`);
-                const data = await response.json();
-                if (!data.values || data.values.length === 0) throw new Error('Planilha vazia ou sem dados (COTAÇÕES!A2:N).');
-                loadingStatus.textContent = 'Processando dados...';
-                globalData = parseSheetData(data.values);
+                loadingStatus.textContent = 'Buscando dados das Cotações...';
+                const [responseCotacoes, responseProdutos] = await Promise.all([
+                    fetch(urlCotacoes),
+                    fetch(urlProdutos)
+                ]);
+
+                if (!responseCotacoes.ok) throw new Error(`Erro ao buscar Cotações. Verifique API Key e permissões da Planilha 2.`);
+                if (!responseProdutos.ok) throw new Error(`Erro ao buscar Lista de Produtos. Verifique API Key e permissões da Planilha 1.`);
+                
+                const dataCotacoes = await responseCotacoes.json();
+                const dataProdutos = await responseProdutos.json();
+                
+                if (!dataCotacoes.values || dataCotacoes.values.length === 0) throw new Error('Planilha de Cotações vazia.');
+                if (!dataProdutos.values || dataProdutos.values.length === 0) throw new Error('Planilha de Produtos vazia.');
+
+                loadingStatus.textContent = 'Processando Cotações...';
+                globalData = parseSheetData(dataCotacoes.values);
+                
+                loadingStatus.textContent = 'Processando Lista de Produtos...';
+                productList = dataProdutos.values.map(row => ({ sku: String(row[0]).trim(), name: String(row[1]).trim() })).filter(p => p.sku && p.name);
+                
                 loadingStatus.textContent = 'Montando filtros...';
                 populateFilters();
+                
                 loadingStatus.textContent = 'Análise inicial...';
                 runAnalysis();
+                
                 loadingOverlay.style.display = 'none';
+                
             } catch (error) {
                 console.error('Erro fatal ao carregar dados:', error);
-                loadingStatus.innerHTML = `❌ Erro: ${error.message}<br><br>Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode VER".`;
+                loadingStatus.innerHTML = `❌ Erro: ${error.message}<br><br>Verifique se ambas as planilhas estão compartilhadas como "Qualquer pessoa com o link pode VER".`;
                 loadingStatus.style.color = 'red';
             }
         }
@@ -804,7 +992,7 @@
                         if (['precoFlex', 'custo', 'precoConcorrente'].includes(key)) {
                             value = parseFloat(String(value).replace(',', '.')) || 0;
                         } else if (key === 'vendaPerdida') {
-                            value = String(value).toUpperCase().trim();
+                            value = String(row[14] || '').toUpperCase().trim();
                             if (value === 'FALSE' || value === 'FALSO' || value === 'N') value = 'FALSE';
                             else value = 'TRUE';
                         }
@@ -849,6 +1037,7 @@
 
         function populateSelect(elementId, items) {
             const select = document.getElementById(elementId);
+            select.options.length = 1; 
             items.forEach(item => {
                 const option = document.createElement('option');
                 option.value = item;
@@ -858,7 +1047,7 @@
         }
 
         // =======================================================================
-        // ETAPA 2: FILTRAGEM E ANÁLISE (Automática)
+        // ETAPA 2: FILTRAGEM E ANÁLISE (Global)
         // =======================================================================
         
         function runAnalysis() {
@@ -884,6 +1073,9 @@
             statusEl.textContent = `${filteredData.length} cotações encontradas.`;
             updateKPIs();
             updateTable(); 
+            
+            runProductAnalysis(); // Re-executa a análise de produto
+            
             const activeSection = document.querySelector('.sidebar li.active').dataset.section;
             renderActiveChart(activeSection);
         }
@@ -920,12 +1112,8 @@
             if (value >= threshold) el.classList.add(classIfHigh);
             else el.classList.add(classIfLow);
         }
-
-        // =======================================================================
-        // ETAPA 3: GRÁFICOS (Chart.js)
-        // =======================================================================
         
-        // --- Funções auxiliares de formatação ---
+        // --- CORREÇÃO: Funções de Formatação Globais ---
         const formatPercent = (val) => {
             const p = (val * 100).toFixed(1);
             let cls = 'margin-ok';
@@ -942,6 +1130,10 @@
             if (val === 'TRUE') return `<span style="color: var(--danger); font-weight: 600;">Sim</span>`;
             return `<span style="color: var(--secondary);">Não</span>`;
         };
+
+        // =======================================================================
+        // ETAPA 3: GRÁFICOS (Chart.js)
+        // =======================================================================
         
         function updateChartGuerraPreco() {
             const ctx = document.getElementById('chart-guerra-preco')?.getContext('2d');
@@ -1080,81 +1272,71 @@
             });
         }
 
-        // --- NOVO Dashboard: Pontos Críticos ---
         function updateDashboardRisco() {
             const tbodyConc = document.getElementById('tabela-risco-concorrentes')?.getElementsByTagName('tbody')[0];
             const tbodyProd = document.getElementById('tabela-risco-produtos')?.getElementsByTagName('tbody')[0];
             if (!tbodyConc || !tbodyProd) return;
             
-            // 1. Análise de Concorrentes Agressivos
+            const findTopBrand = (marcas) => {
+                if (Object.keys(marcas).length === 0) return 'N/A';
+                return Object.entries(marcas).sort((a, b) => b[1] - a[1])[0][0];
+            };
+
             const dataComCusto = filteredData.filter(row => row.custo > 0 && row.concorrenteHeader);
             const aggConc = {};
             dataComCusto.forEach(row => {
                 const k = row.concorrenteHeader;
-                if (!aggConc[k]) aggConc[k] = { key: k, count: 0, sumFlex: 0, sumConc: 0, sumMinha: 0, sumCobrir: 0 };
+                if (!aggConc[k]) aggConc[k] = { key: k, count: 0, sumCobrir: 0, marcas: {} };
                 aggConc[k].count++;
-                aggConc[k].sumFlex += row.precoFlex;
-                aggConc[k].sumConc += row.precoConcorrente;
-                aggConc[k].sumMinha += row.minhaMargem;
                 aggConc[k].sumCobrir += row.margemParaCobrir;
+                if (row.marcaConcorrente) {
+                    aggConc[k].marcas[row.marcaConcorrente] = (aggConc[k].marcas[row.marcaConcorrente] || 0) + 1;
+                }
             });
-            
             const listaConc = Object.values(aggConc).map(c => ({
                 key: c.key,
                 count: c.count,
-                avgFlex: c.sumFlex / c.count,
-                avgConc: c.sumConc / c.count,
-                avgMinha: c.sumMinha / c.count,
-                avgCobrir: c.sumCobrir / c.count
-            }))
-            .sort((a,b) => a.avgCobrir - b.avgCobrir); // Ordena pela MAIS DIFÍCIL (menor margem)
+                avgCobrir: c.sumCobrir / c.count,
+                topMarca: findTopBrand(c.marcas)
+            })).sort((a,b) => a.avgCobrir - b.avgCobrir);
             
             tbodyConc.innerHTML = '';
-            listaConc.slice(0, 20).forEach(d => { // Top 20
+            listaConc.slice(0, 20).forEach(d => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><b>${d.key}</b></td>
                     <td>${d.count}</td>
-                    <td>${formatCurrency(d.avgFlex)}</td>
-                    <td>${formatCurrency(d.avgConc)}</td>
-                    <td>${formatPercent(d.avgMinha)}</td>
+                    <td>${d.topMarca}</td>
                     <td>${formatPercent(d.avgCobrir)}</td>
                 `;
                 tbodyConc.appendChild(tr);
             });
 
-            // 2. Análise de Produtos Problemáticos
             const dataPerdidaComCusto = filteredData.filter(row => row.vendaPerdida === 'TRUE' && row.custo > 0 && row.nomeProduto);
             const aggProd = {};
             dataPerdidaComCusto.forEach(row => {
                 const k = row.nomeProduto;
-                if (!aggProd[k]) aggProd[k] = { key: k, count: 0, sumFlex: 0, sumConc: 0, sumMinha: 0, sumCobrir: 0 };
+                if (!aggProd[k]) aggProd[k] = { key: k, count: 0, sumCobrir: 0, marcas: {} };
                 aggProd[k].count++;
-                aggProd[k].sumFlex += row.precoFlex;
-                aggProd[k].sumConc += row.precoConcorrente;
-                aggProd[k].sumMinha += row.minhaMargem;
                 aggProd[k].sumCobrir += row.margemParaCobrir;
+                if (row.marcaConcorrente) {
+                    aggProd[k].marcas[row.marcaConcorrente] = (aggProd[k].marcas[row.marcaConcorrente] || 0) + 1;
+                }
             });
-
             const listaProd = Object.values(aggProd).map(p => ({
                 key: p.key,
                 count: p.count,
-                avgFlex: p.sumFlex / p.count,
-                avgConc: p.sumConc / p.count,
-                avgMinha: p.sumMinha / p.count,
-                avgCobrir: p.sumCobrir / p.count
-            }))
-            .sort((a,b) => b.count - a.count); // Ordena pelo MAIS CITADO
+                avgCobrir: p.sumCobrir / p.count,
+                topMarca: findTopBrand(p.marcas)
+            })).sort((a,b) => b.count - a.count);
             
             tbodyProd.innerHTML = '';
-            listaProd.slice(0, 30).forEach(d => { // Top 30
+            listaProd.slice(0, 30).forEach(d => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><b>${d.key}</b></td>
                     <td>${d.count}</td>
-                    <td>${formatCurrency(d.avgFlex)}</td>
-                    <td>${formatCurrency(d.avgConc)}</td>
-                    <td>${formatPercent(d.avgMinha)}</td>
+                    <td>${d.topMarca}</td>
                     <td>${formatPercent(d.avgCobrir)}</td>
                 `;
                 tbodyProd.appendChild(tr);
@@ -1269,6 +1451,7 @@
                     <td>${formatCurrency(row.custo)}</td>
                     <td>${formatCurrency(row.precoFlex)}</td>
                     <td>${formatCurrency(row.precoConcorrente)}</td>
+                    <td>${row.marcaConcorrente || 'N/A'}</td>
                     <td>${formatDiff(row.diffPreco)}</td>
                     <td>${formatPercent(row.minhaMargem)}</td>
                     <td>${formatPercent(row.margemParaCobrir)}</td>
@@ -1295,6 +1478,7 @@
                     'Data': row.dataCotacao, 'Vendedor': row.vendedor, 'Cidade': row.cidade, 'Cliente': row.cliente,
                     'Concorrente (Geral)': row.concorrenteHeader, 'Cód. Produto': row.codProduto, 'Nome Produto': row.nomeProduto,
                     'Custo': row.custo, 'Preço Flex': row.precoFlex, 'Preço Concorrente': row.precoConcorrente,
+                    'Marca Conc.': row.marcaConcorrente,
                     'Diferença (R$)': row.diffPreco, 'Minha Margem (%)': row.minhaMargem, 'Margem p/ Cobrir (%)': row.margemParaCobrir,
                     'Venda Perdida?': row.vendaPerdida === 'TRUE' ? 'Sim' : 'Não'
                 }));
@@ -1326,7 +1510,6 @@
             const resposta = parseAssistenteQuery(query);
             responseContainer.innerHTML = resposta;
         }
-
         function parseAssistenteQuery(query) {
             const q = query.toLowerCase()
                          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -1364,8 +1547,6 @@
                     - "concorrente mais agressivo?"<br>
                     - "taxa de perda em limeira?"</p>`;
         }
-        
-        // --- Funções de Análise do Assistente ---
         function assistente_findWorstVendedor() {
             const data = analyzeByGroup(filteredData, 'vendedor');
             const worst = data.sort((a,b) => b.taxaPerda - a.taxaPerda)[0];
@@ -1389,7 +1570,7 @@
         function assistente_findWorstProduct() {
             const data = analyzeByGroup(filteredData, 'nomeProduto');
             const worst = data.sort((a,b) => b.taxaPerda - a.taxaPerda)[0];
-            if (!worst) return `<p>Não há dados de produtos para analisar.</p>`;
+            if (!worst) return `<p>Não há dados de produtos para analisar.</a`
             return `<h4>Produto Mais Perdido (Taxa de Perda)</h4>
                     <p>O produto com a maior taxa de perda é 
                     <span class="highlight">${worst.key}</span>, com 
@@ -1399,7 +1580,7 @@
         function assistente_findBestMarginProduct() {
             const data = analyzeByGroup(filteredData, 'nomeProduto');
             const best = data.sort((a,b) => b.avgMinhaMargem - a.avgMinhaMargem)[0];
-            if (!best) return `<p>Não há dados de produtos para analisar.</p>`;
+            if (!best) return `<p>Não há dados de produtos para analisar.</a`
             return `<h4>Produto Mais Rentável (Margem Média)</h4>
                     <p>O produto com a maior margem média (com custo) é 
                     <span class="highlight">${best.key}</span>, com 
@@ -1477,6 +1658,271 @@
                     taxaPerda: g.total > 0 ? g.perdas / g.total : 0,
                     avgMinhaMargem: g.custoCount > 0 ? g.somaMinhaMargem / g.custoCount : 0
                 };
+            });
+        }
+        
+        // =======================================================================
+        // ETAPA 7: LÓGICA DA ABA "ANÁLISE POR PRODUTO"
+        // =======================================================================
+
+        function setupProductSearch() {
+            const skuInput = document.getElementById('produto-sku-input');
+            const nameInput = document.getElementById('produto-nome-input');
+            const resultsContainer = document.getElementById('produto-search-results');
+            
+            skuInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const sku = skuInput.value.trim();
+                    const product = productList.find(p => p.sku === sku);
+                    if (product) {
+                        skuInput.value = product.sku;
+                        nameInput.value = product.name;
+                        currentSelectedProduct = product.name;
+                        runProductAnalysis();
+                    } else {
+                        alert("SKU não encontrado na lista de produtos.");
+                    }
+                }
+            });
+
+            nameInput.addEventListener('input', () => {
+                const query = nameInput.value.trim().toUpperCase();
+                if (query.length < 2) {
+                    resultsContainer.style.display = 'none';
+                    return;
+                }
+                const terms = query.split('*').filter(t => t); 
+                const results = productList.filter(product => {
+                    const productName = product.name.toUpperCase();
+                    return terms.every(term => productName.includes(term));
+                }).slice(0, 10);
+
+                resultsContainer.innerHTML = '';
+                if (results.length === 0) {
+                    resultsContainer.style.display = 'none';
+                    return;
+                }
+                
+                results.forEach(product => {
+                    const item = document.createElement('div');
+                    item.innerHTML = `<strong>${product.sku}</strong> - ${product.name}`;
+                    item.onclick = () => {
+                        skuInput.value = product.sku;
+                        nameInput.value = product.name;
+                        resultsContainer.style.display = 'none';
+                        currentSelectedProduct = product.name;
+                        runProductAnalysis();
+                    };
+                    resultsContainer.appendChild(item);
+                });
+                
+                // --- CORREÇÃO DE POSICIONAMENTO ---
+                const rect = nameInput.getBoundingClientRect();
+                resultsContainer.style.left = `${rect.left + window.scrollX}px`;
+                resultsContainer.style.top = `${rect.bottom + window.scrollY}px`;
+                resultsContainer.style.width = `${rect.width}px`;
+                // --- FIM DA CORREÇÃO ---
+
+                resultsContainer.style.display = 'block';
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#produto-selector-card')) {
+                    resultsContainer.style.display = 'none';
+                }
+            });
+            
+            setupProductTableSorting();
+        }
+
+        function runProductAnalysis() {
+            if (!currentSelectedProduct) {
+                document.getElementById('produto-analytics-container').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('produto-analytics-container').style.display = 'block';
+            document.getElementById('produto-titulo-kpi').textContent = `Análise Detalhada: ${currentSelectedProduct}`;
+
+            let baseProductData = filteredData.filter(row => row.nomeProduto === currentSelectedProduct);
+            
+            const ignorarSemCusto = document.getElementById('produto-ignorar-sem-custo').checked;
+            if (ignorarSemCusto) {
+                baseProductData = baseProductData.filter(row => row.custo > 0);
+            }
+            
+            const vendedores = new Set(baseProductData.map(r => r.vendedor).filter(Boolean));
+            const cidades = new Set(baseProductData.map(r => r.cidade).filter(Boolean));
+            const concorrentes = new Set(baseProductData.map(r => r.concorrenteHeader).filter(Boolean));
+            populateSelect('produto-filter-vendedor', [...vendedores].sort());
+            populateSelect('produto-filter-cidade', [...cidades].sort());
+            populateSelect('produto-filter-concorrente', [...concorrentes].sort());
+
+            const subFilterVendedor = document.getElementById('produto-filter-vendedor').value;
+            const subFilterCidade = document.getElementById('produto-filter-cidade').value;
+            const subFilterConcorrente = document.getElementById('produto-filter-concorrente').value;
+            
+            const displayData = baseProductData.filter(row => {
+                if (subFilterVendedor && row.vendedor !== subFilterVendedor) return false;
+                if (subFilterCidade && row.cidade !== subFilterCidade) return false;
+                if (subFilterConcorrente && row.concorrenteHeader !== subFilterConcorrente) return false;
+                return true;
+            });
+            
+            activeProductData = displayData;
+
+            updateProductKPIs(displayData);
+            
+            const activeSection = document.querySelector('.sidebar li.active').dataset.section;
+            if (activeSection === 'produto_detalhe') {
+                updateChartProdutoTemporal(displayData);
+                updateChartProdutoConcorrentes(displayData);
+            }
+            
+            updateTableProdutoDetalhe(displayData);
+        }
+        
+        function updateProductKPIs(data) {
+            let sumFlex = 0, sumConc = 0, sumMinhaMargem = 0, sumMargemConc = 0;
+            let countComCusto = 0;
+            
+            data.forEach(row => {
+                sumFlex += row.precoFlex;
+                sumConc += row.precoConcorrente;
+                if (row.custo > 0) {
+                    sumMinhaMargem += row.minhaMargem;
+                    sumMargemConc += row.margemParaCobrir;
+                    countComCusto++;
+                }
+            });
+            
+            const countTotal = data.length || 1;
+            const countMargem = countComCusto || 1;
+            
+            const avgFlex = sumFlex / countTotal;
+            const avgConc = sumConc / countTotal;
+            const avgMinhaMargem = sumMinhaMargem / countMargem;
+            const avgMargemConc = sumMargemConc / countMargem;
+
+            document.getElementById('kpi-produto-meu-preco').textContent = formatCurrency(avgFlex);
+            document.getElementById('kpi-produto-conc-preco').textContent = formatCurrency(avgConc);
+            document.getElementById('kpi-produto-minha-margem').textContent = `${(avgMinhaMargem * 100).toFixed(1)}%`;
+            document.getElementById('kpi-produto-conc-margem').textContent = `${(avgMargemConc * 100).toFixed(1)}%`;
+            
+            setClassByValue('kpi-produto-minha-margem', avgMinhaMargem, 0.2, 'margin-good', 'margin-warn');
+            setClassByValue('kpi-produto-conc-margem', avgMargemConc, 0.1, 'margin-warn', 'margin-bad');
+        }
+        
+        function updateChartProdutoTemporal(data) {
+            const ctx = document.getElementById('chart-produto-temporal')?.getContext('2d');
+            if (!ctx) return;
+            
+            const dataByDate = {};
+            data.forEach(row => {
+                const date = row.dataCotacao;
+                if (!dataByDate[date]) dataByDate[date] = { sumFlex: 0, countFlex: 0, sumConc: 0, countConc: 0 };
+                dataByDate[date].sumFlex += row.precoFlex;
+                dataByDate[date].countFlex++;
+                dataByDate[date].sumConc += row.precoConcorrente;
+                dataByDate[date].countConc++;
+            });
+            
+            const labels = Object.keys(dataByDate).sort();
+            const dataFlex = labels.map(date => dataByDate[date].sumFlex / dataByDate[date].countFlex);
+            const dataConc = labels.map(date => dataByDate[date].sumConc / dataByDate[date].countConc);
+
+            if (charts['chart-produto-temporal']) charts['chart-produto-temporal'].destroy();
+            charts['chart-produto-temporal'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Meu Preço (Flex)', data: dataFlex, borderColor: 'rgba(30, 136, 229, 1)', tension: 0.1 },
+                        { label: 'Preço Concorrente', data: dataConc, borderColor: 'rgba(229, 57, 53, 1)', tension: 0.1 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => formatCurrency(v) } } }, plugins: { tooltip: { mode: 'index' } } }
+            });
+        }
+        
+        function updateChartProdutoConcorrentes(data) {
+            const ctx = document.getElementById('chart-produto-concorrentes')?.getContext('2d');
+            if (!ctx) return;
+
+            const dataByConc = {};
+            data.forEach(row => {
+                const conc = row.concorrenteHeader || 'N/A';
+                if (!dataByConc[conc]) dataByConc[conc] = { sumPreco: 0, count: 0 };
+                dataByConc[conc].sumPreco += row.precoConcorrente;
+                dataByConc[conc].count++;
+            });
+            
+            const chartData = Object.keys(dataByConc).map(conc => ({
+                concorrente: conc,
+                avgPreco: dataByConc[conc].sumPreco / dataByConc[conc].count
+            })).sort((a,b) => a.avgPreco - b.avgPreco).slice(0, 5);
+
+            if (charts['chart-produto-concorrentes']) charts['chart-produto-concorrentes'].destroy();
+            charts['chart-produto-concorrentes'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.map(d => d.concorrente),
+                    datasets: [{ label: 'Preço Médio Concorrente', data: chartData.map(d => d.avgPreco), backgroundColor: 'rgba(255, 152, 0, 0.7)' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => formatCurrency(v) } } }, plugins: { tooltip: { callbacks: { label: c => formatCurrency(c.raw) } } } }
+            });
+        }
+
+        function setupProductTableSorting() {
+            document.querySelectorAll('#tabela-produto-detalhe th').forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.key;
+                    if (!key) return;
+                    let direction = 'asc';
+                    if (productSortConfig.key === key && productSortConfig.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    productSortConfig = { key, direction, type: th.dataset.type };
+                    document.querySelectorAll('#tabela-produto-detalhe th').forEach(t => t.className = '');
+                    th.classList.add(direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    updateTableProdutoDetalhe(activeProductData);
+                });
+            });
+        }
+
+        function updateTableProdutoDetalhe(data) {
+            const tbody = document.getElementById('tabela-produto-detalhe')?.getElementsByTagName('tbody')[0];
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            const sortedData = [...data].sort((a, b) => {
+                let valA = a[productSortConfig.key];
+                let valB = b[productSortConfig.key];
+                if (productSortConfig.type === 'number') {
+                    return productSortConfig.direction === 'asc' ? valA - valB : valB - valA;
+                }
+                valA = String(valA || '').toLowerCase();
+                valB = String(valB || '').toLowerCase();
+                if (valA < valB) return productSortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return productSortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            sortedData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.dataCotacao}</td>
+                    <td>${row.vendedor || 'N/A'}</td>
+                    <td>${row.cidade || 'N/A'}</td>
+                    <td>${row.concorrenteHeader || 'N/A'}</td>
+                    <td>${row.marcaConcorrente || 'N/A'}</td>
+                    <td>${formatCurrency(row.precoFlex)}</td>
+                    <td>${formatCurrency(row.precoConcorrente)}</td>
+                    <td>${formatPercent(row.minhaMargem)}</td>
+                    <td>${formatPercent(row.margemParaCobrir)}</td>
+                    <td>${formatPerdida(row.vendaPerdida)}</td>
+                `;
+                tbody.appendChild(tr);
             });
         }
         
