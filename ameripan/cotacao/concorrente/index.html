@@ -156,9 +156,11 @@
         }
         
         .col-cod { width: 10%; }
-        .col-nome { width: 27%; }
-        .col-flex, .col-custo, .col-concorrente { width: 10%; }
-        .col-foto { width: 18%; }
+        .col-nome { width: 25%; }
+        .col-flex, .col-custo { width: 9%; }
+        .col-concorrente { width: 10%; }
+        .col-marca-conc { width: 12%; }
+        .col-foto { width: 10%; }
         .col-perdida { width: 10%; }
         .col-acao { width: 5%; text-align: center; }
 
@@ -321,6 +323,7 @@
                                 <th class="col-flex">Preço Flex</th>
                                 <th class="col-custo">Custo (Opc.)</th>
                                 <th class="col-concorrente">Preço Concorrente</th>
+                                <th class="col-marca-conc">Marca Conc. (Opc.)</th>
                                 <th class="col-foto">Link Foto NF (Opc.)</th>
                                 <th class="col-perdida">Venda Perdida?</th>
                                 <th class="col-acao">Ação</th>
@@ -404,7 +407,6 @@
 
         // =======================================================================
         // PARTE 2: CARREGAMENTO E BUSCA DE PRODUTOS (PLANILHA 1)
-        // (Sem alterações)
         // =======================================================================
 
         async function loadProductsFromSheet() {
@@ -505,7 +507,6 @@
 
         // =======================================================================
         // PARTE 3: LÓGICA DO FORMULÁRIO (Adicionar/Remover/Enviar)
-        // (Sem alterações)
         // =======================================================================
 
         function adicionarProdutoLinha() {
@@ -517,6 +518,7 @@
                 <td class="col-flex"><input type="text" class="input-preco" placeholder="R$"></td>
                 <td class="col-custo"><input type="text" class="input-preco" placeholder="R$ (Opc.)"></td>
                 <td class="col-concorrente"><input type="text" class="input-preco" placeholder="R$"></td>
+                <td class="col-marca-conc"><input type="text" class="input-marca-conc" placeholder="Marca do Concorrente"></td>
                 <td class="col-foto"><input type="text" class="input-foto" placeholder="Cole o link da foto/NF"></td>
                 <td class="col-perdida">
                     <select class="input-venda-perdida">
@@ -616,6 +618,7 @@
                         flex: parseValorUsuario(precos[0].value),
                         custo: parseValorUsuario(precos[1].value),
                         concorrente: parseValorUsuario(precos[2].value),
+                        marcaConcorrente: linha.querySelector('.input-marca-conc').value.trim(),
                         foto: linha.querySelector('.input-foto').value.trim(),
                         vendaPerdida: linha.querySelector('.input-venda-perdida').value.trim()
                     });
@@ -654,7 +657,6 @@
 
         // =======================================================================
         // PARTE 4: FUNÇÕES UTILITÁRIAS (Memória, Formatação e Dica)
-        // (Sem alterações)
         // =======================================================================
 
         function showSearchHint(event) {
@@ -707,8 +709,7 @@
         }
 
         // =======================================================================
-        // PARTE 5: --- MUDANÇA --- LÓGICA DO VISUALIZADOR DE IMAGEM
-        // (Substituída pela sua função de fetch direto, sem proxy)
+        // PARTE 5: LÓGICA DO VISUALIZADOR DE IMAGEM
         // =======================================================================
 
         /**
@@ -717,7 +718,6 @@
          */
         async function getProductInfoFromAmeripan(sku) {
             try {
-                // Esta é a técnica de fetch direto que você solicitou
                 const url = `https://www.ameripan.com.br/buscar?q=${sku}`;
                 const response = await fetch(url);
 
@@ -743,7 +743,6 @@
                 const parentDiv = productDiv.closest('.listagem-item');
                 const imgSrc = parentDiv.querySelector('.imagem-produto img').src;
                 
-                // Conserta URLs relativas (ex: /Imagens/...)
                 let finalImageUrl = imgSrc;
                 if (imgSrc.startsWith('/')) {
                     finalImageUrl = `https://www.ameripan.com.br${imgSrc}`;
@@ -752,15 +751,11 @@
                 return { imageUrl: finalImageUrl };
 
             } catch (error) {
-                // Este erro (CORS) é esperado
                 console.error("Erro ao obter informações do produto (Scraper):", error);
-                return null; // Falha para permitir o fallback
+                return null; 
             }
         }
 
-        /**
-         * Função principal que orquestra a busca da imagem.
-         */
         async function handleImageSearch() {
             const skuInput = document.getElementById('image-sku-input');
             const resultContainer = document.getElementById('image-result-container');
@@ -774,8 +769,7 @@
             resultContainer.innerHTML = `<p><i class="fas fa-spinner fa-spin"></i> Buscando imagem, por favor aguarde...</p>`;
             let found = false;
 
-            // --- Tentativa 1: Scraper (Direto) ---
-            // AVISO: Isto irá falhar na maioria dos navegadores devido ao CORS.
+            // Tentativa 1: Scraper (Direto)
             try {
                 const productInfo = await getProductInfoFromAmeripan(sku);
                 if (productInfo && productInfo.imageUrl) {
@@ -786,38 +780,29 @@
                 console.warn(`Scraper falhou (Erro de CORS esperado): ${error.message}. Tentando fallback.`);
             }
             
-            // --- Tentativa 2: Fallback (GitHub) ---
+            // Tentativa 2: Fallback (GitHub)
             if (!found) {
                 console.log(`Scraper falhou. Tentando fallback no GitHub para SKU: ${sku}`);
                 displayFallbackImage(sku);
             }
         }
         
-        /**
-         * Tenta carregar a imagem do repositório GitHub.
-         */
         function displayFallbackImage(sku) {
             const resultContainer = document.getElementById('image-result-container');
             const fallbackUrl = FALLBACK_IMAGE_URL.replace('{SKU}', sku);
             
             const img = new Image();
-            
             img.onload = function() {
                 img.alt = `Imagem do ${sku} (Fonte: GitHub)`;
                 resultContainer.innerHTML = '';
                 resultContainer.appendChild(img);
             };
-            
             img.onerror = function() {
                 resultContainer.innerHTML = `<p><i class="fas fa-exclamation-triangle"></i> Imagem não encontrada no site ou no GitHub para o SKU: <b>${sku}</b>.</p>`;
             };
-            
             img.src = fallbackUrl;
         }
 
-        /**
-         * Função utilitária para exibir a imagem encontrada.
-         */
         function displayImage(src, alt) {
             const resultContainer = document.getElementById('image-result-container');
             resultContainer.innerHTML = '';
