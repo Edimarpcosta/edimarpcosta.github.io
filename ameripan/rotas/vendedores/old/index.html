@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ameripan Rotas - Final</title>
+  
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
+
+  <style>
+    /* Configurações Base */
+    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+    
+    /* CORREÇÃO CRÍTICA: Garante que elementos ocultos não apareçam */
+    .hidden { display: none !important; }
+    
+    /* CORES DOS BOTÕES (Fixas para garantir visualização imediata) */
+    .btn-amber { background-color: #f59e0b !important; color: white !important; }
+    .btn-amber:hover { background-color: #d97706 !important; }
+    
+    .btn-blue { background-color: #2563eb !important; color: white !important; }
+    .btn-blue:hover { background-color: #1d4ed8 !important; }
+    
+    .btn-green { background-color: #16a34a !important; color: white !important; }
+    .btn-green:hover { background-color: #15803d !important; }
+
+    /* Estilos Personalizados */
+    .btn-check:checked + label { background-color: #2563eb; color: white; border-color: #2563eb; }
+    .btn-check-sec:checked + label { background-color: #059669; color: white; border-color: #059669; }
+    
+    .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3498db; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    .input-editable { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.25rem; padding: 0.25rem 0.5rem; }
+    .input-editable:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+    
+    /* Evita o "flash" de conteúdo não estilizado */
+    [un-cloak] { display: none; }
+  </style>
+</head>
+<body class="pb-24" un-cloak>
+
+  <div id="loadingBar" class="bg-yellow-100 text-yellow-800 text-xs font-bold text-center p-1 border-b border-yellow-200">
+    Carregando sistema...
+  </div>
+
+  <div class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-40">
+    <h1 class="text-lg font-bold flex items-center gap-2"><i class="ph ph-path text-2xl"></i> Ameripan Rotas</h1>
+    <div class="flex justify-between items-end"><p class="text-xs text-blue-200">Sistema Online</p><span id="contadorTopo" class="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full hidden">0</span></div>
+  </div>
+
+  <div class="max-w-md mx-auto p-4">
+    <form id="rotaForm" onsubmit="return false;">
+      
+      <div class="bg-white p-4 rounded-lg shadow-sm mb-4 border-l-4 border-blue-500">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Vendedor</label>
+        <div class="flex gap-2 relative mb-2">
+          <div class="relative w-24">
+            <input type="number" id="codVendedor" class="w-full p-2 border rounded bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none pr-8" placeholder="Cód" oninput="buscarVendedorLocal()">
+            <button type="button" class="absolute right-1 top-1 p-1 text-gray-400"><i class="ph ph-magnifying-glass text-lg"></i></button>
+          </div>
+          <input type="text" id="nomeVendedor" class="flex-1 p-2 border rounded bg-white text-gray-700 font-medium outline-none" placeholder="Nome Vendedor" readonly>
+        </div>
+        <div class="flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-100">
+           <span class="text-xs text-blue-600 font-bold uppercase">Equipe:</span>
+           <input type="text" id="equipeVendedor" class="bg-transparent text-sm font-semibold text-blue-800 w-full outline-none" placeholder="..." readonly>
+        </div>
+        <div id="msgVendedor" class="text-xs mt-1 min-h-[1rem]"></div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm mb-4 border-l-4 border-orange-500">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Cliente</label>
+        <div class="flex gap-2 relative">
+          <input type="number" id="codCliente" class="w-full p-3 border rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-10 text-lg font-bold" placeholder="Cód..." oninput="buscarClienteLocal()">
+          <i class="ph ph-magnifying-glass absolute left-3 top-4 text-gray-400 text-xl"></i>
+          <button type="button" onclick="limparCliente()" class="bg-gray-200 text-gray-600 px-3 rounded hover:bg-gray-300"><i class="ph ph-eraser"></i></button>
+        </div>
+        <div id="msgCliente" class="text-xs mt-1 h-5 font-bold text-blue-600"></div>
+        <div class="mt-3 grid grid-cols-1 gap-2 bg-orange-50 p-3 rounded border border-orange-100">
+          <div><span class="text-xs text-gray-500 uppercase font-bold">Fantasia</span><input type="text" id="nomeFantasia" class="input-editable w-full font-bold text-gray-800 text-sm" placeholder="..."></div>
+          <div class="grid grid-cols-2 gap-2">
+             <div><span class="text-xs text-gray-500 uppercase font-bold">Razão</span><input type="text" id="razaoSocial" class="input-editable w-full text-gray-600 text-xs" placeholder="..."></div>
+             <div><span class="text-xs text-gray-500 uppercase font-bold">Cidade</span><input type="text" id="cidade" class="input-editable w-full text-gray-600 text-xs" placeholder="..."></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <label class="block text-sm font-semibold text-gray-700">Ordem</label>
+          <div class="flex items-center gap-2"><span class="text-xs text-gray-500">Manual:</span><input type="number" id="ordemManual" class="w-16 p-1 border rounded text-center font-bold text-blue-600 outline-none" placeholder="#" oninput="sincronizarOrdem(this.value)"></div>
+        </div>
+        <div class="grid grid-cols-5 gap-2">
+          <script>for(let i=1; i<=20; i++) document.write(`<input type="radio" name="ordemVisita" id="ordem_${i}" value="${i}" class="hidden btn-check" onclick="document.getElementById('ordemManual').value=this.value"><label for="ordem_${i}" class="cursor-pointer text-center py-2 rounded border border-gray-200 text-gray-600 text-sm font-bold hover:bg-blue-50 transition-colors">${i}</label>`);</script>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm mb-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Dia Principal</label>
+        <div class="grid grid-cols-3 gap-2 mb-4">
+          <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="radio" name="diaPrincipal" id="dia_${d}" value="${d}" class="hidden btn-check"><label for="dia_${d}" class="cursor-pointer text-center py-2 rounded border border-gray-200 text-sm font-semibold">${d}</label>`)); </script>
+        </div>
+        <label class="block text-xs font-semibold text-gray-500 mb-2 uppercase">Dias Secundários</label>
+        <div class="flex flex-wrap gap-2">
+           <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="checkbox" name="diasSecundarios" id="sec_${d}" value="${d}" class="hidden btn-check-sec"><label for="sec_${d}" class="cursor-pointer px-3 py-1 rounded-full border border-gray-200 text-xs font-semibold">${d}</label>`)); </script>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm mb-4">
+        <div class="grid grid-cols-1 gap-3">
+          <div><label class="text-sm font-semibold text-gray-700">Comprador</label><input type="text" id="comprador" class="w-full p-2 border rounded bg-gray-50 outline-none"></div>
+          <div><label class="text-sm font-semibold text-gray-700">WhatsApp</label><input type="tel" id="whatsapp" class="w-full p-2 border rounded bg-gray-50 outline-none" placeholder="(00) 00000-0000" maxlength="15"></div>
+          <div><label class="text-sm font-semibold text-gray-700">Obs</label><textarea id="obs" rows="1" class="w-full p-2 border rounded bg-gray-50 outline-none text-sm"></textarea></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-6">
+        <button type="button" onclick="incluirNaLista()" class="btn-amber font-bold py-3 rounded-lg shadow flex flex-col items-center justify-center text-sm"><i class="ph ph-plus-circle text-2xl"></i> INCLUIR</button>
+        <button type="button" onclick="salvarDireto()" class="btn-blue font-bold py-3 rounded-lg shadow flex flex-col items-center justify-center text-sm"><i class="ph ph-floppy-disk text-2xl"></i> GRAVAR ESTE</button>
+      </div>
+    </form>
+
+    <div id="areaLista" class="bg-white rounded-lg shadow-sm border border-gray-200 mb-20 hidden">
+      <div class="bg-gray-100 p-3 border-b border-gray-200 flex justify-between items-center"><h3 class="font-bold text-gray-700">Lista (Salva na Memória)</h3><span id="contadorLista" class="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">0</span></div>
+      <div id="listaClientesContainer" class="divide-y divide-gray-100"></div>
+    </div>
+  </div>
+
+  <div id="barraSalvar" class="fixed bottom-0 left-0 w-full bg-white border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hidden z-50">
+    <div class="max-w-md mx-auto">
+      <button onclick="salvarLote()" class="w-full btn-green font-bold py-3 rounded-lg shadow-lg flex justify-center items-center gap-2 text-lg"><i class="ph ph-paper-plane-right text-2xl"></i> ENVIAR TUDO (<span id="btnCount">0</span>)</button>
+    </div>
+  </div>
+
+  <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4"><div class="bg-white rounded-lg p-6 w-full max-w-sm text-center shadow-xl"><div id="modalContent"></div></div></div>
+
+  <script>
+    // ============================================================
+    // CONFIGURAÇÕES DO BACKEND E API
+    // ============================================================
+    // SEU LINK DO SCRIPT (Já atualizado)
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyoOQUbcC4nKdR3qeh2u1q0Wn4eQUD3eJUrby2DG5Nx7xQh1jmH6FSTphqxslWPvktCfQ/exec'; 
+
+    // LEITURA DE DADOS (Sheets API Pública)
+    const SPREADSHEET_ID = '1JXdW-RDSrG4or8WzvLBV_PbopVvug9B9og7fSMGOWj0';
+    const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
+    
+    const ABA_VENDEDORES = 'VENDEDORES';
+    const RANGE_VENDEDORES = 'A2:C';
+    
+    const ABA_CLIENTES = 'CLIENTES'; 
+    const RANGE_CLIENTES = 'A2:C';
+
+    // Variáveis de Estado
+    let dbVendedores = [];
+    let dbClientes = [];
+    let listaDeRotas = [];
+
+    // ============================================================
+    // INICIALIZAÇÃO DO SISTEMA
+    // ============================================================
+    window.onload = async function() {
+        // 1. Restaura lista de rotas salvas no navegador
+        const s = localStorage.getItem('rotasTemp'); 
+        if(s) { 
+            listaDeRotas = JSON.parse(s); 
+            renderizarLista(); 
+        }
+
+        // 2. Baixa o banco de dados (Vendedores/Clientes)
+        await carregarBasesDeDados();
+
+        // 3. Restaura o último vendedor usado
+        restaurarVendedor();
+    };
+
+    async function carregarBasesDeDados() {
+        const loadingBar = document.getElementById('loadingBar');
+        try {
+            loadingBar.innerText = "Baixando tabelas...";
+            const [resVendedores, resClientes] = await Promise.all([
+                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_VENDEDORES}!${RANGE_VENDEDORES}?key=${API_KEY}`),
+                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_CLIENTES}!${RANGE_CLIENTES}?key=${API_KEY}`)
+            ]);
+
+            const jsonVendedores = await resVendedores.json();
+            const jsonClientes = await resClientes.json();
+
+            if (jsonVendedores.values) {
+                dbVendedores = jsonVendedores.values.map(row => ({
+                    codigo: String(row[0]).trim(),
+                    nome: row[1],
+                    equipe: row[2]
+                }));
+            }
+
+            if (jsonClientes.values) {
+                dbClientes = jsonClientes.values.map(row => ({
+                    codigo: String(row[0]).trim(),
+                    cidade: row[1],
+                    razao: row[2],
+                    fantasia: row[2] 
+                }));
+            }
+
+            loadingBar.className = "bg-green-100 text-green-800 text-xs font-bold text-center p-1 border-b border-green-200";
+            loadingBar.innerText = `Pronto! ${dbVendedores.length} Vendedores | ${dbClientes.length} Clientes.`;
+            setTimeout(() => { loadingBar.style.display = 'none'; }, 2000);
+
+        } catch (error) {
+            console.error(error);
+            loadingBar.className = "bg-red-100 text-red-800 text-xs font-bold text-center p-1 border-b border-red-200";
+            loadingBar.innerText = "Erro ao carregar dados. Verifique a Internet.";
+        }
+    }
+
+    // ============================================================
+    // GESTÃO DE VENDEDOR (COM MEMÓRIA)
+    // ============================================================
+    function restaurarVendedor() {
+        const codSalvo = localStorage.getItem('vendedorCodigo');
+        if (codSalvo) {
+            document.getElementById('codVendedor').value = codSalvo;
+            buscarVendedorLocal(); // Busca os dados com base no código salvo
+        }
+    }
+
+    function buscarVendedorLocal() {
+        const cod = document.getElementById('codVendedor').value.toString().trim();
+        const msg = document.getElementById('msgVendedor');
+        const campoNome = document.getElementById('nomeVendedor');
+        const campoEquipe = document.getElementById('equipeVendedor');
+
+        if (!cod) {
+            msg.innerHTML = ''; campoNome.value = ''; campoEquipe.value = '';
+            localStorage.removeItem('vendedorCodigo');
+            return;
+        }
+
+        const encontrado = dbVendedores.find(v => v.codigo === cod);
+
+        if (encontrado) {
+            campoNome.value = encontrado.nome;
+            campoEquipe.value = encontrado.equipe;
+            msg.innerHTML = '<span class="text-green-600 font-bold">✓ Encontrado</span>';
+            // Salva na memória para a próxima vez que abrir
+            localStorage.setItem('vendedorCodigo', cod);
+        } else {
+            campoNome.value = '';
+            campoEquipe.value = '';
+            msg.innerHTML = '<span class="text-red-500 text-xs">Não encontrado</span>';
+        }
+    }
+
+    // ============================================================
+    // BUSCA DE CLIENTE E ENVIO
+    // ============================================================
+    function buscarClienteLocal() {
+        const cod = document.getElementById('codCliente').value.toString().trim();
+        const msg = document.getElementById('msgCliente');
+        
+        if (!cod) {
+            msg.innerHTML = '';
+            return;
+        }
+
+        const encontrado = dbClientes.find(c => c.codigo === cod);
+
+        if (encontrado) {
+            document.getElementById('nomeFantasia').value = encontrado.fantasia;
+            document.getElementById('razaoSocial').value = encontrado.razao;
+            document.getElementById('cidade').value = encontrado.cidade;
+            msg.innerHTML = '<span class="text-green-600 font-bold">✓ Encontrado</span>';
+        } else {
+            msg.innerHTML = '<span class="text-red-500 font-bold">Novo ou não encontrado</span>';
+        }
+    }
+
+    async function chamarBackendScript(payload) {
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+          body: JSON.stringify(payload)
+        });
+        return await response.json();
+      } catch (error) {
+        return { erro: "Falha na conexão com o Script." };
+      }
+    }
+
+    async function salvarLote() {
+      if(listaDeRotas.length === 0) return;
+      mostrarModal('loading', 'Enviando...');
+      const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: listaDeRotas });
+      tratarRespostaEnvio(res, true);
+    }
+
+    async function salvarDireto() {
+      const btn = document.querySelector("button[onclick='salvarDireto()']");
+      if(btn.disabled) return;
+      
+      const item = obterDadosDoFormulario();
+      if(!item) return;
+      
+      btn.disabled = true;
+      mostrarModal('loading', 'Salvando...');
+      
+      try {
+          const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: [item] });
+          tratarRespostaEnvio(res, false);
+      } finally {
+          btn.disabled = false;
+      }
+    }
+
+    function tratarRespostaEnvio(res, ehLote) {
+      if(res.sucesso) {
+        if(ehLote) { 
+            listaDeRotas = []; 
+            salvarLocal(); // Limpa memória
+            renderizarLista(); 
+        }
+        else { limparFormulario(); }
+        mostrarModal('sucesso', res.mensagem);
+      } else {
+        mostrarModal('erro', res.erro);
+      }
+    }
+
+    function obterDadosDoFormulario() {
+      const codV = document.getElementById('codVendedor').value;
+      const nomeV = document.getElementById('nomeVendedor').value;
+      const equipeV = document.getElementById('equipeVendedor').value;
+      const codC = document.getElementById('codCliente').value;
+      const nomeC = document.getElementById('nomeFantasia').value;
+      
+      if(!nomeV || !nomeC) { alert("Preencha Vendedor e Cliente."); return null; }
+      
+      let ordem = document.getElementById('ordemManual').value;
+      if(!ordem) { const r = document.querySelector('input[name="ordemVisita"]:checked'); if(r) ordem = r.value; }
+      if(!ordem) { alert("Preencha Ordem."); return null; }
+
+      const diaP = document.querySelector('input[name="diaPrincipal"]:checked');
+      if(!diaP) { alert("Selecione Dia Principal."); return null; }
+
+      const diasS = [];
+      document.querySelectorAll('input[name="diasSecundarios"]:checked').forEach(c => diasS.push(c.value));
+
+      return {
+        id: Date.now(),
+        codVendedor: codV || 'MANUAL', nomeVendedor: nomeV, equipeVendedor: equipeV,
+        codCliente: codC || 'MANUAL', nomeFantasia: nomeC,
+        razaoSocial: document.getElementById('razaoSocial').value, cidade: document.getElementById('cidade').value,
+        ordemVisita: ordem, diaPrincipal: diaP.value, diasSecundarios: diasS,
+        comprador: document.getElementById('comprador').value, whatsapp: document.getElementById('whatsapp').value, obs: document.getElementById('obs').value
+      };
+    }
+
+    function incluirNaLista() { 
+        const item = obterDadosDoFormulario(); 
+        if(item) { 
+            listaDeRotas.push(item); 
+            salvarLocal(); // GRAVA NA MEMÓRIA
+            renderizarLista(); 
+            limparFormulario(); 
+        } 
+    }
+    
+    function renderizarLista() {
+       const c = document.getElementById('listaClientesContainer'); c.innerHTML = '';
+       const area = document.getElementById('areaLista'); const btn = document.getElementById('barraSalvar');
+       if(listaDeRotas.length===0) { area.classList.add('hidden'); btn.classList.add('hidden'); return; }
+       area.classList.remove('hidden'); btn.classList.remove('hidden');
+       document.getElementById('contadorLista').innerText = listaDeRotas.length;
+       document.getElementById('btnCount').innerText = listaDeRotas.length;
+       listaDeRotas.slice().reverse().forEach(item => {
+         c.innerHTML += `<div class="p-3 hover:bg-gray-50 transition-colors"><div class="flex justify-between items-start"><div><p class="font-bold text-sm">${item.nomeFantasia}</p><p class="text-xs text-gray-500">${item.cidade} • Visita ${item.ordemVisita}</p></div><div class="flex gap-2"><button onclick="excluirItem(${item.id})" class="text-red-500"><i class="ph ph-trash text-xl"></i></button></div></div></div>`;
+       });
+    }
+    
+    function excluirItem(id) { 
+        if(confirm('Remover?')) { 
+            listaDeRotas = listaDeRotas.filter(i => i.id !== id); 
+            salvarLocal(); 
+            renderizarLista(); 
+        } 
+    }
+    
+    function salvarLocal() { 
+        localStorage.setItem('rotasTemp', JSON.stringify(listaDeRotas)); 
+    }
+    
+    function limparFormulario() {
+      document.getElementById('codCliente').value=''; document.getElementById('nomeFantasia').value=''; document.getElementById('razaoSocial').value=''; document.getElementById('cidade').value='';
+      document.getElementById('comprador').value=''; document.getElementById('whatsapp').value=''; document.getElementById('obs').value=''; document.getElementById('ordemManual').value='';
+      document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(e => e.checked = false);
+      document.getElementById('msgCliente').innerHTML = '';
+      document.getElementById('codCliente').focus();
+    }
+    function limparCliente() { limparFormulario(); }
+    function sincronizarOrdem(v) { const r = document.querySelector(`input[name="ordemVisita"][value="${v}"]`); if(r) r.checked=true; }
+    
+    function mostrarModal(tipo, msg) {
+      const o = document.getElementById('overlay'); const c = document.getElementById('modalContent'); o.classList.remove('hidden');
+      if(tipo==='loading') c.innerHTML = `<div class="loader"></div><h3 class="font-bold mt-2">${msg}</h3>`;
+      else c.innerHTML = `<h3 class="font-bold text-lg mb-2">${tipo==='sucesso'?'Sucesso!':'Erro'}</h3><p class="mb-4 text-sm">${msg}</p><button onclick="document.getElementById('overlay').classList.add('hidden')" class="bg-gray-200 px-4 py-2 rounded">Fechar</button>`;
+    }
+    
+    document.getElementById('whatsapp').addEventListener('input', function (e) { let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/); e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : ''); });
+  </script>
+</body>
+</html>
