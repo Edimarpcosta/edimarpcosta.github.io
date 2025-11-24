@@ -3,94 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestão de Rotas - Ameripan</title>
+  <title>Gestão Integrada de Rotas - Ameripan</title>
   
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
 
   <style>
-    /* Reset e Base */
+    /* Base */
     body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; display: flex; height: 100vh; overflow: hidden; }
-    
-    /* Scrollbars */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-
-    /* Menu Ativo */
-    .menu-item.active { background-color: #eff6ff; color: #2563eb; border-right: 3px solid #2563eb; }
     
-    /* Visões */
+    .menu-item.active { background-color: #eff6ff; color: #2563eb; border-right: 3px solid #2563eb; }
     .view-section { display: none; height: 100%; overflow-y: auto; padding-bottom: 80px; }
     .view-section.active { display: block; }
 
-    /* Calendário */
-    .calendar-grid { display: grid; grid-template-columns: 80px repeat(6, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
-    .cal-header { background-color: #f8fafc; font-weight: bold; text-align: center; padding: 10px; font-size: 0.75rem; color: #64748b; text-transform: uppercase; }
-    .cal-cell { background-color: white; min-height: 100px; padding: 5px; font-size: 0.7rem; position: relative; }
-    .cal-cell:hover { background-color: #f8fafc; }
+    /* Grid do Calendário (Visualização Tela) */
+    .calendar-grid { display: grid; grid-template-columns: 60px repeat(6, 1fr); gap: 1px; background-color: #cbd5e1; border: 1px solid #cbd5e1; }
+    .cal-header { background-color: #f8fafc; font-weight: bold; text-align: center; padding: 8px; font-size: 0.7rem; color: #475569; text-transform: uppercase; }
+    .cal-cell { background-color: white; min-height: 120px; padding: 6px; font-size: 0.7rem; display: flex; flex-direction: column; gap: 4px; }
     
-    /* Indicadores Visuais */
-    .heat-low { border-left: 3px solid #22c55e; }
-    .heat-med { border-left: 3px solid #f59e0b; }
-    .heat-high { border-left: 3px solid #ef4444; background-color: #fef2f2; }
-    
+    /* Itens dentro do dia */
+    .cal-city-item { padding: 3px 5px; background-color: #f8fafc; border-radius: 4px; border-left: 3px solid #3b82f6; line-height: 1.2; }
+    .cal-city-name { font-weight: bold; color: #334155; display: block; }
+    .cal-city-delivery { font-size: 0.6rem; color: #64748b; display: block; margin-top: 1px; }
+
     /* Badges Logística */
     .badge-log-ok { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
     .badge-log-warn { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
     .badge-log-err { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
-
-    /* =========================================
-       CONFIGURAÇÃO DE IMPRESSÃO (A4 PAISAGEM)
-       ========================================= */
-    @media print {
-        @page { 
-            size: A4 landscape; 
-            margin: 10mm; 
-        }
-        body { 
-            display: block !important; 
-            height: auto !important; 
-            overflow: visible !important; 
-            background-color: white !important;
-            font-family: Arial, sans-serif !important;
-        }
-        aside, main, #loading-overlay, .no-print { display: none !important; }
-        #print-area { 
-            display: block !important; 
-            width: 100% !important;
-        }
-        
-        /* Estilos Específicos do Relatório */
-        .print-header { border-bottom: 2px solid black; margin-bottom: 15px; padding-bottom: 5px; }
-        .print-day-block { margin-bottom: 20px; page-break-inside: avoid; }
-        .print-day-title { background-color: #e2e8f0; padding: 5px 10px; font-weight: bold; font-size: 14px; border-left: 5px solid #1e293b; margin-bottom: 10px; }
-        
-        .print-city-block { margin-bottom: 10px; margin-left: 5px; page-break-inside: avoid; }
-        .print-city-header { 
-            font-weight: bold; font-size: 12px; margin-bottom: 2px; 
-            border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; 
-            display: flex; justify-content: space-between;
-        }
-        
-        .print-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .print-table th { border: 1px solid #64748b; background-color: #f1f5f9; padding: 4px; text-align: left; }
-        .print-table td { border: 1px solid #94a3b8; padding: 4px; vertical-align: top; }
-        
-        /* Garante que nada seja cortado */
-        .print-no-cut { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
-    }
 
     [un-cloak] { display: none; }
   </style>
 </head>
 <body un-cloak>
 
-  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 z-20 shadow-sm no-print">
+  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 z-20 shadow-sm">
     <div class="p-6 border-b border-slate-100">
         <h1 class="text-xl font-bold text-blue-700 flex items-center gap-2"><i class="ph ph-truck-trailer"></i> Gestão Rotas</h1>
         <p class="text-xs text-slate-400 mt-1">Ameripan Distribuidora</p>
@@ -98,10 +53,11 @@
     <nav class="flex-1 overflow-y-auto py-4">
         <ul class="space-y-1">
             <li><a href="#" onclick="switchView('dashboard')" class="menu-item active flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-chart-pie-slice text-lg"></i> Visão Geral</a></li>
+            <li><a href="#" onclick="switchView('deliveries')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-truck text-lg"></i> Consulta Entregas</a></li>
             <li><a href="#" onclick="switchView('calendar')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-calendar text-lg"></i> Calendário (Mês)</a></li>
             <li><a href="#" onclick="switchView('logistica')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-map-pin text-lg"></i> Logística & Cobertura</a></li>
             <li><a href="#" onclick="switchView('team')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-users-three text-lg"></i> Carga da Equipe</a></li>
-            <li><a href="#" onclick="switchView('reports')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-file-text text-lg"></i> Relatórios & PDF</a></li>
+            <li><a href="#" onclick="switchView('reports')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-file-text text-lg"></i> Dados Brutos</a></li>
         </ul>
     </nav>
     <div class="p-4 border-t border-slate-100 bg-slate-50">
@@ -109,7 +65,7 @@
     </div>
   </aside>
 
-  <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative no-print">
+  <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
     
     <header class="bg-white border-b border-slate-200 p-4 flex flex-wrap gap-4 items-center justify-between shadow-sm z-10">
         <div class="flex items-center gap-4 flex-1">
@@ -143,18 +99,30 @@
                 <div class="bg-white p-4 rounded shadow-sm border-l-4 border-purple-500"><p class="text-xs text-slate-400 font-bold uppercase">Equipes Ativas</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-equipes-ativas">0</h3></div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Distribuição Semanal</h3><canvas id="chartDias"></canvas></div>
+                <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Distribuição Semanal (Escala: 0-20+)</h3><canvas id="chartDias"></canvas></div>
                 <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Top 5 Cidades</h3><canvas id="chartCidades"></canvas></div>
+            </div>
+        </div>
+
+        <div id="view-deliveries" class="view-section p-6">
+            <div class="max-w-2xl mx-auto">
+                <h2 class="text-lg font-bold text-slate-700 mb-2 text-center">Consulta Rápida de Entregas</h2>
+                <p class="text-sm text-slate-500 mb-6 text-center">Pesquise qualquer cidade para ver os dias em que o caminhão passa.</p>
+                <div class="relative mb-6">
+                    <input type="text" id="search-delivery" placeholder="Digite o nome da cidade..." class="w-full p-4 pl-12 border rounded-lg shadow-sm text-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="renderDeliveries()">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-5 text-xl text-gray-400"></i>
+                </div>
+                <div id="delivery-results" class="space-y-3"></div>
             </div>
         </div>
 
         <div id="view-calendar" class="view-section p-6">
             <div class="flex justify-between items-end mb-4">
-                <div><h2 class="text-lg font-bold text-slate-700">Planejamento Mensal</h2><p class="text-xs text-slate-500">Grade Semana x Dia.</p></div>
-                <div class="flex gap-2 text-[10px] font-bold uppercase"><span class="flex items-center gap-1"><span class="w-3 h-3 bg-green-500 rounded-sm"></span> Leve</span><span class="flex items-center gap-1"><span class="w-3 h-3 bg-amber-500 rounded-sm"></span> Médio</span><span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-500 rounded-sm"></span> Pesado</span></div>
+                <div><h2 class="text-lg font-bold text-slate-700">Calendário Mensal de Visitas</h2><p class="text-xs text-slate-500">Planejamento Semanal (1 a 5) x Dia da Semana.</p></div>
+                <button onclick="generateCalendarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF Mensal</button>
             </div>
             <div class="bg-white rounded shadow overflow-hidden border border-slate-200">
-                <div class="calendar-grid" style="border-bottom: 0;"><div class="cal-header bg-slate-100">Semana</div><div class="cal-header">Segunda</div><div class="cal-header">Terça</div><div class="cal-header">Quarta</div><div class="cal-header">Quinta</div><div class="cal-header">Sexta</div><div class="cal-header">Sábado</div></div>
+                <div class="calendar-grid" style="border-bottom: 0;"><div class="cal-header bg-slate-100">SEM</div><div class="cal-header">SEGUNDA</div><div class="cal-header">TERÇA</div><div class="cal-header">QUARTA</div><div class="cal-header">QUINTA</div><div class="cal-header">SEXTA</div><div class="cal-header">SÁBADO</div></div>
                 <div class="calendar-grid" id="calendar-body"></div>
             </div>
         </div>
@@ -165,7 +133,7 @@
                 <div class="lg:col-span-2 bg-white rounded shadow overflow-hidden">
                     <div class="p-4 border-b border-slate-100 bg-slate-50"><h3 class="font-bold text-slate-700 text-sm">Análise Visita vs. Entrega (Rota Filtrada)</h3></div>
                     <div class="overflow-x-auto h-[500px]">
-                        <table class="w-full text-left text-xs"><thead class="bg-slate-100 text-slate-500 font-bold uppercase sticky top-0"><tr><th class="p-2">Vendedor</th><th class="p-2">Cidade</th><th class="p-2">Dia Visita</th><th class="p-2">Dias Entrega</th><th class="p-2 text-center">Lead Time</th></tr></thead><tbody id="table-logistica-conflitos" class="divide-y divide-slate-100 text-slate-600"></tbody></table>
+                        <table class="w-full text-left text-xs"><thead class="bg-slate-100 text-slate-500 font-bold uppercase sticky top-0"><tr><th class="p-2">Cód</th><th class="p-2">Vendedor</th><th class="p-2">Cidade</th><th class="p-2">Dia Visita</th><th class="p-2">Dias Entrega</th><th class="p-2 text-center">Lead Time</th></tr></thead><tbody id="table-logistica-conflitos" class="divide-y divide-slate-100 text-slate-600"></tbody></table>
                     </div>
                 </div>
                 <div class="lg:col-span-1 bg-white rounded shadow overflow-hidden">
@@ -184,20 +152,18 @@
 
         <div id="view-reports" class="view-section p-6">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-slate-700">Relatório</h2>
+                <h2 class="text-lg font-bold text-slate-700">Dados Brutos (Listagem)</h2>
                 <div class="flex gap-2">
-                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-2"><i class="ph ph-file-xls text-lg"></i> Excel</button>
-                    <button onclick="printRouteSheet()" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-2"><i class="ph ph-printer text-lg"></i> PDF Roteiro</button>
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-2"><i class="ph ph-file-xls text-lg"></i> Baixar Excel</button>
+                    <button onclick="exportPDFLista()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF (Lista Completa)</button>
                 </div>
             </div>
             <div class="bg-white rounded shadow overflow-x-auto">
-                <table class="w-full text-left text-xs" id="report-table"><thead class="bg-slate-50 text-slate-500 font-bold uppercase"><tr><th class="p-2">Vendedor</th><th class="p-2">Cidade</th><th class="p-2">Cliente</th><th class="p-2">Dia</th><th class="p-2">Freq.</th><th class="p-2">Ordem</th></tr></thead><tbody id="table-report-body" class="divide-y divide-slate-100 text-slate-600"></tbody></table>
+                <table class="w-full text-left text-xs" id="report-table"><thead class="bg-slate-50 text-slate-500 font-bold uppercase"><tr><th class="p-2">Cód.</th><th class="p-2">Vendedor</th><th class="p-2">Cidade</th><th class="p-2">Cliente</th><th class="p-2">Dia</th><th class="p-2">Freq.</th><th class="p-2">Ordem</th></tr></thead><tbody id="table-report-body" class="divide-y divide-slate-100 text-slate-600"></tbody></table>
             </div>
         </div>
     </div>
   </main>
-
-  <div id="print-area" class="hidden"></div>
 
   <div id="loading-overlay" class="fixed inset-0 bg-white/90 z-[100] flex flex-col items-center justify-center">
     <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
@@ -205,9 +171,6 @@
   </div>
 
   <script>
-    // ============================================================
-    // 1. DADOS E CONFIGURAÇÕES
-    // ============================================================
     const SPREADSHEET_ID = '1JXdW-RDSrG4or8WzvLBV_PbopVvug9B9og7fSMGOWj0';
     const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
     
@@ -216,45 +179,41 @@
     const URL_ENTREGAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CIDADES-ENTREGAS!A2:B?key=${API_KEY}`;
     
     const COL = { DATA:0, VEND_COD:1, VEND_NOME:2, EQUIPE:3, CLIENTE_COD:4, RAZAO:5, FANTASIA:6, CIDADE:7, ORDEM:8, FREQ:9, DIA_PRINC:10, DIAS_SEC:11, COMPRADOR:12, WHATSAPP:13, OBS:14 };
-    
-    const DIAS_MAP = { 'SEG':1, 'SEGUNDA':1, 'TER':2, 'TERCA':2, 'QUA':3, 'QUARTA':3, 'QUI':4, 'QUINTA':4, 'SEX':5, 'SEXTA':5, 'SAB':6, 'SABADO':6 };
+    const DIAS_MAP = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
     const DIAS_LISTA = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
-    const DIAS_NOMES_COMPLETOS = { 'SEG':'SEGUNDA', 'TER':'TERÇA', 'QUA':'QUARTA', 'QUI':'QUINTA', 'SEX':'SEXTA', 'SAB':'SÁBADO' };
+    const DIAS_VALOR = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
 
-    let rawRotas = [], rawEntregas = {}, filteredData = [], charts = {};
+    let rawRotas = [], rawEntregas = {}, cityDisplayMap = {}, filteredData = [], charts = {};
 
-    // ============================================================
-    // 2. CARREGAMENTO
-    // ============================================================
     window.onload = carregarDados;
 
     async function carregarDados() {
         document.getElementById('loading-overlay').style.display = 'flex';
         try {
-            const [resRotas, resVend, resEnt] = await Promise.all([
-                fetch(URL_ROTAS), fetch(URL_VENDEDORES), fetch(URL_ENTREGAS)
-            ]);
-            
-            const jRotas = await resRotas.json();
-            const jEnt = await resEnt.json();
+            const [resRotas, resVend, resEnt] = await Promise.all([fetch(URL_ROTAS), fetch(URL_VENDEDORES), fetch(URL_ENTREGAS)]);
+            const jRotas = await resRotas.json(); const jEnt = await resEnt.json();
 
-            // Logística
             rawEntregas = {}; 
+            cityDisplayMap = {}; // Reseta Mapa de Nomes
+            
             if (jEnt.values) {
                 jEnt.values.forEach(r => {
                     const cidadeNorm = normalizarTexto(r[0]);
+                    const nomeBonito = r[0] ? r[0].toUpperCase() : "";
+                    cityDisplayMap[cidadeNorm] = nomeBonito; // Salva o nome legível
+                    
                     const diasStr = r[1] ? r[1].toUpperCase() : '';
                     rawEntregas[cidadeNorm] = parseDiasEntrega(diasStr);
                 });
             }
 
-            // Rotas
             rawRotas = (jRotas.values || []).map(r => ({
                 vendedor: r[COL.VEND_NOME] || 'N/A',
                 equipe: r[COL.EQUIPE] || 'Geral',
                 cidade: r[COL.CIDADE] || 'N/A',
                 cidadeNorm: normalizarTexto(r[COL.CIDADE] || ''),
-                cliente: r[COL.FANTASIA] || r[COL.RAZAO] || 'Cliente',
+                codCliente: r[COL.CLIENTE_COD] || '000',
+                cliente: r[COL.FANTASIA] || r[COL.RAZAO] || 'Cliente Sem Nome',
                 ordem: parseInt(r[COL.ORDEM]) || 99,
                 freq: normalizarFreq(r[COL.FREQ]),
                 diaPrinc: normalizarDia(r[COL.DIA_PRINC]),
@@ -264,66 +223,53 @@
 
             popularFiltros();
             aplicarFiltros();
-
-        } catch (e) { console.error(e); alert("Erro ao carregar dados."); } 
+        } catch (e) { console.error(e); alert("Erro ao carregar."); } 
         finally { document.getElementById('loading-overlay').style.display = 'none'; }
     }
 
-    // --- Funções Auxiliares ---
-    function normalizarTexto(txt) {
-        if(!txt) return "";
-        return txt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    }
-    function normalizarDia(d) {
-        if(!d) return null;
-        const clean = d.trim().toUpperCase().substring(0,3);
-        return DIAS_LISTA.includes(clean) ? clean : null;
-    }
-    function normalizarFreq(f) {
-        if(!f || f.includes('Toda') || f.includes('Indef')) return ['TODAS'];
-        return f.split(',').map(s=>s.trim());
-    }
+    // Funções Auxiliares
+    function normalizarTexto(txt) { return txt ? txt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase() : ""; }
+    function normalizarDia(d) { if(!d) return null; const c = d.trim().toUpperCase().substring(0,3); return DIAS_LISTA.includes(c) ? c : null; }
+    function normalizarFreq(f) { if(!f || f.includes('Toda') || f.includes('Indef')) return ['TODAS']; return f.split(',').map(s=>s.trim()); }
+    
     function parseDiasEntrega(str) {
-        let dias = new Set();
-        if (str.includes(' A ')) {
-            const parts = str.split(' A ');
-            const inicio = DIAS_MAP[normalizarDiaLong(parts[0])];
-            const fim = DIAS_MAP[normalizarDiaLong(parts[1])];
-            if (inicio && fim) { for (let i = inicio; i <= fim; i++) dias.add(i); }
-        } else {
-            const parts = str.replace(' E ', ',').split(',');
-            parts.forEach(p => { const d = DIAS_MAP[normalizarDiaLong(p)]; if (d) dias.add(d); });
-        }
+        if(!str) return []; let dias=new Set(); const u=str.toUpperCase();
+        if(u.includes(' A ')) { const p=u.split(' A '); const i=DIAS_MAP[p[0].trim().substring(0,3)]; const f=DIAS_MAP[p[1].trim().substring(0,3)]; if(i&&f) for(let k=i;k<=f;k++) dias.add(k); } 
+        else u.replace(' E ',',').split(',').forEach(s=>{const d=DIAS_MAP[s.trim().substring(0,3)]; if(d) dias.add(d)});
         return Array.from(dias).sort();
     }
-    function normalizarDiaLong(d) { return d.trim().split('-')[0].split(' ')[0]; }
-    function getDiasEntregaTexto(cidadeNorm) {
-        const diasNums = rawEntregas[cidadeNorm] || [];
-        if(diasNums.length === 0) return "Não Cadastrado";
-        return diasNums.map(n => DIAS_LISTA[n-1]).join(', ');
-    }
+    function getEntregaStr(cidadeNorm) { const d = rawEntregas[cidadeNorm] || []; return d.length===0 ? "N/D" : d.map(n => DIAS_LISTA[n-1]).join(', '); }
 
-    // ============================================================
-    // 3. LÓGICA DE INTERFACE
-    // ============================================================
     function switchView(v) {
         document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
         document.getElementById(`view-${v}`).classList.add('active');
         document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
         event.currentTarget.classList.add('active');
         if(v === 'logistica') renderLogistics();
+        if(v === 'deliveries') renderDeliveries();
     }
 
+    // CORREÇÃO: MEMORIZA FILTROS ANTES DE REPOVOAR
     function popularFiltros() {
+        // 1. Salva valores atuais
+        const selEq = document.getElementById('filtro-equipe').value;
+        const selVend = document.getElementById('filtro-vendedor').value;
+        const selCid = document.getElementById('filtro-cidade').value;
+
         const eq = [...new Set(rawRotas.map(i=>i.equipe).filter(Boolean))].sort();
         const ve = [...new Set(rawRotas.map(i=>i.vendedor).filter(Boolean))].sort();
         const ci = [...new Set(rawRotas.map(i=>i.cidade).filter(Boolean))].sort();
-        povoar('filtro-equipe', eq); povoar('filtro-vendedor', ve); povoar('filtro-cidade', ci);
+        
+        povoar('filtro-equipe', eq); 
+        povoar('filtro-vendedor', ve); 
+        povoar('filtro-cidade', ci);
+
+        // 2. Restaura valores (se ainda existirem na lista)
+        if(eq.includes(selEq)) document.getElementById('filtro-equipe').value = selEq;
+        if(ve.includes(selVend)) document.getElementById('filtro-vendedor').value = selVend;
+        if(ci.includes(selCid)) document.getElementById('filtro-cidade').value = selCid;
     }
-    function povoar(id, l) { 
-        const s=document.getElementById(id); const v=s.value; s.innerHTML='<option value="">Todas</option>'; 
-        l.forEach(i=>s.appendChild(new Option(i,i))); s.value=v; 
-    }
+    function povoar(id, l) { const s=document.getElementById(id); s.innerHTML='<option value="">Todas</option>'; l.forEach(i=>s.appendChild(new Option(i,i))); }
 
     function aplicarFiltros() {
         const fEq = document.getElementById('filtro-equipe').value;
@@ -332,15 +278,18 @@
         filteredData = rawRotas.filter(r => (!fEq || r.equipe===fEq) && (!fVend || r.vendedor===fVend) && (!fCid || r.cidade===fCid));
         document.getElementById('kpi-total-top').innerText = filteredData.length;
         const active = document.querySelector('.view-section.active').id.replace('view-', '');
+        
+        // Re-renderiza a view ativa para refletir o filtro
         if(active === 'dashboard') renderDashboard();
-        if(active === 'calendar') renderCalendar();
-        if(active === 'team') renderTeamLoad();
-        if(active === 'reports') renderReports();
-        if(active === 'logistica') renderLogistics();
+        else if(active === 'calendar') renderCalendar();
+        else if(active === 'team') renderTeamLoad();
+        else if(active === 'reports') renderReports();
+        else if(active === 'logistica') renderLogistics();
+        else if(active === 'deliveries') renderDeliveries();
     }
 
     // ============================================================
-    // 4. RENDERIZADORES
+    // 3. RENDERIZADORES (VIEWS)
     // ============================================================
     function renderDashboard() {
         document.getElementById('kpi-visitas-dia').innerText = (filteredData.length / 6).toFixed(1);
@@ -350,10 +299,39 @@
         filteredData.forEach(r => { if(r.diaPrinc) diasCount[r.diaPrinc]++; });
         const diaPico = Object.entries(diasCount).reduce((a,b)=>a[1]>b[1]?a:b)[0];
         document.getElementById('kpi-dia-pico').innerText = diaPico;
-        renderChart('chartDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#3b82f6');
+        
+        // CORREÇÃO DO GRÁFICO (ESCALA Y 0-20+)
+        renderChart('chartDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#3b82f6', {
+            scales: {
+                y: { 
+                    beginAtZero: true, 
+                    suggestedMax: 20, // Força o topo para ser pelo menos 20
+                    ticks: { stepSize: 1 } // Números inteiros
+                }
+            }
+        });
+        
         const cidCount = {}; filteredData.forEach(r=> cidCount[r.cidade] = (cidCount[r.cidade]||0)+1);
         const topCid = Object.entries(cidCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
         renderChart('chartCidades', 'doughnut', topCid.map(x=>x[0]), topCid.map(x=>x[1]), ['#f59e0b','#10b981','#6366f1','#ec4899','#64748b']);
+    }
+
+    function renderDeliveries() {
+        const search = document.getElementById('search-delivery').value.trim().toUpperCase();
+        const container = document.getElementById('delivery-results');
+        container.innerHTML = '';
+        const lista = Object.entries(rawEntregas).map(([cidadeNorm, diasNum]) => {
+            // Usa o nome bonito do mapa, ou a chave normalizada
+            const nomeBonito = cityDisplayMap[cidadeNorm] || cidadeNorm;
+            return { nome: nomeBonito, norm: cidadeNorm, dias: diasNum };
+        }).sort((a,b) => a.nome.localeCompare(b.nome));
+
+        const filtrados = lista.filter(i => i.norm.includes(search) || i.nome.toUpperCase().includes(search));
+        filtrados.slice(0, 50).forEach(item => {
+            const diasStr = item.dias.length > 0 ? item.dias.map(d => DIAS_LISTA[d-1]).join(', ') : 'SEM ENTREGAS DEFINIDAS';
+            container.innerHTML += `<div class="bg-white p-4 rounded shadow-sm border border-slate-200 flex justify-between items-center"><div><h3 class="font-bold text-slate-700 text-lg">${item.nome}</h3></div><div class="text-right"><span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">${diasStr}</span></div></div>`;
+        });
+        if (filtrados.length === 0) container.innerHTML = '<div class="text-center text-slate-400 p-4">Nenhuma cidade encontrada.</div>';
     }
 
     function renderCalendar() {
@@ -362,16 +340,48 @@
             c.innerHTML += `<div class="cal-header bg-slate-100 flex items-center justify-center border-b border-slate-200">SEMANA ${sem}</div>`;
             DIAS_LISTA.forEach(dia => {
                 const clientes = filteredData.filter(r => (r.diaPrinc===dia || r.diasSec.includes(dia)) && (r.freq.includes('TODAS') || r.freq.includes(`S${sem}`)));
-                let html = `<div class="cal-cell border border-slate-100 ${clientes.length>15?'heat-high':clientes.length>5?'heat-med':'heat-low'}">`;
+                let html = `<div class="cal-cell border border-slate-100">`;
                 if(clientes.length>0) {
-                    const cids = {}; clientes.forEach(x=>cids[x.cidade]=(cids[x.cidade]||0)+1);
-                    html += `<div class="font-bold text-slate-700 mb-1 border-b pb-1">${clientes.length} Cli</div>`;
-                    Object.entries(cids).slice(0,3).forEach(([k,v])=>html+=`<div class="flex justify-between text-slate-500"><span>${k.substring(0,8)}</span><span>${v}</span></div>`);
+                    const cids = {}; clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
+                    Object.entries(cids).sort().forEach(([n, q]) => html += `<div class="cal-city-item"><span class="cal-city-name">${n} (${q})</span><span class="cal-city-delivery">[ENT: ${getEntregaStr(normalizarTexto(n))}]</span></div>`); // Ícone removido aqui também
                 }
                 html += `</div>`;
                 c.appendChild(new DOMParser().parseFromString(html, 'text/html').body.firstChild);
             });
         }
+    }
+
+    function renderLogistics() {
+        const tbody = document.getElementById('table-logistica-conflitos'); tbody.innerHTML = '';
+        const cidadesComRota = new Set(rawRotas.map(r => r.cidadeNorm));
+        const listaVazias = document.getElementById('list-cidades-vazias'); listaVazias.innerHTML = '';
+        let countVazias = 0;
+        Object.keys(rawEntregas).forEach(cidNorm => {
+            if (!cidadesComRota.has(cidNorm)) {
+                // CORREÇÃO: Usa o nome bonito aqui
+                const nomeBonito = cityDisplayMap[cidNorm] || cidNorm;
+                listaVazias.innerHTML += `<li class="border-b border-red-100 pb-1"><i class="ph ph-warning text-red-500"></i> <b>${nomeBonito}</b> <span class="text-xs text-gray-400">(Sem Visitas)</span></li>`;
+                countVazias++;
+            }
+        });
+        if(countVazias===0) listaVazias.innerHTML = '<li class="text-green-600 italic">Cobertura Total!</li>';
+
+        filteredData.forEach(r => {
+            const diaVisitaNum = DIAS_MAP[r.diaPrinc];
+            const diasEntrega = rawEntregas[r.cidadeNorm] || [];
+            if (diaVisitaNum && diasEntrega.length > 0) {
+                let gap = 99; for (let d of diasEntrega) { let diff = d - diaVisitaNum; if (diff < 0) diff += 7; if (diff < gap) gap = diff; }
+                let badge = gap <= 2 ? `<span class="badge-log-ok">Ótimo (${gap}d)</span>` : gap <= 4 ? `<span class="badge-log-warn">Atenção (${gap}d)</span>` : `<span class="badge-log-err">Crítico (${gap}d)</span>`;
+                tbody.innerHTML += `<tr class="hover:bg-slate-50 border-b border-slate-100"><td class="p-2 font-mono text-xs">${r.codCliente}</td><td class="p-2 font-bold">${r.vendedor}</td><td class="p-2">${r.cidade}</td><td class="p-2 text-blue-600 font-bold">${r.diaPrinc}</td><td class="p-2 text-xs">${getEntregaStr(r.cidadeNorm)}</td><td class="p-2 text-center">${badge}</td></tr>`;
+            }
+        });
+    }
+
+    function renderReports() {
+        const tb = document.getElementById('table-report-body'); tb.innerHTML = '';
+        filteredData.slice(0,200).forEach(r => {
+            tb.innerHTML += `<tr class="hover:bg-slate-50 border-b border-slate-100"><td class="p-2 font-mono text-blue-600 font-bold">${r.codCliente}</td><td class="p-2 font-bold text-slate-700">${r.vendedor}</td><td class="p-2">${r.cidade}</td><td class="p-2 truncate max-w-[150px]">${r.cliente}</td><td class="p-2">${r.diaPrinc||'-'}</td><td class="p-2 text-[10px]">${r.freq.join(',')}</td><td class="p-2 text-center">${r.ordem}</td></tr>`;
+        });
     }
 
     function renderTeamLoad() {
@@ -386,120 +396,113 @@
         });
     }
 
-    function renderReports() {
-        const tb = document.getElementById('table-report-body'); tb.innerHTML = '';
-        filteredData.slice(0,200).forEach(r => {
-            tb.innerHTML += `<tr class="hover:bg-slate-50 border-b border-slate-100"><td class="p-2 font-bold">${r.vendedor}</td><td class="p-2">${r.cidade}</td><td class="p-2 truncate max-w-[150px]">${r.cliente}</td><td class="p-2">${r.diaPrinc||'-'}</td><td class="p-2 text-[10px]">${r.freq.join(',')}</td><td class="p-2 text-center">${r.ordem}</td></tr>`;
-        });
-    }
-
-    function renderLogistics() {
-        const tbody = document.getElementById('table-logistica-conflitos'); tbody.innerHTML = '';
-        const cidadesComRota = new Set(rawRotas.map(r => r.cidadeNorm));
-        const listaVazias = document.getElementById('list-cidades-vazias'); listaVazias.innerHTML = '';
-        
-        let countVazias = 0;
-        Object.keys(rawEntregas).forEach(cidNorm => {
-            if (!cidadesComRota.has(cidNorm)) {
-                listaVazias.innerHTML += `<li class="border-b border-red-100 pb-1"><i class="ph ph-warning text-red-500"></i> <b>${cidNorm}</b> <span class="text-xs text-gray-400">(Sem Visitas)</span></li>`;
-                countVazias++;
-            }
-        });
-        if(countVazias===0) listaVazias.innerHTML = '<li class="text-green-600 italic">Cobertura Total!</li>';
-
-        filteredData.forEach(r => {
-            const diaVisitaNum = DIAS_MAP[r.diaPrinc];
-            const diasEntrega = rawEntregas[r.cidadeNorm] || [];
-            if (diaVisitaNum && diasEntrega.length > 0) {
-                let gap = 99;
-                for (let d of diasEntrega) {
-                    let diff = d - diaVisitaNum;
-                    if (diff < 0) diff += 7;
-                    if (diff < gap) gap = diff;
-                }
-                let badge = gap <= 2 ? `<span class="badge-log-ok">Ótimo (${gap}d)</span>` : gap <= 4 ? `<span class="badge-log-warn">Atenção (${gap}d)</span>` : `<span class="badge-log-err">Crítico (${gap}d)</span>`;
-                const diasEntregaStr = diasEntrega.map(d => DIAS_LISTA[d-1]).join(', ');
-                tbody.innerHTML += `<tr class="hover:bg-slate-50 border-b border-slate-100"><td class="p-2 font-bold">${r.vendedor}</td><td class="p-2">${r.cidade}</td><td class="p-2 text-blue-600 font-bold">${r.diaPrinc}</td><td class="p-2 text-xs">${diasEntregaStr}</td><td class="p-2 text-center">${badge}</td></tr>`;
-            }
-        });
-    }
-
     // ============================================================
-    // 5. EXPORTAÇÃO AVANÇADA (EXCEL E PDF A4 PAISAGEM)
+    // 4. EXPORTAÇÕES
     // ============================================================
     function exportToExcel() {
         if(filteredData.length === 0) { alert("Sem dados."); return; }
         const ws = XLSX.utils.json_to_sheet(filteredData.map(r => ({
-            "Vendedor": r.vendedor,
-            "Cidade": r.cidade,
-            "Dias de Entrega na Cidade": getDiasEntregaTexto(r.cidadeNorm), // Nova Coluna
-            "Cliente": r.cliente,
-            "Dia Principal": r.diaPrinc,
-            "Frequência": r.freq.join(','),
-            "Ordem": r.ordem,
-            "Obs": r.obs,
-            "Status Visita": ""
+            "Cód. Cliente": r.codCliente, "Vendedor": r.vendedor, "Cidade": r.cidade, "Dias Entrega": getEntregaStr(r.cidadeNorm),
+            "Cliente": r.cliente, "Dia Visita": r.diaPrinc, "Freq": r.freq.join(','), "Ordem": r.ordem, "Obs": r.obs 
         })));
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Roteiro"); XLSX.writeFile(wb, "Roteiro_Ameripan.xlsx");
     }
 
-    function printRouteSheet() {
-        if (filteredData.length === 0) { alert("Nenhum dado para imprimir. Aplique filtros."); return; }
-        const printArea = document.getElementById('print-area');
-        printArea.innerHTML = '';
+    function exportPDFLista() {
+        if(filteredData.length === 0) { alert("Sem dados."); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
 
-        const vendedorFiltro = document.getElementById('filtro-vendedor').value || "Geral";
-        printArea.innerHTML += `
-            <div class="print-header">
-                <h1 class="text-2xl font-bold uppercase">Roteiro de Visitas - Ameripan</h1>
-                <p class="text-sm">Vendedor: <b>${vendedorFiltro}</b> | Gerado em: ${new Date().toLocaleDateString()}</p>
-            </div>
-        `;
+        const fVend = document.getElementById('filtro-vendedor').value || "Todos";
+        const fEq = document.getElementById('filtro-equipe').value || "Todas";
+        
+        // CORREÇÃO DO TÍTULO DINÂMICO
+        let tituloRelatorio = "Relatório Geral de Rotas";
+        if (fVend !== "Todos") tituloRelatorio = `Relatório de Visitas - ${fVend}`;
+        else if (fEq !== "Todas") tituloRelatorio = `Relatório de Equipe - ${fEq}`;
 
-        DIAS_LISTA.forEach(dia => {
-            const visitasDia = filteredData.filter(r => r.diaPrinc === dia).sort((a,b) => a.ordem - b.ordem);
-            if (visitasDia.length > 0) {
-                let diaBlock = `<div class="print-day-block">`;
-                diaBlock += `<div class="print-day-title">${DIAS_NOMES_COMPLETOS[dia]} (${visitasDia.length} clientes)</div>`;
-                
-                const cidadesNoDia = [...new Set(visitasDia.map(v=>v.cidade))];
-                cidadesNoDia.forEach(cidade => {
-                    const clientesCidade = visitasDia.filter(v => v.cidade === cidade);
-                    // Lookup da Entrega
-                    const cidadeNorm = normalizarTexto(cidade);
-                    const entregaInfo = getDiasEntregaTexto(cidadeNorm);
-
-                    diaBlock += `<div class="print-city-block">`;
-                    diaBlock += `<div class="print-city-header">
-                                    <span>📍 ${cidade}</span>
-                                    <span class="text-xs text-gray-600">🚚 Entregas: ${entregaInfo}</span>
-                                 </div>`;
-                    diaBlock += `<table class="print-table">`;
-                    diaBlock += `<tr><th style="width:30px">Ord</th><th>Cliente</th><th style="width:40%">Obs</th><th style="width:40px">OK?</th></tr>`;
-                    
-                    clientesCidade.forEach(cli => {
-                        diaBlock += `
-                            <tr>
-                                <td style="text-align:center; font-weight:bold;">${cli.ordem}</td>
-                                <td class="print-no-cut"><b>${cli.cliente}</b></td>
-                                <td class="print-no-cut">${cli.obs || ''}</td>
-                                <td></td>
-                            </tr>`;
-                    });
-                    diaBlock += `</table></div>`;
-                });
-                diaBlock += `</div>`;
-                printArea.innerHTML += diaBlock;
-            }
+        const dadosSort = [...filteredData].sort((a, b) => {
+            if (a.equipe !== b.equipe) return a.equipe.localeCompare(b.equipe);
+            if (a.vendedor !== b.vendedor) return a.vendedor.localeCompare(b.vendedor);
+            const diaA = DIAS_VALOR[a.diaPrinc] || 9; const diaB = DIAS_VALOR[b.diaPrinc] || 9;
+            if (diaA !== diaB) return diaA - diaB;
+            return a.ordem - b.ordem;
         });
 
-        window.print();
+        const tableBody = dadosSort.map(r => {
+            const entrega = getEntregaStr(r.cidadeNorm);
+            // CORREÇÃO DO ÍCONE: Usando texto limpo [ENT: ...]
+            const cidadeDisplay = `${r.cidade}\n[Ent: ${entrega}]`; 
+            return [r.equipe, r.vendedor, r.diaPrinc, cidadeDisplay, r.codCliente, r.cliente, r.ordem];
+        });
+
+        doc.setFontSize(14); doc.text(tituloRelatorio, 14, 15);
+        doc.setFontSize(9); doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${filteredData.length}`, 14, 22);
+
+        doc.autoTable({
+            head: [['Equipe', 'Vend', 'Dia', 'Cidade (Entrega)', 'Cód.', 'Cliente', 'Ord']],
+            body: tableBody,
+            startY: 30,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+            columnStyles: { 3: { cellWidth: 35 }, 4: { cellWidth: 15, fontStyle: 'bold' } },
+            didParseCell: function(data) {
+                if (data.section === 'body' && data.row.index > 0) {
+                    const prevRow = data.table.body[data.row.index - 1];
+                    if (prevRow.cells[1].raw !== data.row.cells[1].raw) {
+                        data.cell.styles.borderTopWidth = 0.1; data.cell.styles.borderTopColor = [100, 100, 100];
+                    }
+                }
+            }
+        });
+        doc.save("Relatorio_Lista_Completa.pdf");
     }
 
-    function renderChart(id, type, lab, dat, col) {
+    async function generateCalendarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const fVend = document.getElementById('filtro-vendedor').value || "Todos";
+        
+        doc.setFontSize(16); doc.text(`VISÃO MENSAL: VISITAS X ENTREGAS`, 14, 15);
+        doc.setFontSize(10); doc.text(`Filtro: ${fVend} | Gerado em: ${new Date().toLocaleDateString()}`, 14, 22);
+        
+        const tableBody = [];
+        for(let sem=1; sem<=5; sem++) {
+            const rowData = [`SEM ${sem}`];
+            DIAS_LISTA.forEach(dia => {
+                const clientes = filteredData.filter(r => (r.diaPrinc === dia || r.diasSec.includes(dia)) && (r.freq.includes('TODAS') || r.freq.includes(`S${sem}`)));
+                if (clientes.length === 0) rowData.push(""); 
+                else {
+                    const cids = {}; clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
+                    let cellText = "";
+                    Object.keys(cids).sort().forEach(c => cellText += `${c} (${cids[c]})\n[Ent: ${getEntregaStr(normalizarTexto(c))}]\n\n`);
+                    rowData.push(cellText.trim());
+                }
+            });
+            tableBody.push(rowData);
+        }
+
+        doc.autoTable({
+            head: [['', ...DIAS_LISTA]], body: tableBody, startY: 30, theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [30, 41, 59] },
+            columnStyles: { 0: { cellWidth: 15, fontStyle: 'bold' } }
+        });
+        doc.save(`Calendario_Rotas.pdf`);
+    }
+
+    function renderChart(id, type, lab, dat, col, extraOptions = {}) {
         const ctx = document.getElementById(id).getContext('2d');
         if (charts[id]) charts[id].destroy();
-        charts[id] = new Chart(ctx, { type, data: { labels: lab, datasets: [{ data: dat, backgroundColor: col }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type!=='bar' } } } });
+        
+        const options = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: type!=='bar' } },
+            ...extraOptions 
+        };
+
+        charts[id] = new Chart(ctx, { type, data: { labels: lab, datasets: [{ data: dat, backgroundColor: col }] }, options: options });
     }
   </script>
 </body>
