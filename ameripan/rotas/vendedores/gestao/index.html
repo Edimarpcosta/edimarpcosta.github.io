@@ -25,7 +25,7 @@
     .view-section { display: none; height: 100%; overflow-y: auto; padding-bottom: 80px; }
     .view-section.active { display: block; }
 
-    /* Grid do Calendário (Visualização Tela) */
+    /* Grid do Calendário */
     .calendar-grid { display: grid; grid-template-columns: 60px repeat(6, 1fr); gap: 1px; background-color: #cbd5e1; border: 1px solid #cbd5e1; }
     .cal-header { background-color: #f8fafc; font-weight: bold; text-align: center; padding: 8px; font-size: 0.7rem; color: #475569; text-transform: uppercase; }
     .cal-cell { background-color: white; min-height: 120px; padding: 6px; font-size: 0.7rem; display: flex; flex-direction: column; gap: 4px; }
@@ -171,6 +171,9 @@
   </div>
 
   <script>
+    // ============================================================
+    // 1. DADOS E CONFIGURAÇÕES
+    // ============================================================
     const SPREADSHEET_ID = '1JXdW-RDSrG4or8WzvLBV_PbopVvug9B9og7fSMGOWj0';
     const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
     
@@ -179,12 +182,15 @@
     const URL_ENTREGAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CIDADES-ENTREGAS!A2:B?key=${API_KEY}`;
     
     const COL = { DATA:0, VEND_COD:1, VEND_NOME:2, EQUIPE:3, CLIENTE_COD:4, RAZAO:5, FANTASIA:6, CIDADE:7, ORDEM:8, FREQ:9, DIA_PRINC:10, DIAS_SEC:11, COMPRADOR:12, WHATSAPP:13, OBS:14 };
-    const DIAS_MAP = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
+    const DIAS_MAP = { 'SEG':1, 'SEGUNDA':1, 'TER':2, 'TERCA':2, 'QUA':3, 'QUARTA':3, 'QUI':4, 'QUINTA':4, 'SEX':5, 'SEXTA':5, 'SAB':6, 'SABADO':6 };
     const DIAS_LISTA = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
     const DIAS_VALOR = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
 
     let rawRotas = [], rawEntregas = {}, cityDisplayMap = {}, filteredData = [], charts = {};
 
+    // ============================================================
+    // 2. CARREGAMENTO
+    // ============================================================
     window.onload = carregarDados;
 
     async function carregarDados() {
@@ -194,13 +200,13 @@
             const jRotas = await resRotas.json(); const jEnt = await resEnt.json();
 
             rawEntregas = {}; 
-            cityDisplayMap = {}; // Reseta Mapa de Nomes
+            cityDisplayMap = {}; 
             
             if (jEnt.values) {
                 jEnt.values.forEach(r => {
                     const cidadeNorm = normalizarTexto(r[0]);
                     const nomeBonito = r[0] ? r[0].toUpperCase() : "";
-                    cityDisplayMap[cidadeNorm] = nomeBonito; // Salva o nome legível
+                    cityDisplayMap[cidadeNorm] = nomeBonito; 
                     
                     const diasStr = r[1] ? r[1].toUpperCase() : '';
                     rawEntregas[cidadeNorm] = parseDiasEntrega(diasStr);
@@ -240,18 +246,18 @@
     }
     function getEntregaStr(cidadeNorm) { const d = rawEntregas[cidadeNorm] || []; return d.length===0 ? "N/D" : d.map(n => DIAS_LISTA[n-1]).join(', '); }
 
+    // ============================================================
+    // 3. INTERFACE
+    // ============================================================
     function switchView(v) {
         document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
         document.getElementById(`view-${v}`).classList.add('active');
         document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
         event.currentTarget.classList.add('active');
-        if(v === 'logistica') renderLogistics();
-        if(v === 'deliveries') renderDeliveries();
+        renderView(v); // CORREÇÃO CRÍTICA: Chama o renderizador ao trocar de aba
     }
 
-    // CORREÇÃO: MEMORIZA FILTROS ANTES DE REPOVOAR
     function popularFiltros() {
-        // 1. Salva valores atuais
         const selEq = document.getElementById('filtro-equipe').value;
         const selVend = document.getElementById('filtro-vendedor').value;
         const selCid = document.getElementById('filtro-cidade').value;
@@ -260,11 +266,8 @@
         const ve = [...new Set(rawRotas.map(i=>i.vendedor).filter(Boolean))].sort();
         const ci = [...new Set(rawRotas.map(i=>i.cidade).filter(Boolean))].sort();
         
-        povoar('filtro-equipe', eq); 
-        povoar('filtro-vendedor', ve); 
-        povoar('filtro-cidade', ci);
+        povoar('filtro-equipe', eq); povoar('filtro-vendedor', ve); povoar('filtro-cidade', ci);
 
-        // 2. Restaura valores (se ainda existirem na lista)
         if(eq.includes(selEq)) document.getElementById('filtro-equipe').value = selEq;
         if(ve.includes(selVend)) document.getElementById('filtro-vendedor').value = selVend;
         if(ci.includes(selCid)) document.getElementById('filtro-cidade').value = selCid;
@@ -277,19 +280,22 @@
         const fCid = document.getElementById('filtro-cidade').value;
         filteredData = rawRotas.filter(r => (!fEq || r.equipe===fEq) && (!fVend || r.vendedor===fVend) && (!fCid || r.cidade===fCid));
         document.getElementById('kpi-total-top').innerText = filteredData.length;
-        const active = document.querySelector('.view-section.active').id.replace('view-', '');
         
-        // Re-renderiza a view ativa para refletir o filtro
-        if(active === 'dashboard') renderDashboard();
-        else if(active === 'calendar') renderCalendar();
-        else if(active === 'team') renderTeamLoad();
-        else if(active === 'reports') renderReports();
-        else if(active === 'logistica') renderLogistics();
-        else if(active === 'deliveries') renderDeliveries();
+        const active = document.querySelector('.view-section.active').id.replace('view-', '');
+        renderView(active);
+    }
+
+    function renderView(v) {
+        if(v === 'dashboard') renderDashboard();
+        else if(v === 'calendar') renderCalendar();
+        else if(v === 'team') renderTeamLoad();
+        else if(v === 'reports') renderReports();
+        else if(v === 'logistica') renderLogistics();
+        else if(v === 'deliveries') renderDeliveries();
     }
 
     // ============================================================
-    // 3. RENDERIZADORES (VIEWS)
+    // 4. RENDERIZADORES
     // ============================================================
     function renderDashboard() {
         document.getElementById('kpi-visitas-dia').innerText = (filteredData.length / 6).toFixed(1);
@@ -300,15 +306,8 @@
         const diaPico = Object.entries(diasCount).reduce((a,b)=>a[1]>b[1]?a:b)[0];
         document.getElementById('kpi-dia-pico').innerText = diaPico;
         
-        // CORREÇÃO DO GRÁFICO (ESCALA Y 0-20+)
         renderChart('chartDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#3b82f6', {
-            scales: {
-                y: { 
-                    beginAtZero: true, 
-                    suggestedMax: 20, // Força o topo para ser pelo menos 20
-                    ticks: { stepSize: 1 } // Números inteiros
-                }
-            }
+            scales: { y: { beginAtZero: true, suggestedMax: 20, ticks: { stepSize: 1 } } }
         });
         
         const cidCount = {}; filteredData.forEach(r=> cidCount[r.cidade] = (cidCount[r.cidade]||0)+1);
@@ -321,7 +320,6 @@
         const container = document.getElementById('delivery-results');
         container.innerHTML = '';
         const lista = Object.entries(rawEntregas).map(([cidadeNorm, diasNum]) => {
-            // Usa o nome bonito do mapa, ou a chave normalizada
             const nomeBonito = cityDisplayMap[cidadeNorm] || cidadeNorm;
             return { nome: nomeBonito, norm: cidadeNorm, dias: diasNum };
         }).sort((a,b) => a.nome.localeCompare(b.nome));
@@ -343,7 +341,7 @@
                 let html = `<div class="cal-cell border border-slate-100">`;
                 if(clientes.length>0) {
                     const cids = {}; clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
-                    Object.entries(cids).sort().forEach(([n, q]) => html += `<div class="cal-city-item"><span class="cal-city-name">${n} (${q})</span><span class="cal-city-delivery">[ENT: ${getEntregaStr(normalizarTexto(n))}]</span></div>`); // Ícone removido aqui também
+                    Object.entries(cids).sort().forEach(([n, q]) => html += `<div class="cal-city-item"><span class="cal-city-name">${n} (${q})</span><span class="cal-city-delivery">[ENT: ${getEntregaStr(normalizarTexto(n))}]</span></div>`);
                 }
                 html += `</div>`;
                 c.appendChild(new DOMParser().parseFromString(html, 'text/html').body.firstChild);
@@ -358,7 +356,6 @@
         let countVazias = 0;
         Object.keys(rawEntregas).forEach(cidNorm => {
             if (!cidadesComRota.has(cidNorm)) {
-                // CORREÇÃO: Usa o nome bonito aqui
                 const nomeBonito = cityDisplayMap[cidNorm] || cidNorm;
                 listaVazias.innerHTML += `<li class="border-b border-red-100 pb-1"><i class="ph ph-warning text-red-500"></i> <b>${nomeBonito}</b> <span class="text-xs text-gray-400">(Sem Visitas)</span></li>`;
                 countVazias++;
@@ -416,9 +413,8 @@
         const fVend = document.getElementById('filtro-vendedor').value || "Todos";
         const fEq = document.getElementById('filtro-equipe').value || "Todas";
         
-        // CORREÇÃO DO TÍTULO DINÂMICO
         let tituloRelatorio = "Relatório Geral de Rotas";
-        if (fVend !== "Todos") tituloRelatorio = `Relatório de Visitas - ${fVend}`;
+        if (fVend !== "Todos") tituloRelatorio = `Relatório de Vendas - ${fVend}`;
         else if (fEq !== "Todas") tituloRelatorio = `Relatório de Equipe - ${fEq}`;
 
         const dadosSort = [...filteredData].sort((a, b) => {
@@ -431,7 +427,6 @@
 
         const tableBody = dadosSort.map(r => {
             const entrega = getEntregaStr(r.cidadeNorm);
-            // CORREÇÃO DO ÍCONE: Usando texto limpo [ENT: ...]
             const cidadeDisplay = `${r.cidade}\n[Ent: ${entrega}]`; 
             return [r.equipe, r.vendedor, r.diaPrinc, cidadeDisplay, r.codCliente, r.cliente, r.ordem];
         });
@@ -494,14 +489,7 @@
     function renderChart(id, type, lab, dat, col, extraOptions = {}) {
         const ctx = document.getElementById(id).getContext('2d');
         if (charts[id]) charts[id].destroy();
-        
-        const options = { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            plugins: { legend: { display: type!=='bar' } },
-            ...extraOptions 
-        };
-
+        const options = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type!=='bar' } }, ...extraOptions };
         charts[id] = new Chart(ctx, { type, data: { labels: lab, datasets: [{ data: dat, backgroundColor: col }] }, options: options });
     }
   </script>
