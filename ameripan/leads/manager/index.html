@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Roteirizador Maps - V6</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a; --surface: #1e293b; --border: #334155;
+            --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --text-main: #f8fafc; --text-muted: #94a3b8;
+        }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding: 20px; font-size: 13px; }
+        .container { max-width: 98%; margin: 0 auto; }
+
+        /* HEADER */
+        header { background: var(--surface); padding: 15px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+        h1 { margin: 0; font-size: 1.4rem; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .badge-v { background: rgba(59,130,246,0.1); color: var(--primary); font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
+        
+        /* CONTROLS */
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; color: white; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
+        .btn:hover { filter: brightness(1.1); }
+        .btn-blue { background: var(--primary); }
+        .btn-green { background: var(--success); }
+        .btn-red { background: rgba(239,68,68,0.2); color: var(--danger); border: 1px solid var(--danger); }
+        .file-box { position: relative; overflow: hidden; }
+        .file-box input { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+
+        /* KPIS & FILTERS */
+        .stats-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .kpi-box { background: var(--surface); flex: 1; min-width: 150px; padding: 10px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
+        .kpi-num { font-size: 1.5rem; font-weight: bold; }
+        .kpi-txt { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+        
+        .filter-bar { display: flex; gap: 5px; align-items: center; overflow-x: auto; }
+        .btn-filter { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
+        .btn-filter.active, .btn-filter:hover { border-color: var(--primary); color: var(--primary); background: rgba(59,130,246,0.1); }
+
+        /* TABLE */
+        .table-wrap { background: var(--surface); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; height: 68vh; display: flex; flex-direction: column; }
+        .table-scroll { overflow: auto; flex: 1; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th { position: sticky; top: 0; z-index: 10; background: #020617; color: var(--text-muted); padding: 12px; text-align: left; cursor: pointer; border-bottom: 2px solid var(--border); }
+        th:hover { color: var(--primary); }
+        td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        /* DATA CELLS */
+        .cell-trunc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+        .cell-note { max-width: 250px; overflow: hidden; text-overflow: ellipsis; color: #fbbf24; font-style: italic; }
+        .badge-st { padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .st-yes { background: rgba(16,185,129,0.15); color: var(--success); }
+        .st-no { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .rating { color: var(--warning); font-weight: bold; }
+
+        /* ACTIONS */
+        .act-group { display: flex; gap: 4px; }
+        .btn-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: var(--text-main); transition: 0.2s; text-decoration: none; }
+        .btn-icon:hover { transform: scale(1.1); background: rgba(255,255,255,0.1); }
+        .i-wa { color: #25D366; } 
+        .i-map { color: #60A5FA; } 
+        .i-gps { color: #F59E0B; }
+        .i-edit { color: #fbbf24; }
+        .i-del { color: #ef4444; }
+
+        /* MODAL */
+        .modal-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 50; }
+        .modal { background: var(--surface); width: 600px; max-width: 95%; padding: 20px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; max-height: 90vh; overflow-y: auto; }
+        .form-row { display: flex; gap: 15px; }
+        .form-col { flex: 1; }
+        label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.8rem; }
+        input, select, textarea { width: 100%; padding: 8px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 5px; box-sizing: border-box; }
+        textarea { resize: vertical; min-height: 60px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>CRM Roteirizador <span class="badge-v">V6</span></h1>
+        
+        <div class="controls">
+            <div class="file-box">
+                <button class="btn btn-blue">📂 Importar / Juntar</button>
+                <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
+            </div>
+            <button class="btn btn-blue" onclick="openModal()">➕ Novo Lead</button>
+            <button class="btn btn-green" onclick="exportExcel()">📤 Exportar (Rotas)</button>
+            <button class="btn btn-red" onclick="clearDB()">🗑️ Limpar</button>
+        </div>
+    </header>
+
+    <div class="stats-row">
+        <div class="kpi-box"><div class="kpi-num" id="kTotal">0</div><div class="kpi-txt">Total</div></div>
+        <div class="kpi-box"><div class="kpi-num" id="kAvg" style="color:var(--warning)">0.0</div><div class="kpi-txt">Nota Média</div></div>
+        <div class="kpi-box"><div class="kpi-num" id="kOpps" style="color:var(--danger)">0</div><div class="kpi-txt">Oportunidades</div></div>
+        
+        <div class="filter-bar">
+            <span>Ordenar:</span>
+            <button class="btn-filter" id="btnSortBest" onclick="applySort('best')">🏆 Melhores (Padrão)</button>
+            <button class="btn-filter" onclick="applySort('opp')">📉 Nota Baixa</button>
+            <button class="btn-filter" onclick="applySort('geo')">🌍 Cidade/Bairro</button>
+        </div>
+    </div>
+
+    <div class="table-wrap">
+        <div class="table-scroll">
+            <table id="mainTable">
+                <thead>
+                    <tr>
+                        <th width="20%">Empresa</th>
+                        <th width="15%">Anotações</th>
+                        <th width="15%">Localização (Cidade/UF)</th>
+                        <th>Nota</th>
+                        <th>Reviews</th>
+                        <th>Status</th>
+                        <th>Ações (Nav & Edit)</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal-bg" id="editModal">
+    <div class="modal">
+        <h2 style="margin:0; color:var(--primary)">Editar Lead</h2>
+        <input type="hidden" id="editIdx">
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Nome</label>
+                <input type="text" id="inpName">
+            </div>
+            <div class="form-col">
+                <label>Telefone</label>
+                <input type="text" id="inpPhone">
+            </div>
+        </div>
+
+        <div class="form-col">
+            <label>📝 Anotações (Internas)</label>
+            <textarea id="inpNotes" placeholder="Ex: Cliente interessado em Paletas..."></textarea>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Endereço Completo</label>
+                <input type="text" id="inpAddr" onblur="tryParseAddr()">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Cidade</label>
+                <input type="text" id="inpCity">
+            </div>
+            <div class="form-col">
+                <label>UF</label>
+                <input type="text" id="inpUF" style="width:60px">
+            </div>
+            <div class="form-col">
+                <label>CEP</label>
+                <input type="text" id="inpCEP">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Latitude</label>
+                <input type="text" id="inpLat">
+            </div>
+            <div class="form-col">
+                <label>Longitude</label>
+                <input type="text" id="inpLng">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Nota</label>
+                <input type="number" id="inpRating" step="0.1">
+            </div>
+            <div class="form-col">
+                <label>Reviews</label>
+                <input type="number" id="inpRev">
+            </div>
+            <div class="form-col">
+                <label>Status</label>
+                <select id="inpClaim">
+                    <option value="YES">Verificado</option>
+                    <option value="NO">Oportunidade</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-red" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-blue" onclick="saveLead()">Salvar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let db = [];
+    let currentSort = { key: 'rating', dir: 'desc' }; // Padrão inicial
+
+    window.onload = () => {
+        loadData();
+        // Força ordenação Melhores ao abrir
+        applySort('best');
+    };
+
+    // --- PARSER DE ENDEREÇO (INTELIGÊNCIA) ---
+    function parseAddress(fullAddr) {
+        let res = { city: '', uf: '', cep: '' };
+        if(!fullAddr) return res;
+
+        // Tenta achar CEP (XXXXX-XXX)
+        const cepMatch = fullAddr.match(/\d{5}-\d{3}/);
+        if(cepMatch) res.cep = cepMatch[0];
+
+        // Tenta achar UF (SP, MG, RJ, etc) - geralmente logo após " - " e antes do CEP
+        // Estratégia: dividir por traços
+        const parts = fullAddr.split('-').map(p => p.trim());
+        
+        // Se tiver partes suficientes, tenta adivinhar
+        // Ex: Rua X, 123, Bairro - Cidade - SP, 12345
+        for (let p of parts) {
+            // Se a parte tem 2 letras maiusculas, pode ser UF
+            if (/^[A-Z]{2}$/.test(p)) {
+                res.uf = p;
+                // A cidade geralmente vem antes da UF
+                const idx = parts.indexOf(p);
+                if (idx > 0) res.city = parts[idx-1];
+            }
+            // Ex: Piracicaba - SP
+            // Verifica se a string termina com UF (ex: "Piracicaba SP")
+            const ufMatch = p.match(/\s([A-Z]{2})$/);
+            if (ufMatch && !res.uf) {
+                res.uf = ufMatch[1];
+                res.city = p.replace(ufMatch[1], '').trim();
+            }
+        }
+
+        // Fallback: Se não achou estruturado, tenta pegar Piracicaba especificamente
+        if (!res.city && fullAddr.includes("Piracicaba")) res.city = "Piracicaba";
+        if (!res.uf && fullAddr.includes(" SP")) res.uf = "SP";
+
+        return res;
+    }
+
+    // --- IMPORTAÇÃO ---
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+
+        let raw = [];
+        if(file.name.endsWith('.csv')) {
+            raw = parseCSV(await file.text());
+        } else {
+            const ab = await file.arrayBuffer();
+            const wb = XLSX.read(ab, {type:'array'});
+            raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
+        }
+
+        let added = 0;
+        raw.forEach(r => {
+            // Mapeamento seguro
+            const name = r['Name'] || 'Sem Nome';
+            const addr = r['Fulladdress'] || r['Street'] || '';
+            
+            // Verifica duplicidade
+            const exists = db.some(x => x.name === name && x.address === addr);
+            if(!exists) {
+                const parsed = parseAddress(addr);
+                db.push({
+                    name: name,
+                    address: addr,
+                    category: (r['Categories'] || '').split(',')[0],
+                    rating: parseFloat(r['Average Rating']) || 0,
+                    reviews: parseInt(r['Review Count']) || 0,
+                    claimed: String(r['Claimed']).toUpperCase().includes('YES'),
+                    phone: String(r['Phone'] || ''),
+                    url: r['Google Maps URL'] || '',
+                    lat: r['Latitude'] || '',
+                    lng: r['Longitude'] || '',
+                    // Novos campos
+                    notes: '', 
+                    city: parsed.city,
+                    uf: parsed.uf,
+                    cep: parsed.cep
+                });
+                added++;
+            }
+        });
+
+        saveData();
+        renderTable();
+        alert(`${added} leads importados e endereços processados!`);
+        e.target.value = '';
+    });
+
+    // --- RENDER ---
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        
+        // Ordenação
+        db.sort((a,b) => {
+            if(currentSort.key === 'best') {
+                // Nota DESC, depois Review DESC
+                if(b.rating !== a.rating) return b.rating - a.rating;
+                return b.reviews - a.reviews;
+            }
+            if(currentSort.key === 'geo') {
+                // Cidade ASC, Bairro/Endereço ASC
+                return a.city.localeCompare(b.city) || a.address.localeCompare(b.address);
+            }
+            // Genérico
+            let vA = a[currentSort.key], vB = b[currentSort.key];
+            if(vA < vB) return currentSort.dir==='asc'?-1:1;
+            if(vA > vB) return currentSort.dir==='asc'?1:-1;
+            return 0;
+        });
+
+        let stats = { total: db.length, sumR: 0, opps: 0 };
+        const frag = document.createDocumentFragment();
+
+        db.forEach((item, idx) => {
+            stats.sumR += item.rating;
+            if(!item.claimed) stats.opps++;
+
+            // Tratamento Zap
+            let phoneClean = item.phone.replace(/\D/g, '');
+            if(phoneClean.length >= 10 && phoneClean.length <= 11) phoneClean = '55'+phoneClean;
+            const hasZap = phoneClean.length > 8 && !/[a-z]/i.test(item.phone);
+
+            // Link Mapa
+            let navUrl = item.url;
+            if(!navUrl) navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
+            
+            // Link GPS
+            let gpsUrl = '';
+            if(item.lat && item.lng) gpsUrl = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="cell-trunc" style="font-weight:bold" title="${item.name}">${item.name}</div>
+                    <div style="font-size:0.75rem; color:#aaa">${item.category}</div>
+                </td>
+                <td>
+                    <div class="cell-note" title="${item.notes || 'Sem anotações'}">${item.notes || '-'}</div>
+                </td>
+                <td>
+                    <div class="cell-trunc">${item.city} - ${item.uf}</div>
+                    <div style="font-size:0.7rem; color:#666">${item.cep}</div>
+                </td>
+                <td><span class="rating">★ ${item.rating.toFixed(1)}</span></td>
+                <td>${item.reviews}</td>
+                <td><span class="badge-st ${item.claimed?'st-yes':'st-no'}">${item.claimed?'Verificado':'Oportunidade'}</span></td>
+                <td>
+                    <div class="act-group">
+                        <a href="${navUrl}" target="_blank" class="btn-icon i-map" title="Navegar por Endereço">🗺️</a>
+                        ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Navegar por GPS (Exato)">📍</a>` : ''}
+                        ${hasZap ? `<a href="https://wa.me/${phoneClean}" target="_blank" class="btn-icon i-wa" title="WhatsApp">📱</a>` : ''}
+                        <button class="btn-icon i-edit" onclick="editLead(${idx})" title="Editar / Anotar">✏️</button>
+                        <button class="btn-icon i-del" onclick="delLead(${idx})" title="Excluir">🗑️</button>
+                    </div>
+                </td>
+            `;
+            tr.ondblclick = () => editLead(idx);
+            frag.appendChild(tr);
+        });
+        tbody.appendChild(frag);
+
+        // Stats UI
+        document.getElementById('kTotal').innerText = stats.total;
+        document.getElementById('kAvg').innerText = stats.total ? (stats.sumR/stats.total).toFixed(1) : '0.0';
+        document.getElementById('kOpps').innerText = stats.opps;
+        
+        // Update Filter Button UI
+        document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+        if(currentSort.key === 'best') document.getElementById('btnSortBest').classList.add('active');
+    }
+
+    // --- CRUD ---
+    function openModal() {
+        document.getElementById('editIdx').value = -1;
+        // Limpar inputs
+        document.querySelectorAll('.modal input, .modal textarea').forEach(i => i.value = '');
+        document.getElementById('inpClaim').value = 'NO';
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function editLead(idx) {
+        // Como o array db está ordenado visualmente mas os índices podem ter mudado se usar sort in-place,
+        // o ideal seria ter um ID unico. Mas como estamos reordenando o DB principal:
+        const item = db[idx]; 
+        document.getElementById('editIdx').value = idx;
+        
+        document.getElementById('inpName').value = item.name;
+        document.getElementById('inpPhone').value = item.phone;
+        document.getElementById('inpNotes').value = item.notes || '';
+        document.getElementById('inpAddr').value = item.address;
+        document.getElementById('inpCity').value = item.city || '';
+        document.getElementById('inpUF').value = item.uf || '';
+        document.getElementById('inpCEP').value = item.cep || '';
+        document.getElementById('inpLat').value = item.lat || '';
+        document.getElementById('inpLng').value = item.lng || '';
+        document.getElementById('inpRating').value = item.rating;
+        document.getElementById('inpRev').value = item.reviews;
+        document.getElementById('inpClaim').value = item.claimed ? 'YES':'NO';
+        
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function saveLead() {
+        const idx = parseInt(document.getElementById('editIdx').value);
+        const obj = {
+            name: document.getElementById('inpName').value,
+            phone: document.getElementById('inpPhone').value,
+            notes: document.getElementById('inpNotes').value,
+            address: document.getElementById('inpAddr').value,
+            city: document.getElementById('inpCity').value,
+            uf: document.getElementById('inpUF').value,
+            cep: document.getElementById('inpCEP').value,
+            lat: document.getElementById('inpLat').value,
+            lng: document.getElementById('inpLng').value,
+            rating: parseFloat(document.getElementById('inpRating').value)||0,
+            reviews: parseInt(document.getElementById('inpRev').value)||0,
+            claimed: document.getElementById('inpClaim').value === 'YES',
+            category: idx >= 0 ? db[idx].category : 'Manual',
+            url: idx >= 0 ? db[idx].url : ''
+        };
+
+        if(idx < 0) db.unshift(obj);
+        else db[idx] = obj;
+
+        saveData();
+        closeModal();
+        renderTable();
+    }
+
+    function delLead(idx) {
+        if(confirm('Excluir este lead?')) {
+            db.splice(idx, 1);
+            saveData();
+            renderTable();
+        }
+    }
+
+    function tryParseAddr() {
+        // Auxiliar no Modal: se mudar endereço, tenta preencher cidade
+        const addr = document.getElementById('inpAddr').value;
+        const p = parseAddress(addr);
+        if(p.city) document.getElementById('inpCity').value = p.city;
+        if(p.uf) document.getElementById('inpUF').value = p.uf;
+        if(p.cep) document.getElementById('inpCEP').value = p.cep;
+    }
+
+    // --- SYSTEM ---
+    function applySort(type) {
+        if(type === 'best') currentSort = { key: 'best' };
+        if(type === 'opp') currentSort = { key: 'rating', dir: 'asc' };
+        if(type === 'geo') currentSort = { key: 'geo' };
+        renderTable();
+    }
+
+    function exportExcel() {
+        // Mapeia para formato amigável
+        const rows = db.map(i => ({
+            "Empresa": i.name,
+            "Anotações": i.notes,
+            "Telefone": i.phone,
+            "Categoria": i.category,
+            "Endereço Completo": i.address,
+            "Cidade": i.city,
+            "UF": i.uf,
+            "CEP": i.cep,
+            "Latitude": i.lat,
+            "Longitude": i.lng,
+            "Nota": i.rating,
+            "Reviews": i.reviews,
+            "Verificado": i.claimed ? "SIM" : "NÃO",
+            "Maps URL": i.url
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rota de Vendas");
+        XLSX.writeFile(wb, "Leads_Roteirizacao.xlsx");
+    }
+
+    function parseCSV(text) {
+        const lines = text.split('\n');
+        const headers = lines[0].split(',').map(h=>h.trim());
+        const res=[];
+        for(let i=1;i<lines.length;i++){
+            if(!lines[i].trim())continue;
+            const matches = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)||[];
+            let obj={};
+            headers.forEach((h,idx)=> obj[h]=(matches[idx]||'').replace(/^"|"$/g,''));
+            res.push(obj);
+        }
+        return res;
+    }
+
+    function saveData() { localStorage.setItem('crm_v6', JSON.stringify(db)); }
+    function loadData() { const s = localStorage.getItem('crm_v6'); if(s) db = JSON.parse(s); }
+    function clearDB() { if(confirm('Apagar tudo?')) { db=[]; saveData(); renderTable(); } }
+    function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+</script>
+</body>
+</html>
