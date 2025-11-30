@@ -7,7 +7,9 @@
     <title>AmerIA - Consultora Virtual Ameripan</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script>
@@ -20,8 +22,14 @@
               'whatsapp': '#25D366'
             },
             fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-            animation: { 'fadeIn': 'fadeIn 0.3s ease-out' },
-            keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+            animation: {
+              'fadeIn': 'fadeIn 0.3s ease-out',
+              'slideIn': 'slideIn 0.3s ease-out',
+            },
+            keyframes: {
+              fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+              slideIn: { '0%': { transform: 'translateY(10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+            }
           }
         }
       }
@@ -29,16 +37,19 @@
 
     <style>
       body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
-      ::-webkit-scrollbar { width: 6px; }
+      /* Scrollbar Bonita */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
       
+      /* Animação de Digitação */
       .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
       .typing-dot:nth-child(1) { animation-delay: -0.32s; }
       .typing-dot:nth-child(2) { animation-delay: -0.16s; }
       @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
       
-      /* Markdown */
+      /* Estilos do Markdown (Texto da IA) */
       .prose p { margin-bottom: 0.5rem; }
       .prose strong { color: #1e3a8a; font-weight: 700; }
       .prose ul { list-style-type: disc; padding-left: 1.2rem; margin: 0.5rem 0; }
@@ -55,7 +66,7 @@
       "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
       "lucide-react": "https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0",
       "react-markdown": "https://esm.sh/react-markdown@8.0.7?deps=react@18.2.0",
-      "@google/generative-ai": "https://esm.sh/@google/generative-ai"
+      "@google/generative-ai": "https://esm.sh/@google/generative-ai@0.1.3"
     }
   }
   </script>
@@ -75,42 +86,50 @@
       import ReactMarkdown from 'react-markdown';
       import { GoogleGenerativeAI } from '@google/generative-ai';
 
-      // --- LISTA DE MODELOS ---
+      // --- LISTA DE MODELOS DISPONÍVEIS ---
       const AI_MODELS = [
-        { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking (Padrão)" },
-        { id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash Exp" },
-        { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro Exp" },
-        { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-        { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-        { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash 8B" },
-        { id: "gemini-1.5-pro-002", name: "Gemini 1.5 Pro 002" },
-        { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash 002" }
+        { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking (Recomendado)" },
+        { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Rápido)" },
+        { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Inteligente)" }
       ];
 
-      const CACHE = { products: [], videos: [], logistics: [], salespeople: [], branches: [], knowledge: "" };
+      // --- CACHE GLOBAL ---
+      const CACHE = { 
+        products: [], videos: [], logistics: [], 
+        salespeople: [], branches: [], knowledge: "", config: {} 
+      };
       
       // --- CARREGAMENTO DE DADOS ---
       async function loadData() {
         try {
+          // Detecta se está no GitHub ou Localhost
           const baseUrl = window.location.hostname.includes('github') ? '/ameripan/ameria/' : '/';
-          console.log(`🔄 Base: ${baseUrl}`);
+          console.log(`🔄 Conectando ao banco de dados em: ${baseUrl}`);
 
-          const [p, v, d, s, b, k] = await Promise.all([
+          const [p, v, d, s, b, k, c] = await Promise.all([
             fetch(`${baseUrl}data/products.json`).then(r => r.json()),
             fetch(`${baseUrl}data/videos.json`).then(r => r.json()),
             fetch(`${baseUrl}data/delivery.json`).then(r => r.json()),
             fetch(`${baseUrl}data/salespeople.json`).then(r => r.json()),
             fetch(`${baseUrl}data/branches.json`).then(r => r.json()),
-            fetch(`${baseUrl}data/knowledge.json`).then(r => r.json())
+            fetch(`${baseUrl}data/knowledge.json`).then(r => r.json()),
+            // Tenta carregar config.json, se falhar usa padrão
+            fetch(`${baseUrl}config.json`).catch(() => ({ json: () => ({ model: "gemini-2.0-flash-thinking-exp-01-21" }) })).then(r => r.json())
           ]);
 
           CACHE.products = p; CACHE.videos = v; CACHE.logistics = d;
           CACHE.salespeople = s; CACHE.branches = b; CACHE.knowledge = k.content;
+          CACHE.config = c;
+          
+          console.log("✅ Dados carregados!", CACHE);
           return true;
-        } catch (e) { console.error("❌ Erro dados:", e); return false; }
+        } catch (e) { 
+          console.error("❌ Erro ao carregar dados:", e); 
+          return false; 
+        }
       }
 
-      // --- BUSCA INTELIGENTE ---
+      // --- MOTOR DE BUSCA INTELIGENTE (FUZZY) ---
       const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
       
       function extractWeight(query) {
@@ -120,40 +139,118 @@
 
       async function searchProducts(query) {
         if (!CACHE.products.length) return [];
+        
         const terms = normalize(query).split(/\s+/).filter(t => t.length > 1);
         const targetWeight = extractWeight(query);
 
         let results = CACHE.products.map(p => {
           let score = 0;
-          const fullText = normalize(`${p.PRODUTO} ${p.SKU} ${p.RAMO}`);
+          const pName = normalize(p.PRODUTO);
+          const pTags = normalize(`${p.SKU} ${p.RAMO}`);
+          const fullText = `${pName} ${pTags}`;
           
           if (p.SKU.toString() === query.trim()) score += 1000;
+
           let matches = 0;
-          terms.forEach(t => { if (fullText.includes(t)) { score += 10; matches++; } });
+          terms.forEach(t => { 
+            if (fullText.includes(t)) { score += 10; matches++; }
+            if (pName.startsWith(t)) score += 5;
+          });
 
           if (targetWeight) {
             const pWeight = extractWeight(p.PRODUTO);
-            if (pWeight && pWeight.unit === targetWeight.unit && Math.abs(pWeight.value - targetWeight.value) <= 2) {
-              score += 15;
+            if (pWeight && pWeight.unit === targetWeight.unit) {
+              if (Math.abs(pWeight.value - targetWeight.value) <= 2) score += 15;
             }
           }
-          if (matches < terms.length) score *= 0.5;
+
+          if (matches < terms.length) score = score * 0.5;
+
           return { ...p, score };
         }).filter(r => r.score > 5).sort((a, b) => b.score - a.score);
 
+        // Fallback Vídeos
         if (results.length === 0) {
            const videoMatches = CACHE.videos.filter(v => {
               const vText = normalize(v.nome);
               return terms.every(t => vText.includes(t));
            });
            results = [...results, ...videoMatches.map(v => ({
-              SKU: v.codigo, PRODUTO: v.nome + " (Vídeo)", RAMO: "Catálogo Vídeo", IMG: "", videoLink: v.link, isVideoItem: true
+              SKU: v.codigo, 
+              PRODUTO: v.nome + " (Vídeo)", 
+              RAMO: "Catálogo Vídeo", 
+              IMG: "", 
+              videoLink: v.link,
+              isVideoItem: true
            }))];
         }
+        
         return results.slice(0, 10);
       }
 
-      // --- UI COMPONENTES ---
+      // --- INTELIGÊNCIA ARTIFICIAL (CÉREBRO) ---
+      // Tenta usar chave salva ou a padrão (mas a padrão já foi revogada, então o usuário deve configurar)
+      const DEFAULT_KEY = 'AIzaSyC...'; // Placeholder
+      
+      async function callGemini(history, apiKey, modelId, imageBase64 = null) {
+        try {
+            if (!apiKey) throw new Error("API Key não configurada.");
+
+            const genAI = new GoogleGenerativeAI(apiKey);
+            // Usa o modelo passado ou o do config.json
+            const activeModelId = modelId || CACHE.config.model || "gemini-2.0-flash-thinking-exp-01-21";
+            const model = genAI.getGenerativeModel({ model: activeModelId });
+
+            const systemPrompt = `
+            # IDENTIDADE: AmerIA, consultora da Ameripan.
+            # OBJETIVO: Vender soluções e tirar dúvidas técnicas.
+            # CONTEXTO TÉCNICO: ${CACHE.knowledge ? "Disponível" : "Carregando..."}
+            
+            # REGRAS VISUAIS (Markdown):
+            1. Produtos: ![Nome](URL_IMAGEM).
+            2. Vídeos: [🎥 Ver Vídeo](URL_VIDEO).
+            3. Contatos: > 👤 **Nome** - Cargo ... [WhatsApp](link).
+            4. NUNCA invente preços.
+            5. Use emojis.
+            
+            # COMPORTAMENTO:
+            - Se pedirem produto, verifique no contexto o que o sistema encontrou.
+            - Faça venda cruzada (ofereça complementos).
+            `;
+
+            const chatHistory = [
+              { role: "user", parts: [{ text: systemPrompt }] },
+              { role: "model", parts: [{ text: "Entendido." }] },
+              ...history.slice(-8).map(h => ({
+                  role: h.role === 'system_ui' ? 'user' : h.role, 
+                  parts: [{ text: h.text || (h.products ? `O sistema encontrou estes produtos no banco de dados: ${JSON.stringify(h.products)}` : "") }]
+              }))
+            ];
+
+            if (imageBase64) {
+                const parts = [
+                    { text: systemPrompt + "\nAnalise esta imagem. Se for um produto, identifique e veja se temos algo similar no catálogo." },
+                    { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] } }
+                ];
+                const result = await model.generateContent(parts);
+                return result.response.text();
+            } else {
+                const chat = model.startChat({ history: chatHistory });
+                const lastMsg = history[history.length - 1].text || "Olá";
+                const result = await chat.sendMessage(lastMsg);
+                return result.response.text();
+            }
+        } catch(e) {
+            console.error("Gemini Error:", e);
+            if(e.toString().includes("403") || e.toString().includes("API key")) {
+                return "🚫 **Erro de API Key:** Sua chave foi bloqueada ou é inválida. Por favor, clique na engrenagem ⚙️ no topo e insira uma nova chave válida do Google AI Studio.";
+            }
+            return "❌ Tive um problema técnico. Verifique sua conexão ou a API Key nas configurações.";
+        }
+      }
+
+      // --- COMPONENTES VISUAIS ---
+
       const ProductCard = ({ product, onAdd }) => (
         <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-all animate-fadeIn flex gap-3">
           <div className="w-16 h-16 flex-shrink-0">
@@ -179,7 +276,8 @@
       );
 
       function App() {
-        const [messages, setMessages] = useState([{ role: 'model', text: "Olá! Sou a **AmerIA 4.0**. 🚀\n\nPosso ver fotos, ouvir e montar sua cotação." }]);
+        // Estado
+        const [messages, setMessages] = useState([{ role: 'model', text: "Olá! Sou a **AmerIA 4.0**. 🚀\n\nConfigure sua API Key na engrenagem ⚙️ para começar." }]);
         const [input, setInput] = useState('');
         const [isLoading, setIsLoading] = useState(false);
         const [cart, setCart] = useState([]);
@@ -189,9 +287,9 @@
         const [audioEnabled, setAudioEnabled] = useState(false);
         const [dataLoaded, setDataLoaded] = useState(false);
         
-        // Configurações (Persistentes)
+        // Configs Persistentes
         const [apiKey, setApiKey] = useState(() => localStorage.getItem('ameria_api_key') || '');
-        const [modelId, setModelId] = useState(() => localStorage.getItem('ameria_model') || 'gemini-2.0-flash-thinking-exp-01-21');
+        const [currentModel, setCurrentModel] = useState(() => localStorage.getItem('ameria_model') || 'gemini-2.0-flash-thinking-exp-01-21');
 
         const messagesEndRef = useRef(null);
         const fileInputRef = useRef(null);
@@ -199,12 +297,12 @@
         useEffect(() => { loadData().then(ok => ok && setDataLoaded(true)); }, []);
         useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-        // Salvar configs
-        const saveSettings = () => {
+        // Salvar Configs
+        const handleSaveSettings = () => {
             localStorage.setItem('ameria_api_key', apiKey);
-            localStorage.setItem('ameria_model', modelId);
+            localStorage.setItem('ameria_model', currentModel);
             setShowSettings(false);
-            alert("Configurações salvas!");
+            alert("Configurações salvas! A AmerIA foi atualizada.");
         };
 
         // Carrinho
@@ -215,61 +313,39 @@
         const removeFromCart = (sku) => setCart(prev => prev.filter(p => p.SKU !== sku));
         const sendQuote = () => {
           if (!cart.length) return;
-          const msg = `*COTAÇÃO AMERIA*%0A%0A${cart.map(p => `• ${p.qtd}x ${p.PRODUTO} (SKU: ${p.SKU})`).join('%0A')}%0A%0A*Total:* ${cart.reduce((a,b)=>a+b.qtd,0)} itens.`;
+          const items = cart.map(p => `• ${p.qtd}x ${p.PRODUTO} (SKU: ${p.SKU})`).join('%0A');
+          const msg = `*COTAÇÃO AMERIA*%0A%0A${items}%0A%0A*Total:* ${cart.reduce((a,b)=>a+b.qtd,0)} itens.`;
           window.open(`https://wa.me/5519982213355?text=${msg}`, '_blank');
         };
 
-        // IA
-        const callGemini = async (history, img = null) => {
-            if (!apiKey) {
-                setShowSettings(true);
-                return "⚠️ **Configure sua API Key** nas configurações (engrenagem no topo) para começar.";
-            }
-            try {
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: modelId });
-                
-                const sysPrompt = `
-                # IDENTIDADE: AmerIA, consultora da Ameripan.
-                # CONTEXTO TÉCNICO: ${CACHE.knowledge ? "Disponível" : "Carregando..."}
-                # REGRAS:
-                1. Produtos: ![Nome](URL_IMAGEM).
-                2. Vídeos: [🎥 Ver Vídeo](URL_VIDEO).
-                3. Contatos: > 👤 **Nome** - Cargo ... [WhatsApp](link).
-                4. NUNCA invente preços.
-                `;
-
-                const chatHistory = [
-                    { role: "user", parts: [{ text: sysPrompt }] },
-                    { role: "model", parts: [{ text: "Ok." }] },
-                    ...history.slice(-8).map(h => ({
-                        role: h.role === 'system_ui' ? 'user' : h.role, 
-                        parts: [{ text: h.text || `CONTEXTO: ${JSON.stringify(h.products)}` }]
-                    }))
-                ];
-
-                if (img) {
-                    const result = await model.generateContent([
-                        { text: sysPrompt + "\nAnalise a imagem." },
-                        { inlineData: { mimeType: "image/jpeg", data: img.split(',')[1] } }
-                    ]);
-                    return result.response.text();
-                } else {
-                    const chat = model.startChat({ history: chatHistory });
-                    const res = await chat.sendMessage(history[history.length-1].text);
-                    return res.response.text();
-                }
-            } catch(e) {
-                console.error(e);
-                if(e.toString().includes("403") || e.toString().includes("API key")) return "🚫 **Erro de API Key:** Sua chave foi bloqueada ou é inválida. Gere uma nova no Google AI Studio e atualize nas configurações.";
-                return "❌ Erro técnico. Tente novamente.";
-            }
+        // Voz e Fala
+        const toggleVoice = () => {
+           if (!('webkitSpeechRecognition' in window)) return alert("Use Chrome para voz.");
+           if (isListening) { setIsListening(false); return; }
+           const rec = new window.webkitSpeechRecognition();
+           rec.lang = 'pt-BR'; rec.start(); setIsListening(true);
+           rec.onresult = (e) => { handleSend(e.results[0][0].transcript); setIsListening(false); };
+           rec.onend = () => setIsListening(false);
         };
 
+        const speak = (text) => {
+          if (!audioEnabled) return;
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text.replace(/[*_#]/g, ''));
+          u.lang = "pt-BR"; u.rate = 1.2;
+          window.speechSynthesis.speak(u);
+        };
+
+        // Enviar Mensagem
         const handleSend = async (txt = null, img = null) => {
           const text = txt || input;
           if ((!text.trim() && !img) || isLoading) return;
           
+          if (!apiKey) {
+              setShowSettings(true);
+              return;
+          }
+
           const userMsg = { role: 'user', text, image: img };
           setMessages(p => [...p, userMsg]);
           setInput(''); setIsLoading(true);
@@ -283,34 +359,22 @@
                  setMessages(curr => [...curr, sysMsg]);
                }
             }
+            
             const history = [...messages, userMsg];
             if (sysMsg) history.push(sysMsg);
-            const resp = await callGemini(history, img);
-            setMessages(curr => [...curr, { role: 'model', text: resp }]);
-            if (audioEnabled) {
-                 window.speechSynthesis.cancel();
-                 const u = new SpeechSynthesisUtterance(resp.replace(/[*_#]/g, ''));
-                 u.lang = "pt-BR"; u.rate = 1.2;
-                 window.speechSynthesis.speak(u);
-            }
-          } catch (e) { setMessages(curr => [...curr, { role: 'model', text: "Erro de conexão." }]); } 
-          finally { setIsLoading(false); }
-        };
 
-        // Voz
-        const toggleVoice = () => {
-           if (!('webkitSpeechRecognition' in window)) return alert("Use Chrome para voz.");
-           if (isListening) { setIsListening(false); return; }
-           const rec = new window.webkitSpeechRecognition();
-           rec.lang = 'pt-BR'; rec.start(); setIsListening(true);
-           rec.onresult = (e) => { handleSend(e.results[0][0].transcript); setIsListening(false); };
-           rec.onend = () => setIsListening(false);
+            const resp = await callGemini(history, apiKey, currentModel, img);
+            setMessages(curr => [...curr, { role: 'model', text: resp }]);
+            speak(resp);
+          } catch (e) {
+            setMessages(curr => [...curr, { role: 'model', text: "Erro de conexão." }]);
+          } finally { setIsLoading(false); }
         };
 
         const handleImg = (e) => {
           const f = e.target.files[0]; if(!f) return;
           const r = new FileReader();
-          r.onloadend = () => handleSend("O que é isso?", r.result);
+          r.onloadend = () => handleSend("Analise esta imagem", r.result);
           r.readAsDataURL(f);
         };
 
@@ -318,6 +382,7 @@
 
         return (
           <div className="flex flex-col h-screen bg-slate-50 relative">
+            
             {/* HEADER */}
             <header className="bg-gradient-to-r from-blue-800 to-ameripan-blue text-white p-4 shadow-lg z-20 flex justify-between items-center">
               <div className="flex items-center gap-3">
@@ -331,42 +396,27 @@
               </div>
             </header>
 
-            {/* CONFIG MODAL */}
+            {/* MODAL DE CONFIGURAÇÕES */}
             {showSettings && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Settings className="text-blue-600"/> Configurações</h3>
+                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Settings className="text-ameripan-blue"/> Configurações</h3>
                             <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded-full"><X/></button>
                         </div>
-                        
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">API Key (Google AI Studio)</label>
-                                <input 
-                                    type="password" 
-                                    value={apiKey} 
-                                    onChange={(e) => setApiKey(e.target.value)} 
-                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                    placeholder="Cole sua chave AIza..."
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Sua chave fica salva apenas no seu navegador.</p>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Sua API Key (Google AI Studio)</label>
+                                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Cole aqui sua chave AIza..." />
+                                <p className="text-xs text-gray-500 mt-1">A chave fica salva apenas no seu navegador.</p>
                             </div>
-                            
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Modelo de IA</label>
-                                <select 
-                                    value={modelId} 
-                                    onChange={(e) => setModelId(e.target.value)}
-                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
-                                >
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Modelo de Inteligência</label>
+                                <select value={currentModel} onChange={(e) => setCurrentModel(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
                                     {AI_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                             </div>
-                            
-                            <button onClick={saveSettings} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2 mt-2">
-                                <Save size={18}/> Salvar e Fechar
-                            </button>
+                            <button onClick={handleSaveSettings} className="w-full bg-ameripan-blue text-white py-3 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2 mt-2"><Save size={18}/> Salvar e Fechar</button>
                         </div>
                     </div>
                 </div>
@@ -418,7 +468,7 @@
                     ))
                   }
                 </div>
-                <div className="p-5 border-t bg-white"><button onClick={sendQuote} disabled={!cart.length} className="w-full bg-whatsapp text-white font-bold py-4 rounded-xl hover:brightness-90 shadow-lg flex justify-center gap-2">Enviar no WhatsApp <Send size={20}/></button></div>
+                <div className="p-5 border-t bg-white"><button onClick={sendQuote} disabled={!cart.length} className="w-full bg-whatsapp text-white font-bold py-4 rounded-xl hover:brightness-90 disabled:opacity-50 shadow-lg flex justify-center gap-2">Enviar no WhatsApp <Send size={20}/></button></div>
               </div>
             </div>
 
@@ -426,7 +476,7 @@
             <footer className="bg-white p-3 border-t z-20">
               <div className="max-w-4xl mx-auto flex items-end gap-2">
                 <button onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-ameripan-blue"><Camera size={24}/><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImg}/></button>
-                <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-2"><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())} placeholder="Digite ou fale..." className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-24 py-2 text-sm outline-none" rows={1}/></div>
+                <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-2"><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())} placeholder="Digite..." className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-24 py-2 text-sm outline-none" rows={1}/></div>
                 <button onClick={input.trim() ? () => handleSend() : toggleVoice} className={`p-3 rounded-full shadow-md text-white transition-all ${isListening ? 'bg-red-500 animate-pulse' : 'bg-ameripan-blue'}`}>{input.trim() ? <Send size={20}/> : <Mic size={20}/>}</button>
               </div>
             </footer>
