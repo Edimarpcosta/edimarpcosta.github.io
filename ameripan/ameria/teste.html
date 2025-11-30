@@ -7,7 +7,6 @@
     <title>AmerIA - Consultora Virtual Ameripan</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -24,11 +23,9 @@
             fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
             animation: {
               'fadeIn': 'fadeIn 0.3s ease-out',
-              'slideIn': 'slideIn 0.3s ease-out',
             },
             keyframes: {
-              fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-              slideIn: { '0%': { transform: 'translateY(10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+              fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
             }
           }
         }
@@ -37,25 +34,20 @@
 
     <style>
       body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
-      /* Scrollbar Bonita */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-      
-      /* Animação de Digitação */
       .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
       .typing-dot:nth-child(1) { animation-delay: -0.32s; }
       .typing-dot:nth-child(2) { animation-delay: -0.16s; }
       @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
       
-      /* Estilos do Markdown (Texto da IA) */
+      /* Markdown */
       .prose p { margin-bottom: 0.5rem; }
       .prose strong { color: #1e3a8a; font-weight: 700; }
       .prose ul { list-style-type: disc; padding-left: 1.2rem; margin: 0.5rem 0; }
       .prose ol { list-style-type: decimal; padding-left: 1.2rem; margin: 0.5rem 0; }
       .prose a { color: #2563EB; text-decoration: none; font-weight: 500; }
-      .prose a:hover { text-decoration: underline; }
       .prose blockquote { border-left: 4px solid #F97316; background: #fff7ed; padding: 0.5rem 1rem; border-radius: 0 8px 8px 0; margin: 0.5rem 0; font-style: italic; }
     </style>
 
@@ -63,9 +55,9 @@
   {
     "imports": {
       "react": "https://esm.sh/react@18.2.0",
-      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-      "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-      "react-markdown": "https://esm.sh/react-markdown@8.0.7",
+      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
+      "lucide-react": "https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0",
+      "react-markdown": "https://esm.sh/react-markdown@8.0.7?deps=react@18.2.0",
       "@google/generative-ai": "https://esm.sh/@google/generative-ai"
     }
   }
@@ -86,20 +78,14 @@
       import ReactMarkdown from 'react-markdown';
       import { GoogleGenerativeAI } from '@google/generative-ai';
 
-      // =======================================================================
-      // 1. GESTÃO DE DADOS E CACHE
-      // =======================================================================
-      const CACHE = { 
-        products: [], videos: [], logistics: [], 
-        salespeople: [], branches: [], knowledge: "", config: {} 
-      };
+      // --- CACHE DE DADOS ---
+      const CACHE = { products: [], videos: [], logistics: [], salespeople: [], branches: [], knowledge: "", config: {} };
       
-      // Carrega os arquivos JSON da pasta /data
+      // --- CARREGAMENTO ---
       async function loadData() {
         try {
-          // Ajusta caminho se estiver no GitHub Pages ou Localhost
           const baseUrl = window.location.hostname.includes('github') ? '/ameripan/ameria/' : '/';
-          console.log(`🔄 Conectando ao banco de dados em: ${baseUrl}`);
+          console.log(`🔄 Conectando banco de dados: ${baseUrl}`);
 
           const [p, v, d, s, b, k, c] = await Promise.all([
             fetch(`${baseUrl}data/products.json`).then(r => r.json()),
@@ -108,7 +94,6 @@
             fetch(`${baseUrl}data/salespeople.json`).then(r => r.json()),
             fetch(`${baseUrl}data/branches.json`).then(r => r.json()),
             fetch(`${baseUrl}data/knowledge.json`).then(r => r.json()),
-            // Configuração opcional, usa padrão se falhar
             fetch(`${baseUrl}config.json`).catch(() => ({ json: () => ({ model: "gemini-1.5-flash" }) })).then(r => r.json())
           ]);
 
@@ -116,18 +101,15 @@
           CACHE.salespeople = s; CACHE.branches = b; CACHE.knowledge = k.content;
           CACHE.config = c;
           
-          console.log("✅ Dados carregados com sucesso!", CACHE);
+          console.log("✅ Dados carregados!");
           return true;
         } catch (e) { 
-          console.error("❌ Erro crítico ao carregar dados:", e); 
-          // Fallback para não quebrar a tela se não tiver dados
+          console.error("❌ Erro no carregamento:", e); 
           return false; 
         }
       }
 
-      // =======================================================================
-      // 2. MOTOR DE BUSCA INTELIGENTE (FUZZY + VIDEO)
-      // =======================================================================
+      // --- MOTOR DE BUSCA ---
       const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
       
       function extractWeight(query) {
@@ -143,27 +125,20 @@
 
         let results = CACHE.products.map(p => {
           let score = 0;
-          const pName = normalize(p.PRODUTO);
-          const pTags = normalize(`${p.SKU} ${p.RAMO}`);
-          const fullText = `${pName} ${pTags}`;
+          const fullText = normalize(`${p.PRODUTO} ${p.SKU} ${p.RAMO}`);
           
           if (p.SKU.toString() === query.trim()) score += 1000;
-
           let matches = 0;
-          terms.forEach(t => { 
-            if (fullText.includes(t)) { score += 10; matches++; }
-            if (pName.startsWith(t)) score += 5;
-          });
+          terms.forEach(t => { if (fullText.includes(t)) { score += 10; matches++; } });
 
           if (targetWeight) {
             const pWeight = extractWeight(p.PRODUTO);
-            if (pWeight && pWeight.unit === targetWeight.unit) {
-              if (Math.abs(pWeight.value - targetWeight.value) <= 2) score += 15;
+            if (pWeight && pWeight.unit === targetWeight.unit && Math.abs(pWeight.value - targetWeight.value) <= 2) {
+              score += 15;
             }
           }
 
-          if (matches < terms.length) score = score * 0.5;
-
+          if (matches < terms.length) score *= 0.5;
           return { ...p, score };
         }).filter(r => r.score > 5).sort((a, b) => b.score - a.score);
 
@@ -172,133 +147,93 @@
               const vText = normalize(v.nome);
               return terms.every(t => vText.includes(t));
            });
-           const videoProducts = videoMatches.map(v => ({
-              SKU: v.codigo, 
-              PRODUTO: v.nome + " (Item do Catálogo de Vídeos)", 
-              RAMO: "Vídeo Técnico", 
-              IMG: "", 
-              videoLink: v.link,
-              isVideoItem: true
-           }));
-           results = [...results, ...videoProducts];
+           results = [...results, ...videoMatches.map(v => ({
+              SKU: v.codigo, PRODUTO: v.nome + " (Vídeo)", RAMO: "Catálogo Vídeo", IMG: "", videoLink: v.link, isVideoItem: true
+           }))];
         }
-        
         return results.slice(0, 10);
       }
 
-      // =======================================================================
-      // 3. CÉREBRO DA IA (Google Gemini - Stable SDK)
-      // =======================================================================
-      // Sua chave de API (Hardcoded para demo - use backend em produção)
-      const API_KEY = 'AIzaSyC8vvleypdr' + 'qKhGdm21FSJh9_fiKRFZvvA'; 
+      // --- INTELIGÊNCIA ARTIFICIAL ---
+      const API_KEY = 'AIzaSyC8vvleypdr' + 'qKhGdm21FSJh9_fiKRFZvvA';
       
       async function callGemini(history, imageBase64 = null) {
         try {
-            const genAI = new GoogleGenerativeAI(API_KEY); // SDK Estável
-            const modelId = CACHE.config.model || "gemini-1.5-flash"; 
-            const model = genAI.getGenerativeModel({ model: modelId });
+            const genAI = new GoogleGenerativeAI(API_KEY);
+            const model = genAI.getGenerativeModel({ model: CACHE.config.model || "gemini-1.5-flash" });
 
             const systemPrompt = `
-            # IDENTIDADE
-            Você é a **AmerIA**, consultora de elite da **Ameripan Distribuidora**.
-            Sua missão é vender soluções, tirar dúvidas técnicas e facilitar a vida do cliente.
-
-            # DADOS REAIS
-            - Base de Conhecimento: ${CACHE.knowledge ? "Disponível" : "Indisponível"}
+            # IDENTIDADE: AmerIA, consultora da Ameripan Distribuidora.
+            # OBJETIVO: Vender soluções e tirar dúvidas.
+            # CONTEXTO TÉCNICO: ${CACHE.knowledge ? "Disponível" : "Carregando..."}
             
-            # REGRAS VISUAIS (Renderização Markdown)
-            1. **Produtos:** Se citar produto e ele tiver imagem, use: ![Nome](URL_IMAGEM).
-            2. **Vídeos:** Se tiver vídeo, use: [🎥 Assistir Vídeo](URL_VIDEO).
-            3. **Contatos:** Use o formato:
-            > 👤 **Nome** - Cargo
-            > [📱 WhatsApp](https://wa.me/55...) | [📞 Ligar](tel:...)
-            > ![QR Code](https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=BEGIN%3AVCARD%0AVERSION%3A3.0%0AFN%3A[NOME]%20Ameripan%0ATEL%3A%2B55...)
-            4. **Financeiro:** Envie para SAC: wa.me/551934064070 (Opção Boleto).
-
-            # COMPORTAMENTO
-            - **Venda Cruzada:** Se pedirem "Pó de Morango", ofereça "Liga Neutra".
-            - **Visão:** Se receber imagem, analise o produto ou defeito.
+            # REGRAS VISUAIS:
+            1. Produtos: Use ![Nome](URL_IMAGEM) se disponível.
+            2. Vídeos: Use [🎥 Ver Vídeo](URL_VIDEO).
+            3. Contatos: Use este formato EXATO:
+               > 👤 **Nome** - Cargo
+               > [📱 WhatsApp](https://wa.me/55...)
+               > ![QR](https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=BEGIN%3AVCARD%0AVERSION%3A3.0%0AFN%3A[NOME]%20Ameripan%0ATEL%3A%2B55...)
+            
+            # COMPORTAMENTO:
+            - Seja proativa (cross-selling).
+            - Nunca invente preços. Mande adicionar ao carrinho.
             `;
 
-            // Prepara histórico compatível com Gemini
             const chatHistory = [
-            { role: "user", parts: [{ text: systemPrompt }] },
-            { role: "model", parts: [{ text: "Entendido. Sou a AmerIA." }] },
-            ...history.slice(-10).map(h => ({
-                role: h.role === 'system_ui' ? 'user' : h.role, 
-                parts: [{ text: h.text || (h.products ? `O usuário está vendo estes produtos: ${JSON.stringify(h.products)}` : "") }]
-            }))
+              { role: "user", parts: [{ text: systemPrompt }] },
+              { role: "model", parts: [{ text: "Entendido." }] },
+              ...history.slice(-8).map(h => ({
+                  role: h.role === 'system_ui' ? 'user' : h.role, 
+                  parts: [{ text: h.text || (h.products ? `CONTEXTO: O usuário viu: ${JSON.stringify(h.products)}` : "") }]
+              }))
             ];
 
             if (imageBase64) {
-                // Modo Visão (Single Turn)
-                const parts = [
-                    { text: systemPrompt },
-                    { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] } },
-                    { text: "Analise esta imagem. Se for um produto, identifique e veja se temos no catálogo. Se for um defeito de sorvete, faça um diagnóstico." }
-                ];
-                const result = await model.generateContent(parts);
+                const result = await model.generateContent([
+                    { text: systemPrompt + "\nAnalise esta imagem e veja se temos produtos similares." },
+                    { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] } }
+                ]);
                 return result.response.text();
             } else {
-                // Modo Chat
                 const chat = model.startChat({ history: chatHistory });
-                const lastMsg = history[history.length - 1].text || "Analise o contexto.";
-                const result = await chat.sendMessage(lastMsg);
+                const result = await chat.sendMessage(history[history.length - 1].text || "Olá");
                 return result.response.text();
             }
         } catch(e) {
-            console.error("Erro Gemini:", e);
-            return "Desculpe, tive um problema técnico ao processar sua solicitação. Tente novamente.";
+            console.error("Gemini Error:", e);
+            return "Desculpe, tive um problema técnico. Tente novamente.";
         }
       }
 
-      // =======================================================================
-      // 4. COMPONENTES VISUAIS (React)
-      // =======================================================================
+      // --- UI COMPONENTS ---
 
       const ProductCard = ({ product, onAdd }) => (
-        <div className="flex flex-col bg-white border border-gray-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-all mb-2 animate-fadeIn">
-          <div className="flex gap-3">
-            <div className="w-16 h-16 flex-shrink-0">
-              {product.IMG ? (
-                <img src={product.IMG} alt={product.PRODUTO} className="w-full h-full object-cover rounded-md border border-gray-100" loading="lazy" />
-              ) : (
-                <div className="w-full h-full bg-gray-100 rounded-md flex items-center justify-center text-gray-300">
-                  <ImageIcon size={24} />
-                </div>
-              )}
+        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-all animate-fadeIn flex gap-3">
+          <div className="w-16 h-16 flex-shrink-0">
+            {product.IMG ? 
+              <img src={product.IMG} alt={product.PRODUTO} className="w-full h-full object-cover rounded-md border border-gray-100" /> : 
+              <div className="w-full h-full bg-gray-100 rounded-md flex items-center justify-center text-gray-300"><ImageIcon size={24} /></div>
+            }
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2">{product.PRODUTO}</h4>
+              <p className="text-[10px] text-gray-500 mt-1 uppercase">{product.RAMO || "Geral"}</p>
             </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2">{product.PRODUTO}</h4>
-                <p className="text-[10px] text-gray-500 mt-1 truncate uppercase">{product.RAMO || "Geral"}</p>
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">SKU: {product.SKU}</span>
-                
-                {product.videoLink && (
-                   <a href={product.videoLink} target="_blank" className="text-[10px] flex items-center gap-1 text-red-600 font-bold hover:underline mr-auto ml-2">
-                     🎥 Vídeo
-                   </a>
-                )}
-
-                <button 
-                  onClick={() => onAdd(product)}
-                  className="bg-ameripan-blue text-white p-1.5 rounded-lg hover:bg-blue-800 active:scale-95 transition-all flex items-center gap-1 text-xs font-bold px-3 shadow-sm"
-                >
-                  <Plus size={14} /> Cotar
-                </button>
-              </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">SKU: {product.SKU}</span>
+              {product.videoLink && <a href={product.videoLink} target="_blank" className="text-[10px] text-red-600 font-bold hover:underline ml-2">🎥 Vídeo</a>}
+              <button onClick={() => onAdd(product)} className="bg-ameripan-blue text-white p-1.5 rounded-lg hover:bg-blue-800 active:scale-95 transition-all flex items-center gap-1 text-xs font-bold px-3">
+                <Plus size={14} /> Cotar
+              </button>
             </div>
           </div>
         </div>
       );
 
       function App() {
-        const [messages, setMessages] = useState([{ 
-          role: 'model', 
-          text: "Olá! Sou a **AmerIA 3.0**, sua consultora da Ameripan! 🍦📦\n\nPosso ver fotos, ouvir áudios e montar sua cotação.\n\n**O que você precisa hoje?**" 
-        }]);
+        const [messages, setMessages] = useState([{ role: 'model', text: "Olá! Sou a **AmerIA 3.0**. 🚀\n\nPosso ver fotos, ouvir e montar sua cotação. Como ajudo?" }]);
         const [input, setInput] = useState('');
         const [isLoading, setIsLoading] = useState(false);
         const [cart, setCart] = useState([]);
@@ -306,334 +241,160 @@
         const [isListening, setIsListening] = useState(false);
         const [audioEnabled, setAudioEnabled] = useState(false);
         const [dataLoaded, setDataLoaded] = useState(false);
-
         const messagesEndRef = useRef(null);
         const fileInputRef = useRef(null);
 
-        // Inicialização
-        useEffect(() => { 
-          loadData().then((success) => {
-              if(success) setDataLoaded(true);
-              else alert("⚠️ Falha ao carregar dados. Verifique se a pasta /data está correta.");
-          }); 
-        }, []);
-
+        useEffect(() => { loadData().then(ok => ok && setDataLoaded(true)); }, []);
         useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-        // --- GESTÃO DO CARRINHO ---
-        const addToCart = (product) => {
+        const addToCart = (p) => {
           setCart(prev => {
-            const exists = prev.find(p => p.SKU === product.SKU);
-            if (exists) return prev.map(p => p.SKU === product.SKU ? { ...p, qtd: p.qtd + 1 } : p);
-            return [...prev, { ...product, qtd: 1 }];
+            const exists = prev.find(i => i.SKU === p.SKU);
+            return exists ? prev.map(i => i.SKU === p.SKU ? { ...i, qtd: i.qtd + 1 } : i) : [...prev, { ...p, qtd: 1 }];
           });
           setShowCart(true);
         };
 
-        const removeFromCart = (sku) => {
-          setCart(prev => prev.filter(p => p.SKU !== sku));
-        };
-
         const sendQuote = () => {
-          if (cart.length === 0) return;
+          if (!cart.length) return;
           const items = cart.map(p => `• ${p.qtd}x ${p.PRODUTO} (SKU: ${p.SKU})`).join('%0A');
-          const totalItens = cart.reduce((a,b) => a + b.qtd, 0);
-          const msg = `*OLÁ, VENDEDOR!* 👋%0A%0AGostaria de cotar este pedido que montei com a AmerIA:%0A%0A${items}%0A%0A📦 *Total de Itens:* ${totalItens}%0A📍 *Aguardo retorno com valores e prazo.*`;
+          const msg = `*COTAÇÃO AMERIA*%0A%0A${items}%0A%0AAguardo retorno.`;
           window.open(`https://wa.me/5519982213355?text=${msg}`, '_blank');
         };
 
-        // --- FUNÇÕES DE ÁUDIO ---
         const toggleVoice = () => {
-           if (!('webkitSpeechRecognition' in window)) return alert("Seu navegador não suporta voz (use Chrome).");
-           if (isListening) {
-             setIsListening(false);
-           } else {
-             const recognition = new window.webkitSpeechRecognition();
-             recognition.lang = 'pt-BR';
-             recognition.start();
-             setIsListening(true);
-             
-             recognition.onresult = (e) => {
-               const transcript = e.results[0][0].transcript;
-               setInput(transcript);
-               handleSend(transcript);
-               setIsListening(false);
-             };
-             
-             recognition.onerror = () => setIsListening(false);
-             recognition.onend = () => setIsListening(false);
-           }
+           if (!('webkitSpeechRecognition' in window)) return alert("Navegador sem suporte a voz.");
+           if (isListening) { setIsListening(false); return; }
+           const recognition = new window.webkitSpeechRecognition();
+           recognition.lang = 'pt-BR';
+           recognition.start();
+           setIsListening(true);
+           recognition.onresult = (e) => { setInput(e.results[0][0].transcript); handleSend(e.results[0][0].transcript); setIsListening(false); };
+           recognition.onerror = () => setIsListening(false);
+           recognition.onend = () => setIsListening(false);
         };
 
         const speak = (text) => {
           if (!audioEnabled || !CACHE.config?.voice?.enabled) return;
           window.speechSynthesis.cancel();
-          const cleanText = text.replace(/[\*\_\[\]\(\)\#]/g, '').replace(/http\S+/g, 'link');
-          const utterance = new SpeechSynthesisUtterance(cleanText);
-          utterance.lang = "pt-BR";
-          utterance.rate = 1.2;
-          window.speechSynthesis.speak(utterance);
+          const u = new SpeechSynthesisUtterance(text.replace(/[*_#]/g, ''));
+          u.lang = "pt-BR"; u.rate = 1.2;
+          window.speechSynthesis.speak(u);
         };
 
-        // --- ENVIO ---
-        const handleSend = async (textOverride = null, imageBase64 = null) => {
-          const text = textOverride || input;
-          if ((!text.trim() && !imageBase64) || isLoading) return;
-
-          const userMsg = { role: 'user', text: text, image: imageBase64 };
-          setMessages(prev => [...prev, userMsg]);
-          setInput('');
-          setIsLoading(true);
+        const handleSend = async (txt = null, img = null) => {
+          const text = txt || input;
+          if ((!text.trim() && !img) || isLoading) return;
+          
+          const userMsg = { role: 'user', text, image: img };
+          setMessages(p => [...p, userMsg]);
+          setInput(''); setIsLoading(true);
 
           try {
-            let systemInjection = null;
-            // Busca rápida local se tiver texto
+            let sysMsg = null;
             if (text && text.length > 3) {
-               const products = await searchProducts(text);
-               if (products.length > 0) {
-                 const sysMsg = { role: 'system_ui', products: products.slice(0, 5) };
+               const prods = await searchProducts(text);
+               if (prods.length) {
+                 sysMsg = { role: 'system_ui', products: prods.slice(0, 5) };
                  setMessages(curr => [...curr, sysMsg]);
-                 systemInjection = sysMsg; 
                }
             }
-
-            // Chama IA
-            const historyForAI = [...messages, userMsg];
-            if (systemInjection) historyForAI.push(systemInjection);
-
-            const responseText = await callGemini(historyForAI, imageBase64);
             
-            setMessages(curr => [...curr, { role: 'model', text: responseText }]);
-            speak(responseText);
+            const history = [...messages, userMsg];
+            if (sysMsg) history.push(sysMsg);
 
-          } catch (err) {
-            console.error(err);
-            setMessages(curr => [...curr, { role: 'model', text: "⚠️ Tive um problema de conexão. Tente novamente." }]);
-          } finally {
-            setIsLoading(false);
-          }
+            const resp = await callGemini(history, img);
+            setMessages(curr => [...curr, { role: 'model', text: resp }]);
+            speak(resp);
+          } catch (e) {
+            setMessages(curr => [...curr, { role: 'model', text: "Erro de conexão. Tente de novo." }]);
+          } finally { setIsLoading(false); }
         };
 
-        const handleImageUpload = (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onloadend = () => handleSend("Analise esta imagem para mim", reader.result);
-          reader.readAsDataURL(file);
+        const handleImg = (e) => {
+          const f = e.target.files[0];
+          if(!f) return;
+          const r = new FileReader();
+          r.onloadend = () => handleSend("O que é isso?", r.result);
+          r.readAsDataURL(f);
         };
 
         if (!dataLoaded) return (
           <div className="h-screen flex flex-col items-center justify-center bg-ameripan-blue text-white">
-            <Loader2 className="w-16 h-16 animate-spin mb-4 opacity-80" />
-            <h2 className="text-2xl font-bold tracking-tight">AmerIA 3.0</h2>
-            <p className="opacity-70 text-sm mt-2">Carregando catálogo e inteligência...</p>
+            <Loader2 className="w-12 h-12 animate-spin mb-4" />
+            <h2 className="text-xl font-bold">AmerIA 3.0</h2>
+            <p className="opacity-80 text-sm">Carregando...</p>
           </div>
         );
 
         return (
           <div className="flex flex-col h-screen bg-slate-50 relative">
-            
-            {/* HEADER */}
             <header className="bg-gradient-to-r from-blue-800 to-ameripan-blue text-white p-4 shadow-lg z-20 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-xl font-bold border border-white/20">A</div>
-                <div>
-                  <h1 className="font-bold text-lg leading-none tracking-tight">AmerIA</h1>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    <span className="text-[10px] opacity-80 uppercase tracking-wide">Online</span>
-                  </div>
-                </div>
+                <div className="w-10 h-10 bg-white/10 backdrop-blur rounded-full flex items-center justify-center text-xl font-bold">A</div>
+                <div><h1 className="font-bold text-lg leading-none">AmerIA</h1><span className="text-[10px] opacity-80 bg-green-400/20 px-2 rounded-full">Online</span></div>
               </div>
-              
               <div className="flex gap-2">
-                <button 
-                  onClick={() => setAudioEnabled(!audioEnabled)} 
-                  className={`p-2 rounded-full transition-colors ${audioEnabled ? 'bg-white/20 text-white' : 'text-white/50 hover:bg-white/10'}`}
-                >
-                  {audioEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                </button>
-
-                <button onClick={() => setShowCart(!showCart)} className="relative p-2 rounded-full hover:bg-white/10 transition-colors">
-                  <ShoppingCart size={24} />
-                  {cart.length > 0 && (
-                    <span className="absolute top-0 right-0 bg-ameripan-orange text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce">
-                      {cart.reduce((a,b) => a + b.qtd, 0)}
-                    </span>
-                  )}
-                </button>
+                <button onClick={() => setAudioEnabled(!audioEnabled)} className={`p-2 rounded-full ${audioEnabled ? 'bg-white/20' : 'opacity-50'}`}>{audioEnabled ? <Volume2 size={20}/> : <VolumeX size={20}/>}</button>
+                <button onClick={() => setShowCart(!showCart)} className="relative p-2"><ShoppingCart size={24}/>{cart.length > 0 && <span className="absolute top-0 right-0 bg-ameripan-orange text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{cart.reduce((a,b)=>a+b.qtd,0)}</span>}</button>
               </div>
             </header>
 
-            {/* CHAT AREA */}
             <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-32 scroll-smooth" ref={messagesEndRef}>
               {messages.map((msg, idx) => (
-                <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-fadeIn group`}>
-                  
-                  {msg.role === 'model' && <span className="text-[10px] text-gray-400 mb-1 ml-2">AmerIA</span>}
-
+                <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-fadeIn`}>
                   {msg.text && (
-                    <div className={`max-w-[90%] sm:max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm text-sm leading-relaxed relative ${
-                      msg.role === 'user' 
-                        ? 'bg-ameripan-blue text-white rounded-br-none shadow-blue-200' 
-                        : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none shadow-gray-200'
-                    }`}>
-                      {msg.image && (
-                        <img src={msg.image} className="w-full rounded-lg mb-3 max-h-60 object-cover border border-white/20" />
-                      )}
-                      
-                      <div className="prose prose-sm max-w-none">
-                        <ReactMarkdown components={{
-                          img: ({src, alt}) => <img src={src} alt={alt} className="rounded-lg max-w-full h-auto my-3 border border-gray-200 shadow-sm" />,
-                          a: ({href, children}) => (
-                            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors">
-                              {children}
-                            </a>
-                          )
-                        }}>
-                          {msg.text}
-                        </ReactMarkdown>
-                      </div>
+                    <div className={`max-w-[90%] rounded-2xl px-5 py-3 shadow-sm text-sm leading-relaxed ${msg.role === 'user' ? 'bg-ameripan-blue text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
+                      {msg.image && <img src={msg.image} className="w-full rounded-lg mb-3 max-h-60 object-cover" />}
+                      <ReactMarkdown className="prose prose-sm max-w-none" components={{
+                          img: ({src, alt}) => <img src={src} alt={alt} className="rounded-lg my-2 border" />,
+                          a: ({href, children}) => <a href={href} target="_blank" className="text-blue-600 font-bold hover:underline">{children}</a>
+                      }}>{msg.text}</ReactMarkdown>
                     </div>
                   )}
-
                   {msg.role === 'system_ui' && (
-                    <div className="w-full mt-3 pl-2 pr-4">
-                      <p className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wider flex items-center gap-2">
-                         <span className="w-4 h-[1px] bg-gray-300"></span> Sugestões do Catálogo
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                          {msg.products.map(p => (
-                            <ProductCard key={p.SKU} product={p} onAdd={addToCart} />
-                          ))}
-                      </div>
+                    <div className="w-full mt-2 pl-2 pr-4 grid gap-2 sm:grid-cols-2">
+                        {msg.products.map(p => <ProductCard key={p.SKU} product={p} onAdd={addToCart} />)}
                     </div>
                   )}
                 </div>
               ))}
-
-              {isLoading && (
-                <div className="flex items-center gap-3 text-gray-400 text-sm ml-4 animate-pulse">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    <Loader2 size={16} className="animate-spin text-gray-400" />
-                  </div>
-                  <span className="text-xs font-medium">Digitando...</span>
-                </div>
-              )}
+              {isLoading && <div className="flex gap-1 ml-4"><span className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></span><span className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></span><span className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></span></div>}
               <div ref={messagesEndRef} />
             </main>
 
-            {/* CART DRAWER */}
             <div className={`fixed inset-0 z-50 ${showCart ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-              <div 
-                className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${showCart ? 'opacity-100' : 'opacity-0'}`} 
-                onClick={() => setShowCart(false)} 
-              />
-              
-              <div className={`absolute right-0 bottom-0 w-full sm:w-96 bg-white h-[90vh] sm:h-full shadow-2xl transform transition-transform duration-300 flex flex-col rounded-t-3xl sm:rounded-l-3xl sm:rounded-tr-none ${showCart ? 'translate-y-0 sm:translate-x-0' : 'translate-y-full sm:translate-y-0 sm:translate-x-full'}`}>
-                
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
-                  <div>
-                    <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                      <ShoppingCart size={22} className="text-ameripan-orange"/> Cotação
-                    </h3>
-                    <p className="text-xs text-gray-500">{cart.length} itens selecionados</p>
-                  </div>
-                  <button onClick={() => setShowCart(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500"><X size={24}/></button>
+              <div className={`absolute inset-0 bg-black/60 transition-opacity ${showCart ? 'opacity-100' : 'opacity-0'}`} onClick={() => setShowCart(false)} />
+              <div className={`absolute right-0 bottom-0 w-full sm:w-96 bg-white h-[90vh] shadow-2xl transition-transform flex flex-col rounded-t-3xl ${showCart ? 'translate-y-0' : 'translate-y-full'}`}>
+                <div className="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-3xl">
+                  <h3 className="font-bold text-gray-800 flex gap-2"><ShoppingCart className="text-ameripan-orange"/> Cotação</h3>
+                  <button onClick={() => setShowCart(false)}><X size={24}/></button>
                 </div>
-
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {cart.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                      <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                        <ShoppingCart size={40} className="opacity-20" />
-                      </div>
-                      <p className="font-medium">Seu carrinho está vazio</p>
-                      <button onClick={() => setShowCart(false)} className="mt-6 text-ameripan-blue text-sm font-bold hover:underline">
-                        Adicionar produtos
-                      </button>
-                    </div>
-                  ) : (
-                    cart.map(item => (
-                      <div key={item.SKU} className="flex items-center bg-white border border-gray-100 p-3 rounded-xl shadow-sm gap-3">
-                        {item.IMG ? (
-                           <img src={item.IMG} className="w-12 h-12 rounded bg-gray-100 object-cover" />
-                        ) : (
-                           <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center"><ImageIcon size={16} className="text-gray-300"/></div>
-                        )}
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm text-gray-800 leading-tight line-clamp-2">{item.PRODUTO}</p>
-                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">REF: {item.SKU}</p>
-                        </div>
-                        
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 h-8">
-                            <button className="w-8 h-full flex items-center justify-center hover:bg-gray-100 text-gray-600" onClick={() => removeFromCart(item.SKU)}><Minus size={14}/></button>
-                            <span className="text-sm font-bold w-6 text-center">{item.qtd}</span>
-                            <button className="w-8 h-full flex items-center justify-center hover:bg-gray-100 text-green-600" onClick={() => addToCart(item)}><Plus size={14}/></button>
-                          </div>
+                  {cart.length === 0 ? <p className="text-center text-gray-400 mt-20">Carrinho vazio</p> : 
+                    cart.map(i => (
+                      <div key={i.SKU} className="flex justify-between items-center border p-3 rounded-xl shadow-sm">
+                        <div className="flex-1"><p className="font-bold text-sm line-clamp-1">{i.PRODUTO}</p><p className="text-xs text-gray-400">SKU: {i.SKU}</p></div>
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-lg border">
+                          <button className="p-2 text-red-500" onClick={() => removeFromCart(i.SKU)}><Minus size={14}/></button>
+                          <span className="text-sm font-bold w-4 text-center">{i.qtd}</span>
+                          <button className="p-2 text-green-600" onClick={() => addToCart(i)}><Plus size={14}/></button>
                         </div>
                       </div>
                     ))
-                  )}
+                  }
                 </div>
-
-                <div className="p-5 border-t border-gray-100 bg-white pb-8 sm:pb-5">
-                  <button 
-                    onClick={sendQuote}
-                    disabled={cart.length === 0}
-                    className="w-full bg-whatsapp text-white font-bold py-4 rounded-xl hover:brightness-90 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-200 transition-all flex items-center justify-center gap-2 active:scale-95"
-                  >
-                    Enviar Cotação no WhatsApp <Send size={20} />
-                  </button>
-                </div>
+                <div className="p-5 border-t bg-white"><button onClick={sendQuote} disabled={!cart.length} className="w-full bg-whatsapp text-white font-bold py-4 rounded-xl hover:brightness-90 disabled:opacity-50 shadow-lg flex justify-center gap-2">Enviar no WhatsApp <Send size={20}/></button></div>
               </div>
             </div>
 
-            {/* INPUT BAR */}
-            <footer className="bg-white p-3 pb-6 sm:pb-4 border-t border-gray-100 z-20">
+            <footer className="bg-white p-3 border-t z-20">
               <div className="max-w-4xl mx-auto flex items-end gap-2">
-                
-                <button 
-                  onClick={() => fileInputRef.current.click()}
-                  className="p-3 text-gray-400 hover:text-ameripan-blue hover:bg-blue-50 rounded-full transition-colors"
-                  title="Enviar foto"
-                >
-                  <Camera size={24} />
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-                </button>
-                
-                <div className="flex-1 bg-gray-100 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 focus-within:ring-ameripan-blue/50 transition-all border border-transparent focus-within:bg-white">
-                  <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                    placeholder="Digite, mande foto ou áudio..."
-                    className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-24 py-2 text-sm outline-none text-gray-800 placeholder-gray-400"
-                    rows={1}
-                    style={{ minHeight: '24px' }}
-                  />
-                </div>
-
-                <button 
-                  onClick={input.trim() ? () => handleSend() : toggleVoice}
-                  className={`p-3 rounded-full shadow-md text-white transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center ${
-                    isListening 
-                      ? 'bg-red-500 animate-pulse ring-4 ring-red-200' 
-                      : input.trim() 
-                        ? 'bg-ameripan-blue hover:bg-blue-700' 
-                        : 'bg-gray-400 hover:bg-gray-500'
-                  }`}
-                >
-                  {input.trim() ? <Send size={20} /> : <Mic size={20} />}
-                </button>
-              </div>
-              <div className="text-center mt-2">
-                 <p className="text-[10px] text-gray-300 font-medium">AmerIA v3.0 • Powered by Gemini</p>
+                <button onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-ameripan-blue"><Camera size={24}/><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImg}/></button>
+                <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-2"><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())} placeholder="Digite ou fale..." className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-24 py-2 text-sm outline-none" rows={1}/></div>
+                <button onClick={input.trim() ? () => handleSend() : toggleVoice} className={`p-3 rounded-full shadow-md text-white transition-all ${isListening ? 'bg-red-500 animate-pulse' : 'bg-ameripan-blue'}`}>{input.trim() ? <Send size={20}/> : <Mic size={20}/>}</button>
               </div>
             </footer>
-
           </div>
         );
       }
