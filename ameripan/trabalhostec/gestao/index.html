@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão Técnica - Ameripan</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #003366; /* Azul Ameripan */
+            --accent: #cc0000;  /* Vermelho Ameripan */
+            --light: #f4f6f8;
+            --sidebar-width: 250px;
+        }
+
+        body { margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--light); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- SIDEBAR (MENU) --- */
+        #sidebar {
+            width: var(--sidebar-width);
+            background: var(--primary);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s;
+            position: fixed;
+            height: 100%;
+            z-index: 100;
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar { transform: translateX(-100%); }
+            #sidebar.active { transform: translateX(0); }
+        }
+
+        .brand { padding: 20px; font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between;}
+        
+        .menu-items { padding: 20px 0; flex: 1; }
+        .menu-item {
+            padding: 15px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; border-left: 4px solid transparent;
+        }
+        .menu-item:hover, .menu-item.active { background: rgba(255,255,255,0.1); border-left-color: var(--accent); }
+        
+        /* --- MAIN CONTENT --- */
+        #main {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            display: flex; flex-direction: column;
+            height: 100%;
+            overflow-y: auto;
+            transition: margin 0.3s;
+        }
+        @media (max-width: 768px) { #main { margin-left: 0; } }
+
+        /* HEADER & FILTROS */
+        .top-bar {
+            background: white; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+            position: sticky; top: 0; z-index: 90;
+        }
+        
+        .toggle-btn { font-size: 24px; cursor: pointer; color: var(--primary); display: none; }
+        @media (max-width: 768px) { .toggle-btn { display: block; } }
+
+        .filters { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filters select, .filters button { padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        .filters button { background: var(--primary); color: white; border: none; cursor: pointer; }
+
+        /* --- VIEWS --- */
+        .view-section { display: none; padding: 20px; }
+        .view-section.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* DASHBOARD CARDS */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid var(--primary); }
+        .kpi-card h3 { margin: 0 0 10px 0; color: #666; font-size: 0.9rem; text-transform: uppercase; }
+        .kpi-card .value { font-size: 1.8rem; font-weight: bold; color: var(--primary); }
+
+        /* TABELA */
+        .pay-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; margin-top: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .pay-table th, .pay-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        .pay-table th { background: #eee; color: #333; font-weight: bold; }
+        .pay-table tr:hover { background: #f9f9f9; }
+
+        /* --- NOVO MURAL (CARDS DE VISITA) --- */
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        
+        .visit-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-top: 4px solid var(--primary);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .visit-header {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        .visit-header h4 { margin: 0; color: var(--primary); font-size: 1.1rem; }
+        .visit-date { font-size: 0.8rem; color: #666; margin-top: 5px; display: block; }
+        .visit-badge { 
+            display: inline-block; padding: 3px 8px; border-radius: 12px; 
+            font-size: 0.7rem; font-weight: bold; margin-top: 5px;
+            background: #e3f2fd; color: var(--primary);
+        }
+
+        .visit-body { padding: 15px; flex: 1; }
+        .visit-body p { margin: 5px 0; font-size: 0.9rem; color: #555; }
+        .label { font-weight: bold; color: #333; }
+
+        .visit-media {
+            padding: 15px;
+            background: #fff;
+            border-top: 1px solid #eee;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* Botões de Mídia */
+        .btn-media {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 12px;
+            background: var(--light);
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .btn-media:hover { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-media i { color: var(--accent); }
+        .btn-media:hover i { color: white; }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; }
+        .close-modal { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #999; }
+        .detail-row { margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .detail-label { font-weight: bold; color: var(--primary); display: block; margin-bottom: 3px; }
+
+    </style>
+</head>
+<body>
+
+    <nav id="sidebar">
+        <div class="brand">
+            <span>AMERIPAN GESTÃO</span>
+            <i class="fas fa-times toggle-btn" onclick="toggleSidebar()"></i>
+        </div>
+        <div class="menu-items">
+            <div class="menu-item active" onclick="showView('dashboard')">
+                <i class="fas fa-chart-pie"></i> Dashboard
+            </div>
+            <div class="menu-item" onclick="showView('gallery')">
+                <i class="fas fa-images"></i> Mural de Trabalhos
+            </div>
+            <div class="menu-item" onclick="showView('list')">
+                <i class="fas fa-list-alt"></i> Relatório em Lista
+            </div>
+        </div>
+    </nav>
+
+    <main id="main">
+        <div class="top-bar">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-bars toggle-btn" onclick="toggleSidebar()"></i>
+                <h2 style="margin:0; font-size:1.1rem; color:#333;">Painel de Controle</h2>
+            </div>
+            
+            <div class="filters">
+                <select id="filterMonth" onchange="aplicarFiltros()">
+                    <option value="ALL">Todos os Meses</option>
+                </select>
+                <select id="filterTecnico" onchange="aplicarFiltros()">
+                    <option value="ALL">Todos os Técnicos</option>
+                </select>
+                <select id="filterMotivo" onchange="aplicarFiltros()">
+                    <option value="ALL">Todos os Motivos</option>
+                </select>
+                <button onclick="carregarDados()" title="Atualizar Dados">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="dashboard" class="view-section active">
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <h3>Total de Visitas</h3>
+                    <div class="value" id="totalVisitas">0</div>
+                </div>
+                <div class="kpi-card" style="border-left-color: var(--accent);">
+                    <h3>Clientes Únicos</h3>
+                    <div class="value" id="totalClientes">0</div>
+                </div>
+                <div class="kpi-card" style="border-left-color: #28a745;">
+                    <h3>Pedidos Tirados</h3>
+                    <div class="value" id="totalPedidos">0</div>
+                </div>
+            </div>
+
+            <div class="kpi-card" style="border-left:none; box-shadow:none;">
+                <h3 style="color:var(--primary); border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:15px;">
+                    <i class="fas fa-file-invoice-dollar"></i> Resumo por Técnico (Mês Selecionado)
+                </h3>
+                <table class="pay-table">
+                    <thead>
+                        <tr>
+                            <th>Técnico</th>
+                            <th>Qtd. Visitas</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="paymentTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="gallery" class="view-section">
+            <div style="margin-bottom:15px; color:#666; font-size:0.9rem;">
+                <i class="fas fa-info-circle"></i> Os arquivos abrem em nova aba.
+            </div>
+            <div class="gallery-grid" id="galleryContainer">
+                </div>
+        </div>
+
+        <div id="list" class="view-section">
+            <div style="overflow-x:auto;">
+                <table class="pay-table" id="fullTable">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Técnico</th>
+                            <th>Motivo</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="modalDetalhes" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal()">&times;</span>
+            <h2 style="color:var(--primary); margin-top:0; border-bottom:2px solid var(--accent); padding-bottom:10px;">Detalhes da Visita</h2>
+            <div id="modalBody" class="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        // *** INSIRA AQUI A MESMA URL DO APPS SCRIPT DO OUTRO ARQUIVO ***
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyGx9K186KXJ75L-mLz1xaEt8VRvv3a48bNPmBaAnVz3pja7wnPNmr7DObrOdWfbnHU/exec";
+
+        let rawData = [];
+        let filteredData = [];
+
+        // Mapeamento das Colunas (A=0, B=1...)
+        const COLS = {
+            CLIENTE: 2,   // C
+            MOTIVO: 5,    // F
+            LINKS: 8,     // I
+            DATA: 9,      // J
+            FEEDBACK: 10, // K
+            PEDIDO: 11,   // L
+            VENDEDOR: 12, // M
+            TECNICA: 13   // N
+        };
+
+        window.onload = () => {
+            carregarDados();
+            preencherFiltroMeses();
+        };
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function showView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(viewId).classList.add('active');
+            
+            // Lógica para ativar o menu correto
+            const menuMap = { 'dashboard': 0, 'gallery': 1, 'list': 2 };
+            document.querySelectorAll('.menu-item')[menuMap[viewId]].classList.add('active');
+
+            if(window.innerWidth < 768) toggleSidebar();
+        }
+
+        async function carregarDados() {
+            const btn = document.querySelector('.filters button i');
+            btn.className = "fas fa-sync-alt fa-spin"; // Efeito visual de loading
+
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const json = await response.json();
+                
+                // Filtra linhas vazias ou inválidas
+                rawData = json.filter(r => r[0] && r[0] !== "Carimbo de data/hora");
+                
+                // Preencher selects
+                const tecnicos = [...new Set(rawData.map(r => r[COLS.TECNICA]).filter(t => t))].sort();
+                const selTec = document.getElementById('filterTecnico');
+                selTec.innerHTML = '<option value="ALL">Todos os Técnicos</option>';
+                tecnicos.forEach(t => selTec.innerHTML += `<option value="${t}">${t}</option>`);
+
+                const motivos = [...new Set(rawData.map(r => r[COLS.MOTIVO]).filter(m => m))].sort();
+                const selMot = document.getElementById('filterMotivo');
+                selMot.innerHTML = '<option value="ALL">Todos os Motivos</option>';
+                motivos.forEach(m => selMot.innerHTML += `<option value="${m}">${m}</option>`);
+
+                aplicarFiltros();
+
+            } catch (error) {
+                console.error(error);
+                alert("Erro ao conectar com a Planilha. Verifique a URL.");
+            } finally {
+                btn.className = "fas fa-sync-alt";
+            }
+        }
+
+        function preencherFiltroMeses() {
+            const select = document.getElementById('filterMonth');
+            const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const hoje = new Date();
+            
+            for(let i=0; i<12; i++) {
+                let d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+                let val = d.toISOString().slice(0, 7); // YYYY-MM
+                let label = `${meses[d.getMonth()]} ${d.getFullYear()}`;
+                select.innerHTML += `<option value="${val}">${label}</option>`;
+            }
+        }
+
+        function aplicarFiltros() {
+            const mes = document.getElementById('filterMonth').value;
+            const tec = document.getElementById('filterTecnico').value;
+            const mot = document.getElementById('filterMotivo').value;
+
+            filteredData = rawData.filter(row => {
+                const dataVisita = row[COLS.DATA]; 
+                let dataValida = true;
+                
+                if (mes !== "ALL") {
+                    let dStr = new Date(dataVisita).toISOString().slice(0, 7);
+                    if (dStr !== mes) dataValida = false;
+                }
+
+                const tecValido = tec === "ALL" || row[COLS.TECNICA] === tec;
+                const motValido = mot === "ALL" || row[COLS.MOTIVO] === mot;
+
+                return dataValida && tecValido && motValido;
+            });
+
+            // Ordena do mais recente para o mais antigo
+            filteredData.sort((a, b) => new Date(b[COLS.DATA]) - new Date(a[COLS.DATA]));
+
+            atualizarDashboard();
+            atualizarMural();
+            atualizarTabela();
+        }
+
+        function atualizarDashboard() {
+            document.getElementById('totalVisitas').innerText = filteredData.length;
+            
+            const clientesUnicos = new Set(filteredData.map(r => r[COLS.CLIENTE])).size;
+            document.getElementById('totalClientes').innerText = clientesUnicos;
+
+            const pedidos = filteredData.filter(r => r[COLS.PEDIDO] && r[COLS.PEDIDO].toString().includes("SIM")).length;
+            document.getElementById('totalPedidos').innerText = pedidos;
+
+            const contagem = {};
+            filteredData.forEach(r => {
+                const t = r[COLS.TECNICA] || "Sem Técnico";
+                contagem[t] = (contagem[t] || 0) + 1;
+            });
+
+            const tbody = document.getElementById('paymentTableBody');
+            tbody.innerHTML = "";
+            
+            for (const [nome, qtd] of Object.entries(contagem)) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${nome}</b></td>
+                        <td>${qtd}</td>
+                        <td><span style="color:#28a745; font-weight:bold;">Ativo</span></td>
+                    </tr>
+                `;
+            }
+        }
+
+        function atualizarMural() {
+            const container = document.getElementById('galleryContainer');
+            container.innerHTML = "";
+            
+            // Set para evitar duplicatas VISUAIS (Mesma Data + Mesmo Cliente)
+            const chavesVistas = new Set();
+
+            filteredData.forEach(row => {
+                const chaveUnica = `${row[COLS.DATA]}-${row[COLS.CLIENTE]}`;
+                if (chavesVistas.has(chaveUnica)) return; // Pula se já mostrou este cliente nesta data
+                chavesVistas.add(chaveUnica);
+
+                const linksString = row[COLS.LINKS];
+                // Criação dos botões de mídia
+                let mediaButtonsHTML = "";
+                
+                if (linksString && linksString.length > 5) {
+                    const links = linksString.toString().split(',').map(s => s.trim());
+                    
+                    links.forEach((link, i) => {
+                        // Como não temos o tipo do arquivo na planilha, usamos um nome genérico
+                        // ou tentamos adivinhar. Por segurança, usamos "Arquivo".
+                        mediaButtonsHTML += `
+                            <a href="${link}" target="_blank" class="btn-media">
+                                <i class="fas fa-external-link-alt"></i> Arquivo ${i+1}
+                            </a>
+                        `;
+                    });
+                } else {
+                    mediaButtonsHTML = "<span style='color:#999; font-size:0.8rem;'>Sem arquivos.</span>";
+                }
+
+                // Criação do Card
+                const card = document.createElement('div');
+                card.className = 'visit-card';
+                card.innerHTML = `
+                    <div class="visit-header">
+                        <h4>${row[COLS.CLIENTE]}</h4>
+                        <span class="visit-date">
+                            <i class="far fa-calendar-alt"></i> ${new Date(row[COLS.DATA]).toLocaleDateString('pt-BR')}
+                        </span>
+                        <span class="visit-badge">${row[COLS.TECNICA].split(' ')[0]}</span>
+                    </div>
+                    <div class="visit-body">
+                        <p><span class="label">Motivo:</span> ${row[COLS.MOTIVO]}</p>
+                        <p><span class="label">Feedback:</span> ${row[COLS.FEEDBACK].substring(0, 60)}...</p>
+                        <button onclick='abrirDetalhes(${JSON.stringify(row)})' style="margin-top:10px; background:none; border:none; color:var(--primary); text-decoration:underline; cursor:pointer;">
+                            Ver Detalhes Completos
+                        </button>
+                    </div>
+                    <div class="visit-media">
+                        ${mediaButtonsHTML}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            if (filteredData.length === 0) {
+                container.innerHTML = "<p style='grid-column: 1/-1; text-align:center; color:#666;'>Nenhum registro encontrado com estes filtros.</p>";
+            }
+        }
+
+        function atualizarTabela() {
+            const tbody = document.querySelector('#fullTable tbody');
+            tbody.innerHTML = "";
+            
+            filteredData.slice(0, 50).forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${new Date(row[COLS.DATA]).toLocaleDateString('pt-BR')}</td>
+                    <td>${row[COLS.CLIENTE]}</td>
+                    <td>${row[COLS.TECNICA]}</td>
+                    <td>${row[COLS.MOTIVO]}</td>
+                    <td><button onclick='abrirDetalhes(${JSON.stringify(row)})' style="cursor:pointer; color:var(--primary); border:none; background:none; font-weight:bold;">Ver</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function abrirDetalhes(row) {
+            const modal = document.getElementById('modalDetalhes');
+            const body = document.getElementById('modalBody');
+            
+            // Recria botões de links para o modal
+            let linksHtml = "";
+            if (row[COLS.LINKS]) {
+                const links = row[COLS.LINKS].toString().split(',');
+                links.forEach((link, i) => {
+                    linksHtml += `<a href="${link}" target="_blank" class="btn-media" style="display:inline-flex; margin:5px;">
+                        <i class="fas fa-eye"></i> Abrir Arquivo ${i+1}
+                    </a>`;
+                });
+            } else {
+                linksHtml = "Nenhum arquivo anexado.";
+            }
+
+            body.innerHTML = `
+                <div class="detail-row"><span class="detail-label">Cliente:</span> ${row[COLS.CLIENTE]} (Cód: ${row[1]})</div>
+                <div class="detail-row"><span class="detail-label">Data da Visita:</span> ${new Date(row[COLS.DATA]).toLocaleDateString('pt-BR')}</div>
+                <div class="detail-row"><span class="detail-label">Técnica Responsável:</span> ${row[COLS.TECNICA]}</div>
+                <div class="detail-row"><span class="detail-label">Vendedor:</span> ${row[COLS.VENDEDOR]}</div>
+                <div class="detail-row"><span class="detail-label">Motivo:</span> ${row[COLS.MOTIVO]}</div>
+                <div class="detail-row"><span class="detail-label">Pessoas Contatadas:</span> ${row[4]}</div>
+                <div class="detail-row"><span class="detail-label">Produtos Utilizados:</span> <p style="margin:5px 0; background:#f9f9f9; padding:5px;">${row[6]}</p></div>
+                <div class="detail-row"><span class="detail-label">Feedback Completo:</span> <p style="margin:5px 0; background:#f9f9f9; padding:5px;">${row[COLS.FEEDBACK]}</p></div>
+                <div class="detail-row"><span class="detail-label">Pedido Gerado?</span> ${row[COLS.PEDIDO]}</div>
+                
+                <div style="margin-top:20px; border-top:2px solid #eee; padding-top:10px;">
+                    <span class="detail-label">Arquivos Anexados:</span>
+                    <div style="margin-top:10px;">${linksHtml}</div>
+                </div>
+            `;
+            
+            modal.style.display = "flex";
+        }
+
+        function fecharModal() {
+            document.getElementById('modalDetalhes').style.display = "none";
+        }
+        
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('modalDetalhes')) fecharModal();
+        }
+    </script>
+</body>
+</html>
