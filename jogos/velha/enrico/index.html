@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Velha do Enrico Silva</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Roboto:wght@700&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            /* Imagem de background solicitada */
+            background-image: url('https://i2.wp.com/wp.ufpel.edu.br/artenosul/files/2017/08/1-6-e1503952861958.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: white;
+        }
+
+        /* Camada escura para facilitar a leitura */
+        .overlay {
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 20px;
+            border: 4px solid #E62429; /* Vermelho Spider */
+            box-shadow: 0 0 20px #00629B; /* Azul Spider */
+            text-align: center;
+            max-width: 95%;
+            width: 400px;
+        }
+
+        h1 {
+            font-family: 'Bangers', cursive; /* Fonte estilo quadrinhos */
+            font-size: 3rem;
+            margin: 0;
+            color: #E62429;
+            text-shadow: 2px 2px 0px #fff;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: #61DAFB;
+            margin-top: 5px;
+        }
+
+        .controls {
+            margin: 15px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        select, button {
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        select {
+            background-color: #00629B;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-restart {
+            background-color: #E62429;
+            color: white;
+            transition: transform 0.2s;
+        }
+
+        .btn-restart:hover {
+            transform: scale(1.05);
+            background-color: #ff3333;
+        }
+
+        /* Tabuleiro */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            background-color: #00629B;
+            padding: 10px;
+            border-radius: 15px;
+            width: fit-content;
+        }
+
+        .cell {
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            user-select: none;
+        }
+
+        .cell:hover {
+            background-color: #fff;
+        }
+
+        .cell.winner {
+            background-color: #ffd700; /* Dourado para vitória */
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .status {
+            font-size: 1.2rem;
+            margin-top: 10px;
+            font-weight: bold;
+            min-height: 1.5em;
+        }
+
+        /* Cores dos jogadores */
+        .player-x { color: #E62429; } /* Aranha */
+        .player-o { color: #00629B; } /* Oponente */
+
+    </style>
+</head>
+<body>
+
+    <div class="overlay">
+        <h1>ENRICO SILVA</h1>
+        <h2>🕷️ MISSÃO ARANHA 🕷️</h2>
+
+        <div class="controls">
+            <label>Quem vai jogar?</label>
+            <select id="gameMode" onchange="resetGame()">
+                <option value="pve">Enrico vs Computador</option>
+                <option value="pvp">Enrico vs Amigo (2 Jogadores)</option>
+            </select>
+
+            <div id="difficultyContainer">
+                <label>Nível de Dificuldade:</label>
+                <select id="difficulty" onchange="resetGame()">
+                    <option value="easy">Fácil (Iniciante)</option>
+                    <option value="medium" selected>Intermediário (Normal)</option>
+                    <option value="hard">Avançado (Mestre Aranha)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="status" id="status">Vez do: 🕷️ (Enrico)</div>
+
+        <div class="board" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+
+        <button class="btn-restart" onclick="resetGame()">REINICIAR JOGO</button>
+    </div>
+
+    <script>
+        const boardElement = document.getElementById('board');
+        const cells = document.querySelectorAll('.cell');
+        const statusElement = document.getElementById('status');
+        const difficultySelect = document.getElementById('difficulty');
+        const modeSelect = document.getElementById('gameMode');
+        const difficultyContainer = document.getElementById('difficultyContainer');
+
+        let boardState = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = true;
+        let currentPlayer = "X"; // X é o Enrico (Aranha), O é o Oponente
+        
+        // Ícones
+        const iconX = "🕷️";
+        const iconO = "🕸️";
+
+        // Condições de vitória
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Linhas
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Colunas
+            [0, 4, 8], [2, 4, 6]             // Diagonais
+        ];
+
+        function handleCellClick(clickedCellEvent) {
+            const clickedCell = clickedCellEvent.target;
+            const clickedCellIndex = parseInt(clickedCell.getAttribute('data-index'));
+
+            if (boardState[clickedCellIndex] !== "" || !gameActive) {
+                return;
+            }
+
+            // Jogada do Jogador (Enrico ou Jogador 1)
+            makeMove(clickedCellIndex, currentPlayer);
+            
+            checkResult();
+
+            // Se o jogo não acabou e é contra o Computador
+            if (gameActive && modeSelect.value === 'pve' && currentPlayer === "O") {
+                // Pequeno delay para parecer que o computador está pensando
+                statusElement.innerText = "Computador pensando...";
+                setTimeout(computerMove, 600);
+            }
+        }
+
+        function makeMove(index, player) {
+            boardState[index] = player;
+            cells[index].innerText = player === "X" ? iconX : iconO;
+            cells[index].classList.add(player === "X" ? "player-x" : "player-o");
+        }
+
+        function switchPlayer() {
+            currentPlayer = currentPlayer === "X" ? "O" : "X";
+            const name = currentPlayer === "X" ? "Enrico (🕷️)" : (modeSelect.value === 'pve' ? "Computador (🕸️)" : "Amigo (🕸️)");
+            statusElement.innerText = `Vez do: ${name}`;
+        }
+
+        function checkResult() {
+            let roundWon = false;
+            let winningLine = [];
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const winCondition = winningConditions[i];
+                let a = boardState[winCondition[0]];
+                let b = boardState[winCondition[1]];
+                let c = boardState[winCondition[2]];
+
+                if (a === '' || b === '' || c === '') {
+                    continue;
+                }
+                if (a === b && b === c) {
+                    roundWon = true;
+                    winningLine = winCondition;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                const winnerName = currentPlayer === "X" ? "ENRICO VENCEU!" : (modeSelect.value === 'pve' ? "COMPUTADOR VENCEU!" : "AMIGO VENCEU!");
+                statusElement.innerText = `🎉 ${winnerName} 🎉`;
+                gameActive = false;
+                highlightWinner(winningLine);
+                return;
+            }
+
+            if (!boardState.includes("")) {
+                statusElement.innerText = "Empate! Ninguém caiu na teia.";
+                gameActive = false;
+                return;
+            }
+
+            switchPlayer();
+        }
+
+        function highlightWinner(line) {
+            line.forEach(index => {
+                cells[index].classList.add('winner');
+            });
+        }
+
+        // --- Lógica da Inteligência Artificial (Computador) ---
+
+        function computerMove() {
+            if (!gameActive) return;
+
+            let index;
+            const difficulty = difficultySelect.value;
+            const available = boardState.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
+
+            if (difficulty === 'easy') {
+                // Fácil: Escolhe aleatoriamente
+                index = available[Math.floor(Math.random() * available.length)];
+            } else if (difficulty === 'medium') {
+                // Intermediário: 40% chance de errar, 60% de jogar sério
+                if (Math.random() > 0.6) {
+                    index = available[Math.floor(Math.random() * available.length)];
+                } else {
+                    index = getBestMove();
+                }
+            } else {
+                // Avançado: Minimax (Invencível)
+                index = getBestMove();
+            }
+
+            makeMove(index, "O");
+            checkResult();
+        }
+
+        // Algoritmo Minimax para o nível Difícil
+        function getBestMove() {
+            // Tenta ganhar ou bloquear
+            let bestScore = -Infinity;
+            let move;
+            
+            for (let i = 0; i < 9; i++) {
+                if (boardState[i] === "") {
+                    boardState[i] = "O";
+                    let score = minimax(boardState, 0, false);
+                    boardState[i] = "";
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
+        const scores = {
+            O: 10,
+            X: -10,
+            tie: 0
+        };
+
+        function minimax(board, depth, isMaximizing) {
+            let result = checkWinnerForMinimax();
+            if (result !== null) {
+                return scores[result];
+            }
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === "") {
+                        board[i] = "O";
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = "";
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === "") {
+                        board[i] = "X";
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = "";
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function checkWinnerForMinimax() {
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
+                    return boardState[a];
+                }
+            }
+            if (!boardState.includes("")) return 'tie';
+            return null;
+        }
+
+        // --- Controles Gerais ---
+
+        function resetGame() {
+            boardState = ["", "", "", "", "", "", "", "", ""];
+            gameActive = true;
+            currentPlayer = "X";
+            statusElement.innerText = "Vez do: 🕷️ (Enrico)";
+            cells.forEach(cell => {
+                cell.innerText = "";
+                cell.classList.remove('player-x', 'player-o', 'winner');
+            });
+
+            // Esconder seletor de dificuldade se for 2 jogadores
+            if (modeSelect.value === 'pvp') {
+                difficultyContainer.style.display = 'none';
+            } else {
+                difficultyContainer.style.display = 'block';
+            }
+        }
+
+        // Event Listeners
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+
+        // Inicializa
+        resetGame();
+
+    </script>
+</body>
+</html>
