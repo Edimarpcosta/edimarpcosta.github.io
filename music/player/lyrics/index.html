@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Player - Apresentação Profissional</title>
+    <link rel="icon" href="data:,">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script src="https://unpkg.com/browser-id3-writer@4.4.0/dist/browser-id3-writer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0a0a0f;
+            --surface: #1a1a24;
+            --hl: #ffeaa7;
+            --text: #e5e7eb;
+            --success: #00b894;
+            --error: #d63031;
+            --font-size-base: 1.4em;
+            --font-size-active: 1.8em;
+            --color-inactive: #555;
+            --color-active: #ffeaa7;
+            --bg-type: solid;
+            --bg-value: #0a0a0f;
+            --bg-opacity: 1;
+            --bg-blur: 0px;
+            --line-spacing: 1.2;
+            --text-align: center;
+            --font-weight-active: 800;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        body.presentation-mode {
+            cursor: none;
+        }
+
+        body.presentation-mode header,
+        body.presentation-mode footer,
+        body.presentation-mode .controls {
+            display: none !important;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: var(--bg-value);
+            filter: blur(var(--bg-blur));
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: rgba(0, 0, 0, var(--bg-opacity));
+        }
+
+        body[data-bg-type="gradient"]::before {
+            background: linear-gradient(135deg, var(--bg-value), var(--bg-value-2, #1a1a24));
+        }
+
+        body[data-bg-type="image"]::before {
+            background-image: var(--bg-value);
+            background-size: cover;
+            background-position: center;
+        }
+
+        header {
+            background: var(--surface);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #333;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-file {
+            position: relative;
+            overflow: hidden;
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            transition: 0.2s;
+            border: none;
+        }
+        .btn-file:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-file input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+        }
+
+        .track-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .track-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: white;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        .track-artist {
+            font-size: 0.9em;
+            color: #aaa;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            background: #333;
+            border: 1px solid #444;
+            color: #ddd;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+        .btn:hover {
+            background: #444;
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-presentation {
+            background: #8b5cf6;
+            color: white;
+            font-weight: bold;
+        }
+        .btn-presentation:hover {
+            background: #7c3aed;
+        }
+
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .btn-action {
+            background: var(--success);
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        .btn-action:hover {
+            background: #00a383;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background-color: #2d3436;
+            min-width: 220px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            z-index: 100;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .dropdown-content button {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-bottom: 1px solid #444;
+            transition: background 0.2s;
+        }
+        .dropdown-content button:hover {
+            background-color: #333;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        .tag-info {
+            font-size: 0.75em;
+            color: #aaa;
+            margin-left: 5px;
+        }
+
+        main {
+            flex: 1;
+            overflow-y: auto;
+            text-align: var(--text-align);
+            position: relative;
+            scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .church-name {
+            position: fixed;
+            width: 100%;
+            padding: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            z-index: 5;
+            text-align: center;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+        .church-name.top {
+            top: 0;
+        }
+        .church-name.bottom {
+            bottom: 0;
+        }
+        .church-name.hidden {
+            display: none;
+        }
+
+        .lyrics-box {
+            padding: 50vh 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .l-line {
+            padding: 10px;
+            font-size: var(--font-size-base);
+            color: var(--color-inactive);
+            transition: all 0.3s ease;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 4px 0;
+            line-height: var(--line-spacing);
+        }
+        .l-line:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .l-line.active {
+            color: var(--color-active);
+            font-size: var(--font-size-active);
+            font-weight: var(--font-weight-active);
+            transform: scale(1.05);
+            text-shadow: 0 0 15px rgba(255, 234, 167, 0.3);
+        }
+        .plain-text {
+            white-space: pre-wrap;
+            font-size: 1.2em;
+            line-height: 1.6;
+            color: #ccc;
+            padding-top: 50px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-box {
+            background: var(--surface);
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            font-size: 1.3em;
+            color: white;
+        }
+        .modal-close {
+            background: #d63031;
+            color: white;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close:hover {
+            background: #c0392b;
+            transform: rotate(90deg);
+        }
+
+        .modal-tabs {
+            display: flex;
+            border-bottom: 1px solid #333;
+            background: #16161c;
+        }
+        .modal-tab {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+        .modal-tab:hover {
+            color: #aaa;
+            background: rgba(255,255,255,0.05);
+        }
+        .modal-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .modal-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+        .tab-panel.active {
+            display: block;
+        }
+
+        .setting-group {
+            margin-bottom: 25px;
+        }
+        .setting-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        .setting-input {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+        .setting-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #333;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: none;
+        }
+        .slider-value {
+            min-width: 50px;
+            text-align: right;
+            color: white;
+            font-weight: bold;
+        }
+
+        .color-picker-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .color-picker {
+            width: 60px;
+            height: 40px;
+            border: 2px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .radio-option input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .theme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .theme-card {
+            background: #222;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .theme-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        .theme-card.active {
+            border-color: var(--success);
+            background: #2a2a2a;
+        }
+        .theme-preview {
+            width: 100%;
+            height: 60px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .theme-name {
+            font-weight: bold;
+            color: white;
+        }
+
+        .inp-search {
+            flex: 1;
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .results-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .res-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #333;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .res-item:hover {
+            background: #2a2a2a;
+        }
+        .res-info b {
+            display: block;
+            color: white;
+            margin-bottom: 4px;
+        }
+        .tag {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .tag-sync {
+            background: #00b894;
+            color: white;
+        }
+        .tag-txt {
+            background: #fdcb6e;
+            color: #333;
+        }
+
+        footer {
+            padding: 15px;
+            background: var(--surface);
+            border-top: 1px solid #333;
+            transition: all 0.3s ease;
+        }
+        audio {
+            width: 100%;
+            outline: none;
+        }
+        
+        #loading {
+            display: none;
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 50;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            margin-top: 8px;
+            border-radius: 2px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: white;
+            width: 0%;
+            transition: width 0.1s;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 1024px) {
+            .lyrics-box {
+                width: 85%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                flex-wrap: wrap;
+                padding: 10px;
+            }
+            .controls {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .btn {
+                padding: 6px 10px;
+                font-size: 0.85em;
+            }
+            .lyrics-box {
+                width: 95%;
+                padding: 40vh 15px;
+            }
+            .l-line {
+                font-size: calc(var(--font-size-base) * 0.9);
+            }
+            .l-line.active {
+                font-size: calc(var(--font-size-active) * 0.9);
+            }
+            .modal-box {
+                width: 95%;
+                max-height: 90vh;
+            }
+            .modal-tabs {
+                overflow-x: auto;
+            }
+            .modal-tab {
+                font-size: 0.8em;
+                padding: 10px 8px;
+            }
+            .theme-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
+        }
+
+        @media (max-width: 480px) {
+            .track-info {
+                display: none;
+            }
+            .btn-file span {
+                display: none;
+            }
+            .btn-file::after {
+                content: '📂';
+            }
+        }
+    </style>
+</head>
+<body data-bg-type="solid">
+
+<div id="loading">
+    <span id="loadingText">Carregando...</span>
+    <div class="progress-bar" id="progressBar" style="display:none">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+</div>
+
+<div class="church-name hidden" id="churchName">Nome da Igreja</div>
+
+<header id="mainHeader">
+    <button class="btn-file">
+        <span>📂 Abrir Arquivo</span>
+        <input type="file" id="fileInput" accept="audio/*">
+    </button>
+
+    <div class="track-info">
+        <div class="track-title" id="lblTitle">Church Player</div>
+        <div class="track-artist" id="lblArtist">Selecione uma música</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-presentation" id="btnPresentation" onclick="app.togglePresentationMode()">🖥️ Apresentação</button>
+        <button class="btn" id="btnSettings" onclick="app.openSettings()">⚙️ Configurações</button>
+        <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
+        <button class="btn" onclick="app.openSearch()">🔍 Manual</button>
+        
+        <div class="dropdown" id="dropdownSave" style="display:none">
+            <button class="btn btn-action">💾 Salvar...</button>
+            <div class="dropdown-content">
+                <button onclick="app.downloadLrc()">📄 Salvar .LRC</button>
+                <button id="btnEmbed" onclick="app.embedInFile()">🎵 Embutir no Áudio <span id="embedTag" class="tag-info"></span></button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main id="mainArea">
+    <div class="lyrics-box" id="lyricsContainer">
+        <div style="margin-top:20vh; color:#444">
+            Suporta MP3 e FLAC (Conversão Auto).<br>
+            Carregue um arquivo para começar.
+        </div>
+    </div>
+</main>
+
+<footer id="mainFooter">
+    <audio id="audioPlayer" controls preload="metadata"></audio>
+</footer>
+
+<div class="modal" id="searchModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2>Busca Manual</h2>
+            <button class="modal-close" onclick="app.closeModal('searchModal')">×</button>
+        </div>
+        <div style="padding: 15px; display: flex; gap: 10px; border-bottom: 1px solid #333;">
+            <input type="text" class="inp-search" id="inpTrack" placeholder="Música">
+            <input type="text" class="inp-search" id="inpArtist" placeholder="Artista">
+            <button class="btn btn-action" onclick="app.doManualSearch()">Buscar</button>
+        </div>
+        <div class="results-area" id="resultsList">
+            <div style="text-align:center; padding:20px; color:#555">Digite e busque para ver as opções.</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="settingsModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2>Configurações</h2>
+            <button class="modal-close" onclick="app.closeModal('settingsModal')">×</button>
+        </div>
+        
+        <div class="modal-tabs">
+            <button class="modal-tab active" onclick="app.switchTab('appearance')">🎨 Aparência</button>
+            <button class="modal-tab" onclick="app.switchTab('background')">🖼️ Fundo</button>
+            <button class="modal-tab" onclick="app.switchTab('church')">⛪ Igreja</button>
+            <button class="modal-tab" onclick="app.switchTab('themes')">💾 Temas</button>
+        </div>
+
+        <div class="modal-content">
+            <div class="tab-panel active" id="tab-appearance">
+                <div class="setting-group">
+                    <label class="setting-label">Tamanho da Fonte Base</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="fontSize" min="1.0" max="3.0" step="0.1" value="1.4">
+                        <span class="slider-value" id="fontSizeValue">1.4x</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Tamanho da Linha Ativa</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="fontSizeActive" min="1.2" max="2.5" step="0.1" value="1.8">
+                        <span class="slider-value" id="fontSizeActiveValue">1.8x</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Texto Inativo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="colorInactive" value="#555555">
+                        <input type="text" class="setting-input" id="colorInactiveText" value="#555555" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Texto Ativo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="colorActive" value="#ffeaa7">
+                        <input type="text" class="setting-input" id="colorActiveText" value="#ffeaa7" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Peso da Fonte Ativa</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="fontWeight" value="400"> Normal
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="fontWeight" value="700"> Bold
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="fontWeight" value="800" checked> Extra Bold
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Espaçamento entre Linhas</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="lineSpacing" min="1.0" max="2.0" step="0.1" value="1.2">
+                        <span class="slider-value" id="lineSpacingValue">1.2</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Alinhamento do Texto</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="textAlign" value="left"> Esquerda
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="textAlign" value="center" checked> Centro
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="textAlign" value="right"> Direita
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-background">
+                <div class="setting-group">
+                    <label class="setting-label">Tipo de Fundo</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="bgType" value="solid" checked> Cor Sólida
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="bgType" value="gradient"> Gradiente
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="bgType" value="image"> Imagem
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setting-group" id="bgSolidGroup">
+                    <label class="setting-label">Cor do Fundo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgColor" value="#0a0a0f">
+                        <input type="text" class="setting-input" id="bgColorText" value="#0a0a0f" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="setting-group" id="bgGradientGroup" style="display:none;">
+                    <label class="setting-label">Cor 1 do Gradiente</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgGradient1" value="#0a0a0f">
+                        <input type="text" class="setting-input" id="bgGradient1Text" value="#0a0a0f" style="flex: 1;">
+                    </div>
+                    <label class="setting-label" style="margin-top: 15px;">Cor 2 do Gradiente</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgGradient2" value="#1a1a24">
+                        <input type="text" class="setting-input" id="bgGradient2Text" value="#1a1a24" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="setting-group" id="bgImageGroup" style="display:none;">
+                    <label class="setting-label">URL da Imagem</label>
+                    <input type="text" class="setting-input" id="bgImageUrl" placeholder="https://exemplo.com/imagem.jpg">
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Opacidade do Overlay (Escurecimento)</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="bgOpacity" min="0" max="1" step="0.05" value="0.3">
+                        <span class="slider-value" id="bgOpacityValue">30%</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Desfoque do Fundo</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="bgBlur" min="0" max="20" step="1" value="0">
+                        <span class="slider-value" id="bgBlurValue">0px</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-church">
+                <div class="setting-group">
+                    <label class="setting-label">Nome da Igreja/Organização</label>
+                    <input type="text" class="setting-input" id="churchName" placeholder="Digite o nome da igreja">
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Posição do Nome</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="churchPosition" value="top" checked> Topo
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="churchPosition" value="bottom"> Rodapé
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="churchPosition" value="hidden"> Desativado
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Tamanho do Nome</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="churchNameSize" min="1.0" max="3.0" step="0.1" value="1.5">
+                        <span class="slider-value" id="churchNameSizeValue">1.5em</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Nome</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="churchNameColor" value="#ffffff">
+                        <input type="text" class="setting-input" id="churchNameColorText" value="#ffffff" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Opacidade do Nome</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="churchNameOpacity" min="0" max="1" step="0.05" value="0.8">
+                        <span class="slider-value" id="churchNameOpacityValue">80%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-themes">
+                <div class="setting-group">
+                    <label class="setting-label">Temas Pré-definidos</label>
+                    <div class="theme-grid" id="themesGrid"></div>
+                </div>
+
+                <div class="setting-group" style="margin-top: 30px;">
+                    <button class="btn btn-action" style="width: 100%; padding: 12px;" onclick="app.saveCustomTheme()">💾 Salvar Configuração Atual como Tema</button>
+                </div>
+
+                <div class="setting-group">
+                    <button class="btn" style="width: 100%; padding: 12px;" onclick="app.exportConfig()">📥 Exportar Configuração (JSON)</button>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Importar Configuração</label>
+                    <input type="file" class="setting-input" id="importConfig" accept=".json" onchange="app.importConfig(event)">
+                </div>
+
+                <div class="setting-group">
+                    <button class="btn" style="width: 100%; padding: 12px; background: #d63031;" onclick="app.resetToDefault()">🔄 Restaurar Padrão</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="services.js"></script>
+<script>
+const CONFIG_KEY = 'churchPlayerConfig';
+
+const DEFAULT_CONFIG = {
+    theme: 'classic-dark',
+    fontSize: 1.4,
+    fontSizeActive: 1.8,
+    colorInactive: '#555555',
+    colorActive: '#ffeaa7',
+    fontWeightActive: 800,
+    lineSpacing: 1.2,
+    textAlign: 'center',
+    bgType: 'solid',
+    bgColor: '#0a0a0f',
+    bgGradient1: '#0a0a0f',
+    bgGradient2: '#1a1a24',
+    bgImageUrl: '',
+    bgOpacity: 0.3,
+    bgBlur: 0,
+    churchName: '',
+    churchPosition: 'top',
+    churchNameSize: 1.5,
+    churchNameColor: '#ffffff',
+    churchNameOpacity: 0.8,
+    presentationMode: false
+};
+
+const PRESET_THEMES = {
+    'classic-dark': {
+        name: 'Clássico Escuro',
+        config: {
+            bgType: 'solid',
+            bgColor: '#0a0a0f',
+            colorInactive: '#555555',
+            colorActive: '#ffeaa7',
+            fontSize: 1.4,
+            fontSizeActive: 1.8
+        }
+    },
+    'divine-light': {
+        name: 'Luz Divina',
+        config: {
+            bgType: 'solid',
+            bgColor: '#f9fafb',
+            colorInactive: '#666666',
+            colorActive: '#4f46e5',
+            fontSize: 1.4,
+            fontSizeActive: 1.8
+        }
+    },
+    'elegant-blue': {
+        name: 'Elegante Azul',
+        config: {
+            bgType: 'gradient',
+            bgGradient1: '#1e3a8a',
+            bgGradient2: '#3b82f6',
+            colorInactive: '#93c5fd',
+            colorActive: '#ffffff',
+            fontSize: 1.4,
+            fontSizeActive: 1.8
+        }
+    },
+    'worship-modern': {
+        name: 'Worship Moderno',
+        config: {
+            bgType: 'solid',
+            bgColor: '#1a1a24',
+            colorInactive: '#888888',
+            colorActive: '#fbbf24',
+            fontSize: 1.5,
+            fontSizeActive: 2.0,
+            bgOpacity: 0.6
+        }
+    },
+    'minimalist': {
+        name: 'Minimalista',
+        config: {
+            bgType: 'solid',
+            bgColor: '#000000',
+            colorInactive: '#666666',
+            colorActive: '#ffffff',
+            fontSize: 1.3,
+            fontSizeActive: 1.7
+        }
+    }
+};
+
+const app = {
+    client: new LrcClient(),
+    config: { ...DEFAULT_CONFIG },
+    state: {
+        meta: { track: "", artist: "", album: "", duration: 0 },
+        lyrics: null,
+        currentMode: 'synced',
+        fileName: "",
+        fileType: "",
+        originalFile: null,
+        presentationMode: false,
+        cursorTimeout: null
+    },
+    ui: {
+        audio: document.getElementById('audioPlayer'),
+        container: document.getElementById('lyricsContainer'),
+        loading: document.getElementById('loading'),
+        loadingText: document.getElementById('loadingText'),
+        progressBar: document.getElementById('progressBar'),
+        progressFill: document.getElementById('progressFill'),
+        churchName: document.getElementById('churchName')
+    },
+
+    init() {
+        this.loadConfig();
+        this.applyConfig();
+        this.initEventListeners();
+        this.renderThemes();
+        this.setupKeyboardShortcuts();
+    },
+
+    initEventListeners() {
+        document.getElementById('fileInput').addEventListener('change', e => this.loadFile(e.target.files[0]));
+        this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
+        this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
+
+        document.getElementById('fontSize').addEventListener('input', e => {
+            this.config.fontSize = parseFloat(e.target.value);
+            document.getElementById('fontSizeValue').textContent = e.target.value + 'x';
+            this.applyConfig();
+        });
+
+        document.getElementById('fontSizeActive').addEventListener('input', e => {
+            this.config.fontSizeActive = parseFloat(e.target.value);
+            document.getElementById('fontSizeActiveValue').textContent = e.target.value + 'x';
+            this.applyConfig();
+        });
+
+        document.getElementById('colorInactive').addEventListener('input', e => {
+            this.config.colorInactive = e.target.value;
+            document.getElementById('colorInactiveText').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('colorInactiveText').addEventListener('input', e => {
+            this.config.colorInactive = e.target.value;
+            document.getElementById('colorInactive').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('colorActive').addEventListener('input', e => {
+            this.config.colorActive = e.target.value;
+            document.getElementById('colorActiveText').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('colorActiveText').addEventListener('input', e => {
+            this.config.colorActive = e.target.value;
+            document.getElementById('colorActive').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.querySelectorAll('input[name="fontWeight"]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                this.config.fontWeightActive = parseInt(e.target.value);
+                this.applyConfig();
+            });
+        });
+
+        document.getElementById('lineSpacing').addEventListener('input', e => {
+            this.config.lineSpacing = parseFloat(e.target.value);
+            document.getElementById('lineSpacingValue').textContent = e.target.value;
+            this.applyConfig();
+        });
+
+        document.querySelectorAll('input[name="textAlign"]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                this.config.textAlign = e.target.value;
+                this.applyConfig();
+            });
+        });
+
+        document.querySelectorAll('input[name="bgType"]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                this.config.bgType = e.target.value;
+                this.updateBackgroundInputs();
+                this.applyConfig();
+            });
+        });
+
+        document.getElementById('bgColor').addEventListener('input', e => {
+            this.config.bgColor = e.target.value;
+            document.getElementById('bgColorText').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgColorText').addEventListener('input', e => {
+            this.config.bgColor = e.target.value;
+            document.getElementById('bgColor').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgGradient1').addEventListener('input', e => {
+            this.config.bgGradient1 = e.target.value;
+            document.getElementById('bgGradient1Text').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgGradient1Text').addEventListener('input', e => {
+            this.config.bgGradient1 = e.target.value;
+            document.getElementById('bgGradient1').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgGradient2').addEventListener('input', e => {
+            this.config.bgGradient2 = e.target.value;
+            document.getElementById('bgGradient2Text').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgGradient2Text').addEventListener('input', e => {
+            this.config.bgGradient2 = e.target.value;
+            document.getElementById('bgGradient2').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgImageUrl').addEventListener('input', e => {
+            this.config.bgImageUrl = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('bgOpacity').addEventListener('input', e => {
+            this.config.bgOpacity = parseFloat(e.target.value);
+            document.getElementById('bgOpacityValue').textContent = Math.round(e.target.value * 100) + '%';
+            this.applyConfig();
+        });
+
+        document.getElementById('bgBlur').addEventListener('input', e => {
+            this.config.bgBlur = parseInt(e.target.value);
+            document.getElementById('bgBlurValue').textContent = e.target.value + 'px';
+            this.applyConfig();
+        });
+
+        document.getElementById('churchName').addEventListener('input', e => {
+            this.config.churchName = e.target.value;
+            this.applyConfig();
+        });
+
+        document.querySelectorAll('input[name="churchPosition"]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                this.config.churchPosition = e.target.value;
+                this.applyConfig();
+            });
+        });
+
+        document.getElementById('churchNameSize').addEventListener('input', e => {
+            this.config.churchNameSize = parseFloat(e.target.value);
+            document.getElementById('churchNameSizeValue').textContent = e.target.value + 'em';
+            this.applyConfig();
+        });
+
+        document.getElementById('churchNameColor').addEventListener('input', e => {
+            this.config.churchNameColor = e.target.value;
+            document.getElementById('churchNameColorText').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('churchNameColorText').addEventListener('input', e => {
+            this.config.churchNameColor = e.target.value;
+            document.getElementById('churchNameColor').value = e.target.value;
+            this.applyConfig();
+        });
+
+        document.getElementById('churchNameOpacity').addEventListener('input', e => {
+            this.config.churchNameOpacity = parseFloat(e.target.value);
+            document.getElementById('churchNameOpacityValue').textContent = Math.round(e.target.value * 100) + '%';
+            this.applyConfig();
+        });
+
+        document.addEventListener('mousemove', () => this.handleMouseMove());
+        document.addEventListener('dblclick', () => {
+            if (this.state.presentationMode) {
+                this.togglePresentationMode();
+            }
+        });
+    },
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F11') {
+                e.preventDefault();
+                this.togglePresentationMode();
+            } else if (e.key === 'p' || e.key === 'P') {
+                if (!e.target.matches('input, textarea')) {
+                    this.togglePresentationMode();
+                }
+            } else if (e.key === 'Escape') {
+                if (this.state.presentationMode) {
+                    this.togglePresentationMode();
+                }
+            } else if (e.key === ' ') {
+                if (!e.target.matches('input, textarea')) {
+                    e.preventDefault();
+                    if (this.ui.audio.paused) {
+                        this.ui.audio.play();
+                    } else {
+                        this.ui.audio.pause();
+                    }
+                }
+            } else if (e.key === 'ArrowLeft') {
+                if (!e.target.matches('input, textarea')) {
+                    this.ui.audio.currentTime = Math.max(0, this.ui.audio.currentTime - 5);
+                }
+            } else if (e.key === 'ArrowRight') {
+                if (!e.target.matches('input, textarea')) {
+                    this.ui.audio.currentTime = Math.min(this.ui.audio.duration, this.ui.audio.currentTime + 5);
+                }
+            }
+        });
+    },
+
+    handleMouseMove() {
+        if (this.state.presentationMode) {
+            document.body.style.cursor = 'default';
+            clearTimeout(this.state.cursorTimeout);
+            this.state.cursorTimeout = setTimeout(() => {
+                document.body.style.cursor = 'none';
+            }, 3000);
+        }
+    },
+
+    togglePresentationMode() {
+        this.state.presentationMode = !this.state.presentationMode;
+        document.body.classList.toggle('presentation-mode', this.state.presentationMode);
+        
+        if (this.state.presentationMode) {
+            this.handleMouseMove();
+        } else {
+            document.body.style.cursor = 'default';
+            clearTimeout(this.state.cursorTimeout);
+        }
+    },
+
+    loadConfig() {
+        try {
+            const saved = localStorage.getItem(CONFIG_KEY);
+            if (saved) {
+                this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+            }
+        } catch (e) {
+            console.error('Erro ao carregar configuração:', e);
+        }
+    },
+
+    saveConfig() {
+        try {
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(this.config));
+        } catch (e) {
+            console.error('Erro ao salvar configuração:', e);
+        }
+    },
+
+    applyConfig() {
+        const root = document.documentElement;
+        root.style.setProperty('--font-size-base', this.config.fontSize + 'em');
+        root.style.setProperty('--font-size-active', this.config.fontSizeActive + 'em');
+        root.style.setProperty('--color-inactive', this.config.colorInactive);
+        root.style.setProperty('--color-active', this.config.colorActive);
+        root.style.setProperty('--font-weight-active', this.config.fontWeightActive);
+        root.style.setProperty('--line-spacing', this.config.lineSpacing);
+        root.style.setProperty('--text-align', this.config.textAlign);
+        root.style.setProperty('--bg-opacity', this.config.bgOpacity);
+        root.style.setProperty('--bg-blur', this.config.bgBlur + 'px');
+
+        document.body.setAttribute('data-bg-type', this.config.bgType);
+
+        if (this.config.bgType === 'solid') {
+            root.style.setProperty('--bg-value', this.config.bgColor);
+        } else if (this.config.bgType === 'gradient') {
+            root.style.setProperty('--bg-value', this.config.bgGradient1);
+            root.style.setProperty('--bg-value-2', this.config.bgGradient2);
+        } else if (this.config.bgType === 'image' && this.config.bgImageUrl) {
+            root.style.setProperty('--bg-value', `url(${this.config.bgImageUrl})`);
+        }
+
+        this.ui.churchName.textContent = this.config.churchName;
+        this.ui.churchName.className = 'church-name ' + this.config.churchPosition;
+        this.ui.churchName.style.fontSize = this.config.churchNameSize + 'em';
+        this.ui.churchName.style.color = this.config.churchNameColor;
+        this.ui.churchName.style.opacity = this.config.churchNameOpacity;
+
+        this.syncUIWithConfig();
+        this.saveConfig();
+    },
+
+    syncUIWithConfig() {
+        document.getElementById('fontSize').value = this.config.fontSize;
+        document.getElementById('fontSizeValue').textContent = this.config.fontSize + 'x';
+        
+        document.getElementById('fontSizeActive').value = this.config.fontSizeActive;
+        document.getElementById('fontSizeActiveValue').textContent = this.config.fontSizeActive + 'x';
+        
+        document.getElementById('colorInactive').value = this.config.colorInactive;
+        document.getElementById('colorInactiveText').value = this.config.colorInactive;
+        
+        document.getElementById('colorActive').value = this.config.colorActive;
+        document.getElementById('colorActiveText').value = this.config.colorActive;
+        
+        document.querySelector(`input[name="fontWeight"][value="${this.config.fontWeightActive}"]`).checked = true;
+        
+        document.getElementById('lineSpacing').value = this.config.lineSpacing;
+        document.getElementById('lineSpacingValue').textContent = this.config.lineSpacing;
+        
+        document.querySelector(`input[name="textAlign"][value="${this.config.textAlign}"]`).checked = true;
+        
+        document.querySelector(`input[name="bgType"][value="${this.config.bgType}"]`).checked = true;
+        this.updateBackgroundInputs();
+        
+        document.getElementById('bgColor').value = this.config.bgColor;
+        document.getElementById('bgColorText').value = this.config.bgColor;
+        
+        document.getElementById('bgGradient1').value = this.config.bgGradient1;
+        document.getElementById('bgGradient1Text').value = this.config.bgGradient1;
+        
+        document.getElementById('bgGradient2').value = this.config.bgGradient2;
+        document.getElementById('bgGradient2Text').value = this.config.bgGradient2;
+        
+        document.getElementById('bgImageUrl').value = this.config.bgImageUrl;
+        
+        document.getElementById('bgOpacity').value = this.config.bgOpacity;
+        document.getElementById('bgOpacityValue').textContent = Math.round(this.config.bgOpacity * 100) + '%';
+        
+        document.getElementById('bgBlur').value = this.config.bgBlur;
+        document.getElementById('bgBlurValue').textContent = this.config.bgBlur + 'px';
+        
+        document.getElementById('churchName').value = this.config.churchName;
+        
+        document.querySelector(`input[name="churchPosition"][value="${this.config.churchPosition}"]`).checked = true;
+        
+        document.getElementById('churchNameSize').value = this.config.churchNameSize;
+        document.getElementById('churchNameSizeValue').textContent = this.config.churchNameSize + 'em';
+        
+        document.getElementById('churchNameColor').value = this.config.churchNameColor;
+        document.getElementById('churchNameColorText').value = this.config.churchNameColor;
+        
+        document.getElementById('churchNameOpacity').value = this.config.churchNameOpacity;
+        document.getElementById('churchNameOpacityValue').textContent = Math.round(this.config.churchNameOpacity * 100) + '%';
+    },
+
+    updateBackgroundInputs() {
+        document.getElementById('bgSolidGroup').style.display = this.config.bgType === 'solid' ? 'block' : 'none';
+        document.getElementById('bgGradientGroup').style.display = this.config.bgType === 'gradient' ? 'block' : 'none';
+        document.getElementById('bgImageGroup').style.display = this.config.bgType === 'image' ? 'block' : 'none';
+    },
+
+    renderThemes() {
+        const grid = document.getElementById('themesGrid');
+        grid.innerHTML = '';
+        
+        Object.entries(PRESET_THEMES).forEach(([key, theme]) => {
+            const card = document.createElement('div');
+            card.className = 'theme-card';
+            if (this.config.theme === key) card.classList.add('active');
+            
+            const preview = document.createElement('div');
+            preview.className = 'theme-preview';
+            preview.style.background = theme.config.bgType === 'gradient' 
+                ? `linear-gradient(135deg, ${theme.config.bgGradient1 || theme.config.bgColor}, ${theme.config.bgGradient2 || theme.config.bgColor})`
+                : theme.config.bgColor;
+            
+            const name = document.createElement('div');
+            name.className = 'theme-name';
+            name.textContent = theme.name;
+            
+            card.appendChild(preview);
+            card.appendChild(name);
+            card.onclick = () => this.applyTheme(key);
+            
+            grid.appendChild(card);
+        });
+    },
+
+    applyTheme(themeKey) {
+        const theme = PRESET_THEMES[themeKey];
+        if (!theme) return;
+        
+        this.config = { ...this.config, ...theme.config, theme: themeKey };
+        this.applyConfig();
+        this.renderThemes();
+    },
+
+    saveCustomTheme() {
+        const name = prompt('Nome do tema customizado:');
+        if (!name) return;
+        
+        const key = 'custom-' + Date.now();
+        PRESET_THEMES[key] = {
+            name: name,
+            config: { ...this.config }
+        };
+        
+        this.renderThemes();
+        alert('Tema salvo com sucesso!');
+    },
+
+    exportConfig() {
+        const json = JSON.stringify(this.config, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'church-player-config.json';
+        a.click();
+    },
+
+    importConfig(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                this.config = { ...DEFAULT_CONFIG, ...imported };
+                this.applyConfig();
+                alert('Configuração importada com sucesso!');
+            } catch (err) {
+                alert('Erro ao importar configuração: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    },
+
+    resetToDefault() {
+        if (!confirm('Tem certeza que deseja restaurar as configurações padrão?')) return;
+        
+        this.config = { ...DEFAULT_CONFIG };
+        this.applyConfig();
+        this.renderThemes();
+        alert('Configurações restauradas!');
+    },
+
+    openSettings() {
+        document.getElementById('settingsModal').classList.add('active');
+    },
+
+    closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+    },
+
+    switchTab(tabName) {
+        document.querySelectorAll('.modal-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById('tab-' + tabName).classList.add('active');
+    },
+
+    setLoading(msg, progress = -1) {
+        if (msg) {
+            this.ui.loadingText.innerText = msg;
+            this.ui.loading.style.display = 'block';
+            if (progress >= 0) {
+                this.ui.progressBar.style.display = 'block';
+                this.ui.progressFill.style.width = progress + '%';
+            } else {
+                this.ui.progressBar.style.display = 'none';
+            }
+        } else {
+            this.ui.loading.style.display = 'none';
+        }
+    },
+
+    loadFile(file) {
+        if (!file) return;
+        this.reset();
+        
+        this.state.originalFile = file;
+        this.state.fileName = file.name.replace(/\.[^/.]+$/, "");
+        
+        const name = file.name.toLowerCase();
+        if (file.type.includes('mp3') || name.endsWith('.mp3')) this.state.fileType = 'mp3';
+        else if (file.type.includes('flac') || name.endsWith('.flac')) this.state.fileType = 'flac';
+        else this.state.fileType = 'other';
+
+        this.ui.audio.src = URL.createObjectURL(file);
+        this.setLoading("Lendo Tags...");
+        
+        jsmediatags.read(file, {
+            onSuccess: (tag) => {
+                const t = tag.tags;
+                if (t.title) {
+                    this.state.meta.track = t.title;
+                    this.state.meta.artist = t.artist || "";
+                    this.state.meta.album = t.album || "";
+                    this.updateHeader();
+                    this.autoFetch();
+                } else {
+                    this.promptManualSearch();
+                }
+            },
+            onError: () => this.promptManualSearch()
+        });
+    },
+
+    updateHeader() {
+        document.getElementById('lblTitle').innerText = this.state.meta.track;
+        document.getElementById('lblArtist').innerText = this.state.meta.artist;
+    },
+
+    promptManualSearch() {
+        this.setLoading(null);
+        this.state.meta.track = this.state.fileName.replace(/^\d+\s*[-_]?\s*/, '').replace(/[-_]/g, ' ').trim();
+        this.state.meta.artist = "";
+        this.updateHeader();
+        this.openSearch();
+    },
+
+    async autoFetch() {
+        this.setLoading("Buscando Letra...");
+        try {
+            const result = await this.client.findBestMatch(this.state.meta);
+            this.loadLyrics(result);
+            this.setLoading(null);
+        } catch (e) {
+            this.setLoading(null);
+            this.promptManualSearch();
+        }
+    },
+
+    loadLyrics(data) {
+        const parsedSynced = LrcParser.parse(data.syncedLyrics);
+        const plainText = data.plainLyrics || parsedSynced.plain;
+
+        this.state.lyrics = { synced: parsedSynced.synced, plain: plainText };
+
+        if (this.state.lyrics.synced) {
+            this.state.currentMode = 'synced';
+            this.renderSynced();
+        } else {
+            this.state.currentMode = 'plain';
+            this.renderPlain();
+        }
+
+        document.getElementById('dropdownSave').style.display = 'inline-block';
+        const embedTag = document.getElementById('embedTag');
+        const btnEmbed = document.getElementById('btnEmbed');
+
+        if (this.state.fileType === 'mp3') {
+            btnEmbed.innerText = "🎵 Embutir no MP3 (Rápido)";
+            embedTag.innerText = "";
+            btnEmbed.disabled = false;
+        } else if (this.state.fileType === 'flac') {
+            btnEmbed.innerText = "🎵 Converter p/ MP3 + Embed";
+            embedTag.innerText = "(Lento)";
+            btnEmbed.disabled = false;
+        } else {
+            btnEmbed.innerText = "🎵 Embutir Indisponível";
+            btnEmbed.disabled = true;
+        }
+
+        const btnToggle = document.getElementById('btnToggleType');
+        btnToggle.style.display = (this.state.lyrics.synced && this.state.lyrics.plain) ? 'inline-block' : 'none';
+        if (btnToggle.style.display !== 'none') btnToggle.innerText = "Ver Texto";
+    },
+
+    renderSynced() {
+        this.ui.container.innerHTML = '';
+        if (!this.state.lyrics.synced) return;
+        this.state.lyrics.synced.forEach(line => {
+            const div = document.createElement('div');
+            div.className = 'l-line';
+            div.innerText = line.text;
+            div.onclick = () => {
+                this.ui.audio.currentTime = line.startTime;
+                this.ui.audio.play();
+            };
+            this.ui.container.appendChild(div);
+        });
+    },
+
+    renderPlain() {
+        this.ui.container.innerHTML = `<div class="plain-text">${this.state.lyrics.plain || "Sem texto."}</div>`;
+    },
+
+    toggleView() {
+        this.state.currentMode = this.state.currentMode === 'synced' ? 'plain' : 'synced';
+        document.getElementById('btnToggleType').innerText = this.state.currentMode === 'synced' ? "Ver Texto" : "Ver Sync";
+        this.state.currentMode === 'synced' ? this.renderSynced() : this.renderPlain();
+    },
+
+    syncLoop() {
+        if (this.state.currentMode !== 'synced' || !this.state.lyrics.synced) return;
+        const time = this.ui.audio.currentTime;
+        const lines = this.state.lyrics.synced;
+        let activeIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startTime <= time) activeIdx = i;
+            else break;
+        }
+        const currentEl = document.querySelector('.l-line.active');
+        const nextEl = this.ui.container.children[activeIdx];
+        if (currentEl !== nextEl) {
+            if (currentEl) currentEl.classList.remove('active');
+            if (nextEl) {
+                nextEl.classList.add('active');
+                nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    },
+
+    openSearch() {
+        document.getElementById('searchModal').classList.add('active');
+        document.getElementById('inpTrack').value = this.state.meta.track;
+        document.getElementById('inpArtist').value = this.state.meta.artist;
+        if (this.state.meta.track) this.doManualSearch();
+    },
+
+    async doManualSearch() {
+        const list = document.getElementById('resultsList');
+        list.innerHTML = '<div style="padding:20px; text-align:center">Buscando...</div>';
+        const q = {
+            track: document.getElementById('inpTrack').value,
+            artist: document.getElementById('inpArtist').value
+        };
+        try {
+            const results = await this.client.searchRaw(q);
+            const sorted = this.client.sortCandidates(results, this.state.meta.duration);
+            list.innerHTML = '';
+            sorted.forEach(item => {
+                const hasSync = !!item.syncedLyrics;
+                const min = Math.floor(item.duration / 60);
+                const sec = Math.floor(item.duration % 60).toString().padStart(2, '0');
+                const div = document.createElement('div');
+                div.className = 'res-item';
+                div.innerHTML = `
+                    <div class="res-info">
+                        <b>${item.trackName} <span class="tag ${hasSync ? 'tag-sync' : 'tag-txt'}">${hasSync ? 'SYNC' : 'TXT'}</span></b>
+                        <span>${item.artistName} • ${min}:${sec}</span>
+                    </div>
+                    <button class="btn btn-action">Usar</button>
+                `;
+                div.onclick = () => {
+                    this.loadLyrics(item);
+                    this.closeModal('searchModal');
+                };
+                list.appendChild(div);
+            });
+        } catch (e) {
+            list.innerHTML = '<div style="padding:20px; text-align:center">Nada encontrado.</div>';
+        }
+    },
+
+    async downloadLrc() {
+        let content = this.state.lyrics.synced
+            ? this.state.lyrics.synced.map(l => {
+                const min = Math.floor(l.startTime / 60).toString().padStart(2, '0');
+                const sec = (l.startTime % 60).toFixed(2).padStart(5, '0');
+                return `[${min}:${sec}] ${l.text}`;
+            }).join('\n')
+            : this.state.lyrics.plain;
+        if (content) this.saveFile(content, this.state.fileName + ".lrc", 'text/plain');
+    },
+
+    async embedInFile() {
+        if (this.state.fileType !== 'mp3' && this.state.fileType !== 'flac') {
+            return alert("Formato não suportado.");
+        }
+
+        let targetBlob = this.state.originalFile;
+        let finalName = this.state.fileName + "_tagged.mp3";
+
+        try {
+            if (this.state.fileType === 'flac') {
+                this.setLoading("Convertendo FLAC p/ MP3...", 0);
+                targetBlob = await AudioConverter.convertToMp3(this.state.originalFile, (pct) => {
+                    this.setLoading(`Convertendo: ${pct}%`, pct);
+                });
+            }
+
+            this.setLoading("Gravando Tags...", -1);
+            const taggedBlob = await AudioTagger.embedMp3(targetBlob, this.state.meta, this.state.lyrics);
+            this.setLoading(null);
+            this.saveFile(taggedBlob, finalName, 'audio/mpeg');
+
+        } catch (e) {
+            this.setLoading(null);
+            alert("Erro ao processar: " + e.message);
+            console.error(e);
+        }
+    },
+
+    async saveFile(content, filename, mimeType) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'File',
+                    accept: { [mimeType]: ['.lrc', '.mp3'] }
+                }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            alert("Salvo!");
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+            }
+        }
+    },
+
+    reset() {
+        this.state.lyrics = null;
+        this.state.meta = { track: "", artist: "", album: "", duration: 0 };
+        this.state.originalFile = null;
+        this.ui.container.innerHTML = '';
+        document.getElementById('dropdownSave').style.display = 'none';
+        document.getElementById('btnToggleType').style.display = 'none';
+        this.setLoading(null);
+    }
+};
+
+app.init();
+</script>
+</body>
+</html>
