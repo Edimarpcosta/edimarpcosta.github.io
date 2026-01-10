@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -59,6 +60,38 @@
 }
 	
 	</style>
+<style>
+/* === UX Mobile Enhancements v11.0 === */
+@media (max-width: 480px) {
+  .container { margin: 0.5rem; padding: 1rem; }
+  .brand-header { margin-bottom: 1rem; }
+  .field, .date-field { display: block !important; width: 100% !important; min-width: 0 !important; }
+  .date-location-row { flex-direction: column; gap: .75rem; align-items: flex-start; }
+  .field-input, .date-field input, .field input, .field textarea { width: 100% !important; font-size: 16px !important; line-height: 1.4; padding: .6rem .5rem; }
+  .footer-section { padding-bottom: 4.5rem; } /* space for sticky bar */
+  .signature-pad-container { height: 160px !important; }
+  .button { min-height: 44px; }
+}
+
+/* Sticky CTA bar */
+.sticky-cta {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: #ffffff; border-top: 1px solid rgba(0,0,0,.1);
+  padding: .5rem .75rem; display: flex; gap: .5rem; align-items: center; z-index: 999;
+  box-shadow: 0 -6px 16px rgba(0,0,0,.08);
+}
+.sticky-cta .cta-left { flex: 1; display: flex; gap: .5rem; align-items: center; }
+.sticky-cta .cta-right { display: flex; gap: .5rem; }
+.sticky-cta .button { flex: 1; }
+.sticky-cta .secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+#mobile-error-summary {
+  position: sticky; top: 0; z-index: 998;
+  background: #fff7f7; color: #b91c1c; border: 1px solid #fecaca;
+  padding: .75rem; margin: .5rem 0 1rem; border-radius: .5rem; display: none;
+}
+#mobile-error-summary ul { margin: .25rem 0 0 1rem; }
+#mobile-error-summary a { text-decoration: underline; }
+</style>
 </head>
 <body>
     <div class="container" id="form-container">
@@ -280,5 +313,208 @@
             console.log("Listeners configurados (v10.5).");
         }); // Fim DOMContentLoaded
     </script>
+
+<!-- Enhancements v11.0 -->
+<script>
+(function() {
+  'use strict';
+
+  function onReady(fn){ if(document.readyState!=='loading'){ fn(); } else { document.addEventListener('DOMContentLoaded', fn); }}
+
+  onReady(function(){
+
+    // ===== Error Summary Container (insert near top form) =====
+    var container = document.querySelector('.container') || document.body;
+    var formContent = document.querySelector('.form-content') || container.firstElementChild;
+    if (formContent) {
+      var err = document.createElement('div');
+      err.id = 'mobile-error-summary';
+      err.innerHTML = '<strong>Corrija os campos abaixo:</strong><ul></ul>';
+      formContent.parentNode.insertBefore(err, formContent);
+    }
+
+    // ===== Sticky CTA Bar =====
+    var mainBtn = document.getElementById('generate-share-pdf-main');
+    if (mainBtn) {
+      var sticky = document.createElement('div');
+      sticky.className = 'sticky-cta';
+      sticky.innerHTML = '<div class="cta-left"><button type="button" class="button secondary" id="open-signature-quick">Assinar</button></div><div class="cta-right"></div>';
+      document.body.appendChild(sticky);
+      // Move the existing button into sticky bar (keeps original listeners)
+      var right = sticky.querySelector('.cta-right');
+      right.appendChild(mainBtn);
+      // Make button full-width in mobile bar
+      mainBtn.style.flex = '1';
+      // Shortcut to open signature (if function exists)
+      var quick = sticky.querySelector('#open-signature-quick');
+      quick.addEventListener('click', function(){
+        if (typeof openSignatureModal === 'function') { openSignatureModal(); }
+        else {
+          var area = document.querySelector('.signature-pad-container') || document.getElementById('signature-pad');
+          if (area) { area.scrollIntoView({behavior:'smooth', block:'center'}); }
+        }
+      });
+    }
+
+    // ===== Keyboard flow (Enter = próximo campo) =====
+    var order = ['cpf','valor','nome','empresa','autorizado','pedidos','cidade','dia','mes','ano','whatsapp-proprietario'];
+    var fields = order.map(function(id){ return document.getElementById(id); }).filter(Boolean);
+    fields.forEach(function(el, idx){
+      el.setAttribute('enterkeyhint','next');
+      el.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var next = fields[idx+1];
+          if (next && typeof next.focus === 'function') next.focus();
+        }
+      });
+    });
+
+    // ===== Auto-tab nos campos de data =====
+    function onlyDigits(s){ return (s||'').replace(/\D+/g,''); }
+    function setVal(el, v){ if(!el) return; el.value = v; el.dispatchEvent(new Event('input', {bubbles:true})); }
+    var dia = document.getElementById('dia');
+    var mes = document.getElementById('mes');
+    var ano = document.getElementById('ano');
+
+    [dia, ano].forEach(function(el){ if(!el) return;
+      el.inputMode = 'numeric';
+    });
+    if (mes) { mes.removeAttribute('inputmode'); }
+      el.addEventListener('input', function(){
+        var v = onlyDigits(el.value);
+        if (el === dia && v.length >= 2 && mes) { setVal(el, v.slice(0,2)); mes.focus(); }
+        // Para o mês, só auto-avança se forem dígitos (1-12). Se texto ("agosto"), não auto-avança.
+        if (el === mes) {
+          if (/^\d{2}$/.test(v) && ano) { setVal(el, v.slice(0,2)); ano.focus(); }
+        }
+        if (el === ano) { setVal(el, v.slice(0,4)); }
+      });
+    });
+
+    // ===== Paste tolerance for CPF & WhatsApp =====
+    function normalizeCpf(v){
+      var d = onlyDigits(v).slice(0,11);
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return d.replace(/(\d{3})(\d+)/, '$1.$2');
+      if (d.length <= 9) return d.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
+      return d.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2}).*/, '$1.$2.$3-$4');
+    }
+    function normalizePhone(v){
+      var d = onlyDigits(v).slice(0, 11);
+      if (d.length <= 2) return '('+d;
+      if (d.length <= 6) return d.replace(/(\d{2})(\d+)/, '($1) $2');
+      if (d.length <= 7) return d.replace(/(\d{2})(\d{1})(\d+)/, '($1) $2 $3');
+      return d.replace(/(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+    }
+    var cpf = document.getElementById('cpf');
+    if (cpf){
+      cpf.addEventListener('paste', function(e){
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text');
+        setVal(cpf, normalizeCpf(text));
+      });
+    }
+    var wpp = document.getElementById('whatsapp-proprietario');
+    if (wpp){
+      wpp.inputMode = 'tel';
+      wpp.addEventListener('paste', function(e){
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text');
+        setVal(wpp, normalizePhone(text));
+      });
+      wpp.addEventListener('input', function(){ this.value = normalizePhone(this.value); });
+    }
+
+    // ===== Error summary before gerar/enviar =====
+    function showErrors(list){
+      var box = document.getElementById('mobile-error-summary');
+      if (!box) return;
+      var ul = box.querySelector('ul');
+      ul.innerHTML = '';
+      list.forEach(function(item){
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = '#'+item.id;
+        a.textContent = item.msg;
+        a.addEventListener('click', function(ev){
+          ev.preventDefault();
+          var el = document.getElementById(item.id);
+          if (el){ el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
+        });
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+      box.style.display = list.length ? 'block' : 'none';
+      if (list.length && navigator.vibrate) { navigator.vibrate(40); }
+    }
+
+    function isEmpty(v){ return !v || !String(v).trim(); }
+    function validateAll(){
+      var errs = [];
+      function add(id, msg){
+        var el = document.getElementById(id);
+        if (el && !el.disabled) errs.push({id:id, msg:msg});
+      }
+      if (!cpf || onlyDigits(cpf.value).length !== 11) add('cpf', 'CPF inválido');
+      var valor = document.getElementById('valor'); if (!valor || isEmpty(valor.value)) add('valor','Informe o valor');
+      ['nome','autorizado','pedidos','cidade'].forEach(function(id){ var el = document.getElementById(id); if (!el || isEmpty(el.value)) add(id, 'Preencha "'+id+'"'); });
+      if (!dia || onlyDigits(dia.value).length!==2) add('dia','Dia inválido');
+      // aceitar mês como número (1-12) ou nome (jan...dez, com acentos)
+      function isValidMonth(val){
+        if (!val) return false;
+        var s = String(val).trim().toLowerCase();
+        var d = onlyDigits(s);
+        if (d && d.length<=2){ var n = parseInt(d,10); if(n>=1 && n<=12) return true; }
+        var meses = ['janeiro','fevereiro','março','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+        var abbr = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+        // normalizar cedilha/acentos simples
+        s = s.replace('ç','c').replace('á','a').replace('â','a').replace('ã','a').replace('é','e').replace('ê','e').replace('í','i').replace('ó','o').replace('ô','o').replace('õ','o').replace('ú','u');
+        if (meses.includes(s) || abbr.includes(s)) return true;
+        return false;
+      }
+      if (!mes || !isValidMonth(mes.value)) add('mes','Mês inválido');
+      if (!ano || onlyDigits(ano.value).length!==4) add('ano','Ano inválido');
+      if (!wpp || onlyDigits(wpp.value).length < 10) add('whatsapp-proprietario','Telefone inválido');
+      return errs;
+    }
+
+    // Intercept main click early (capture) to validate
+    if (mainBtn){
+      mainBtn.addEventListener('click', function(e){
+        var errs = validateAll();
+        if (errs.length){
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          showErrors(errs);
+        } else {
+          showErrors([]);
+        }
+      }, true); // capture
+    }
+
+    // ===== Enhance share fallbacks unobtrusively =====
+    // If the original code dispatches a custom event when PDF is ready, we can hook here.
+    document.addEventListener('pdf:ready', function(ev){
+      // no-op: reserved for future cloud upload hook
+    });
+
+  });
+})();
+</script>
+
+
+<datalist id="mes-list">
+  <option value="janeiro"><option value="fevereiro"><option value="março"><option value="abril">
+  <option value="maio"><option value="junho"><option value="julho"><option value="agosto">
+  <option value="setembro"><option value="outubro"><option value="novembro"><option value="dezembro">
+  <option value="jan"><option value="fev"><option value="mar"><option value="abr"><option value="mai">
+  <option value="jun"><option value="jul"><option value="ago"><option value="set"><option value="out">
+  <option value="nov"><option value="dez">
+</datalist>
+<script>
+(function(){ var mes = document.getElementById('mes'); if(mes){ mes.setAttribute('list','mes-list'); } })();
+</script>
+
 </body>
 </html>
