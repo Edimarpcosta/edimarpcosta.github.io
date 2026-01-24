@@ -90,7 +90,9 @@
   const state = {
     tab: "produtos",
     db: { products:[], delivery:[], sales:[], videos:[], branches:[], knowledge:null },
-    idx: { salesById:new Map(), videosBySku:new Map(), branchNameById:new Map() }
+    idx: { salesById:new Map(), videosBySku:new Map(), branchNameById:new Map() },
+    ui: {}, // refs dos inputs/selects/botões (não recriar toda hora)
+    debounceTimers: new Map(),
   };
 
   // -------- Helpers --------
@@ -124,6 +126,7 @@
 
   function buildIndexes(){
     state.idx.salesById = new Map(state.db.sales.map(v => [String(v.id), v]));
+
     state.idx.videosBySku = new Map();
     for(const v of state.db.videos){
       const key = String(v.codigo ?? "").trim();
@@ -131,8 +134,8 @@
       if(!state.idx.videosBySku.has(key)) state.idx.videosBySku.set(key, []);
       state.idx.videosBySku.get(key).push(v);
     }
+
     state.idx.branchNameById = new Map();
-    // branches.json é lista de {id, ramos:[...]} -> usaremos id => ramos (texto)
     for(const b of state.db.branches){
       state.idx.branchNameById.set(String(b.id), (b.ramos || []).join(", "));
     }
@@ -152,7 +155,8 @@
       state.db = { products, delivery, sales, videos, branches, knowledge };
       buildIndexes();
       setStatus("dados prontos");
-      render();
+      mountControls(state.tab);     // cria inputs UMA VEZ por aba
+      renderResults();              // só resultados mudam
     } catch(err){
       console.error(err);
       setStatus("erro ao carregar dados", false);
@@ -166,66 +170,110 @@
     }
   }
 
-  // -------- UI: Tabs --------
+  // -------- Tabs --------
+  function setTab(tab){
+    state.tab = tab;
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab===tab)));
+    mountControls(tab);
+    renderResults();
+  }
+
   document.querySelectorAll(".tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.tab = btn.dataset.tab;
-      document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b===btn)));
-      render();
-    });
+    btn.addEventListener("click", () => setTab(btn.dataset.tab));
   });
 
   $("#reloadBtn").addEventListener("click", loadAll);
 
-  // -------- Render Controls --------
-  function renderControls(){
+  // -------- Debounce + Dynamic search (>=3 chars) --------
+  function scheduleSearch(key, fn){
+    const tPrev = state.debounceTimers.get(key);
+    if(tPrev) clearTimeout(tPrev);
+    const t = setTimeout(fn, 160);
+    state.debounceTimers.set(key, t);
+  }
+
+  function attachSmartSearch(el, key){
+    el.addEventListener("input", () => {
+      const v = (el.value || "").trim();
+      scheduleSearch(key, () => {
+        if(v.length >= 3 || v.length === 0) renderResults();
+      });
+    });
+    el.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        renderResults();
+      }
+    });
+  }
+
+  // -------- Controls (monta 1x por aba) --------
+  function mountControls(tab){
     controls.innerHTML = "";
     hint.textContent = "";
+    state.ui = {};
 
-    if(state.tab === "produtos"){
-      hint.textContent = "Digite SKU, nome ou ramo (ex.: “algemix”, “morango”, “sorveteria”).";
-      controls.append(
-        input("q", "Pesquisar produto (SKU / nome / ramo)…"),
-        select("ramo", ["", "sorveteria", "confeitaria", "panificacao", "embalagens", "guloseimas"], "Filtrar ramo"),
-        button("Buscar", "primary", () => render())
-      );
+    if(tab === "produtos"){
+      hint.textContent = "Digite SKU, nome ou ramo. A busca roda automaticamente a partir de 3 caracteres.";
+      const q = input("q", "Pesquisar produto (SKU / nome / ramo)…");
+      const ramo = select("ramo", ["", "sorveteria", "confeitaria", "panificacao", "embalagens", "guloseimas"], "Filtrar ramo");
+      const b = button("Buscar", "primary", () => renderResults());
+
+      attachSmartSearch(q, "prod_q");
+      ramo.addEventListener("change", () => renderResults());
+
+      controls.append(q, ramo, b);
+      state.ui.q = q; state.ui.ramo = ramo;
       return;
     }
 
-    if(state.tab === "entregas"){
-      hint.textContent = "Digite a cidade para ver dias de entrega e vendedores por ramo.";
-      controls.append(
-        input("cidade", "Pesquisar cidade… (ex.: Campinas)"),
-        button("Buscar", "primary", () => render())
-      );
+    if(tab === "entregas"){
+      hint.textContent = "Digite a cidade. A busca roda automaticamente a partir de 3 caracteres.";
+      const cidade = input("cidade", "Pesquisar cidade… (ex.: Campinas)");
+      const b = button("Buscar", "primary", () => renderResults());
+
+      attachSmartSearch(cidade, "ent_cidade");
+
+      controls.append(cidade, b);
+      state.ui.cidade = cidade;
       return;
     }
 
-    if(state.tab === "vendedores"){
-      hint.textContent = "Pesquise por nome ou filtre por ramo/segmento (ID 1 ou 2).";
-      controls.append(
-        input("qv", "Pesquisar vendedor… (nome)"),
-        select("branch", ["", "1", "2"], "Filtrar ramo (1/2)"),
-        button("Buscar", "primary", () => render())
-      );
+    if(tab === "vendedores"){
+      hint.textContent = "Pesquise por nome. A busca roda automaticamente a partir de 3 caracteres.";
+      const qv = input("qv", "Pesquisar vendedor… (nome)");
+      const branch = select("branch", ["", "1", "2"], "Filtrar ramo (1/2)");
+      const b = button("Buscar", "primary", () => renderResults());
+
+      attachSmartSearch(qv, "vend_qv");
+      branch.addEventListener("change", () => renderResults());
+
+      controls.append(qv, branch, b);
+      state.ui.qv = qv; state.ui.branch = branch;
       return;
     }
 
-    if(state.tab === "midia"){
-      hint.textContent = "Digite o SKU (código) para ver vídeos/fotos relacionados.";
-      controls.append(
-        input("sku", "SKU / Código do produto…"),
-        button("Buscar", "primary", () => render())
-      );
+    if(tab === "midia"){
+      hint.textContent = "Digite o SKU. A busca roda automaticamente a partir de 3 caracteres.";
+      const sku = input("sku", "SKU / Código do produto…");
+      const b = button("Buscar", "primary", () => renderResults());
+
+      attachSmartSearch(sku, "midia_sku");
+
+      controls.append(sku, b);
+      state.ui.sku = sku;
       return;
     }
 
-    if(state.tab === "guia"){
-      hint.textContent = "Conteúdo técnico carregado do knowledge.json (busca simples no texto).";
-      controls.append(
-        input("qg", "Buscar no guia… (ex.: PAC, emulsificante, balanceamento)"),
-        button("Buscar", "primary", () => render())
-      );
+    if(tab === "guia"){
+      hint.textContent = "Busque dentro do conteúdo técnico (rodando automaticamente a partir de 3 caracteres).";
+      const qg = input("qg", "Buscar no guia… (ex.: PAC, emulsificante, balanceamento)");
+      const b = button("Buscar", "primary", () => renderResults());
+
+      attachSmartSearch(qg, "guia_qg");
+
+      controls.append(qg, b);
+      state.ui.qg = qg;
       return;
     }
   }
@@ -235,7 +283,6 @@
     el.id = id;
     el.placeholder = placeholder;
     el.autocomplete = "off";
-    el.addEventListener("keydown", (e) => { if(e.key === "Enter") render(); });
     return el;
   }
 
@@ -253,7 +300,6 @@
       o.textContent = v;
       el.append(o);
     }
-    el.addEventListener("change", () => render());
     return el;
   }
 
@@ -265,10 +311,8 @@
     return el;
   }
 
-  // -------- Render Results --------
-  function render(){
-    renderControls();
-
+  // -------- Render Results (não mexe nos inputs) --------
+  function renderResults(){
     if(state.tab === "produtos") return renderProdutos();
     if(state.tab === "entregas") return renderEntregas();
     if(state.tab === "vendedores") return renderVendedores();
@@ -277,8 +321,8 @@
   }
 
   function renderProdutos(){
-    const q = norm($("#q")?.value);
-    const ramo = norm($("#ramo")?.value);
+    const q = norm(state.ui.q?.value);
+    const ramo = norm(state.ui.ramo?.value);
 
     let items = state.db.products || [];
     if(ramo) items = items.filter(p => norm(p.RAMO) === ramo);
@@ -292,7 +336,7 @@
       });
     }
 
-    items = items.slice(0, 60); // evita travar no celular
+    items = items.slice(0, 60);
 
     if(!items.length){
       out.innerHTML = `<div class="empty">Nenhum produto encontrado.</div>`;
@@ -314,7 +358,10 @@
     const nome = escapeHtml(p.PRODUTO);
     const ramo = escapeHtml(p.RAMO || "");
     const img = (p.IMG || "").trim();
-    const vids = state.idx.videosBySku.get(String(p.SKU)) || [];
+
+    // IMPORTANT: usa SKU do produto como chave. Se seu videos.json tiver codigo com padding/zeros,
+    // ajuste aqui (ex.: String(p.SKU).padStart(4,'0')).
+    const vids = state.idx.videosBySku.get(String(p.SKU).trim()) || [];
     const hasMedia = vids.length > 0;
 
     return `
@@ -335,13 +382,25 @@
           </a>
           <a class="btn" href="#" onclick="window.__copy('${nome} (SKU ${sku})');return false;">Copiar</a>
         </div>
-        ${hasMedia ? `<div class="note"><span class="badge">${vids.length}</span> mídia(s) encontrada(s) para este SKU</div>` : ``}
+
+        <!-- Regra 2: mostrar vídeos só quando existir -->
+        ${hasMedia ? `
+          <div class="note"><span class="badge">${vids.length}</span> mídia(s) disponível(is)</div>
+          <div class="actions" style="margin-top:8px">
+            ${vids.slice(0, 4).map(v => `
+              <a class="btn" href="${escapeHtml(v.link)}" target="_blank" rel="noopener">
+                ▶ ${escapeHtml(v.nome || "Abrir")}
+              </a>
+            `).join("")}
+            ${vids.length > 4 ? `<span class="pill">+${vids.length - 4} mais</span>` : ``}
+          </div>
+        ` : ``}
       </div>
     `;
   }
 
   function renderEntregas(){
-    const q = norm($("#cidade")?.value);
+    const q = norm(state.ui.cidade?.value);
     let rows = state.db.delivery || [];
     if(q) rows = rows.filter(r => norm(r.cidade).includes(q));
     rows = rows.slice(0, 80);
@@ -396,8 +455,8 @@
   }
 
   function renderVendedores(){
-    const q = norm($("#qv")?.value);
-    const branch = ($("#branch")?.value || "").trim();
+    const q = norm(state.ui.qv?.value);
+    const branch = (state.ui.branch?.value || "").trim();
 
     let items = state.db.sales || [];
     if(branch) items = items.filter(v => String(v.id_ramo) === String(branch));
@@ -439,12 +498,12 @@
   }
 
   function renderMidia(){
-    const sku = ($("#sku")?.value || "").trim();
+    const sku = (state.ui.sku?.value || "").trim();
     if(!sku){
       out.innerHTML = `<div class="empty">Digite um SKU para buscar mídias. Ex.: 1740</div>`;
       return;
     }
-    const list = state.idx.videosBySku.get(String(sku)) || [];
+    const list = state.idx.videosBySku.get(String(sku).trim()) || [];
     if(!list.length){
       out.innerHTML = `<div class="empty">Nenhuma mídia encontrada para o SKU <b>${escapeHtml(sku)}</b>.</div>`;
       return;
@@ -456,7 +515,7 @@
           <span class="pill">${list.length} item(ns)</span>
         </div>
         <div class="actions" style="margin-top:12px">
-          ${list.map(v => `<a class="btn" href="${escapeHtml(v.link)}" target="_blank" rel="noopener">${escapeHtml(v.nome || "Abrir")}</a>`).join("")}
+          ${list.map(v => `<a class="btn" href="${escapeHtml(v.link)}" target="_blank" rel="noopener">▶ ${escapeHtml(v.nome || "Abrir")}</a>`).join("")}
         </div>
       </div>
     `;
@@ -464,7 +523,7 @@
 
   function renderGuia(){
     const raw = (state.db.knowledge && state.db.knowledge.content) ? String(state.db.knowledge.content) : "";
-    const q = norm($("#qg")?.value);
+    const q = norm(state.ui.qg?.value);
 
     if(!raw){
       out.innerHTML = `<div class="empty">knowledge.json não tem conteúdo em <code>content</code>.</div>`;
@@ -507,13 +566,15 @@
     `;
   }
 
-  // -------- Small utilities exposed for inline handlers --------
+  // -------- Utilities --------
   window.__openMedia = (sku) => {
-    state.tab = "midia";
-    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab==="midia")));
-    render();
-    const el = $("#sku");
-    if(el){ el.value = sku; render(); }
+    setTab("midia");
+    // preenche SKU sem recriar a UI depois
+    if(state.ui.sku){
+      state.ui.sku.value = String(sku);
+      renderMidia();
+      state.ui.sku.focus();
+    }
   };
 
   window.__copy = async (text) => {
