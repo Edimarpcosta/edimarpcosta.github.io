@@ -1282,21 +1282,52 @@ function renderNewType() {
 
 async function fetchClientForModal() {
   const cod = $('newCodCliente').value.trim();
-  if (!cod) { $('newClientHint').textContent = '—'; State.modalClient = null; return; }
+  if (!cod) {
+    $('newClientHint').textContent = '—';
+    State.modalClient = null;
+    return;
+  }
+
   try {
+    // 1) Busca dados do cliente
     const r = await api('getClientByCode', { codCliente: cod });
-    if (r.success) {
-      State.modalClient = r.client;
-      $('newClientHint').textContent = `${r.client.NOME_CLIENTE} • ${r.client.CIDADE}`;
-    } else {
+    if (!r.success) {
       State.modalClient = null;
       $('newClientHint').textContent = r.msg || 'Cliente não encontrado.';
+      return;
     }
-  } catch(e) {
+
+    State.modalClient = r.client;
+    let hint = `${r.client.NOME_CLIENTE} • ${r.client.CIDADE}`;
+
+    // 2) Busca carteira (para aviso)
+    try {
+      const k = await api('getCarteiraByClient', { codCliente: cod });
+
+      if (k.found && k.carteira && !k.carteira.masked) {
+        const dono = k.carteira.VENDEDOR || k.carteira.COD_VENDEDOR || '—';
+        const eq = k.carteira.EQUIPE || '—';
+
+        // se o dono for diferente do usuário logado, avisa
+        if (
+          State.user.role === 'VENDEDOR' &&
+          String(State.user.code) !== String(k.carteira.COD_VENDEDOR)
+        ) {
+          hint += `  ⚠️ Carteira de ${dono} (${eq})`;
+        }
+      }
+    } catch {
+      // silencioso: erro ao buscar carteira não bloqueia
+    }
+
+    $('newClientHint').textContent = hint;
+
+  } catch (e) {
     State.modalClient = null;
     $('newClientHint').textContent = e.message || String(e);
   }
 }
+
 
 /** ===== Pendência: itens ===== */
 function addPendItemRow() {
