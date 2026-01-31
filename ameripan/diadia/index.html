@@ -260,7 +260,7 @@
         <div>
           <label class="hint">Senha</label>
           <input id="loginPass" placeholder="Senha" type="password" autocomplete="current-password" />
-          <div class="hint">Senha Padrão: Peça ao seu Supervisor e ou Gerente</div>
+          <div class="hint">Senha Padrão: Peça ao seu Supervisor/Gerente (Depois Troque)</div>
         </div>
 
         <button class="btn primary" id="btnLogin">Entrar</button>
@@ -967,10 +967,28 @@ async function openClienteByCod(cod) {
       <span class="pill">COD ${escapeHtml(r.client.COD_CLIENTE)}</span>
       <span class="pill">${escapeHtml(r.client.CIDADE || '-')}</span>
     `;
-    $('cdCarteiraInfo').textContent = `Carteira: (será criada automaticamente ao salvar registros)`;
-    $('cdWhats').value = ''; // MVP: depende de endpoint para buscar whatsapp
+    // Carrega carteira (whatsapp + dono)
+$('cdCarteiraInfo').textContent = 'Carteira: carregando...';
+$('cdWhats').value = '';
 
-    showView('clienteDetail');
+try {
+  const k = await api('getCarteiraByClient', { codCliente: cod });
+  if (k.found && k.carteira && !k.carteira.masked) {
+    const dono = k.carteira.VENDEDOR || k.carteira.COD_VENDEDOR || '—';
+    const eq = k.carteira.EQUIPE || '—';
+    $('cdCarteiraInfo').textContent = `Carteira: ${dono} • ${eq}`;
+    $('cdWhats').value = k.carteira.WHATSAPP || '';
+  } else if (k.found && k.carteira && k.carteira.masked) {
+    $('cdCarteiraInfo').textContent = `Carteira: (sem permissão para ver)`;
+  } else {
+    $('cdCarteiraInfo').textContent = `Carteira: (ainda não criada)`;
+  }
+} catch (e) {
+  $('cdCarteiraInfo').textContent = `Carteira: (erro ao carregar)`;
+}
+
+showView('clienteDetail');
+
   } catch (e) {
     toast(e.message || String(e));
   }
@@ -1602,14 +1620,33 @@ function bindClienteDetail() {
   // IMPORTANTE:
   // No GS que você montou, ainda NÃO existe endpoint para salvar/ler WhatsApp da CARTEIRA.
   // Aqui eu deixei o botão pronto, mas ele precisa de um action no GS (ex.: updateCarteiraWhatsApp).
-  $('btnSaveWhats').onclick = async () => {
-    const codCliente = State.lastClient?.COD_CLIENTE;
-    if (!codCliente) return;
-    const w = $('cdWhats').value.trim();
-    if (!w) return toast('Informe o WhatsApp.');
+$('btnSaveWhats').onclick = async () => {
+  const codCliente = State.lastClient?.COD_CLIENTE;
+  if (!codCliente) return;
 
-    toast('⚙️ Para salvar WhatsApp na CARTEIRA, adicione um endpoint no Code.gs (updateCarteiraWhatsApp).');
-  };
+  const w = $('cdWhats').value.trim();
+  if (!w) return toast('Informe o WhatsApp.');
+
+  try {
+    const r = await api('updateCarteiraWhatsApp', { codCliente, whatsapp: w });
+
+    toast('WhatsApp atualizado ✅');
+
+    // Recarrega carteira pra atualizar o "Carteira: Fulano • Equipe"
+    try {
+      const k = await api('getCarteiraByClient', { codCliente });
+      if (k.found && k.carteira && !k.carteira.masked) {
+        const dono = k.carteira.VENDEDOR || k.carteira.COD_VENDEDOR || '—';
+        const eq = k.carteira.EQUIPE || '—';
+        $('cdCarteiraInfo').textContent = `Carteira: ${dono} • ${eq}`;
+        $('cdWhats').value = k.carteira.WHATSAPP || $('cdWhats').value;
+      }
+    } catch {}
+  } catch (e) {
+    toast(e.message || String(e));
+  }
+};
+
 }
 
 /** =========================
