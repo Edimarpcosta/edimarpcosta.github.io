@@ -1,0 +1,1680 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Dia a Dia do Vendedor</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111a2e; --muted:#8ea0c2; --text:#e8eeff;
+      --pri:#4aa3ff; --ok:#38d39f; --warn:#ffcc66; --bad:#ff6b6b;
+      --line:rgba(255,255,255,.08);
+      --r:16px;
+      --shadow: 0 10px 30px rgba(0,0,0,.30);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background: radial-gradient(1200px 700px at 20% -10%, rgba(74,163,255,.25), transparent 60%),
+                  radial-gradient(900px 600px at 90% 0%, rgba(56,211,159,.18), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    a{color:inherit}
+    button, input, select, textarea{font:inherit}
+    input, select, textarea{
+      width:100%;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--text);
+      outline:none;
+      font-size:16px; /* evita zoom no iOS */
+    }
+    input::placeholder, textarea::placeholder{color:rgba(232,238,255,.45)}
+    textarea{min-height:96px; resize:vertical}
+    .btn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:12px 14px;
+      border-radius:14px;
+      cursor:pointer;
+      display:inline-flex; align-items:center; justify-content:center;
+      gap:10px;
+      user-select:none;
+      transition: transform .04s ease, background .15s ease, border-color .15s ease;
+    }
+    .btn:active{transform:scale(.99)}
+    .btn.primary{background: rgba(74,163,255,.20); border-color: rgba(74,163,255,.35)}
+    .btn.ok{background: rgba(56,211,159,.18); border-color: rgba(56,211,159,.35)}
+    .btn.bad{background: rgba(255,107,107,.16); border-color: rgba(255,107,107,.28)}
+    .btn.ghost{background: transparent}
+    .btn.small{padding:10px 12px; border-radius:12px; font-size:14px}
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:6px 10px; border-radius:999px; border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size:12px;
+    }
+    .wrap{
+      max-width: 980px;
+      margin: 0 auto;
+      padding: calc(14px + var(--safe-top)) 14px calc(90px + var(--safe-bot));
+    }
+    .topbar{
+      position: sticky;
+      top:0;
+      z-index: 20;
+      padding-top: var(--safe-top);
+      background: linear-gradient(to bottom, rgba(11,18,32,.92), rgba(11,18,32,.70), rgba(11,18,32,0));
+      backdrop-filter: blur(10px);
+    }
+    .topbar .inner{
+      max-width:980px; margin:0 auto; padding: 10px 14px 10px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .brand{display:flex; flex-direction:column; gap:2px}
+    .brand b{font-size:15px}
+    .brand span{font-size:12px; color:var(--muted)}
+    .row{display:flex; gap:12px; align-items:center}
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .grid{display:grid; gap:12px}
+    .grid.two{grid-template-columns: 1fr 1fr}
+    @media (max-width:720px){ .grid.two{grid-template-columns:1fr} }
+
+    /* Bottom nav */
+    .bottomnav{
+      position: fixed;
+      left:0; right:0; bottom:0;
+      padding: 10px 12px calc(10px + var(--safe-bot));
+      background: linear-gradient(to top, rgba(11,18,32,.95), rgba(11,18,32,.70), rgba(11,18,32,0));
+      backdrop-filter: blur(10px);
+      z-index: 50;
+      border-top: 1px solid rgba(255,255,255,.06);
+    }
+    .bottomnav .inner{
+      max-width:980px; margin:0 auto;
+      display:grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap:10px;
+    }
+    .navbtn{
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.04);
+      border-radius: 16px;
+      padding: 10px 8px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:6px;
+      color: var(--muted);
+      cursor:pointer;
+      user-select:none;
+      min-height:54px;
+    }
+    .navbtn.active{
+      background: rgba(74,163,255,.16);
+      border-color: rgba(74,163,255,.32);
+      color: var(--text);
+    }
+    .navbtn b{font-size:12px; font-weight:650}
+    .navbtn .ic{font-size:18px; line-height:18px}
+
+    /* Lists */
+    .list{display:flex; flex-direction:column; gap:10px}
+    .item{
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .item .head{display:flex; justify-content:space-between; gap:10px; align-items:flex-start}
+    .item .title{font-weight:700}
+    .item .meta{color:var(--muted); font-size:12px; display:flex; flex-wrap:wrap; gap:8px}
+    .item .actions{display:flex; gap:10px; flex-wrap:wrap}
+
+    /* Modal */
+    .modal{
+      position: fixed; inset:0; z-index: 80;
+      display:none;
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(6px);
+      padding: 14px;
+    }
+    .modal.open{display:flex}
+    .modal .panel{
+      margin: auto;
+      width: min(980px, 100%);
+      max-height: min(86vh, 900px);
+      overflow:auto;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(17,26,46,.98), rgba(17,26,46,.92));
+      box-shadow: 0 18px 50px rgba(0,0,0,.55);
+      padding: 14px;
+    }
+    .modal .panel h3{margin: 6px 0 10px; font-size:16px}
+    .sep{height:1px; background: rgba(255,255,255,.08); margin: 12px 0}
+    .hint{color:var(--muted); font-size:12px; margin-top:6px}
+    .toast{
+      position: fixed;
+      left: 14px; right: 14px;
+      bottom: calc(90px + var(--safe-bot));
+      z-index: 90;
+      display:none;
+    }
+    .toast.show{display:block}
+    .toast .bubble{
+      max-width: 980px; margin:0 auto;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,26,46,.92);
+      border-radius: 16px;
+      padding: 12px 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45);
+      display:flex; gap:10px; align-items:flex-start; justify-content:space-between;
+    }
+    .toast .bubble .msg{font-size:13px; color:var(--text); line-height:1.25}
+    .badge{
+      font-size:12px; padding:6px 10px; border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+    }
+    .badge.ok{border-color: rgba(56,211,159,.35); background: rgba(56,211,159,.12); color: var(--text)}
+    .badge.warn{border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.12); color: var(--text)}
+    .badge.bad{border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.12); color: var(--text)}
+    .autocomplete{
+      position: relative;
+    }
+    .ac-list{
+      position:absolute; left:0; right:0; top: calc(100% + 6px);
+      z-index: 40;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,26,46,.98);
+      overflow:hidden;
+      box-shadow: 0 16px 50px rgba(0,0,0,.50);
+      display:none;
+    }
+    .ac-list.show{display:block}
+    .ac-item{
+      padding: 10px 12px;
+      cursor:pointer;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      font-size:14px;
+    }
+    .ac-item:last-child{border-bottom:0}
+    .ac-item:hover{background: rgba(255,255,255,.06)}
+    .ac-item b{display:block}
+    .ac-item span{display:block; color: var(--muted); font-size:12px; margin-top:2px}
+    .login-wrap{
+      min-height: 100vh;
+      display:flex; align-items:center; justify-content:center;
+      padding: 18px;
+    }
+    .login{
+      width: min(520px, 100%);
+    }
+    .kpi{
+      display:grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    @media (max-width:720px){ .kpi{grid-template-columns:1fr 1fr} }
+    .kpi .k{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      border-radius: 16px;
+      padding: 12px;
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .k .n{font-size:18px; font-weight:800}
+    .k .l{font-size:12px; color:var(--muted)}
+  </style>
+</head>
+
+<body>
+
+  <!-- LOGIN -->
+  <div id="loginScreen" class="login-wrap" style="display:none">
+    <div class="login card">
+      <div class="brand" style="margin-bottom:10px">
+        <b>Dia a Dia do Vendedor</b>
+        <span>CRM (Pendências • Perdas • Concorrência)</span>
+      </div>
+
+      <div class="grid" style="gap:10px">
+        <div>
+          <label class="hint">Usuário (COD ou Nome completo)</label>
+          <input id="loginUser" placeholder="Ex.: 123 ou JOÃO SILVA" autocomplete="username" />
+        </div>
+        <div>
+          <label class="hint">Senha</label>
+          <input id="loginPass" placeholder="Senha" type="password" autocomplete="current-password" />
+          <div class="hint">Padrão: vendedor 1234 • supervisor/gerente/diretor 4321</div>
+        </div>
+
+        <button class="btn primary" id="btnLogin">Entrar</button>
+
+        <div id="loginMsg" class="hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none">
+    <div class="topbar">
+      <div class="inner">
+        <div class="brand">
+          <b id="topTitle">Clientes</b>
+          <span id="topSub">—</span>
+        </div>
+        <div class="row">
+          <span class="pill" id="pillUser">—</span>
+          <button class="btn ghost small" id="btnLogout" title="Sair">Sair</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+
+      <!-- CLIENTES -->
+      <section id="viewClientes" style="display:none">
+        <div class="card">
+          <div class="grid two">
+            <div>
+              <label class="hint">Buscar cliente (COD ou nome)</label>
+              <input id="clientSearch" placeholder="Ex.: 10203 ou PADARIA" />
+            </div>
+            <div>
+              <label class="hint">Ação</label>
+              <button class="btn primary" id="btnOpenNew">+ Novo registro</button>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div class="hint">Dica: para abrir rápido, digite o <b>COD_CLIENTE</b> e pressione Enter.</div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="kpi" id="kpiBox">
+            <div class="k"><div class="n" id="kpiPend">—</div><div class="l">Pendências (período)</div></div>
+            <div class="k"><div class="n" id="kpiPerdas">—</div><div class="l">Perdas (período)</div></div>
+            <div class="k"><div class="n" id="kpiTotal">—</div><div class="l">Total perdido (R$)</div></div>
+          </div>
+          <div class="hint" style="margin-top:10px">KPIs consideram os filtros atuais da tela de Perdas/Pendências.</div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="hint" style="margin-bottom:10px">Abrir cliente por código</div>
+          <div class="grid two">
+            <input id="quickCodCliente" placeholder="COD_CLIENTE" inputmode="numeric" />
+            <button class="btn ok" id="btnOpenCliente">Abrir cliente</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PENDENCIAS -->
+      <section id="viewPendencias" style="display:none">
+        <div class="card">
+          <div class="grid two">
+            <div>
+              <label class="hint">Período (início)</label>
+              <input id="pDataInicio" type="date" />
+            </div>
+            <div>
+              <label class="hint">Período (fim)</label>
+              <input id="pDataFim" type="date" />
+            </div>
+            <div>
+              <label class="hint">Cliente (COD ou nome)</label>
+              <input id="pCliente" placeholder="Ex.: 10203 ou PADARIA" />
+            </div>
+            <div>
+              <label class="hint">Produto (SKU ou nome / use %)</label>
+              <input id="pProduto" placeholder="Ex.: 12345 ou DOCE%LEITE%10%KG" />
+            </div>
+
+            <div>
+              <label class="hint">Status</label>
+              <select id="pStatus">
+                <option value="">Todos</option>
+                <option>ABERTA</option>
+                <option>EM_ANDAMENTO</option>
+                <option>CONCLUIDA</option>
+                <option>CANCELADA</option>
+              </select>
+            </div>
+
+            <div id="pVendorWrap" style="display:none">
+              <label class="hint">Vendedor</label>
+              <select id="pVendedor"></select>
+            </div>
+
+            <div id="pTeamWrap" style="display:none">
+              <label class="hint">Equipe</label>
+              <select id="pEquipe"></select>
+            </div>
+
+            <div class="row" style="gap:10px; align-items:flex-end">
+              <button class="btn primary" id="btnLoadPend">Filtrar</button>
+              <button class="btn" id="btnClearPend">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="row" style="justify-content:space-between; align-items:center">
+            <b>Resultados</b>
+            <span class="badge" id="pTotal">0</span>
+          </div>
+          <div class="sep"></div>
+          <div class="list" id="pendList"></div>
+          <div id="pendEmpty" class="hint" style="display:none">Nenhuma pendência encontrada.</div>
+        </div>
+      </section>
+
+      <!-- PERDAS -->
+      <section id="viewPerdas" style="display:none">
+        <div class="card">
+          <div class="grid two">
+            <div>
+              <label class="hint">Período (início)</label>
+              <input id="lDataInicio" type="date" />
+            </div>
+            <div>
+              <label class="hint">Período (fim)</label>
+              <input id="lDataFim" type="date" />
+            </div>
+            <div>
+              <label class="hint">Cliente (COD ou nome)</label>
+              <input id="lCliente" placeholder="Ex.: 10203 ou PADARIA" />
+            </div>
+            <div>
+              <label class="hint">Produto (SKU ou nome / use %)</label>
+              <input id="lProduto" placeholder="Ex.: 12345 ou DOCE%LEITE%10%KG" />
+            </div>
+
+            <div>
+              <label class="hint">Status</label>
+              <select id="lStatus">
+                <option value="">Todos</option>
+                <option>REGISTRADA</option>
+                <option>RECUPERADA</option>
+                <option>CANCELADA</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="hint">Motivo</label>
+              <select id="lMotivo">
+                <option value="">Todos</option>
+                <option>FALTA</option>
+                <option>CLIENTE_NAO_ESPEROU</option>
+                <option>PRECO</option>
+                <option>CONCORRENTE</option>
+                <option>OUTROS</option>
+              </select>
+            </div>
+
+            <div id="lVendorWrap" style="display:none">
+              <label class="hint">Vendedor</label>
+              <select id="lVendedor"></select>
+            </div>
+
+            <div id="lTeamWrap" style="display:none">
+              <label class="hint">Equipe</label>
+              <select id="lEquipe"></select>
+            </div>
+
+            <div class="row" style="gap:10px; align-items:flex-end">
+              <button class="btn primary" id="btnLoadPerdas">Filtrar</button>
+              <button class="btn" id="btnClearPerdas">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="row" style="justify-content:space-between; align-items:center">
+            <b>Resultados</b>
+            <div class="row">
+              <span class="badge" id="lTotal">0</span>
+              <span class="badge warn" id="lTotalPerdido">R$ 0,00</span>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div class="list" id="perdasList"></div>
+          <div id="perdasEmpty" class="hint" style="display:none">Nenhuma perda encontrada.</div>
+        </div>
+      </section>
+
+      <!-- CONCORRENCIA -->
+      <section id="viewConc" style="display:none">
+        <div class="card">
+          <div class="grid two">
+            <div>
+              <label class="hint">Período (início)</label>
+              <input id="cDataInicio" type="date" />
+            </div>
+            <div>
+              <label class="hint">Período (fim)</label>
+              <input id="cDataFim" type="date" />
+            </div>
+            <div>
+              <label class="hint">Cliente (COD ou nome)</label>
+              <input id="cCliente" placeholder="Ex.: 10203 ou PADARIA" />
+            </div>
+            <div>
+              <label class="hint">Produto (SKU/nome/produto concorrente)</label>
+              <input id="cProduto" placeholder="Ex.: DOCE%LEITE%10%KG" />
+            </div>
+            <div>
+              <label class="hint">Concorrente (nome)</label>
+              <input id="cConc" placeholder="Ex.: Concorrente X" />
+            </div>
+
+            <div id="cVendorWrap" style="display:none">
+              <label class="hint">Vendedor</label>
+              <select id="cVendedor"></select>
+            </div>
+
+            <div id="cTeamWrap" style="display:none">
+              <label class="hint">Equipe</label>
+              <select id="cEquipe"></select>
+            </div>
+
+            <div class="row" style="gap:10px; align-items:flex-end">
+              <button class="btn primary" id="btnLoadConc">Filtrar</button>
+              <button class="btn" id="btnClearConc">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="row" style="justify-content:space-between; align-items:center">
+            <b>Resultados</b>
+            <span class="badge" id="cTotal">0</span>
+          </div>
+          <div class="sep"></div>
+          <div class="list" id="concList"></div>
+          <div id="concEmpty" class="hint" style="display:none">Nenhuma ocorrência encontrada.</div>
+        </div>
+      </section>
+
+      <!-- CLIENTE DETALHE (MVP simples) -->
+      <section id="viewClienteDetail" style="display:none">
+        <div class="card">
+          <div class="row" style="justify-content:space-between; align-items:flex-start">
+            <div>
+              <div class="hint">Cliente</div>
+              <div style="font-weight:900; font-size:16px" id="cdNome">—</div>
+              <div class="meta" id="cdMeta"></div>
+            </div>
+            <button class="btn small" id="btnBackCliente">Voltar</button>
+          </div>
+
+          <div class="sep"></div>
+
+          <div class="grid two">
+            <button class="btn ok" id="btnNewPendFromClient">+ Pendência</button>
+            <button class="btn warn" style="background: rgba(255,204,102,.12); border-color: rgba(255,204,102,.30)" id="btnNewPerdaFromClient">+ Perda</button>
+            <button class="btn" id="btnNewConcFromClient">+ Concorrência</button>
+            <button class="btn primary" id="btnOpenNewFromClient">+ Novo</button>
+          </div>
+
+          <div class="sep"></div>
+
+          <div class="hint" style="margin-bottom:8px">WhatsApp (fica na CARTEIRA)</div>
+          <div class="grid two">
+            <input id="cdWhats" placeholder="55DDDNUMERO (ex.: 5511999999999)" inputmode="numeric" />
+            <button class="btn ok" id="btnSaveWhats">Salvar WhatsApp</button>
+          </div>
+          <div class="hint" style="margin-top:8px">
+            O botão WhatsApp abre a conversa. Se ainda não existe CARTEIRA, ela é criada ao salvar um registro.
+          </div>
+
+          <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+            <button class="btn primary" id="btnWhats">WhatsApp</button>
+            <span class="pill" id="cdCarteiraInfo">Carteira: —</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Bottom nav -->
+    <div class="bottomnav">
+      <div class="inner">
+        <div class="navbtn active" data-view="clientes"><div class="ic">👥</div><b>Clientes</b></div>
+        <div class="navbtn" data-view="pendencias"><div class="ic">🧾</div><b>Pendências</b></div>
+        <div class="navbtn" data-view="perdas"><div class="ic">💸</div><b>Perdas</b></div>
+        <div class="navbtn" data-view="conc"><div class="ic">🏷️</div><b>Concorrência</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO REGISTRO -->
+  <div class="modal" id="modalNew">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <h3>Novo registro</h3>
+        <button class="btn small" id="btnCloseNew">Fechar</button>
+      </div>
+
+      <div class="grid two">
+        <div>
+          <label class="hint">Tipo</label>
+          <select id="newType">
+            <option value="PENDENCIA">Pendência</option>
+            <option value="PERDA">Venda perdida</option>
+            <option value="CONCORRENCIA">Concorrência</option>
+          </select>
+        </div>
+        <div>
+          <label class="hint">COD_CLIENTE</label>
+          <input id="newCodCliente" placeholder="Digite o código do cliente" inputmode="numeric" />
+          <div class="hint" id="newClientHint">—</div>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- PENDENCIA FORM -->
+      <div id="formPendencia">
+        <div class="grid two">
+          <div>
+            <label class="hint">Tipo de pendência</label>
+            <select id="pendTipo">
+              <option>PRODUTO</option>
+              <option>TECNICO</option>
+              <option>TROCA</option>
+              <option>PROBLEMA</option>
+              <option>OUTROS</option>
+            </select>
+          </div>
+          <div>
+            <label class="hint">Status</label>
+            <select id="pendStatus">
+              <option>ABERTA</option>
+              <option>EM_ANDAMENTO</option>
+              <option>CONCLUIDA</option>
+              <option>CANCELADA</option>
+            </select>
+          </div>
+          <div>
+            <label class="hint">Prazo</label>
+            <input id="pendPrazo" type="date" />
+          </div>
+          <div>
+            <label class="hint">Título</label>
+            <input id="pendTitulo" placeholder="Ex.: Falta item X / Agendar técnico" />
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label class="hint">Descrição</label>
+          <textarea id="pendDesc" placeholder="Detalhe a pendência..."></textarea>
+        </div>
+
+        <div class="sep"></div>
+
+        <b style="font-size:14px">Itens (opcional)</b>
+        <div class="hint">Digite SKU ou nome. Use % para filtrar por partes. Ex.: DOCE%LEITE%10%KG</div>
+
+        <div id="pendItems"></div>
+        <button class="btn small" id="btnAddPendItem" style="margin-top:10px">+ Adicionar item</button>
+
+        <div class="sep"></div>
+        <button class="btn primary" id="btnSavePend">Salvar pendência</button>
+      </div>
+
+      <!-- PERDA FORM -->
+      <div id="formPerda" style="display:none">
+        <div class="grid two">
+          <div>
+            <label class="hint">Motivo</label>
+            <select id="perdaMotivo">
+              <option>FALTA</option>
+              <option>CLIENTE_NAO_ESPEROU</option>
+              <option>PRECO</option>
+              <option>CONCORRENTE</option>
+              <option>OUTROS</option>
+            </select>
+          </div>
+          <div>
+            <label class="hint">Status</label>
+            <select id="perdaStatus">
+              <option>REGISTRADA</option>
+              <option>RECUPERADA</option>
+              <option>CANCELADA</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <label class="hint">Observações gerais</label>
+          <textarea id="perdaObs" placeholder="Descreva o contexto da perda..."></textarea>
+        </div>
+
+        <div class="sep"></div>
+
+        <b style="font-size:14px">Itens da perda</b>
+        <div class="hint">Adicione itens como <b>CAUSA</b> (faltou) e <b>PERDIDO</b> (deixou de vender). Informe QTD e preços.</div>
+
+        <div id="perdaItems"></div>
+        <button class="btn small" id="btnAddPerdaItem" style="margin-top:10px">+ Adicionar item</button>
+
+        <div class="sep"></div>
+        <button class="btn primary" id="btnSavePerda">Salvar perda</button>
+      </div>
+
+      <!-- CONCORRENCIA FORM -->
+      <div id="formConc" style="display:none">
+        <div class="grid two">
+          <div>
+            <label class="hint">Concorrente (nome)</label>
+            <input id="concNome" placeholder="Ex.: Concorrente X" />
+          </div>
+          <div>
+            <label class="hint">Preço concorrente</label>
+            <input id="concPreco" placeholder="Ex.: 12,90" inputmode="decimal" />
+          </div>
+          <div>
+            <label class="hint">SKU (nosso - opcional)</label>
+            <input id="concSku" placeholder="SKU" inputmode="numeric" />
+          </div>
+          <div>
+            <label class="hint">Produto nosso (opcional)</label>
+            <input id="concProdNosso" placeholder="Produto nosso" />
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label class="hint">Produto concorrente</label>
+          <input id="concProdConc" placeholder="Nome do produto do concorrente" />
+        </div>
+        <div style="margin-top:10px">
+          <label class="hint">Observações</label>
+          <textarea id="concObs" placeholder="Detalhes do que está roubando o cliente..."></textarea>
+        </div>
+        <div class="sep"></div>
+        <button class="btn primary" id="btnSaveConc">Salvar ocorrência</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast">
+    <div class="bubble">
+      <div class="msg" id="toastMsg">—</div>
+      <button class="btn small" id="toastClose">Fechar</button>
+    </div>
+  </div>
+
+<script>
+/** =========================
+ *  CONFIG / STATE
+ *  ========================= */
+const State = {
+  apiUrl: "https://script.google.com/macros/s/AKfycbx_pzR_vOtkqBTdwks02-U_c1KqnFuZN_urP-EZlAJcsJU-EgTovzppeXmc_NufnICPQQ/exec",
+  user: null,
+  teams: [],
+  vendors: [],
+  lastClient: null, // {COD_CLIENTE, NOME_CLIENTE, CIDADE}
+};
+
+function $(id){ return document.getElementById(id); }
+
+function saveSession() {
+  localStorage.setItem('ddv_session', JSON.stringify({ user: State.user, teams: State.teams, vendors: State.vendors }));
+}
+function loadSession() {
+  const raw = localStorage.getItem('ddv_session');
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+function clearSession() {
+  localStorage.removeItem('ddv_session');
+}
+
+/** =========================
+ *  API CALL (doPost JSON)
+ *  ========================= */
+async function api(action, body = {}) {
+  const payload = { action, ...body };
+  // sempre enviar requester quando estiver logado
+  if (State.user && !payload.requester) payload.requester = State.user;
+
+  const res = await fetch(State.apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch {
+    throw new Error('Resposta inválida do servidor.');
+  }
+  if (json && json.error) throw new Error(json.msg || 'Erro no servidor.');
+  return json;
+}
+
+/** =========================
+ *  UI HELPERS
+ *  ========================= */
+function toast(msg) {
+  $('toastMsg').textContent = msg;
+  $('toast').classList.add('show');
+}
+$('toastClose').onclick = () => $('toast').classList.remove('show');
+
+function setTop(title, sub) {
+  $('topTitle').textContent = title;
+  $('topSub').textContent = sub || '—';
+}
+
+function setNavActive(key) {
+  document.querySelectorAll('.navbtn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === key);
+  });
+}
+
+function showView(key) {
+  // key: clientes | pendencias | perdas | conc | clienteDetail
+  $('viewClientes').style.display = (key === 'clientes') ? '' : 'none';
+  $('viewPendencias').style.display = (key === 'pendencias') ? '' : 'none';
+  $('viewPerdas').style.display = (key === 'perdas') ? '' : 'none';
+  $('viewConc').style.display = (key === 'conc') ? '' : 'none';
+  $('viewClienteDetail').style.display = (key === 'clienteDetail') ? '' : 'none';
+
+  if (key === 'clientes') setTop('Clientes', State.userLabel());
+  if (key === 'pendencias') setTop('Pendências', State.userLabel());
+  if (key === 'perdas') setTop('Perdas', State.userLabel());
+  if (key === 'conc') setTop('Concorrência', State.userLabel());
+  if (key === 'clienteDetail') setTop('Cliente', State.userLabel());
+
+  setNavActive(key === 'clienteDetail' ? 'clientes' : key);
+}
+
+State.userLabel = function() {
+  const role = State.user?.role || '';
+  const team = State.user?.team || '';
+  const name = State.user?.name || '';
+  if (role === 'VENDEDOR') return `${name} • Vendedor • ${team}`;
+  if (role === 'SUPERVISOR') return `${name} • Supervisor • ${team}`;
+  return `${name} • ${role} • ${team || 'Todas equipes'}`;
+}
+
+/** =========================
+ *  LOGIN / LOGOUT
+ *  ========================= */
+async function doLogin() {
+  const user = $('loginUser').value.trim();
+  const pass = $('loginPass').value.trim();
+  $('loginMsg').textContent = '';
+
+  if (!user || !pass) { $('loginMsg').textContent = 'Informe usuário e senha.'; return; }
+
+  $('btnLogin').disabled = true;
+  try {
+    const r = await api('login', { user, pass });
+    if (!r.success) throw new Error(r.msg || 'Falha no login.');
+
+    State.user = { role: r.role, team: r.team, code: r.code, name: r.name };
+    State.teams = r.teams || [];
+    State.vendors = r.vendors || [];
+    saveSession();
+
+    bootApp();
+  } catch (e) {
+    $('loginMsg').textContent = e.message || String(e);
+  } finally {
+    $('btnLogin').disabled = false;
+  }
+}
+
+function doLogout() {
+  clearSession();
+  State.user = null; State.teams = []; State.vendors = [];
+  $('app').style.display = 'none';
+  $('loginScreen').style.display = '';
+  $('loginUser').focus();
+}
+
+$('btnLogin').onclick = doLogin;
+$('loginPass').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') doLogin(); });
+$('btnLogout').onclick = doLogout;
+
+/** =========================
+ *  BOOT APP
+ *  ========================= */
+function fillVendorSelects() {
+  const opts = State.vendors.map(v => `<option value="${escapeHtml(v.code)}">${escapeHtml(v.name)} (${escapeHtml(v.code)})</option>`).join('');
+  $('pVendedor').innerHTML = `<option value="">Todos</option>` + opts;
+  $('lVendedor').innerHTML = `<option value="">Todos</option>` + opts;
+  $('cVendedor').innerHTML = `<option value="">Todos</option>` + opts;
+
+  const isVend = State.user.role === 'VENDEDOR';
+  const isSup = State.user.role === 'SUPERVISOR';
+  const isMgr = State.user.role === 'GERENTE' || State.user.role === 'DIRETOR';
+
+  $('pVendorWrap').style.display = isVend ? 'none' : '';
+  $('lVendorWrap').style.display = isVend ? 'none' : '';
+  $('cVendorWrap').style.display = isVend ? 'none' : '';
+
+  // supervisor: lista já vem só da equipe. gerente/diretor: lista vem completa.
+  if (isVend) {
+    $('pVendedor').value = State.user.code || '';
+    $('lVendedor').value = State.user.code || '';
+    $('cVendedor').value = State.user.code || '';
+  }
+}
+
+function fillTeamSelects() {
+  const isMgr = State.user.role === 'GERENTE' || State.user.role === 'DIRETOR';
+
+  $('pTeamWrap').style.display = isMgr ? '' : 'none';
+  $('lTeamWrap').style.display = isMgr ? '' : 'none';
+  $('cTeamWrap').style.display = isMgr ? '' : 'none';
+
+  if (!isMgr) return;
+
+  const teams = State.teams || [];
+  const opts = teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  $('pEquipe').innerHTML = `<option value="">Todas</option>` + opts;
+  $('lEquipe').innerHTML = `<option value="">Todas</option>` + opts;
+  $('cEquipe').innerHTML = `<option value="">Todas</option>` + opts;
+}
+
+function bootApp() {
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = '';
+
+  $('pillUser').textContent = State.user.role;
+
+  fillVendorSelects();
+  fillTeamSelects();
+  bindNav();
+  bindClients();
+  bindFilters();
+  bindNewModal();
+  bindClienteDetail();
+
+  // defaults: datas = últimos 30 dias
+  const [d1, d2] = lastNDays(30);
+  $('pDataInicio').value = d1; $('pDataFim').value = d2;
+  $('lDataInicio').value = d1; $('lDataFim').value = d2;
+  $('cDataInicio').value = d1; $('cDataFim').value = d2;
+
+  showView('clientes');
+
+  // carregar KPIs iniciais
+  refreshKPIs().catch(()=>{});
+}
+
+function bindNav() {
+  document.querySelectorAll('.navbtn').forEach(btn => {
+    btn.onclick = () => {
+      const v = btn.dataset.view;
+      if (v === 'clientes') showView('clientes');
+      if (v === 'pendencias') { showView('pendencias'); loadPendencias(); }
+      if (v === 'perdas') { showView('perdas'); loadPerdas(); }
+      if (v === 'conc') { showView('conc'); loadConc(); }
+    };
+  });
+}
+
+/** =========================
+ *  CLIENTES (MVP: abrir por COD)
+ *  ========================= */
+function bindClients() {
+  $('btnOpenNew').onclick = () => openNewModal();
+  $('btnOpenNewFromClient').onclick = () => openNewModal(State.lastClient?.COD_CLIENTE || '');
+
+  $('btnOpenCliente').onclick = () => openClienteByCod($('quickCodCliente').value.trim());
+  $('quickCodCliente').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') openClienteByCod($('quickCodCliente').value.trim());
+  });
+
+  $('clientSearch').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      const q = $('clientSearch').value.trim();
+      // Se o cara digitar código numérico, abre direto:
+      if (/^\d+$/.test(q)) openClienteByCod(q);
+      else toast('Para abrir rápido, digite o COD_CLIENTE e pressione Enter.');
+    }
+  });
+}
+
+async function openClienteByCod(cod) {
+  if (!cod) return toast('Digite o COD_CLIENTE.');
+  try {
+    const r = await api('getClientByCode', { codCliente: cod });
+    if (!r.success) return toast(r.msg || 'Cliente não encontrado.');
+    State.lastClient = r.client;
+
+    // Preenche detalhe
+    $('cdNome').textContent = r.client.NOME_CLIENTE || '—';
+    $('cdMeta').innerHTML = `
+      <span class="pill">COD ${escapeHtml(r.client.COD_CLIENTE)}</span>
+      <span class="pill">${escapeHtml(r.client.CIDADE || '-')}</span>
+    `;
+    $('cdCarteiraInfo').textContent = `Carteira: (será criada automaticamente ao salvar registros)`;
+    $('cdWhats').value = ''; // MVP: depende de endpoint para buscar whatsapp
+
+    showView('clienteDetail');
+  } catch (e) {
+    toast(e.message || String(e));
+  }
+}
+
+/** =========================
+ *  FILTROS / LISTAGENS
+ *  ========================= */
+function bindFilters() {
+  $('btnLoadPend').onclick = loadPendencias;
+  $('btnClearPend').onclick = () => {
+    $('pCliente').value = ''; $('pProduto').value = ''; $('pStatus').value = '';
+    if ($('pVendedor')) $('pVendedor').value = '';
+    if ($('pEquipe')) $('pEquipe').value = '';
+    loadPendencias();
+  };
+
+  $('btnLoadPerdas').onclick = loadPerdas;
+  $('btnClearPerdas').onclick = () => {
+    $('lCliente').value=''; $('lProduto').value=''; $('lStatus').value=''; $('lMotivo').value='';
+    if ($('lVendedor')) $('lVendedor').value='';
+    if ($('lEquipe')) $('lEquipe').value='';
+    loadPerdas();
+  };
+
+  $('btnLoadConc').onclick = loadConc;
+  $('btnClearConc').onclick = () => {
+    $('cCliente').value=''; $('cProduto').value=''; $('cConc').value='';
+    if ($('cVendedor')) $('cVendedor').value='';
+    if ($('cEquipe')) $('cEquipe').value='';
+    loadConc();
+  };
+}
+
+function pendFilters() {
+  const f = {
+    dataInicio: $('pDataInicio').value || '',
+    dataFim: $('pDataFim').value || '',
+    cliente: $('pCliente').value.trim(),
+    produto: $('pProduto').value.trim(),
+    status: $('pStatus').value,
+    codVendedor: ($('pVendedor') && $('pVendedor').value) ? $('pVendedor').value : '',
+    equipe: ($('pEquipe') && $('pEquipe').value) ? $('pEquipe').value : '',
+  };
+  // vendedor fixo
+  if (State.user.role === 'VENDEDOR') f.codVendedor = State.user.code;
+  return f;
+}
+
+function perdasFilters() {
+  const f = {
+    dataInicio: $('lDataInicio').value || '',
+    dataFim: $('lDataFim').value || '',
+    cliente: $('lCliente').value.trim(),
+    produto: $('lProduto').value.trim(),
+    status: $('lStatus').value,
+    motivo: $('lMotivo').value,
+    codVendedor: ($('lVendedor') && $('lVendedor').value) ? $('lVendedor').value : '',
+    equipe: ($('lEquipe') && $('lEquipe').value) ? $('lEquipe').value : '',
+  };
+  if (State.user.role === 'VENDEDOR') f.codVendedor = State.user.code;
+  return f;
+}
+
+function concFilters() {
+  const f = {
+    dataInicio: $('cDataInicio').value || '',
+    dataFim: $('cDataFim').value || '',
+    cliente: $('cCliente').value.trim(),
+    produto: $('cProduto').value.trim(),
+    concorrente: $('cConc').value.trim(),
+    codVendedor: ($('cVendedor') && $('cVendedor').value) ? $('cVendedor').value : '',
+    equipe: ($('cEquipe') && $('cEquipe').value) ? $('cEquipe').value : '',
+  };
+  if (State.user.role === 'VENDEDOR') f.codVendedor = State.user.code;
+  return f;
+}
+
+async function loadPendencias() {
+  try {
+    const r = await api('listPendencias', { filters: pendFilters() });
+    const arr = r.data || [];
+    $('pTotal').textContent = String(r.total || arr.length || 0);
+    renderPendencias(arr);
+    refreshKPIs().catch(()=>{});
+  } catch (e) { toast(e.message || String(e)); }
+}
+
+function renderPendencias(arr) {
+  const box = $('pendList');
+  box.innerHTML = '';
+  $('pendEmpty').style.display = arr.length ? 'none' : '';
+
+  arr.forEach(o => {
+    const badge = statusBadge(o.STATUS);
+    const d = formatDate(o.DATA_ABERTURA);
+    const prazo = o.DATA_PRAZO ? formatDate(o.DATA_PRAZO) : '-';
+
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `
+      <div class="head">
+        <div>
+          <div class="title">${escapeHtml(o.NOME_CLIENTE || '')}</div>
+          <div class="meta">
+            <span class="pill">COD ${escapeHtml(o.COD_CLIENTE || '')}</span>
+            <span class="pill">${escapeHtml(o.CIDADE || '-')}</span>
+            <span class="pill">${escapeHtml(o.TIPO || '-')}</span>
+            <span class="pill">Abertura ${escapeHtml(d)}</span>
+            <span class="pill">Prazo ${escapeHtml(prazo)}</span>
+          </div>
+        </div>
+        ${badge}
+      </div>
+      <div style="font-weight:700">${escapeHtml(o.TITULO || '')}</div>
+      <div class="hint">${escapeHtml(o.DESCRICAO || '')}</div>
+      <div class="meta">
+        <span class="pill">${escapeHtml(o.VENDEDOR || '')}</span>
+        <span class="pill">${escapeHtml(o.EQUIPE || '')}</span>
+      </div>
+      <div class="actions">
+        <button class="btn small" data-openclient="${escapeHtml(o.COD_CLIENTE || '')}">Abrir cliente</button>
+      </div>
+    `;
+    el.querySelector('[data-openclient]').onclick = () => openClienteByCod(o.COD_CLIENTE);
+    box.appendChild(el);
+  });
+}
+
+async function loadPerdas() {
+  try {
+    const r = await api('listPerdas', { filters: perdasFilters() });
+    const arr = r.data || [];
+    $('lTotal').textContent = String(r.total || arr.length || 0);
+    $('lTotalPerdido').textContent = 'R$ ' + moneyBR(r.totalPerdido || 0);
+    renderPerdas(arr);
+    refreshKPIs().catch(()=>{});
+  } catch (e) { toast(e.message || String(e)); }
+}
+
+function renderPerdas(arr) {
+  const box = $('perdasList');
+  box.innerHTML = '';
+  $('perdasEmpty').style.display = arr.length ? 'none' : '';
+
+  arr.forEach(o => {
+    const badge = statusBadge(o.STATUS);
+    const d = formatDate(o.DATA);
+
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `
+      <div class="head">
+        <div>
+          <div class="title">${escapeHtml(o.NOME_CLIENTE || '')}</div>
+          <div class="meta">
+            <span class="pill">COD ${escapeHtml(o.COD_CLIENTE || '')}</span>
+            <span class="pill">${escapeHtml(o.CIDADE || '-')}</span>
+            <span class="pill">${escapeHtml(o.MOTIVO || '-')}</span>
+            <span class="pill">${escapeHtml(d)}</span>
+          </div>
+        </div>
+        ${badge}
+      </div>
+      <div class="hint">${escapeHtml(o.OBS_GERAL || '')}</div>
+      <div class="meta">
+        <span class="pill">${escapeHtml(o.VENDEDOR || '')}</span>
+        <span class="pill">${escapeHtml(o.EQUIPE || '')}</span>
+      </div>
+      <div class="actions">
+        <button class="btn small" data-openclient="${escapeHtml(o.COD_CLIENTE || '')}">Abrir cliente</button>
+      </div>
+    `;
+    el.querySelector('[data-openclient]').onclick = () => openClienteByCod(o.COD_CLIENTE);
+    box.appendChild(el);
+  });
+}
+
+async function loadConc() {
+  try {
+    const r = await api('listConcorrencia', { filters: concFilters() });
+    const arr = r.data || [];
+    $('cTotal').textContent = String(r.total || arr.length || 0);
+    renderConc(arr);
+  } catch (e) { toast(e.message || String(e)); }
+}
+
+function renderConc(arr) {
+  const box = $('concList');
+  box.innerHTML = '';
+  $('concEmpty').style.display = arr.length ? 'none' : '';
+
+  arr.forEach(o => {
+    const d = formatDate(o.DATA);
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `
+      <div class="head">
+        <div>
+          <div class="title">${escapeHtml(o.NOME_CLIENTE || '')}</div>
+          <div class="meta">
+            <span class="pill">COD ${escapeHtml(o.COD_CLIENTE || '')}</span>
+            <span class="pill">${escapeHtml(o.CIDADE || '-')}</span>
+            <span class="pill">${escapeHtml(o.NOME_CONCORRENTE || '-')}</span>
+            <span class="pill">${escapeHtml(d)}</span>
+          </div>
+        </div>
+        <span class="badge">Concorrência</span>
+      </div>
+      <div style="font-weight:700">${escapeHtml(o.PRODUTO_CONCORRENTE || '')}</div>
+      <div class="hint">${escapeHtml(o.OBS || '')}</div>
+      <div class="meta">
+        <span class="pill">Preço conc.: ${moneyBR(o.PRECO_CONCORRENTE || 0)}</span>
+        <span class="pill">${escapeHtml(o.VENDEDOR || '')}</span>
+        <span class="pill">${escapeHtml(o.EQUIPE || '')}</span>
+      </div>
+      <div class="actions">
+        <button class="btn small" data-openclient="${escapeHtml(o.COD_CLIENTE || '')}">Abrir cliente</button>
+      </div>
+    `;
+    el.querySelector('[data-openclient]').onclick = () => openClienteByCod(o.COD_CLIENTE);
+    box.appendChild(el);
+  });
+}
+
+/** =========================
+ *  KPI (usa listPendencias + listPerdas)
+ *  ========================= */
+async function refreshKPIs() {
+  // usa filtros atuais de pendências/perdas como "período"
+  const pf = pendFilters();
+  const lf = perdasFilters();
+
+  try {
+    const [p, l] = await Promise.all([
+      api('listPendencias', { filters: pf }),
+      api('listPerdas', { filters: lf }),
+    ]);
+    $('kpiPend').textContent = String(p.total || 0);
+    $('kpiPerdas').textContent = String(l.total || 0);
+    $('kpiTotal').textContent = 'R$ ' + moneyBR(l.totalPerdido || 0);
+  } catch {
+    // silencioso
+  }
+}
+
+/** =========================
+ *  MODAL NOVO REGISTRO
+ *  ========================= */
+function bindNewModal() {
+  $('btnCloseNew').onclick = closeNewModal;
+  $('newType').onchange = renderNewType;
+  $('newCodCliente').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') fetchClientForModal();
+  });
+  $('newCodCliente').addEventListener('blur', fetchClientForModal);
+
+  $('btnSavePend').onclick = savePendencia;
+  $('btnSavePerda').onclick = savePerda;
+  $('btnSaveConc').onclick = saveConc;
+
+  $('btnAddPendItem').onclick = () => addPendItemRow();
+  $('btnAddPerdaItem').onclick = () => addPerdaItemRow();
+
+  // linhas iniciais
+  addPendItemRow();
+  addPerdaItemRow();
+}
+
+function openNewModal(prefCodCliente = '') {
+  $('modalNew').classList.add('open');
+  $('newCodCliente').value = prefCodCliente || '';
+  $('newClientHint').textContent = '—';
+  State.modalClient = null;
+
+  renderNewType();
+  if (prefCodCliente) fetchClientForModal();
+  setTimeout(()=> $('newCodCliente').focus(), 50);
+}
+
+function closeNewModal() {
+  $('modalNew').classList.remove('open');
+}
+
+function renderNewType() {
+  const t = $('newType').value;
+  $('formPendencia').style.display = (t === 'PENDENCIA') ? '' : 'none';
+  $('formPerda').style.display = (t === 'PERDA') ? '' : 'none';
+  $('formConc').style.display = (t === 'CONCORRENCIA') ? '' : 'none';
+}
+
+async function fetchClientForModal() {
+  const cod = $('newCodCliente').value.trim();
+  if (!cod) { $('newClientHint').textContent = '—'; State.modalClient = null; return; }
+  try {
+    const r = await api('getClientByCode', { codCliente: cod });
+    if (r.success) {
+      State.modalClient = r.client;
+      $('newClientHint').textContent = `${r.client.NOME_CLIENTE} • ${r.client.CIDADE}`;
+    } else {
+      State.modalClient = null;
+      $('newClientHint').textContent = r.msg || 'Cliente não encontrado.';
+    }
+  } catch(e) {
+    State.modalClient = null;
+    $('newClientHint').textContent = e.message || String(e);
+  }
+}
+
+/** ===== Pendência: itens ===== */
+function addPendItemRow() {
+  const box = $('pendItems');
+  const idx = box.children.length + 1;
+  const id = 'pendSku_' + idx;
+
+  const row = document.createElement('div');
+  row.className = 'card';
+  row.style.marginTop = '10px';
+  row.innerHTML = `
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <b style="font-size:13px">Item ${idx}</b>
+      <button class="btn small bad" data-del>Remover</button>
+    </div>
+    <div class="sep"></div>
+
+    <div class="grid two">
+      <div class="autocomplete">
+        <label class="hint">SKU ou Nome (use %)</label>
+        <input id="${id}" placeholder="SKU ou nome" />
+        <div class="ac-list" id="${id}_list"></div>
+      </div>
+      <div>
+        <label class="hint">Produto (auto)</label>
+        <input id="${id}_prod" placeholder="Será preenchido" />
+      </div>
+      <div>
+        <label class="hint">Quantidade</label>
+        <input id="${id}_qtd" placeholder="0" inputmode="decimal" />
+      </div>
+      <div>
+        <label class="hint">Preço unit (opcional)</label>
+        <input id="${id}_preco" placeholder="0,00" inputmode="decimal" />
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label class="hint">Obs</label>
+      <input id="${id}_obs" placeholder="Obs do item" />
+    </div>
+  `;
+  row.querySelector('[data-del]').onclick = () => row.remove();
+  box.appendChild(row);
+
+  attachProductAutocomplete($(id), $(id + '_list'), (sel) => {
+    $(id).value = sel.sku || '';
+    $(id + '_prod').value = sel.produto || '';
+  });
+}
+
+/** ===== Perda: itens ===== */
+function addPerdaItemRow() {
+  const box = $('perdaItems');
+  const idx = box.children.length + 1;
+  const id = 'perdaSku_' + idx;
+
+  const row = document.createElement('div');
+  row.className = 'card';
+  row.style.marginTop = '10px';
+  row.innerHTML = `
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <b style="font-size:13px">Item ${idx}</b>
+      <button class="btn small bad" data-del>Remover</button>
+    </div>
+    <div class="sep"></div>
+
+    <div class="grid two">
+      <div>
+        <label class="hint">Tipo do item</label>
+        <select id="${id}_tipo">
+          <option value="CAUSA">CAUSA</option>
+          <option value="PERDIDO" selected>PERDIDO</option>
+        </select>
+      </div>
+
+      <div class="autocomplete">
+        <label class="hint">SKU ou Nome (use %)</label>
+        <input id="${id}" placeholder="SKU ou nome" />
+        <div class="ac-list" id="${id}_list"></div>
+      </div>
+
+      <div>
+        <label class="hint">Produto (auto)</label>
+        <input id="${id}_prod" placeholder="Será preenchido" />
+      </div>
+
+      <div>
+        <label class="hint">Quantidade</label>
+        <input id="${id}_qtd" placeholder="0" inputmode="decimal" />
+      </div>
+
+      <div>
+        <label class="hint">Preço unit (seu)</label>
+        <input id="${id}_preco" placeholder="0,00" inputmode="decimal" />
+      </div>
+
+      <div>
+        <label class="hint">Preço concorrente</label>
+        <input id="${id}_precoConc" placeholder="0,00" inputmode="decimal" />
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label class="hint">Obs</label>
+      <input id="${id}_obs" placeholder="Obs do item" />
+    </div>
+  `;
+  row.querySelector('[data-del]').onclick = () => row.remove();
+  box.appendChild(row);
+
+  attachProductAutocomplete($(id), $(id + '_list'), (sel) => {
+    $(id).value = sel.sku || '';
+    $(id + '_prod').value = sel.produto || '';
+  });
+}
+
+/** ===== Product autocomplete ===== */
+function attachProductAutocomplete(input, listEl, onSelect) {
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { listEl.classList.remove('show'); listEl.innerHTML=''; return; }
+    timer = setTimeout(async () => {
+      try {
+        const r = await api('searchProducts', { query: q, limit: 10 });
+        const items = (r.items || []);
+        if (!items.length) { listEl.classList.remove('show'); listEl.innerHTML=''; return; }
+
+        listEl.innerHTML = items.map(it => `
+          <div class="ac-item" data-sku="${escapeHtml(it.sku)}" data-prod="${escapeHtml(it.produto)}">
+            <b>${escapeHtml(it.sku)}</b>
+            <span>${escapeHtml(it.produto)}</span>
+          </div>
+        `).join('');
+        listEl.classList.add('show');
+
+        listEl.querySelectorAll('.ac-item').forEach(el => {
+          el.onclick = () => {
+            const sel = { sku: el.dataset.sku, produto: el.dataset.prod };
+            listEl.classList.remove('show');
+            listEl.innerHTML = '';
+            onSelect(sel);
+          }
+        });
+      } catch {
+        listEl.classList.remove('show'); listEl.innerHTML='';
+      }
+    }, 250);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!listEl.contains(ev.target) && ev.target !== input) {
+      listEl.classList.remove('show'); listEl.innerHTML='';
+    }
+  });
+}
+
+/** ===== Save Pendência ===== */
+async function savePendencia() {
+  if (!State.modalClient) return toast('Informe um COD_CLIENTE válido.');
+  const cod = State.modalClient.COD_CLIENTE;
+
+  const payload = {
+    COD_CLIENTE: cod,
+    TIPO: $('pendTipo').value,
+    STATUS: $('pendStatus').value,
+    DATA_PRAZO: $('pendPrazo').value || '',
+    TITULO: $('pendTitulo').value.trim(),
+    DESCRICAO: $('pendDesc').value.trim(),
+  };
+
+  const items = collectPendItems();
+  try {
+    const r = await api('createPendencia', { payload, items });
+    if (r.warningMsg) toast(r.warningMsg);
+    else toast('Pendência salva ✅');
+
+    closeNewModal();
+    // refresh list
+    if ($('viewPendencias').style.display !== 'none') loadPendencias();
+  } catch (e) {
+    toast(e.message || String(e));
+  }
+}
+
+function collectPendItems() {
+  const box = $('pendItems');
+  const items = [];
+  [...box.children].forEach(card => {
+    const inputs = card.querySelectorAll('input');
+    const getBySuffix = (suffix) => {
+      const el = [...inputs].find(x => x.id.endsWith(suffix));
+      return el ? el.value.trim() : '';
+    };
+    const sku = getBySuffix('');
+    const prod = getBySuffix('_prod');
+    const qtd = getBySuffix('_qtd');
+    const preco = getBySuffix('_preco');
+    const obs = getBySuffix('_obs');
+
+    const hasAny = sku || prod || qtd || preco || obs;
+    if (!hasAny) return;
+
+    items.push({
+      SKU: sku,
+      PRODUTO: prod,
+      QTD: parseBR(qtd),
+      PRECO_UNIT: parseBR(preco),
+      OBS_ITEM: obs,
+    });
+  });
+  return items;
+}
+
+/** ===== Save Perda ===== */
+async function savePerda() {
+  if (!State.modalClient) return toast('Informe um COD_CLIENTE válido.');
+  const cod = State.modalClient.COD_CLIENTE;
+
+  const payload = {
+    COD_CLIENTE: cod,
+    MOTIVO: $('perdaMotivo').value,
+    STATUS: $('perdaStatus').value,
+    OBS_GERAL: $('perdaObs').value.trim(),
+  };
+
+  const items = collectPerdaItems();
+  if (!items.length) return toast('Adicione ao menos 1 item na perda.');
+
+  try {
+    const r = await api('createVendaPerdida', { payload, items });
+    if (r.warningMsg) toast(r.warningMsg);
+    else toast('Perda salva ✅');
+
+    closeNewModal();
+    if ($('viewPerdas').style.display !== 'none') loadPerdas();
+  } catch (e) {
+    toast(e.message || String(e));
+  }
+}
+
+function collectPerdaItems() {
+  const box = $('perdaItems');
+  const items = [];
+  [...box.children].forEach(card => {
+    const tipo = card.querySelector('select')?.value || 'PERDIDO';
+    const allInputs = card.querySelectorAll('input');
+    const find = (suffix) => [...allInputs].find(x => x.id.endsWith(suffix))?.value.trim() || '';
+
+    const sku = find('');
+    const prod = find('_prod');
+    const qtd = parseBR(find('_qtd'));
+    const preco = parseBR(find('_preco'));
+    const precoConc = parseBR(find('_precoConc'));
+    const obs = find('_obs');
+
+    const hasAny = sku || prod || qtd || preco || precoConc || obs;
+    if (!hasAny) return;
+
+    items.push({
+      TIPO_ITEM: tipo,
+      SKU: sku,
+      PRODUTO: prod,
+      QTD: qtd,
+      PRECO_UNIT: preco,
+      PRECO_CONCORRENTE: precoConc,
+      OBS_ITEM: obs,
+    });
+  });
+  return items;
+}
+
+/** ===== Save Concorrência ===== */
+async function saveConc() {
+  if (!State.modalClient) return toast('Informe um COD_CLIENTE válido.');
+  const cod = State.modalClient.COD_CLIENTE;
+
+  const payload = {
+    COD_CLIENTE: cod,
+    NOME_CONCORRENTE: $('concNome').value.trim(),
+    PRECO_CONCORRENTE: parseBR($('concPreco').value.trim()),
+    SKU: $('concSku').value.trim(),
+    PRODUTO: $('concProdNosso').value.trim(),
+    PRODUTO_CONCORRENTE: $('concProdConc').value.trim(),
+    OBS: $('concObs').value.trim(),
+  };
+
+  if (!payload.NOME_CONCORRENTE) return toast('Informe o nome do concorrente.');
+  if (!payload.PRODUTO_CONCORRENTE && !payload.SKU && !payload.PRODUTO) return toast('Informe o produto concorrente (ou SKU/produto nosso).');
+
+  try {
+    const r = await api('createConcorrencia', { payload });
+    if (r.warningMsg) toast(r.warningMsg);
+    else toast('Ocorrência salva ✅');
+
+    closeNewModal();
+    if ($('viewConc').style.display !== 'none') loadConc();
+  } catch (e) {
+    toast(e.message || String(e));
+  }
+}
+
+/** =========================
+ *  CLIENTE DETAIL
+ *  ========================= */
+function bindClienteDetail() {
+  $('btnBackCliente').onclick = () => showView('clientes');
+
+  $('btnNewPendFromClient').onclick = () => { openNewModal(State.lastClient?.COD_CLIENTE || ''); $('newType').value='PENDENCIA'; renderNewType(); };
+  $('btnNewPerdaFromClient').onclick = () => { openNewModal(State.lastClient?.COD_CLIENTE || ''); $('newType').value='PERDA'; renderNewType(); };
+  $('btnNewConcFromClient').onclick = () => { openNewModal(State.lastClient?.COD_CLIENTE || ''); $('newType').value='CONCORRENCIA'; renderNewType(); };
+
+  $('btnWhats').onclick = () => {
+    const w = $('cdWhats').value.trim();
+    if (!w) return toast('Cadastre o WhatsApp na carteira para abrir.');
+    const num = w.replace(/\D/g,'');
+    if (!num) return toast('WhatsApp inválido.');
+    window.open('https://wa.me/' + num, '_blank');
+  };
+
+  // IMPORTANTE:
+  // No GS que você montou, ainda NÃO existe endpoint para salvar/ler WhatsApp da CARTEIRA.
+  // Aqui eu deixei o botão pronto, mas ele precisa de um action no GS (ex.: updateCarteiraWhatsApp).
+  $('btnSaveWhats').onclick = async () => {
+    const codCliente = State.lastClient?.COD_CLIENTE;
+    if (!codCliente) return;
+    const w = $('cdWhats').value.trim();
+    if (!w) return toast('Informe o WhatsApp.');
+
+    toast('⚙️ Para salvar WhatsApp na CARTEIRA, adicione um endpoint no Code.gs (updateCarteiraWhatsApp).');
+  };
+}
+
+/** =========================
+ *  UTIL
+ *  ========================= */
+function lastNDays(n) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - n);
+  return [toISODate(start), toISODate(end)];
+}
+function toISODate(d) {
+  const z = new Date(d);
+  const yyyy = z.getFullYear();
+  const mm = String(z.getMonth()+1).padStart(2,'0');
+  const dd = String(z.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+function formatDate(v) {
+  try {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return String(v || '');
+    return d.toLocaleDateString('pt-BR');
+  } catch { return String(v || ''); }
+}
+function parseBR(s) {
+  if (!s) return 0;
+  const x = String(s).replace(/\./g,'').replace(',', '.');
+  const n = Number(x);
+  return isNaN(n) ? 0 : n;
+}
+function moneyBR(n) {
+  const v = Number(n || 0);
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (m) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[m]));
+}
+function statusBadge(status) {
+  const s = String(status || '').toUpperCase();
+  let cls = 'badge';
+  if (s === 'CONCLUIDA' || s === 'RECUPERADA') cls += ' ok';
+  else if (s === 'ABERTA' || s === 'REGISTRADA' || s === 'EM_ANDAMENTO') cls += ' warn';
+  else if (s === 'CANCELADA') cls += ' bad';
+  return `<span class="${cls}">${escapeHtml(s || '-')}</span>`;
+}
+
+/** =========================
+ *  INIT
+ *  ========================= */
+(function init() {
+  const sess = loadSession();
+  if (sess && sess.user) {
+    State.user = sess.user;
+    State.teams = sess.teams || [];
+    State.vendors = sess.vendors || [];
+    bootApp();
+  } else {
+    $('loginScreen').style.display = '';
+    $('loginUser').focus();
+  }
+})();
+</script>
+
+</body>
+</html>
