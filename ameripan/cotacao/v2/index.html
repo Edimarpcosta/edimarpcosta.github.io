@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ameripan | Cotação Expressa v7</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+
+  <style>
+    :root{
+      --brand:#0b66c3;
+      --bg:#f6f7fb;
+      --ink:#1f2937;
+      --muted:#6b7280;
+      --ok:#15803d;
+      --danger:#b91c1c;
+      --card:#ffffff;
+      --border:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:var(--bg);color:var(--ink)}
+
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border);padding:.8rem 1rem;z-index:10}
+    header .row{display:flex;gap:.75rem;align-items:center;justify-content:space-between;max-width:1000px;margin:0 auto}
+    header h1{font-size:1.05rem;margin:0;color:var(--brand);display:flex;align-items:center;gap:.6rem;white-space:nowrap}
+    header h1 img{height:34px}
+
+    .container{max-width:1000px;margin:1rem auto;padding:1rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:1rem}
+    .grid{display:grid;gap:.75rem}
+    @media(min-width:800px){.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+    @media(min-width:640px) and (max-width:799px){.grid.cols-3{grid-template-columns:repeat(2,1fr)}}
+
+    label{display:block;font-size:.8rem;color:var(--muted);margin:0 0 .25rem}
+    input,textarea{width:100%;padding:.65rem .7rem;border:1px solid #d1d5db;border-radius:12px;font-size:.95rem;background:#fff}
+    input:focus,textarea:focus{outline:2px solid #cfe6ff;border-color:#93c5fd}
+
+    .actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.62rem .92rem;border:1px solid #d1d5db;border-radius:12px;background:#fff;cursor:pointer;font-weight:600}
+    .btn.btn-sm{padding:.42rem .6rem;font-size:.82rem;border-radius:10px;font-weight:700}
+    .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .btn.success{background:var(--ok);color:#fff;border-color:var(--ok)}
+    .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+    .btn:active{transform:translateY(1px)}
+
+    .pill{font-size:.75rem;background:#eef6ff;color:#0b4ea2;border:1px solid #cfe2ff;padding:.18rem .55rem;border-radius:999px;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+    .pill strong{font-weight:800}
+
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111827;color:#fff;padding:.65rem .85rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .25s}
+    .toast.show{opacity:1}
+
+    /* Entry */
+    #entry-form{border:1px solid var(--border);padding:.8rem;border-radius:12px;margin-bottom:1rem;background:#fbfdff}
+    #entry-grid{display:grid;gap:.75rem;grid-template-columns:14ch 10ch 16ch 1fr auto;align-items:flex-end}
+    @media(max-width: 768px){
+      #entry-grid{grid-template-columns:1fr 1fr}
+      #entry_price{grid-column:span 2}
+      #entry_desc{grid-column:span 2}
+      #commitRowBtn{grid-column:span 2}
+    }
+
+    /* Desktop table */
+    .tableWrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+    table{width:100%;border-collapse:collapse;background:#fff}
+    th,td{border-bottom:1px solid var(--border);padding:.55rem .65rem;text-align:left;font-size:.92rem;vertical-align:middle}
+    th{background:#f3f4f6;font-weight:800;white-space:nowrap}
+    td input{padding:.38rem;border-radius:10px}
+
+    /* Mobile cards */
+    #cards{display:none}
+    .itemCard{border:1px solid var(--border);border-radius:14px;background:#fff;padding:.85rem;box-shadow:0 1px 1px rgba(0,0,0,.03)}
+    .itemCard .top{display:flex;justify-content:space-between;gap:.5rem;align-items:flex-start}
+    .itemCard .title{font-weight:900;font-size:.98rem;line-height:1.2}
+    .itemCard .sub{color:var(--muted);font-size:.8rem;margin-top:.2rem}
+    .itemCard .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-top:.7rem}
+    .itemCard .row label{margin-bottom:.2rem}
+    .itemCard .row input{padding:.55rem .6rem}
+    .itemCard textarea{margin-top:.55rem}
+    .itemCard .footer{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-top:.65rem}
+    .itemCard .total{font-weight:900;color:var(--brand)}
+
+    @media(max-width: 768px){
+      .tableWrap{display:none}
+      #cards{display:grid;gap:.75rem}
+    }
+
+    .tfoot{display:flex;justify-content:flex-end;padding:.8rem 0;color:var(--brand);font-weight:900;font-size:1.12rem}
+
+    /* Bottom bar (mobile convenience) */
+    .bottomBar{position:sticky;bottom:0;background:rgba(246,247,251,.85);backdrop-filter: blur(8px);padding:.6rem 0;border-top:1px solid var(--border)}
+    .bottomBar .inner{max-width:1000px;margin:0 auto;padding:0 1rem;display:flex;gap:.5rem;justify-content:space-between;flex-wrap:wrap}
+    .bottomBar .inner .actions{flex:1;justify-content:flex-end}
+    @media(min-width: 769px){.bottomBar{position:static;background:transparent;backdrop-filter:none;border-top:none;padding:0}}
+
+    details{border:1px dashed var(--border);border-radius:12px;padding:.65rem .75rem;background:#fff}
+    details summary{cursor:pointer;font-weight:800;color:#0b4ea2}
+    .histList{display:grid;gap:.5rem;margin-top:.65rem}
+    .histItem{border:1px solid var(--border);border-radius:12px;padding:.65rem .75rem;display:flex;gap:.5rem;justify-content:space-between;align-items:flex-start}
+    .histItem .meta{display:flex;flex-direction:column;gap:.15rem}
+    .histItem .meta small{color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <h1>
+        <img src="https://edimarpcosta.github.io/ameripan/assets/logo-ameripan.png" alt="Ameripan">
+        Cotação Expressa
+      </h1>
+      <span class="pill"><i class="fa-solid fa-hashtag"></i> <strong id="quoteIdPill">—</strong> <span style="opacity:.8">Google Sheets</span></span>
+    </div>
+  </header>
+
+  <div class="container">
+    <section class="card grid cols-3">
+      <div>
+        <label for="seller">Vendedor</label>
+        <input id="seller" placeholder="Seu nome"/>
+      </div>
+      <div>
+        <label for="seller_wa">WhatsApp do vendedor</label>
+        <input id="seller_wa" inputmode="numeric" placeholder="DDD + número (ex: 11999998888)"/>
+      </div>
+      <div>
+        <label for="buyer">Cliente</label>
+        <input id="buyer" placeholder="Nome do cliente"/>
+      </div>
+
+      <div style="grid-column:1/-1">
+        <div class="actions" style="justify-content:space-between">
+          <div class="actions">
+            <button class="btn" id="btnDuplicate"><i class="fa-regular fa-clone"></i>Duplicar</button>
+            <button class="btn" id="btnNew"><i class="fa-solid fa-plus"></i>Nova</button>
+          </div>
+          <div class="actions" style="gap:.6rem">
+            <span class="pill" id="catStatus">—</span>
+          </div>
+        </div>
+
+        <details style="margin-top:.75rem" id="historyDetails">
+          <summary><i class="fa-solid fa-clock-rotate-left"></i> Histórico (últimas 10)</summary>
+          <div class="histList" id="historyList"></div>
+        </details>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:1rem">
+      <div id="entry-form">
+        <label>Adicionar Item</label>
+        <div id="entry-grid">
+          <input id="entry_code" inputmode="latin" placeholder="Código"/>
+          <input id="entry_qty" inputmode="numeric" value="1"/>
+          <input id="entry_price" inputmode="decimal" placeholder="Preço (un)"/>
+          <input id="entry_desc" placeholder="Descrição do produto"/>
+          <button class="btn primary" id="commitRowBtn" title="Adicionar item à cotação"><i class="fa fa-plus"></i>Adicionar</button>
+        </div>
+      </div>
+
+      <div id="cards"></div>
+
+      <div class="tableWrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th style="width:14ch">Cód</th>
+              <th style="width:10ch;text-align:center">Qtde</th>
+              <th>Descrição</th>
+              <th style="width:16ch; text-align:right;">Preço (un)</th>
+              <th style="width:12ch;text-align:center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="tfoot"><span id="grandTotal">Total: R$ 0,00</span></div>
+
+      <div class="grid" style="margin-top:.75rem">
+        <div>
+          <label for="notes">Observações (aparece no PDF e no WhatsApp)</label>
+          <textarea id="notes" rows="3" placeholder="Ex.: Valores válidos por 3 dias."></textarea>
+        </div>
+      </div>
+
+      <div class="bottomBar" style="margin-top:.75rem">
+        <div class="inner">
+          <div class="actions">
+            <button class="btn danger" id="clearAll"><i class="fa fa-trash"></i>Limpar</button>
+          </div>
+          <div class="actions">
+            <button class="btn" id="copyText"><i class="fa fa-copy"></i>Copiar</button>
+            <button class="btn" id="shareWa"><i class="fa-brands fa-whatsapp"></i>WhatsApp</button>
+            <button class="btn" id="dlXlsx"><i class="fa fa-file-excel"></i>Excel</button>
+            <button class="btn primary" id="dlPdf"><i class="fa fa-file-pdf"></i>PDF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // ==================== Configs ====================
+    const SPREADSHEET_ID = '1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q';
+    const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
+    const PRODUCTS_SHEET_NAME = 'produtos';
+    const PRODUCTS_RANGE = 'A2:B';
+
+    const BRAND_LOGO_PDF = 'https://cdn.awsli.com.br/1284/1284671/logo/1e2bc493d1.png';
+
+    // Regras WhatsApp
+    const WA_MAX_ITEMS_FULL = 15;          // acima disso, manda resumo + sugere PDF
+    const WA_MAX_CHARS_FULL = 1800;        // segurança de tamanho
+
+    // ==================== Estado ====================
+    const state = {
+      catalog: new Map(),
+      catalogLoaded: false,
+      quote: {
+        id: null,
+        createdAt: null,
+        seller: '',
+        sellerWa: '',
+        buyer: '',
+        notes: '',
+        items: []
+      }
+    };
+
+    // ==================== DOM ====================
+    const tbody = document.querySelector('#tbl tbody');
+    const cards = document.getElementById('cards');
+
+    const sellerEl = document.getElementById('seller');
+    const sellerWaEl = document.getElementById('seller_wa');
+    const buyerEl = document.getElementById('buyer');
+    const notesEl = document.getElementById('notes');
+
+    const entryCode = document.getElementById('entry_code');
+    const entryQty = document.getElementById('entry_qty');
+    const entryDesc = document.getElementById('entry_desc');
+    const entryPrice = document.getElementById('entry_price');
+
+    // ==================== Utils ====================
+    const fmtBRL = (n)=> (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    const parseBR = (s)=>{ if(!s) return 0; let v=(s+'').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',', '.'); const x=parseFloat(v); return isNaN(x)?0:x; };
+    const moneyMask = (el)=>{ let v=(el.value||'').replace(/[^0-9]/g,''); if(!v){el.value='';return;} v=(parseInt(v,10)/100).toFixed(2).replace('.',','); el.value=v.replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.'); };
+
+    function toast(msg){
+      const t=document.getElementById('toast');
+      t.textContent=msg;
+      t.classList.add('show');
+      setTimeout(()=>t.classList.remove('show'),1200);
+    }
+
+    function normalizePhoneBR(raw){
+      const digits = (raw||'').toString().replace(/\D/g,'');
+      if(!digits) return '';
+      // Se já veio com 55, mantém; senão assume Brasil.
+      if(digits.startsWith('55')) return digits;
+      return '55' + digits;
+    }
+
+    function formatDateBR(ts){
+      try{
+        return new Date(ts).toLocaleDateString('pt-BR');
+      }catch{ return new Date().toLocaleDateString('pt-BR'); }
+    }
+
+    function newQuoteId(){
+      // 6 dígitos (mais amigável no WhatsApp/PDF)
+      const n = Math.floor(100000 + Math.random()*900000);
+      return String(n);
+    }
+
+    // ==================== Persistência (cotação atual) ====================
+    const KEY_CURRENT = 'cot_state_v7_current';
+    const KEY_HISTORY = 'cot_history_v7';
+    const KEY_CATALOG_CACHE = 'cot_cache_v7_catalog';
+
+    function readFormToState(){
+      state.quote.seller = sellerEl.value.trim();
+      state.quote.sellerWa = sellerWaEl.value.trim();
+      state.quote.buyer = buyerEl.value.trim();
+      state.quote.notes = notesEl.value.trim();
+    }
+
+    function writeStateToForm(){
+      sellerEl.value = state.quote.seller || '';
+      sellerWaEl.value = state.quote.sellerWa || '';
+      buyerEl.value = state.quote.buyer || '';
+      notesEl.value = state.quote.notes || '';
+      document.getElementById('quoteIdPill').textContent = state.quote.id ? ('#'+state.quote.id) : '—';
+    }
+
+    function saveCurrent(){
+      readFormToState();
+      try{
+        localStorage.setItem(KEY_CURRENT, JSON.stringify(state.quote));
+      }catch{}
+    }
+
+    function loadCurrent(){
+      try{
+        const raw = localStorage.getItem(KEY_CURRENT);
+        if(!raw) return false;
+        const q = JSON.parse(raw);
+        if(!q || !q.id) return false;
+        state.quote = {
+          id: q.id,
+          createdAt: q.createdAt || Date.now(),
+          seller: q.seller || '',
+          sellerWa: q.sellerWa || '',
+          buyer: q.buyer || '',
+          notes: q.notes || '',
+          items: Array.isArray(q.items) ? q.items : []
+        };
+        return true;
+      }catch{ return false; }
+    }
+
+    function resetNewQuote(keepSeller = true){
+      const prevSeller = state.quote.seller;
+      const prevSellerWa = state.quote.sellerWa;
+
+      state.quote = {
+        id: newQuoteId(),
+        createdAt: Date.now(),
+        seller: keepSeller ? prevSeller : '',
+        sellerWa: keepSeller ? prevSellerWa : '',
+        buyer: '',
+        notes: '',
+        items: []
+      };
+      writeStateToForm();
+      renderAll();
+      saveCurrent();
+      toast('Nova cotação criada');
+    }
+
+    // ==================== Histórico (últimas 10) ====================
+    function getHistory(){
+      try{
+        const h = JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]');
+        return Array.isArray(h) ? h : [];
+      }catch{ return []; }
+    }
+
+    function upsertHistory(quote){
+      try{
+        const h = getHistory();
+        const slim = {
+          id: quote.id,
+          createdAt: quote.createdAt,
+          seller: quote.seller,
+          sellerWa: quote.sellerWa,
+          buyer: quote.buyer,
+          notes: quote.notes,
+          items: quote.items,
+          total: quote.items.reduce((s,r)=>s+(Number(r.qty)||0)*(Number(r.price)||0),0)
+        };
+        const idx = h.findIndex(x=>x.id===slim.id);
+        if(idx>=0) h.splice(idx,1);
+        h.unshift(slim);
+        while(h.length>10) h.pop();
+        localStorage.setItem(KEY_HISTORY, JSON.stringify(h));
+      }catch{}
+      renderHistory();
+    }
+
+    function renderHistory(){
+      const list = document.getElementById('historyList');
+      const h = getHistory();
+      if(h.length===0){
+        list.innerHTML = '<div style="color:var(--muted)">Nenhuma cotação salva ainda. Gere um PDF/Excel para gravar no histórico.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      h.forEach(q=>{
+        const div = document.createElement('div');
+        div.className = 'histItem';
+        const when = new Date(q.createdAt||Date.now());
+        const title = `#${q.id} • ${when.toLocaleString('pt-BR')}`;
+        const buyer = q.buyer ? q.buyer : 'Sem cliente';
+        const itemsN = (q.items||[]).length;
+        div.innerHTML = `
+          <div class="meta">
+            <div style="font-weight:900">${title}</div>
+            <small>${buyer} • ${itemsN} itens • <strong>${fmtBRL(q.total||0)}</strong></small>
+          </div>
+          <div class="actions">
+            <button class="btn btn-sm" data-h-action="open" data-id="${q.id}"><i class="fa-regular fa-folder-open"></i>Abrir</button>
+            <button class="btn btn-sm" data-h-action="dup" data-id="${q.id}"><i class="fa-regular fa-clone"></i>Duplicar</button>
+            <button class="btn btn-sm danger" data-h-action="del" data-id="${q.id}"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById('historyList').addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-h-action]');
+      if(!btn) return;
+      const action = btn.dataset.hAction;
+      const id = btn.dataset.id;
+      const h = getHistory();
+      const q = h.find(x=>x.id===id);
+      if(!q) return;
+
+      if(action==='del'){
+        const next = h.filter(x=>x.id!==id);
+        localStorage.setItem(KEY_HISTORY, JSON.stringify(next));
+        renderHistory();
+        toast('Removido do histórico');
+        return;
+      }
+
+      if(action==='open'){
+        state.quote = {
+          id: q.id,
+          createdAt: q.createdAt,
+          seller: q.seller||'',
+          sellerWa: q.sellerWa||'',
+          buyer: q.buyer||'',
+          notes: q.notes||'',
+          items: Array.isArray(q.items) ? q.items : []
+        };
+        writeStateToForm();
+        renderAll();
+        saveCurrent();
+        toast('Cotação aberta');
+        document.getElementById('historyDetails').open = false;
+        return;
+      }
+
+      if(action==='dup'){
+        state.quote = {
+          id: newQuoteId(),
+          createdAt: Date.now(),
+          seller: q.seller||'',
+          sellerWa: q.sellerWa||'',
+          buyer: q.buyer||'',
+          notes: q.notes||'',
+          items: Array.isArray(q.items) ? q.items.map(i=>({...i})) : []
+        };
+        writeStateToForm();
+        renderAll();
+        saveCurrent();
+        toast('Cotação duplicada');
+        document.getElementById('historyDetails').open = false;
+      }
+    });
+
+    // ==================== Catálogo (Sheets + cache) ====================
+    function saveCatalogCache(){
+      try{
+        localStorage.setItem(KEY_CATALOG_CACHE, JSON.stringify({ts:Date.now(), entries:[...state.catalog]}));
+      }catch{}
+    }
+
+    function tryLoadCatalogCache(){
+      try{
+        const c=JSON.parse(localStorage.getItem(KEY_CATALOG_CACHE)||'{}');
+        if(c && c.entries){
+          state.catalog = new Map(c.entries);
+          state.catalogLoaded = true;
+          return true;
+        }
+      }catch{}
+      return false;
+    }
+
+    async function loadProducts(){
+      const statusEl = document.getElementById('catStatus');
+      statusEl.textContent = 'Carregando catálogo...';
+      state.catalog.clear();
+
+      try{
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(PRODUCTS_SHEET_NAME+'!'+PRODUCTS_RANGE)}?key=${API_KEY}`;
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('Falha ao acessar Google Sheets');
+        const data = await res.json();
+        (data.values||[]).forEach(row=>{
+          if(row[0]) state.catalog.set((row[0]||'').trim(), (row[1]||'').trim());
+        });
+        state.catalogLoaded = true;
+        saveCatalogCache();
+        statusEl.textContent = `${state.catalog.size} itens carregados`;
+      }catch(e){
+        if(tryLoadCatalogCache()){
+          statusEl.textContent = `Catálogo offline (${state.catalog.size} itens)`;
+        }else{
+          statusEl.textContent = 'Erro ao carregar';
+          toast('Erro: '+e.message);
+        }
+      }
+    }
+
+    // ==================== Itens / Render ====================
+    function getTotal(){
+      return state.quote.items.reduce((s,r)=>s+(Number(r.qty)||0)*(Number(r.price)||0),0);
+    }
+
+    function updateTotal(){
+      document.getElementById('grandTotal').textContent = 'Total: ' + fmtBRL(getTotal());
+    }
+
+    function renderTable(){
+      tbody.innerHTML = '';
+      state.quote.items.forEach((item, idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(item.code||'')}</td>
+          <td style="text-align:center">${Number(item.qty)||0}</td>
+          <td>${escapeHtml(item.desc||'')}</td>
+          <td style="text-align:right">${fmtBRL(item.price||0)}</td>
+          <td style="text-align:center; display:flex; gap:.25rem; justify-content:center;">
+            <button class="btn btn-sm" data-action="edit" data-idx="${idx}" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+            <button class="btn danger btn-sm" data-action="remove" data-idx="${idx}" title="Remover"><i class="fa-solid fa-times"></i></button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderCards(){
+      cards.innerHTML = '';
+      if(state.quote.items.length === 0){
+        cards.innerHTML = '<div style="color:var(--muted);padding:.25rem .1rem">Nenhum item ainda — adicione pelo formulário acima.</div>';
+        return;
+      }
+
+      state.quote.items.forEach((item, idx)=>{
+        const card = document.createElement('div');
+        card.className = 'itemCard';
+
+        const lineTotal = (Number(item.qty)||0) * (Number(item.price)||0);
+
+        card.innerHTML = `
+          <div class="top">
+            <div style="flex:1">
+              <div class="title">${escapeHtml(item.desc||'(Sem descrição)')}</div>
+              <div class="sub">Código: <strong>${escapeHtml(item.code||'—')}</strong></div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-sm" data-c-action="edit" data-idx="${idx}"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn btn-sm danger" data-c-action="remove" data-idx="${idx}"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Qtde</label>
+              <input inputmode="numeric" class="c-qty" data-idx="${idx}" value="${Number(item.qty)||0}">
+            </div>
+            <div>
+              <label>Preço (un)</label>
+              <input inputmode="decimal" class="c-price" data-idx="${idx}" value="${toMoneyString(item.price||0)}">
+            </div>
+            <div>
+              <label>Total item</label>
+              <input value="${fmtBRL(lineTotal)}" readonly>
+            </div>
+          </div>
+
+          <label style="margin-top:.6rem">Descrição</label>
+          <textarea rows="2" class="c-desc" data-idx="${idx}" placeholder="Descrição">${escapeHtml(item.desc||'')}</textarea>
+
+          <div class="footer">
+            <div class="total">${fmtBRL(lineTotal)}</div>
+            <div style="color:var(--muted);font-size:.82rem">Toque para editar</div>
+          </div>
+        `;
+
+        cards.appendChild(card);
+      });
+
+      // aplicar máscara nos preços
+      cards.querySelectorAll('.c-price').forEach(el=>{
+        moneyMask(el);
+        el.addEventListener('input', ()=>moneyMask(el));
+      });
+    }
+
+    function renderAll(){
+      renderTable();
+      renderCards();
+      updateTotal();
+    }
+
+    function escapeHtml(str){
+      return (str||'').toString()
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#039;');
+    }
+
+    function toMoneyString(n){
+      const v = (Number(n)||0).toFixed(2).replace('.',',');
+      return v.replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');
+    }
+
+    // ==================== CRUD Itens ====================
+    function addItem(item){
+      state.quote.items.push({
+        code: (item.code||'').trim(),
+        qty: Number(item.qty)||1,
+        desc: (item.desc||'').trim(),
+        price: Number(item.price)||0
+      });
+      renderAll();
+      saveCurrent();
+    }
+
+    function removeItem(idx){
+      state.quote.items.splice(idx,1);
+      renderAll();
+      saveCurrent();
+    }
+
+    function updateItem(idx, patch){
+      const it = state.quote.items[idx];
+      if(!it) return;
+      Object.assign(it, patch);
+      renderAll();
+      saveCurrent();
+    }
+
+    // Tabela (desktop) ações
+    tbody.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-action]');
+      if(!btn) return;
+      const action = btn.dataset.action;
+      const idx = Number(btn.dataset.idx);
+
+      if(action==='remove'){
+        removeItem(idx);
+        toast('Item removido');
+        return;
+      }
+
+      if(action==='edit'){
+        // Edit simples via prompt (rápido e confiável no desktop)
+        const it = state.quote.items[idx];
+        if(!it) return;
+        const code = prompt('Código:', it.code||'') ?? it.code;
+        const qty = prompt('Quantidade:', String(it.qty||1)) ?? String(it.qty||1);
+        const desc = prompt('Descrição:', it.desc||'') ?? it.desc;
+        const price = prompt('Preço (un):', toMoneyString(it.price||0)) ?? toMoneyString(it.price||0);
+        updateItem(idx, {
+          code: (code||'').trim(),
+          qty: parseInt(qty,10) || 1,
+          desc: (desc||'').trim(),
+          price: parseBR(price)
+        });
+        toast('Item atualizado');
+      }
+    });
+
+    // Cards (mobile) edição e remoção
+    cards.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-c-action]');
+      if(!btn) return;
+      const action = btn.dataset.cAction;
+      const idx = Number(btn.dataset.idx);
+      if(action==='remove'){
+        removeItem(idx);
+        toast('Item removido');
+        return;
+      }
+      if(action==='edit'){
+        // foca no textarea da descrição
+        const ta = cards.querySelector(`textarea.c-desc[data-idx="${idx}"]`);
+        if(ta) ta.focus();
+      }
+    });
+
+    function commitCardEdits(){
+      // lê inputs atuais e aplica
+      const qtyEls = [...cards.querySelectorAll('.c-qty')];
+      const priceEls = [...cards.querySelectorAll('.c-price')];
+      const descEls = [...cards.querySelectorAll('.c-desc')];
+
+      qtyEls.forEach(el=>{
+        const idx = Number(el.dataset.idx);
+        const q = parseInt(el.value,10) || 0;
+        if(state.quote.items[idx]) state.quote.items[idx].qty = q;
+      });
+      priceEls.forEach(el=>{
+        const idx = Number(el.dataset.idx);
+        const p = parseBR(el.value);
+        if(state.quote.items[idx]) state.quote.items[idx].price = p;
+      });
+      descEls.forEach(el=>{
+        const idx = Number(el.dataset.idx);
+        const d = el.value.trim();
+        if(state.quote.items[idx]) state.quote.items[idx].desc = d;
+      });
+
+      updateTotal();
+      saveCurrent();
+      // re-render parcial (somente totais). Para simplificar e manter total item correto, render tudo.
+      renderAll();
+    }
+
+    let cardEditTimer = null;
+    cards.addEventListener('input', ()=>{
+      clearTimeout(cardEditTimer);
+      cardEditTimer = setTimeout(()=>{
+        commitCardEdits();
+      }, 450);
+    });
+
+    // ==================== Entrada (Adicionar) ====================
+    async function autofillByCode(){
+      const code = entryCode.value.trim();
+      if(!code) return;
+      if(!state.catalogLoaded) await loadProducts();
+      if(code && state.catalog.has(code) && !entryDesc.value.trim()){
+        entryDesc.value = state.catalog.get(code);
+      }
+    }
+
+    function commitAndAddRow(){
+      const item = {
+        code: entryCode.value.trim(),
+        qty: parseInt(entryQty.value,10) || 1,
+        desc: entryDesc.value.trim(),
+        price: parseBR(entryPrice.value)
+      };
+      if(!item.desc && !item.code){
+        toast('Informe o código ou a descrição do item.');
+        entryDesc.focus();
+        return;
+      }
+      addItem(item);
+      entryCode.value='';
+      entryQty.value='1';
+      entryDesc.value='';
+      entryPrice.value='';
+      entryCode.focus();
+    }
+
+    document.getElementById('commitRowBtn').addEventListener('click', commitAndAddRow);
+    entryCode.addEventListener('blur', autofillByCode);
+    entryPrice.addEventListener('input', ()=>moneyMask(entryPrice));
+
+    const entryFields = [entryCode, entryQty, entryPrice, entryDesc];
+    entryFields.forEach((el, index)=>{
+      el.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          (index===entryFields.length-1) ? commitAndAddRow() : entryFields[index+1].focus();
+        }
+      });
+    });
+
+    // ==================== Ações Gerais ====================
+    document.getElementById('clearAll').addEventListener('click', ()=>{
+      if(!state.quote.items.length){ toast('Nada para limpar'); return; }
+      if(confirm('Tem certeza que deseja remover todos os itens?')){
+        state.quote.items = [];
+        renderAll();
+        saveCurrent();
+        toast('Itens removidos');
+      }
+    });
+
+    document.getElementById('btnDuplicate').addEventListener('click', ()=>{
+      readFormToState();
+      state.quote = {
+        id: newQuoteId(),
+        createdAt: Date.now(),
+        seller: state.quote.seller,
+        sellerWa: state.quote.sellerWa,
+        buyer: state.quote.buyer,
+        notes: state.quote.notes,
+        items: state.quote.items.map(i=>({...i}))
+      };
+      writeStateToForm();
+      renderAll();
+      saveCurrent();
+      toast('Cotação duplicada');
+    });
+
+    document.getElementById('btnNew').addEventListener('click', ()=>{
+      if(state.quote.items.length && !confirm('Criar uma nova cotação? (a atual fica salva no histórico quando você gerar PDF/Excel)')) return;
+      resetNewQuote(true);
+    });
+
+    ['blur','change'].forEach(evt=>{
+      [sellerEl, sellerWaEl, buyerEl, notesEl].forEach(el=>el.addEventListener(evt, ()=>{ saveCurrent(); }));
+    });
+
+    // ==================== WhatsApp (texto conforme pedido) ====================
+    function buildWhatsAppText(){
+      readFormToState();
+      const rows = state.quote.items;
+      const total = getTotal();
+      const dateBR = formatDateBR(state.quote.createdAt || Date.now());
+
+      const header = `Olá! Quero falar sobre a cotação #${state.quote.id} (${dateBR}).`;
+      const lines = [];
+      lines.push(header);
+      lines.push('COD - QUANTIDADE - NOME - PREÇO');
+
+      rows.forEach(r=>{
+        const code = (r.code||'').trim() || '—';
+        const qty = String(parseInt(r.qty,10) || 0);
+        const name = (r.desc||'').trim() || '—';
+        const price = fmtBRL(r.price||0);
+        lines.push(`${code} - ${qty} - ${name} ${price} -`);
+      });
+
+      if(state.quote.notes){
+        lines.push('');
+        lines.push(`Obs.: ${state.quote.notes}`);
+      }
+      lines.push('');
+      lines.push(`Total: ${fmtBRL(total)}`);
+
+      let text = lines.join('\n');
+
+      // limite
+      const tooManyItems = rows.length > WA_MAX_ITEMS_FULL;
+      const tooLong = text.length > WA_MAX_CHARS_FULL;
+      if(tooManyItems || tooLong){
+        const head = `Olá! Quero falar sobre a cotação #${state.quote.id} (${dateBR}).`;
+        const summary = [
+          head,
+          `A cotação tem ${rows.length} itens. Para facilitar, sugiro me chamar aqui e eu envio o PDF completo.`,
+          `Total: ${fmtBRL(total)}`
+        ];
+        text = summary.join('\n');
+      }
+
+      return text;
+    }
+
+    function buildWaLink(){
+      const text = buildWhatsAppText();
+      const sellerPhone = normalizePhoneBR(state.quote.sellerWa);
+      const base = sellerPhone ? `https://wa.me/${sellerPhone}` : 'https://wa.me/';
+      return `${base}?text=${encodeURIComponent(text)}`;
+    }
+
+    document.getElementById('copyText').addEventListener('click', ()=>{
+      if(state.quote.items.length===0){ toast('Adicione itens primeiro'); return; }
+      const txt = buildWhatsAppText();
+      navigator.clipboard.writeText(txt).then(()=>toast('Texto copiado'));
+    });
+
+    document.getElementById('shareWa').addEventListener('click', ()=>{
+      if(state.quote.items.length===0){ toast('Adicione itens primeiro'); return; }
+      const url = buildWaLink();
+      window.open(url, '_blank');
+      // opcional: salvar no histórico ao compartilhar
+      saveCurrent();
+    });
+
+    // ==================== Excel ====================
+    document.getElementById('dlXlsx').addEventListener('click', ()=>{
+      if(state.quote.items.length===0){ toast('Adicione itens primeiro'); return; }
+      readFormToState();
+
+      const rows = state.quote.items;
+      const data = [
+        ['Cotação', `#${state.quote.id}`],
+        ['Data', formatDateBR(state.quote.createdAt || Date.now())],
+        ['Vendedor', state.quote.seller || ''],
+        ['WhatsApp', state.quote.sellerWa || ''],
+        ['Cliente', state.quote.buyer || ''],
+        [],
+        ['Código','Qtde','Descrição','Preço (un)','Total Item']
+      ];
+
+      rows.forEach(r=>data.push([
+        r.code||'',
+        Number(r.qty)||0,
+        r.desc||'',
+        Number(r.price)||0,
+        (Number(r.qty)||0) * (Number(r.price)||0)
+      ]));
+
+      data.push([]);
+      data.push(['', '', '', 'TOTAL', getTotal()]);
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols']=[{wch:16},{wch:8},{wch:54},{wch:14},{wch:14}];
+
+      // moeda nas colunas D e E, e total
+      for(let i=8;i<=7+rows.length;i++){
+        if(ws[`D${i}`]){ ws[`D${i}`].t='n'; ws[`D${i}`].z='R$ #,##0.00'; }
+        if(ws[`E${i}`]){ ws[`E${i}`].t='n'; ws[`E${i}`].z='R$ #,##0.00'; }
+      }
+      const totalRow = 10 + rows.length; // aproximação (depende das linhas vazias)
+      // ajustar com base no comprimento total
+      // última linha sempre é data.length
+      const lastRow = data.length;
+      if(ws[`E${lastRow}`]){ ws[`E${lastRow}`].t='n'; ws[`E${lastRow}`].z='R$ #,##0.00'; }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Cotação');
+      XLSX.writeFile(wb, `cotacao_ameripan_${state.quote.id}_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+      upsertHistory(state.quote);
+    });
+
+    // ==================== PDF ====================
+    async function fetchAsDataURL(url){
+      const res = await fetch(url, {mode:'cors'});
+      if(!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      return await new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function generatePdf(){
+      const rows = state.quote.items;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p','mm','a4');
+
+      const total = getTotal();
+      const dateBR = formatDateBR(state.quote.createdAt || Date.now());
+
+      // Header
+      let y = 14;
+      try{
+        const logoData = await fetchAsDataURL(BRAND_LOGO_PDF);
+        doc.addImage(logoData, 'PNG', 14, 10, 34, 14);
+      }catch{}
+
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(14);
+      doc.text(`COTAÇÃO #${state.quote.id}`, 105, y, {align:'center'});
+      y += 6;
+
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(10);
+      doc.text(`Data: ${dateBR}`, 14, y);
+      if(state.quote.seller) doc.text(`Vendedor: ${state.quote.seller}`, 105, y, {align:'center'});
+      if(state.quote.buyer) doc.text(`Cliente: ${state.quote.buyer}`, 196, y, {align:'right'});
+      y += 8;
+
+      const head = [["CÓD","QTDE","DESCRIÇÃO","PREÇO (UN)","TOTAL ITEM"]];
+      const body = rows.map(r=>[
+        r.code||'',
+        String(parseInt(r.qty,10)||0),
+        r.desc||'',
+        fmtBRL(r.price||0),
+        fmtBRL((Number(r.qty)||0)*(Number(r.price)||0))
+      ]);
+
+      doc.autoTable({
+        head,
+        body,
+        startY: y,
+        styles:{fontSize:9,cellPadding:1.8},
+        headStyles:{fillColor:[243,244,246],textColor:[0,0,0],fontStyle:'bold'},
+        columnStyles:{
+          0:{cellWidth:20},
+          1:{cellWidth:14,halign:'center'},
+          2:{cellWidth:'auto'},
+          3:{cellWidth:30,halign:'right'},
+          4:{cellWidth:30,halign:'right'}
+        },
+        margin:{left:14,right:14}
+      });
+
+      y = doc.lastAutoTable.finalY + 8;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(11);
+      doc.text('TOTAL: ' + fmtBRL(total), 196, y, {align:'right'});
+      y += 8;
+
+      if(state.quote.notes){
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(9);
+        doc.text('Observações:', 14, y);
+        y += 4;
+        doc.setFont('helvetica','normal');
+        doc.text(state.quote.notes, 14, y, {maxWidth: 182});
+      }
+
+      // Botão WhatsApp dentro do PDF
+      const waLink = buildWaLink();
+      const linkY = 285;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(10);
+      doc.setTextColor(11,102,195);
+      doc.textWithLink('WhatsApp — falar sobre esta cotação', 14, linkY, { url: waLink });
+      doc.setTextColor(0,0,0);
+
+      return doc;
+    }
+
+    document.getElementById('dlPdf').addEventListener('click', async ()=>{
+      if(state.quote.items.length===0){ toast('Adicione itens primeiro'); return; }
+      readFormToState();
+      if(!state.quote.sellerWa){
+        // não bloqueia, mas avisa
+        toast('Dica: preencha o WhatsApp do vendedor para o link no PDF');
+      }
+      const doc = await generatePdf();
+      doc.save(`cotacao_ameripan_${state.quote.id}_${new Date().toISOString().slice(0,10)}.pdf`);
+      upsertHistory(state.quote);
+    });
+
+    // ==================== Init ====================
+    (function init(){
+      // carregar cotação atual
+      if(!loadCurrent()){
+        state.quote.id = newQuoteId();
+        state.quote.createdAt = Date.now();
+      }
+      writeStateToForm();
+      renderAll();
+      renderHistory();
+
+      // catálogo
+      if(!tryLoadCatalogCache()){
+        loadProducts();
+      }else{
+        document.getElementById('catStatus').textContent = `${state.catalog.size} itens (cache)`;
+        loadProducts();
+      }
+
+      entryCode.focus();
+    })();
+  </script>
+</body>
+</html>
