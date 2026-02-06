@@ -3,8 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Roteirizador Maps - V6</title>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <title>Gestor de Leads Local - V6.2 (IndexedDB)</title>
+    <script>
+    // XLSX loader: tenta local primeiro (offline), se não existir usa CDN (online)
+    (function(){
+        const local = document.createElement('script');
+        local.src = './xlsx.full.min.js';
+        local.onload = () => { /* ok */ };
+        local.onerror = () => {
+            const cdn = document.createElement('script');
+            cdn.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+            document.head.appendChild(cdn);
+        };
+        document.head.appendChild(local);
+    })();
+</script>
     <style>
         :root {
             --bg: #0f172a; --surface: #1e293b; --border: #334155;
@@ -66,6 +79,11 @@
         .i-edit { color: #fbbf24; }
         .i-del { color: #ef4444; }
 
+        .i-mail { color: #fbbf24; }
+        .i-web { color: #34d399; }
+        .i-ig { color: #e879f9; }
+        .i-fb { color: #60a5fa; }
+
         /* MODAL */
         .modal-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 50; }
         .modal { background: var(--surface); width: 600px; max-width: 95%; padding: 20px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; max-height: 90vh; overflow-y: auto; }
@@ -76,13 +94,31 @@
         textarea { resize: vertical; min-height: 60px; }
         .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
 
-    </style>
+    
+        /* SEARCH / FILTERS */
+        .search-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; width:100%; }
+        .search-input { flex: 1; min-width: 220px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(15,23,42,0.7); color: var(--text-main); outline: none; }
+        .search-select { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(15,23,42,0.7); color: var(--text-main); outline:none; }
+        .muted { color: var(--text-muted); font-size: 0.85rem; }
+
+        /* FUNIL BADGES */
+        .badge-stage { display:inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.75rem; border:1px solid var(--border); }
+        .st-novo { background: rgba(59,130,246,0.12); color: #bfdbfe; }
+        .st-contatado { background: rgba(16,185,129,0.12); color: #bbf7d0; }
+        .st-qualificado { background: rgba(245,158,11,0.12); color: #fde68a; }
+        .st-proposta { background: rgba(139,92,246,0.12); color: #ddd6fe; }
+        .st-fechado { background: rgba(16,185,129,0.18); color: #86efac; }
+        .st-perdido { background: rgba(239,68,68,0.12); color: #fecaca; }
+
+        .next-action { font-size:0.78rem; color: var(--text-muted); margin-top: 4px; }
+        .next-action.due { color: #fecaca; }
+</style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>CRM Roteirizador <span class="badge-v">V6</span></h1>
+        <h1>Gestor de Leads <span class="badge-v">V6.2</span></h1>
         
         <div class="controls">
             <div class="file-box">
@@ -91,34 +127,73 @@
             </div>
             <button class="btn btn-blue" onclick="openModal()">➕ Novo Lead</button>
             <button class="btn btn-green" onclick="exportExcel()">📤 Exportar (Rotas)</button>
+
+            <button class="btn btn-green" onclick="exportBackup()">💾 Backup (JSON)</button>
+            <div class="file-box">
+                <button class="btn btn-blue">📥 Importar Backup</button>
+                <input type="file" id="backupInput" accept=".json">
+            </div>
             <button class="btn btn-red" onclick="clearDB()">🗑️ Limpar</button>
         </div>
     </header>
+
+    <div style="margin:-10px 0 15px 0; padding:10px; border:1px solid var(--border); border-radius:8px; background: rgba(245,158,11,0.08); color: var(--text-main);">
+        ⚠️ <b>Importante:</b> este Gestor salva seus dados no navegador (armazenamento do site / IndexedDB). 
+        <b>Não apague os dados do site</b> para não perder seus leads. Use <b>Backup (JSON)</b> regularmente.
+    </div>
 
     <div class="stats-row">
         <div class="kpi-box"><div class="kpi-num" id="kTotal">0</div><div class="kpi-txt">Total</div></div>
         <div class="kpi-box"><div class="kpi-num" id="kAvg" style="color:var(--warning)">0.0</div><div class="kpi-txt">Nota Média</div></div>
         <div class="kpi-box"><div class="kpi-num" id="kOpps" style="color:var(--danger)">0</div><div class="kpi-txt">Oportunidades</div></div>
-        
+        <div class="kpi-box"><div class="kpi-num" id="kDue" style="color:var(--warning)">0</div><div class="kpi-txt">Ações Atrasadas</div></div>
+
+        <div class="search-row">
+            <input id="searchInput" class="search-input" placeholder="Buscar: nome, cidade, tel, email, insta..."
+                   oninput="applyFilters()">
+            <select id="stageFilter" class="search-select" onchange="applyFilters()">
+                <option value="">Funil: Todos</option>
+                <option value="novo">Novo</option>
+                <option value="contatado">Contatado</option>
+                <option value="qualificado">Qualificado</option>
+                <option value="proposta">Proposta</option>
+                <option value="fechado">Fechado</option>
+                <option value="perdido">Perdido</option>
+            </select>
+            <select id="oppFilter" class="search-select" onchange="applyFilters()">
+                <option value="">Oportunidade: Todas</option>
+                <option value="opp">Somente Oportunidades</option>
+                <option value="claimed">Somente Verificados</option>
+            </select>
+            <select id="actionFilter" class="search-select" onchange="applyFilters()">
+                <option value="">Ação: Todas</option>
+                <option value="has">Com Próxima Ação</option>
+                <option value="due">Ação Atrasada</option>
+                <option value="today">Ação Hoje</option>
+            </select>
+            <div class="muted" id="resultsInfo" style="white-space:nowrap"></div>
+        </div>
+
         <div class="filter-bar">
             <span>Ordenar:</span>
             <button class="btn-filter" id="btnSortBest" onclick="applySort('best')">🏆 Melhores (Padrão)</button>
             <button class="btn-filter" onclick="applySort('opp')">📉 Nota Baixa</button>
             <button class="btn-filter" onclick="applySort('geo')">🌍 Cidade/Bairro</button>
         </div>
-    </div>
+    </div></div>
 
     <div class="table-wrap">
         <div class="table-scroll">
             <table id="mainTable">
                 <thead>
                     <tr>
-                        <th width="20%">Empresa</th>
-                        <th width="15%">Anotações</th>
+                        <th width="18%">Empresa</th>
+                        <th width="16%">Funil / Próxima</th>
+                        <th width="16%">Anotações</th>
                         <th width="15%">Localização (Cidade/UF)</th>
                         <th>Nota</th>
                         <th>Reviews</th>
-                        <th>Status</th>
+                        <th>Oportunidade</th>
                         <th>Ações (Nav & Edit)</th>
                     </tr>
                 </thead>
@@ -130,8 +205,8 @@
 
 <div class="modal-bg" id="editModal">
     <div class="modal">
-        <h2 style="margin:0; color:var(--primary)">Editar Lead</h2>
-        <input type="hidden" id="editIdx">
+        <h2 style="margin:0; color:var(--primary)">Lead</h2>
+        <input type="hidden" id="editId">
 
         <div class="form-row">
             <div class="form-col">
@@ -142,10 +217,56 @@
                 <label>Telefone</label>
                 <input type="text" id="inpPhone">
             </div>
+        
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Email</label>
+                <input type="text" id="inpEmail" placeholder="email@dominio.com (pode ser múltiplos, separados por vírgula)">
+            </div>
+            <div class="form-col">
+                <label>Website</label>
+                <input type="text" id="inpWebsite" placeholder="https://...">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Instagram</label>
+                <input type="text" id="inpInstagram" placeholder="https://instagram.com/...">
+            </div>
+            <div class="form-col">
+                <label>Facebook</label>
+                <input type="text" id="inpFacebook" placeholder="https://facebook.com/...">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Funil</label>
+                <select id="inpStage">
+                    <option value="novo">Novo</option>
+                    <option value="contatado">Contatado</option>
+                    <option value="qualificado">Qualificado</option>
+                    <option value="proposta">Proposta</option>
+                    <option value="fechado">Fechado</option>
+                    <option value="perdido">Perdido</option>
+                </select>
+            </div>
+            <div class="form-col">
+                <label>Próxima Ação</label>
+                <input type="datetime-local" id="inpNextAction">
+            </div>
+            <div class="form-col">
+                <label>Tags</label>
+                <input type="text" id="inpTags" placeholder="ex: gelateria, atacado, decisor">
+            </div>
         </div>
 
         <div class="form-col">
             <label>📝 Anotações (Internas)</label>
+
             <textarea id="inpNotes" placeholder="Ex: Cliente interessado em Paletas..."></textarea>
         </div>
 
@@ -208,225 +329,616 @@
 </div>
 
 <script>
-    let db = [];
-    let currentSort = { key: 'rating', dir: 'desc' }; // Padrão inicial
+// Gestor de Leads Local - V6.2 (IndexedDB) - local-first
+const STORAGE_KEY = 'crm_v6'; // usado só para migração (v6.1 -> v6.2)
+const SEEN_KEY = 'crm_v6_seen_warning';
+const APP_VERSION = '6.2';
 
-    window.onload = () => {
-        loadData();
-        // Força ordenação Melhores ao abrir
-        applySort('best');
+// IndexedDB
+const DB_NAME = 'gestor_leads_local';
+const DB_VERSION = 1;
+const STORE_LEADS = 'leads';
+const STORE_INTERACTIONS = 'interactions';
+const STORE_META = 'meta';
+
+const STAGES = ['novo','contatado','qualificado','proposta','fechado','perdido'];
+
+let idb = null;   // IDBDatabase
+let db = [];      // cache em memória (leads)
+let currentSort = { key: 'best' }; // best | rating(asc) | geo
+
+// ---------------- UTIL ----------------
+function uid() {
+    try { return crypto.randomUUID(); } catch(e) {}
+    return 'id_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+}
+
+function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+function firstNonEmpty(...vals) {
+    for(const v of vals) {
+        if(v === undefined || v === null) continue;
+        const s = String(v).trim();
+        if(s) return v;
+    }
+    return '';
+}
+
+function firstFromList(v) {
+    if(v === undefined || v === null) return '';
+    const s = String(v);
+    const parts = s.split(/[,;|]/).map(x => x.trim()).filter(Boolean);
+    return parts[0] || '';
+}
+
+function normalizeWebUrl(s) {
+    s = String(s || '').trim();
+    if(!s) return '';
+    if(/^https?:\/\//i.test(s)) return s;
+    if(s.startsWith('//')) return 'https:' + s;
+    // instagram.com/xxx etc
+    if(s.includes('.') || s.includes('/')) return 'https://' + s.replace(/^\/+/, '');
+    return s;
+}
+
+function normalizeEmail(s) {
+    s = String(s || '').trim();
+    if(!s) return '';
+    // mantém como foi (pode ter múltiplos), mas remove espaços duplicados
+    return s.replace(/\s+/g,' ');
+}
+
+function normalizeTags(s) {
+    s = String(s || '').trim();
+    if(!s) return '';
+    return s.split(/[,;]/).map(x => x.trim()).filter(Boolean).join(', ');
+}
+
+function normalizeStage(s) {
+    s = String(s || '').trim().toLowerCase();
+    if(!s) return 'novo';
+    if(STAGES.includes(s)) return s;
+    // tenta mapear algumas variações
+    const map = {
+        'new':'novo','novo lead':'novo',
+        'contacted':'contatado','contato':'contatado',
+        'qualified':'qualificado',
+        'proposal':'proposta',
+        'closed':'fechado','won':'fechado','ganho':'fechado',
+        'lost':'perdido','perda':'perdido'
     };
+    return map[s] || 'novo';
+}
 
-    // --- PARSER DE ENDEREÇO (INTELIGÊNCIA) ---
-    function parseAddress(fullAddr) {
-        let res = { city: '', uf: '', cep: '' };
-        if(!fullAddr) return res;
+function normalizeLead(x) {
+    const lead = Object.assign({
+        id: uid(),
+        placeId: '',
+        name: 'Sem Nome',
+        address: '',
+        city: '',
+        uf: '',
+        cep: '',
+        category: '',
+        rating: 0,
+        reviews: 0,
+        claimed: false,          // vindo do Google ("verificado/claimed")
+        phone: '',
+        url: '',
+        lat: '',
+        lng: '',
+        notes: '',
+        email: '',
+        website: '',
+        instagram: '',
+        facebook: '',
+        stage: 'novo',           // funil
+        nextAction: '',          // ISO
+        tags: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: 'local',
+    }, x || {});
 
-        // Tenta achar CEP (XXXXX-XXX)
-        const cepMatch = fullAddr.match(/\d{5}-\d{3}/);
-        if(cepMatch) res.cep = cepMatch[0];
+    // IDs
+    lead.placeId = String(lead.placeId || '').trim();
+    if(!lead.id) lead.id = lead.placeId || uid();
 
-        // Tenta achar UF (SP, MG, RJ, etc) - geralmente logo após " - " e antes do CEP
-        // Estratégia: dividir por traços
-        const parts = fullAddr.split('-').map(p => p.trim());
-        
-        // Se tiver partes suficientes, tenta adivinhar
-        // Ex: Rua X, 123, Bairro - Cidade - SP, 12345
-        for (let p of parts) {
-            // Se a parte tem 2 letras maiusculas, pode ser UF
-            if (/^[A-Z]{2}$/.test(p)) {
-                res.uf = p;
-                // A cidade geralmente vem antes da UF
-                const idx = parts.indexOf(p);
-                if (idx > 0) res.city = parts[idx-1];
-            }
-            // Ex: Piracicaba - SP
-            // Verifica se a string termina com UF (ex: "Piracicaba SP")
-            const ufMatch = p.match(/\s([A-Z]{2})$/);
-            if (ufMatch && !res.uf) {
-                res.uf = ufMatch[1];
-                res.city = p.replace(ufMatch[1], '').trim();
-            }
-        }
+    // textos
+    lead.name = String(lead.name || 'Sem Nome').trim() || 'Sem Nome';
+    lead.address = String(lead.address || '').trim();
+    lead.city = String(lead.city || '').trim();
+    lead.uf = String(lead.uf || '').trim().toUpperCase().slice(0,2);
+    lead.cep = String(lead.cep || '').trim();
+    lead.category = String(lead.category || '').trim();
 
-        // Fallback: Se não achou estruturado, tenta pegar Piracicaba especificamente
-        if (!res.city && fullAddr.includes("Piracicaba")) res.city = "Piracicaba";
-        if (!res.uf && fullAddr.includes(" SP")) res.uf = "SP";
+    // contatos
+    lead.phone = String(lead.phone || '').trim();
+    lead.email = normalizeEmail(lead.email);
+    lead.website = normalizeWebUrl(lead.website);
+    lead.instagram = normalizeWebUrl(lead.instagram);
+    lead.facebook = normalizeWebUrl(lead.facebook);
 
-        return res;
+    // números
+    lead.rating = Number.parseFloat(lead.rating || 0) || 0;
+    lead.reviews = Number.parseInt(lead.reviews || 0) || 0;
+    lead.claimed = !!lead.claimed;
+
+    // coords
+    lead.lat = String(lead.lat || '').trim();
+    lead.lng = String(lead.lng || '').trim();
+
+    // funil / tags / nextAction
+    lead.stage = normalizeStage(lead.stage);
+    lead.tags = normalizeTags(lead.tags);
+    lead.nextAction = String(lead.nextAction || '').trim();
+
+    // campos auxiliares p/ index/busca
+    lead.name_lc = lead.name.toLowerCase();
+    lead.city_lc = (lead.city || '').toLowerCase();
+
+    if(!lead.createdAt) lead.createdAt = new Date().toISOString();
+    lead.updatedAt = new Date().toISOString();
+
+    return lead;
+}
+
+function leadKey(placeId, name, addr) {
+    const pid = String(placeId || '').trim();
+    if(pid) return 'pid:' + pid;
+    return 'na:' + String(name||'').trim().toLowerCase() + '|' + String(addr||'').trim().toLowerCase();
+}
+
+function parseMunicipality(mun) {
+    mun = String(mun||'').trim();
+    if(!mun) return { city:'', uf:'' };
+    // tenta "Cidade - UF"
+    const m = mun.match(/^(.+?)\s*[-/]\s*([A-Za-z]{2})$/);
+    if(m) return { city: m[1].trim(), uf: m[2].trim().toUpperCase() };
+    return { city: mun, uf: '' };
+}
+
+function parseAddress(addr) {
+    addr = String(addr||'').trim();
+    let cep = '';
+    let uf = '';
+    let city = '';
+
+    const cepM = addr.match(/(\d{5}-?\d{3})/);
+    if(cepM) cep = cepM[1].replace(/(\d{5})(\d{3})/,'$1-$2');
+
+    // tenta pegar " - UF" perto do final
+    const ufM = addr.match(/[-,]\s*([A-Za-z]{2})\s*(?:,|\s|$)/);
+    if(ufM) uf = ufM[1].toUpperCase();
+
+    // tenta pegar cidade: última parte antes do UF
+    const parts = addr.split(',');
+    if(parts.length >= 2) {
+        const last = parts[parts.length-1].trim();
+        const prev = parts[parts.length-2].trim();
+        if(/^[A-Za-z]{2}$/.test(last)) city = prev;
     }
 
-    // --- IMPORTAÇÃO ---
-    document.getElementById('fileInput').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if(!file) return;
+    return { cep, uf, city };
+}
 
-        let raw = [];
-        if(file.name.endsWith('.csv')) {
-            raw = parseCSV(await file.text());
-        } else {
-            const ab = await file.arrayBuffer();
-            const wb = XLSX.read(ab, {type:'array'});
-            raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
-        }
+function parseCSV(text) {
+    const lines = String(text||'').split(/\r?\n/).filter(l=>l.trim().length);
+    if(!lines.length) return [];
+    const headers = splitCSVLine(lines[0]).map(h => h.trim());
+    const res = [];
+    for(let i=1;i<lines.length;i++){
+        const row = splitCSVLine(lines[i]);
+        const obj = {};
+        headers.forEach((h,idx)=> obj[h]=(row[idx]||'').replace(/^"|"$/g,''));
+        res.push(obj);
+    }
+    return res;
+}
 
-        let added = 0;
-        raw.forEach(r => {
-            // Mapeamento seguro
-            const name = r['Name'] || 'Sem Nome';
-            const addr = r['Fulladdress'] || r['Street'] || '';
-            
-            // Verifica duplicidade
-            const exists = db.some(x => x.name === name && x.address === addr);
-            if(!exists) {
-                const parsed = parseAddress(addr);
-                db.push({
-                    name: name,
-                    address: addr,
-                    category: (r['Categories'] || '').split(',')[0],
-                    rating: parseFloat(r['Average Rating']) || 0,
-                    reviews: parseInt(r['Review Count']) || 0,
-                    claimed: String(r['Claimed']).toUpperCase().includes('YES'),
-                    phone: String(r['Phone'] || ''),
-                    url: r['Google Maps URL'] || '',
-                    lat: r['Latitude'] || '',
-                    lng: r['Longitude'] || '',
-                    // Novos campos
-                    notes: '', 
-                    city: parsed.city,
-                    uf: parsed.uf,
-                    cep: parsed.cep
-                });
-                added++;
+function splitCSVLine(line) {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for(let i=0;i<line.length;i++){
+        const ch = line[i];
+        if(ch === '"' ) { inQ = !inQ; cur += ch; continue; }
+        if(ch === ',' && !inQ) { out.push(cur); cur=''; continue; }
+        cur += ch;
+    }
+    out.push(cur);
+    return out;
+}
+
+function fmtBR(iso) {
+    if(!iso) return '';
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function isDue(iso) {
+    if(!iso) return false;
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return false;
+    return d.getTime() < Date.now();
+}
+
+function isToday(iso) {
+    if(!iso) return false;
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return false;
+    const now = new Date();
+    return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+
+// ---------------- IndexedDB helpers ----------------
+function openIDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+
+        req.onupgradeneeded = () => {
+            const dbx = req.result;
+
+            if(!dbx.objectStoreNames.contains(STORE_LEADS)) {
+                const s = dbx.createObjectStore(STORE_LEADS, { keyPath: 'id' });
+                s.createIndex('placeId', 'placeId', { unique: false });
+                s.createIndex('name_lc', 'name_lc', { unique: false });
+                s.createIndex('city_lc', 'city_lc', { unique: false });
+                s.createIndex('stage', 'stage', { unique: false });
+                s.createIndex('claimed', 'claimed', { unique: false });
+                s.createIndex('nextAction', 'nextAction', { unique: false });
+                s.createIndex('updatedAt', 'updatedAt', { unique: false });
             }
-        });
 
-        saveData();
-        renderTable();
-        alert(`${added} leads importados e endereços processados!`);
-        e.target.value = '';
+            if(!dbx.objectStoreNames.contains(STORE_INTERACTIONS)) {
+                const s = dbx.createObjectStore(STORE_INTERACTIONS, { keyPath: 'id' });
+                s.createIndex('leadId', 'leadId', { unique: false });
+                s.createIndex('createdAt', 'createdAt', { unique: false });
+            }
+
+            if(!dbx.objectStoreNames.contains(STORE_META)) {
+                dbx.createObjectStore(STORE_META, { keyPath: 'key' });
+            }
+        };
+
+        req.onsuccess = () => {
+            idb = req.result;
+            idb.onversionchange = () => idb.close();
+            resolve(idb);
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function tx(store, mode='readonly') {
+    return idb.transaction(store, mode).objectStore(store);
+}
+
+function idbGetAll(store) {
+    return new Promise((resolve, reject) => {
+        const req = tx(store).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function idbPut(store, value) {
+    return new Promise((resolve, reject) => {
+        const req = tx(store, 'readwrite').put(value);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function idbDelete(store, key) {
+    return new Promise((resolve, reject) => {
+        const req = tx(store, 'readwrite').delete(key);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function idbClear(store) {
+    return new Promise((resolve, reject) => {
+        const req = tx(store, 'readwrite').clear();
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function idbBulkPut(store, items) {
+    return new Promise((resolve, reject) => {
+        if(!items || !items.length) return resolve(true);
+        const tr = idb.transaction(store, 'readwrite');
+        const os = tr.objectStore(store);
+        for(const it of items) os.put(it);
+        tr.oncomplete = () => resolve(true);
+        tr.onerror = () => reject(tr.error);
+        tr.onabort = () => reject(tr.error);
+    });
+}
+
+async function metaGet(key) {
+    return new Promise((resolve, reject) => {
+        const req = tx(STORE_META).get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function metaSet(key, value) {
+    return idbPut(STORE_META, { key, value });
+}
+
+async function requestPersistence() {
+    try {
+        if(navigator.storage && navigator.storage.persist) {
+            await navigator.storage.persist(); // best-effort
+        }
+    } catch(e) {}
+}
+
+// ---------------- MIGRAÇÃO ----------------
+async function migrateFromLocalStorage() {
+    const migrated = await metaGet('migrated_from_ls');
+    if(migrated) return;
+
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(!s) {
+        await metaSet('migrated_from_ls', 'no_data');
+        return;
+    }
+
+    try {
+        const arr = JSON.parse(s);
+        if(Array.isArray(arr) && arr.length) {
+            const leads = arr.map(normalizeLead);
+            await idbBulkPut(STORE_LEADS, leads);
+            await metaSet('migrated_from_ls', new Date().toISOString());
+        } else {
+            await metaSet('migrated_from_ls', 'empty');
+        }
+    } catch(e) {
+        await metaSet('migrated_from_ls', 'error:' + (e && e.message ? e.message : 'unknown'));
+    }
+}
+
+// ---------------- RENDER / FILTROS ----------------
+function getFilters() {
+    const q = String(document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+    const stage = String(document.getElementById('stageFilter')?.value || '').trim().toLowerCase();
+    const opp = String(document.getElementById('oppFilter')?.value || '').trim().toLowerCase();
+    const act = String(document.getElementById('actionFilter')?.value || '').trim().toLowerCase();
+    return { q, stage, opp, act };
+}
+
+function applyFilters() {
+    renderTable();
+}
+
+function stageBadgeClass(stage) {
+    const s = normalizeStage(stage);
+    return 'badge-stage st-' + s;
+}
+
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+
+    const { q, stage, opp, act } = getFilters();
+
+    const filtered = db.filter(item => {
+        if(stage && normalizeStage(item.stage) !== stage) return false;
+
+        if(opp === 'opp' && item.claimed) return false;
+        if(opp === 'claimed' && !item.claimed) return false;
+
+        if(act === 'has' && !item.nextAction) return false;
+        if(act === 'due' && !isDue(item.nextAction)) return false;
+        if(act === 'today' && !isToday(item.nextAction)) return false;
+
+        if(q) {
+            const hay = [
+                item.name, item.city, item.uf, item.address, item.phone, item.email,
+                item.website, item.instagram, item.facebook, item.category, item.tags
+            ].join(' ').toLowerCase();
+            if(!hay.includes(q)) return false;
+        }
+        return true;
     });
 
-    // --- RENDER ---
-    function renderTable() {
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        
-        // Ordenação
-        db.sort((a,b) => {
-            if(currentSort.key === 'best') {
-                // Nota DESC, depois Review DESC
-                if(b.rating !== a.rating) return b.rating - a.rating;
-                return b.reviews - a.reviews;
-            }
-            if(currentSort.key === 'geo') {
-                // Cidade ASC, Bairro/Endereço ASC
-                return a.city.localeCompare(b.city) || a.address.localeCompare(b.address);
-            }
-            // Genérico
-            let vA = a[currentSort.key], vB = b[currentSort.key];
-            if(vA < vB) return currentSort.dir==='asc'?-1:1;
-            if(vA > vB) return currentSort.dir==='asc'?1:-1;
-            return 0;
-        });
+    // ordenação
+    const view = [...filtered].sort((a,b) => {
+        if(currentSort.key === 'best') {
+            if(b.rating !== a.rating) return b.rating - a.rating;
+            return b.reviews - a.reviews;
+        }
+        if(currentSort.key === 'geo') {
+            return String(a.city||'').localeCompare(String(b.city||'')) || String(a.address||'').localeCompare(String(b.address||''));
+        }
+        // rating asc (opp)
+        let vA = a[currentSort.key], vB = b[currentSort.key];
+        if(vA < vB) return currentSort.dir==='asc'?-1:1;
+        if(vA > vB) return currentSort.dir==='asc'?1:-1;
+        return 0;
+    });
 
-        let stats = { total: db.length, sumR: 0, opps: 0 };
-        const frag = document.createDocumentFragment();
+    // KPIs (globais)
+    let sumR = 0, opps = 0, due = 0;
+    db.forEach(item => {
+        sumR += (parseFloat(item.rating) || 0);
+        if(!item.claimed) opps++;
+        if(item.nextAction && isDue(item.nextAction)) due++;
+    });
 
-        db.forEach((item, idx) => {
-            stats.sumR += item.rating;
-            if(!item.claimed) stats.opps++;
+    document.getElementById('kTotal').innerText = db.length;
+    document.getElementById('kAvg').innerText = db.length ? (sumR/db.length).toFixed(1) : '0.0';
+    document.getElementById('kOpps').innerText = opps;
+    document.getElementById('kDue').innerText = due;
 
-            // Tratamento Zap
-            let phoneClean = item.phone.replace(/\D/g, '');
-            if(phoneClean.length >= 10 && phoneClean.length <= 11) phoneClean = '55'+phoneClean;
-            const hasZap = phoneClean.length > 8 && !/[a-z]/i.test(item.phone);
+    const resultsInfo = document.getElementById('resultsInfo');
+    if(resultsInfo) resultsInfo.innerText = view.length === db.length ? `${view.length} itens` : `${view.length} de ${db.length}`;
 
-            // Link Mapa
-            let navUrl = item.url;
-            if(!navUrl) navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
-            
-            // Link GPS
-            let gpsUrl = '';
-            if(item.lat && item.lng) gpsUrl = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+    const frag = document.createDocumentFragment();
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>
-                    <div class="cell-trunc" style="font-weight:bold" title="${item.name}">${item.name}</div>
-                    <div style="font-size:0.75rem; color:#aaa">${item.category}</div>
-                </td>
-                <td>
-                    <div class="cell-note" title="${item.notes || 'Sem anotações'}">${item.notes || '-'}</div>
-                </td>
-                <td>
-                    <div class="cell-trunc">${item.city} - ${item.uf}</div>
-                    <div style="font-size:0.7rem; color:#666">${item.cep}</div>
-                </td>
-                <td><span class="rating">★ ${item.rating.toFixed(1)}</span></td>
-                <td>${item.reviews}</td>
-                <td><span class="badge-st ${item.claimed?'st-yes':'st-no'}">${item.claimed?'Verificado':'Oportunidade'}</span></td>
-                <td>
-                    <div class="act-group">
-                        <a href="${navUrl}" target="_blank" class="btn-icon i-map" title="Navegar por Endereço">🗺️</a>
-                        ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Navegar por GPS (Exato)">📍</a>` : ''}
-                        ${hasZap ? `<a href="https://wa.me/${phoneClean}" target="_blank" class="btn-icon i-wa" title="WhatsApp">📱</a>` : ''}
-                        <button class="btn-icon i-edit" onclick="editLead(${idx})" title="Editar / Anotar">✏️</button>
-                        <button class="btn-icon i-del" onclick="delLead(${idx})" title="Excluir">🗑️</button>
-                    </div>
-                </td>
-            `;
-            tr.ondblclick = () => editLead(idx);
-            frag.appendChild(tr);
-        });
-        tbody.appendChild(frag);
+    view.forEach((item) => {
+        let phoneClean = String(item.phone || '').replace(/\D/g, '');
+        if(phoneClean.length >= 10 && phoneClean.length <= 11) phoneClean = '55'+phoneClean;
+        const hasZap = phoneClean.length > 8 && !/[a-z]/i.test(String(item.phone||''));
 
-        // Stats UI
-        document.getElementById('kTotal').innerText = stats.total;
-        document.getElementById('kAvg').innerText = stats.total ? (stats.sumR/stats.total).toFixed(1) : '0.0';
-        document.getElementById('kOpps').innerText = stats.opps;
-        
-        // Update Filter Button UI
-        document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
-        if(currentSort.key === 'best') document.getElementById('btnSortBest').classList.add('active');
-    }
+        let navUrl = item.url;
+        if(!navUrl) navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
 
-    // --- CRUD ---
-    function openModal() {
-        document.getElementById('editIdx').value = -1;
-        // Limpar inputs
-        document.querySelectorAll('.modal input, .modal textarea').forEach(i => i.value = '');
-        document.getElementById('inpClaim').value = 'NO';
-        document.getElementById('editModal').style.display = 'flex';
-    }
+        let gpsUrl = '';
+        if(item.lat && item.lng) gpsUrl = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
 
-    function editLead(idx) {
-        // Como o array db está ordenado visualmente mas os índices podem ter mudado se usar sort in-place,
-        // o ideal seria ter um ID unico. Mas como estamos reordenando o DB principal:
-        const item = db[idx]; 
-        document.getElementById('editIdx').value = idx;
-        
-        document.getElementById('inpName').value = item.name;
-        document.getElementById('inpPhone').value = item.phone;
-        document.getElementById('inpNotes').value = item.notes || '';
-        document.getElementById('inpAddr').value = item.address;
-        document.getElementById('inpCity').value = item.city || '';
-        document.getElementById('inpUF').value = item.uf || '';
-        document.getElementById('inpCEP').value = item.cep || '';
-        document.getElementById('inpLat').value = item.lat || '';
-        document.getElementById('inpLng').value = item.lng || '';
-        document.getElementById('inpRating').value = item.rating;
-        document.getElementById('inpRev').value = item.reviews;
-        document.getElementById('inpClaim').value = item.claimed ? 'YES':'NO';
-        
-        document.getElementById('editModal').style.display = 'flex';
-    }
+        const email = firstFromList(item.email);
+        const hasEmail = !!email;
+        const hasWeb = !!item.website;
+        const hasIg = !!item.instagram;
+        const hasFb = !!item.facebook;
 
-    function saveLead() {
-        const idx = parseInt(document.getElementById('editIdx').value);
-        const obj = {
+        const nextText = item.nextAction ? fmtBR(item.nextAction) : '';
+        const nextDue = item.nextAction && isDue(item.nextAction);
+
+        const tr = document.createElement('tr');
+        if(nextDue) tr.style.background = 'rgba(239,68,68,0.06)';
+
+        tr.innerHTML = `
+            <td>
+                <div class="cell-trunc" style="font-weight:bold" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+                <div style="font-size:0.75rem; color:#aaa">${escapeHtml(item.category||'')}</div>
+            </td>
+
+            <td>
+                <div><span class="${stageBadgeClass(item.stage)}">${escapeHtml(normalizeStage(item.stage))}</span></div>
+                ${nextText ? `<div class="next-action ${nextDue?'due':''}">⏰ ${escapeHtml(nextText)} ${nextDue?'(atrasado)':''}</div>` : `<div class="next-action">—</div>`}
+                ${item.tags ? `<div class="next-action">🏷️ ${escapeHtml(item.tags)}</div>` : ''}
+            </td>
+
+            <td>
+                <div class="cell-note" title="${escapeHtml(item.notes || 'Sem anotações')}">${escapeHtml(item.notes || '-')}</div>
+            </td>
+
+            <td>
+                <div class="cell-trunc">${escapeHtml(item.city || '')} - ${escapeHtml(item.uf || '')}</div>
+                <div style="font-size:0.7rem; color:#666">${escapeHtml(item.cep || '')}</div>
+            </td>
+
+            <td><span class="rating">★ ${(parseFloat(item.rating)||0).toFixed(1)}</span></td>
+            <td>${parseInt(item.reviews)||0}</td>
+
+            <td><span class="badge-st ${item.claimed?'st-yes':'st-no'}">${item.claimed?'Verificado':'Oportunidade'}</span></td>
+
+            <td>
+                <div class="act-group">
+                    <a href="${navUrl}" target="_blank" class="btn-icon i-map" title="Navegar por Endereço">🗺️</a>
+                    ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Navegar por GPS (Exato)">📍</a>` : ''}
+                    ${hasZap ? `<a href="https://wa.me/${phoneClean}" target="_blank" class="btn-icon i-wa" title="WhatsApp">📱</a>` : ''}
+                    ${hasEmail ? `<a href="mailto:${encodeURIComponent(email)}" class="btn-icon i-mail" title="Enviar Email">✉️</a>` : ''}
+                    ${hasWeb ? `<a href="${item.website}" target="_blank" class="btn-icon i-web" title="Website">🌐</a>` : ''}
+                    ${hasIg ? `<a href="${item.instagram}" target="_blank" class="btn-icon i-ig" title="Instagram">📷</a>` : ''}
+                    ${hasFb ? `<a href="${item.facebook}" target="_blank" class="btn-icon i-fb" title="Facebook">📘</a>` : ''}
+                    <button class="btn-icon i-edit" onclick="editLead('${item.id}')" title="Editar / Anotar">✏️</button>
+                    <button class="btn-icon i-del" onclick="delLead('${item.id}')" title="Excluir">🗑️</button>
+                </div>
+            </td>
+        `;
+        tr.ondblclick = () => editLead(item.id);
+        frag.appendChild(tr);
+    });
+
+    tbody.appendChild(frag);
+
+    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+    if(currentSort.key === 'best') document.getElementById('btnSortBest')?.classList.add('active');
+    if(currentSort.key === 'geo') document.querySelector("button[onclick=\"applySort('geo')\"]")?.classList.add('active');
+    if(currentSort.key === 'rating' && currentSort.dir === 'asc') document.querySelector("button[onclick=\"applySort('opp')\"]")?.classList.add('active');
+}
+
+function applySort(key) {
+    if(key === 'best') currentSort = { key: 'best' };
+    if(key === 'geo') currentSort = { key: 'geo' };
+    if(key === 'opp') currentSort = { key: 'rating', dir: 'asc' };
+    renderTable();
+}
+
+// ---------------- CRUD ----------------
+function openModal() {
+    document.querySelectorAll('.modal input:not(#editId), .modal textarea').forEach(i => i.value = '');
+    document.getElementById('editId').value = '';
+    document.getElementById('inpClaim').value = 'NO';
+    document.getElementById('inpStage').value = 'novo';
+    document.getElementById('inpNextAction').value = '';
+    document.getElementById('inpTags').value = '';
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function editLead(id) {
+    const idx = db.findIndex(x => x.id === id);
+    if(idx < 0) return;
+    const item = db[idx];
+
+    document.getElementById('editId').value = item.id;
+
+    document.getElementById('inpName').value = item.name || '';
+    document.getElementById('inpPhone').value = item.phone || '';
+    document.getElementById('inpEmail').value = item.email || '';
+    document.getElementById('inpWebsite').value = item.website || '';
+    document.getElementById('inpInstagram').value = item.instagram || '';
+    document.getElementById('inpFacebook').value = item.facebook || '';
+
+    document.getElementById('inpStage').value = normalizeStage(item.stage || 'novo');
+    document.getElementById('inpNextAction').value = item.nextAction ? toDatetimeLocal(item.nextAction) : '';
+    document.getElementById('inpTags').value = item.tags || '';
+
+    document.getElementById('inpNotes').value = item.notes || '';
+
+    document.getElementById('inpAddr').value = item.address || '';
+    document.getElementById('inpCity').value = item.city || '';
+    document.getElementById('inpUF').value = item.uf || '';
+    document.getElementById('inpCEP').value = item.cep || '';
+    document.getElementById('inpLat').value = item.lat || '';
+    document.getElementById('inpLng').value = item.lng || '';
+
+    document.getElementById('inpRating').value = item.rating || 0;
+    document.getElementById('inpRev').value = item.reviews || 0;
+
+    document.getElementById('inpClaim').value = item.claimed ? 'YES' : 'NO';
+
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function toDatetimeLocal(iso) {
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return '';
+    const pad = (n)=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function saveLead() {
+    try {
+        const id = String(document.getElementById('editId').value || '').trim();
+        const isEdit = !!id;
+
+        const leadObj = normalizeLead({
+            id: isEdit ? id : uid(),
             name: document.getElementById('inpName').value,
             phone: document.getElementById('inpPhone').value,
+            email: document.getElementById('inpEmail').value,
+            website: document.getElementById('inpWebsite').value,
+            instagram: document.getElementById('inpInstagram').value,
+            facebook: document.getElementById('inpFacebook').value,
+            stage: document.getElementById('inpStage').value,
+            nextAction: fromDatetimeLocal(document.getElementById('inpNextAction').value),
+            tags: document.getElementById('inpTags').value,
             notes: document.getElementById('inpNotes').value,
             address: document.getElementById('inpAddr').value,
             city: document.getElementById('inpCity').value,
@@ -434,90 +946,336 @@
             cep: document.getElementById('inpCEP').value,
             lat: document.getElementById('inpLat').value,
             lng: document.getElementById('inpLng').value,
-            rating: parseFloat(document.getElementById('inpRating').value)||0,
-            reviews: parseInt(document.getElementById('inpRev').value)||0,
+            rating: document.getElementById('inpRating').value,
+            reviews: document.getElementById('inpRev').value,
             claimed: document.getElementById('inpClaim').value === 'YES',
-            category: idx >= 0 ? db[idx].category : 'Manual',
-            url: idx >= 0 ? db[idx].url : ''
-        };
+            source: 'local_edit'
+        });
 
-        if(idx < 0) db.unshift(obj);
-        else db[idx] = obj;
+        if(isEdit) {
+            const idx = db.findIndex(x => x.id === id);
+            if(idx >= 0) {
+                // preserva campos que não aparecem no modal (ex: placeId, url, category)
+                const keep = db[idx];
+                leadObj.placeId = keep.placeId || leadObj.placeId;
+                leadObj.url = keep.url || leadObj.url;
+                leadObj.category = keep.category || leadObj.category;
+                leadObj.createdAt = keep.createdAt || leadObj.createdAt;
+                db[idx] = leadObj;
+            }
+        } else {
+            db.unshift(leadObj);
+        }
 
-        saveData();
+        await idbPut(STORE_LEADS, leadObj);
+
         closeModal();
         renderTable();
+    } catch(err) {
+        alert('Erro ao salvar: ' + (err && err.message ? err.message : err));
     }
+}
 
-    function delLead(idx) {
-        if(confirm('Excluir este lead?')) {
-            db.splice(idx, 1);
-            saveData();
-            renderTable();
-        }
-    }
+function fromDatetimeLocal(val) {
+    val = String(val||'').trim();
+    if(!val) return '';
+    // datetime-local é "YYYY-MM-DDTHH:MM"
+    const d = new Date(val);
+    if(Number.isNaN(d.getTime())) return '';
+    return d.toISOString();
+}
 
-    function tryParseAddr() {
-        // Auxiliar no Modal: se mudar endereço, tenta preencher cidade
-        const addr = document.getElementById('inpAddr').value;
-        const p = parseAddress(addr);
-        if(p.city) document.getElementById('inpCity').value = p.city;
-        if(p.uf) document.getElementById('inpUF').value = p.uf;
-        if(p.cep) document.getElementById('inpCEP').value = p.cep;
-    }
+async function delLead(id) {
+    const idx = db.findIndex(x => x.id === id);
+    if(idx < 0) return;
+    if(!confirm('Excluir este lead?')) return;
 
-    // --- SYSTEM ---
-    function applySort(type) {
-        if(type === 'best') currentSort = { key: 'best' };
-        if(type === 'opp') currentSort = { key: 'rating', dir: 'asc' };
-        if(type === 'geo') currentSort = { key: 'geo' };
+    try {
+        db.splice(idx, 1);
+        await idbDelete(STORE_LEADS, id);
         renderTable();
+    } catch(err) {
+        alert('Erro ao excluir: ' + (err && err.message ? err.message : err));
     }
+}
 
-    function exportExcel() {
-        // Mapeia para formato amigável
-        const rows = db.map(i => ({
-            "Empresa": i.name,
-            "Anotações": i.notes,
-            "Telefone": i.phone,
-            "Categoria": i.category,
-            "Endereço Completo": i.address,
-            "Cidade": i.city,
-            "UF": i.uf,
-            "CEP": i.cep,
-            "Latitude": i.lat,
-            "Longitude": i.lng,
-            "Nota": i.rating,
-            "Reviews": i.reviews,
-            "Verificado": i.claimed ? "SIM" : "NÃO",
-            "Maps URL": i.url
-        }));
-        
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Rota de Vendas");
-        XLSX.writeFile(wb, "Leads_Roteirizacao.xlsx");
+function tryParseAddr() {
+    const addr = document.getElementById('inpAddr').value;
+    if(!addr) return;
+    const parsed = parseAddress(addr);
+    if(parsed.cep && !document.getElementById('inpCEP').value) document.getElementById('inpCEP').value = parsed.cep;
+    if(parsed.uf && !document.getElementById('inpUF').value) document.getElementById('inpUF').value = parsed.uf;
+    if(parsed.city && !document.getElementById('inpCity').value) document.getElementById('inpCity').value = parsed.city;
+}
+
+async function clearDB() {
+    if(!confirm('Apagar tudo? Isso remove todos os leads deste dispositivo.')) return;
+    try {
+        await idbClear(STORE_LEADS);
+        await idbClear(STORE_INTERACTIONS);
+        db = [];
+        renderTable();
+    } catch(err) {
+        alert('Erro ao limpar: ' + (err && err.message ? err.message : err));
     }
+}
 
-    function parseCSV(text) {
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h=>h.trim());
-        const res=[];
-        for(let i=1;i<lines.length;i++){
-            if(!lines[i].trim())continue;
-            const matches = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)||[];
-            let obj={};
-            headers.forEach((h,idx)=> obj[h]=(matches[idx]||'').replace(/^"|"$/g,''));
-            res.push(obj);
+// ---------------- IMPORTAÇÃO (XLSX/CSV) ----------------
+async function handleImportFile(file) {
+    if(!file) return;
+
+    let raw = [];
+    if(file.name.toLowerCase().endsWith('.csv')) {
+        raw = parseCSV(await file.text());
+    } else {
+        if(typeof XLSX === 'undefined') {
+            alert('Biblioteca XLSX não carregou. Se estiver offline, baixe xlsx.full.min.js e coloque na mesma pasta do HTML.');
+            return;
         }
-        return res;
+        const ab = await file.arrayBuffer();
+        const wb = XLSX.read(ab, {type:'array'});
+        raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
     }
 
-    function saveData() { localStorage.setItem('crm_v6', JSON.stringify(db)); }
-    function loadData() { const s = localStorage.getItem('crm_v6'); if(s) db = JSON.parse(s); }
-    function clearDB() { if(confirm('Apagar tudo?')) { db=[]; saveData(); renderTable(); } }
-    function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+    let added = 0, merged = 0;
+    const changed = [];
 
+    raw.forEach(r => {
+        const name = firstNonEmpty(r['Name'], r['Empresa'], 'Sem Nome');
+        const addr = firstNonEmpty(r['Fulladdress'], r['Endereço Completo'], r['Street'], r['Endereço'], '');
+        const mun = firstNonEmpty(r['Municipality'], r['Município'], '');
+        const placeId = firstNonEmpty(r['Place Id'], r['PlaceId'], '');
+
+        const parsedMun = parseMunicipality(mun);
+        const parsedAddr = parseAddress(addr);
+
+        let city = parsedMun.city || parsedAddr.city;
+        let uf = parsedMun.uf || parsedAddr.uf;
+
+        const socialStr = firstNonEmpty(r['Social Medias'], r['Social'], '');
+        let social = {};
+        if(socialStr && String(socialStr).trim().startsWith('{')) {
+            try { social = JSON.parse(socialStr); } catch(err) {}
+        }
+
+        const lead = normalizeLead({
+            id: placeId || uid(),
+            placeId: placeId,
+            name: name,
+            address: addr,
+            category: firstFromList(firstNonEmpty(r['Categories'], r['Categoria'], '')),
+            rating: parseFloat(firstNonEmpty(r['Average Rating'], r['Nota'], 0)) || 0,
+            reviews: parseInt(firstNonEmpty(r['Review Count'], r['Reviews'], 0)) || 0,
+            claimed: String(firstNonEmpty(r['Claimed'], r['Verificado'], '')).toUpperCase().includes('YES') || String(firstNonEmpty(r['Verificado'], '')).toUpperCase().includes('SIM'),
+            phone: firstFromList(firstNonEmpty(r['Phone'], r['Telefone'], r['Phones'], '')),
+            url: firstNonEmpty(r['Google Maps URL'], r['Maps URL'], r['URL'], ''),
+            lat: firstNonEmpty(r['Latitude'], ''),
+            lng: firstNonEmpty(r['Longitude'], ''),
+            notes: '',
+            city: city,
+            uf: uf,
+            cep: parsedAddr.cep,
+            email: firstNonEmpty(r['Email'], ''),
+            website: firstNonEmpty(r['Website'], ''),
+            instagram: firstNonEmpty(r['Instagram'], social.instagram, ''),
+            facebook: firstNonEmpty(r['Facebook'], social.facebook, ''),
+            stage: firstNonEmpty(r['Funil'], r['Stage'], ''),
+            nextAction: '',
+            tags: '',
+            source: 'import'
+        });
+
+        const key = leadKey(lead.placeId, lead.name, lead.address);
+        const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
+
+        if(idx < 0) {
+            db.push(lead);
+            changed.push(lead);
+            added++;
+        } else {
+            const old = db[idx];
+            const mergedLead = normalizeLead({
+                ...old,
+                // só sobrepõe campos "vazios" do antigo
+                phone: old.phone || lead.phone,
+                email: old.email || lead.email,
+                website: old.website || lead.website,
+                instagram: old.instagram || lead.instagram,
+                facebook: old.facebook || lead.facebook,
+                url: old.url || lead.url,
+                lat: old.lat || lead.lat,
+                lng: old.lng || lead.lng,
+                rating: old.rating || lead.rating,
+                reviews: old.reviews || lead.reviews,
+                claimed: old.claimed || lead.claimed,
+                category: old.category || lead.category,
+                address: old.address || lead.address,
+                city: old.city || lead.city,
+                uf: old.uf || lead.uf,
+                cep: old.cep || lead.cep,
+                placeId: old.placeId || lead.placeId,
+                source: old.source || 'import_merge'
+            });
+            db[idx] = mergedLead;
+            changed.push(mergedLead);
+            merged++;
+        }
+    });
+
+    await idbBulkPut(STORE_LEADS, changed);
+    renderTable();
+    alert(`${added} leads importados (${merged} mesclados).`);
+}
+
+// ---------------- BACKUP (JSON) ----------------
+async function exportBackup() {
+    try {
+        const interactions = await idbGetAll(STORE_INTERACTIONS);
+        const payload = {
+            app: 'Gestor de Leads Local',
+            version: APP_VERSION,
+            exportedAt: new Date().toISOString(),
+            leads: db,
+            interactions: interactions || []
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `backup_leads_v${APP_VERSION}_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+    } catch(err) {
+        alert('Erro ao exportar backup: ' + (err && err.message ? err.message : err));
+    }
+}
+
+async function importBackupFile(file) {
+    if(!file) return;
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        const leads = Array.isArray(data.leads) ? data.leads.map(normalizeLead) : [];
+        const interactions = Array.isArray(data.interactions) ? data.interactions : [];
+
+        let added = 0, merged = 0;
+        const changed = [];
+
+        leads.forEach(lead => {
+            const key = leadKey(lead.placeId, lead.name, lead.address);
+            const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
+            if(idx < 0) {
+                db.push(lead);
+                changed.push(lead);
+                added++;
+            } else {
+                const old = db[idx];
+                const mergedLead = normalizeLead({ ...old, ...lead, id: old.id || lead.id });
+                // preserva createdAt se existir
+                mergedLead.createdAt = old.createdAt || mergedLead.createdAt;
+                db[idx] = mergedLead;
+                changed.push(mergedLead);
+                merged++;
+            }
+        });
+
+        await idbBulkPut(STORE_LEADS, changed);
+
+        if(interactions.length) {
+            // não tenta dedupe aqui (v6.3 cuidará melhor); apenas insere.
+            const ints = interactions.map(x => ({...x, id: x.id || uid()}));
+            await idbBulkPut(STORE_INTERACTIONS, ints);
+        }
+
+        renderTable();
+        alert(`Backup importado: ${added} adicionados, ${merged} mesclados.`);
+    } catch(err) {
+        alert('Erro ao importar backup: ' + (err && err.message ? err.message : err));
+    }
+}
+
+// ---------------- EXPORTAR (XLSX) ----------------
+function exportExcel() {
+    if(typeof XLSX === 'undefined') {
+        alert('Biblioteca XLSX não carregou. Para exportar planilha, conecte na internet ou coloque xlsx.full.min.js local.');
+        return;
+    }
+    const rows = db.map(i => ({
+        "Empresa": i.name,
+        "Funil": i.stage,
+        "Próxima Ação": i.nextAction ? fmtBR(i.nextAction) : '',
+        "Tags": i.tags,
+        "Anotações": i.notes,
+        "Telefone": i.phone,
+        "Email": i.email,
+        "Website": i.website,
+        "Instagram": i.instagram,
+        "Facebook": i.facebook,
+        "Categoria": i.category,
+        "Endereço Completo": i.address,
+        "Cidade": i.city,
+        "UF": i.uf,
+        "CEP": i.cep,
+        "Latitude": i.lat,
+        "Longitude": i.lng,
+        "Nota": i.rating,
+        "Reviews": i.reviews,
+        "Verificado": i.claimed ? "SIM" : "NÃO",
+        "Maps URL": i.url,
+        "Place Id": i.placeId
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Leads");
+    XLSX.writeFile(wb, `rotas_leads_v${APP_VERSION}.xlsx`);
+}
+
+// ---------------- UI / INIT ----------------
+function showWarningOnce() {
+    try {
+        if(localStorage.getItem(SEEN_KEY)) return;
+        localStorage.setItem(SEEN_KEY, '1');
+    } catch(e) {}
+}
+
+async function reloadFromIDB() {
+    const arr = await idbGetAll(STORE_LEADS);
+    db = (arr || []).map(normalizeLead);
+}
+
+window.onload = async () => {
+    try {
+        await requestPersistence();
+        await openIDB();
+        await migrateFromLocalStorage();
+        await reloadFromIDB();
+        applySort('best');
+        showWarningOnce();
+
+        // listeners de arquivo
+        document.getElementById('fileInput')?.addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            await handleImportFile(f);
+            e.target.value = '';
+        });
+
+        document.getElementById('backupInput')?.addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            await importBackupFile(f);
+            e.target.value = '';
+        });
+
+        renderTable();
+    } catch(err) {
+        alert('Falha ao iniciar: ' + (err && err.message ? err.message : err));
+    }
+};
+
+// fecha modal clicando fora
+window.addEventListener('click', (e) => {
+    if(e.target && e.target.id === 'editModal') closeModal();
+});
 </script>
 </body>
 </html>
