@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Leads Local - V6.2 (IndexedDB)</title>
+    <title>Gestor de Leads Local - V6.3 (IndexedDB)</title>
     <script>
     // XLSX loader: tenta local primeiro (offline), se não existir usa CDN (online)
     (function(){
@@ -12,7 +12,7 @@
         local.onload = () => { /* ok */ };
         local.onerror = () => {
             const cdn = document.createElement('script');
-            cdn.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+            cdn.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
             document.head.appendChild(cdn);
         };
         document.head.appendChild(local);
@@ -112,13 +112,17 @@
 
         .next-action { font-size:0.78rem; color: var(--text-muted); margin-top: 4px; }
         .next-action.due { color: #fecaca; }
+
+        .oh-badge { display:inline-block; font-size:0.70rem; padding:2px 8px; border-radius:999px; margin-left:6px; border:1px solid var(--border); }
+        .oh-open { color: #bbf7d0; background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); }
+        .oh-closed { color: #fecaca; background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.22); }
 </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>Gestor de Leads <span class="badge-v">V6.2</span></h1>
+        <h1>Gestor de Leads <span class="badge-v">V6.3</span></h1>
         
         <div class="controls">
             <div class="file-box">
@@ -265,6 +269,11 @@
         </div>
 
         <div class="form-col">
+            <label>⏱️ Horário de funcionamento (Opening hours)</label>
+            <textarea id="inpOpeningHours" style="min-height:60px" placeholder="Ex: sábado:[13:00–21:30], domingo:[13:00–21:30], segunda-feira:[Fechado]..."></textarea>
+        </div>
+
+        <div class="form-col">
             <label>📝 Anotações (Internas)</label>
 
             <textarea id="inpNotes" placeholder="Ex: Cliente interessado em Paletas..."></textarea>
@@ -329,10 +338,10 @@
 </div>
 
 <script>
-// Gestor de Leads Local - V6.2 (IndexedDB) - local-first
-const STORAGE_KEY = 'crm_v6'; // usado só para migração (v6.1 -> v6.2)
+// Gestor de Leads Local - V6.3 (IndexedDB) - local-first
+const STORAGE_KEY = 'crm_v6'; // usado só para migração (v6.1 -> v6.3)
 const SEEN_KEY = 'crm_v6_seen_warning';
-const APP_VERSION = '6.2';
+const APP_VERSION = '6.3';
 
 // IndexedDB
 const DB_NAME = 'gestor_leads_local';
@@ -434,6 +443,7 @@ function normalizeLead(x) {
         website: '',
         instagram: '',
         facebook: '',
+        openingHours: '',
         stage: 'novo',           // funil
         nextAction: '',          // ISO
         tags: '',
@@ -461,6 +471,8 @@ function normalizeLead(x) {
     lead.instagram = normalizeWebUrl(lead.instagram);
     lead.facebook = normalizeWebUrl(lead.facebook);
 
+    lead.openingHours = String(lead.openingHours || '').trim();
+
     // números
     lead.rating = Number.parseFloat(lead.rating || 0) || 0;
     lead.reviews = Number.parseInt(lead.reviews || 0) || 0;
@@ -478,6 +490,7 @@ function normalizeLead(x) {
     // campos auxiliares p/ index/busca
     lead.name_lc = lead.name.toLowerCase();
     lead.city_lc = (lead.city || '').toLowerCase();
+    lead.openingHours_lc = (lead.openingHours || '').toLowerCase();
 
     if(!lead.createdAt) lead.createdAt = new Date().toISOString();
     lead.updatedAt = new Date().toISOString();
@@ -572,6 +585,58 @@ function isToday(iso) {
     if(Number.isNaN(d.getTime())) return false;
     const now = new Date();
     return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+
+// ---------------- HORÁRIOS (Opening hours) ----------------
+const DOW_PT = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+
+function parseOpeningHours(raw) {
+    raw = String(raw || '').trim();
+    const map = {};
+    if(!raw) return map;
+    // Ex: sábado:[13:00–21:30], domingo:[Fechado]
+    const re = /([A-Za-zÀ-ÿ-]+(?:-feira)?)\s*:\s*\[([^\]]*)\]/gu;
+    let m;
+    while((m = re.exec(raw)) !== null) {
+        const day = String(m[1] || '').trim().toLowerCase();
+        const val = String(m[2] || '').trim();
+        if(day) map[day] = val;
+    }
+    return map;
+}
+
+function todayHoursText(raw) {
+    const map = parseOpeningHours(raw);
+    const key = DOW_PT[new Date().getDay()];
+    const v = map[key];
+    if(v === undefined || v === null) return '';
+    const s = String(v).trim();
+    if(!s) return '';
+    return s;
+}
+
+function isOpenNow(raw) {
+    const txt = todayHoursText(raw);
+    if(!txt) return false;
+    const low = txt.toLowerCase();
+    if(low.includes('fechado')) return false;
+
+    // suporta "13:00–21:30" ou "13:00-21:30" e múltiplos intervalos no mesmo dia
+    const now = new Date();
+    const minsNow = now.getHours()*60 + now.getMinutes();
+    const intervals = [];
+    const re = /(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/g;
+    let m;
+    while((m = re.exec(txt)) !== null) {
+        const [h1,m1] = m[1].split(':').map(Number);
+        const [h2,m2] = m[2].split(':').map(Number);
+        const a = h1*60 + m1;
+        const b = h2*60 + m2;
+        if(!Number.isNaN(a) && !Number.isNaN(b)) intervals.push([a,b]);
+    }
+    if(!intervals.length) return false;
+
+    return intervals.some(([a,b]) => minsNow >= a && minsNow <= b);
 }
 
 // ---------------- IndexedDB helpers ----------------
@@ -743,7 +808,7 @@ function renderTable() {
         if(q) {
             const hay = [
                 item.name, item.city, item.uf, item.address, item.phone, item.email,
-                item.website, item.instagram, item.facebook, item.category, item.tags
+                item.website, item.instagram, item.facebook, item.category, item.tags, item.openingHours
             ].join(' ').toLowerCase();
             if(!hay.includes(q)) return false;
         }
@@ -789,11 +854,20 @@ function renderTable() {
         if(phoneClean.length >= 10 && phoneClean.length <= 11) phoneClean = '55'+phoneClean;
         const hasZap = phoneClean.length > 8 && !/[a-z]/i.test(String(item.phone||''));
 
-        let navUrl = item.url;
-        if(!navUrl) navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
+        // Links de navegação (Google Maps / Waze)
+        let mapsViewUrl = item.url;
+        if(!mapsViewUrl) mapsViewUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
+
+        let mapsNavUrl = '';
+        if(item.lat && item.lng) mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}`;
+        else mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.name + ' ' + item.address)}`;
 
         let gpsUrl = '';
         if(item.lat && item.lng) gpsUrl = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+
+        let wazeUrl = '';
+        if(item.lat && item.lng) wazeUrl = `https://waze.com/ul?ll=${item.lat},${item.lng}&navigate=yes`;
+        else wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(item.name + ' ' + item.address)}&navigate=yes`;
 
         const email = firstFromList(item.email);
         const hasEmail = !!email;
@@ -817,6 +891,7 @@ function renderTable() {
                 <div><span class="${stageBadgeClass(item.stage)}">${escapeHtml(normalizeStage(item.stage))}</span></div>
                 ${nextText ? `<div class="next-action ${nextDue?'due':''}">⏰ ${escapeHtml(nextText)} ${nextDue?'(atrasado)':''}</div>` : `<div class="next-action">—</div>`}
                 ${item.tags ? `<div class="next-action">🏷️ ${escapeHtml(item.tags)}</div>` : ''}
+                ${item.openingHours ? (()=>{ const t=todayHoursText(item.openingHours); if(!t) return `<div class="next-action">⏱️ Horários: ${escapeHtml(item.openingHours)}</div>`; const open=isOpenNow(item.openingHours); return `<div class="next-action">⏱️ Hoje: ${escapeHtml(t)} <span class="oh-badge ${open?'oh-open':'oh-closed'}">${open?'Aberto agora':'Fechado agora'}</span></div>`; })() : ''}
             </td>
 
             <td>
@@ -835,8 +910,9 @@ function renderTable() {
 
             <td>
                 <div class="act-group">
-                    <a href="${navUrl}" target="_blank" class="btn-icon i-map" title="Navegar por Endereço">🗺️</a>
-                    ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Navegar por GPS (Exato)">📍</a>` : ''}
+                    <a href="${mapsNavUrl}" target="_blank" class="btn-icon i-map" title="Navegar (Google Maps)">🗺️</a>
+                    <a href="${wazeUrl}" target="_blank" class="btn-icon i-waze" title="Navegar (Waze)">🚗</a>
+                    ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Abrir coordenadas no Maps (pino exato)">📍</a>` : ''}
                     ${hasZap ? `<a href="https://wa.me/${phoneClean}" target="_blank" class="btn-icon i-wa" title="WhatsApp">📱</a>` : ''}
                     ${hasEmail ? `<a href="mailto:${encodeURIComponent(email)}" class="btn-icon i-mail" title="Enviar Email">✉️</a>` : ''}
                     ${hasWeb ? `<a href="${item.website}" target="_blank" class="btn-icon i-web" title="Website">🌐</a>` : ''}
@@ -898,6 +974,7 @@ function editLead(id) {
     document.getElementById('inpStage').value = normalizeStage(item.stage || 'novo');
     document.getElementById('inpNextAction').value = item.nextAction ? toDatetimeLocal(item.nextAction) : '';
     document.getElementById('inpTags').value = item.tags || '';
+    document.getElementById('inpOpeningHours').value = item.openingHours || '';
 
     document.getElementById('inpNotes').value = item.notes || '';
 
@@ -939,6 +1016,7 @@ async function saveLead() {
             stage: document.getElementById('inpStage').value,
             nextAction: fromDatetimeLocal(document.getElementById('inpNextAction').value),
             tags: document.getElementById('inpTags').value,
+            openingHours: document.getElementById('inpOpeningHours').value,
             notes: document.getElementById('inpNotes').value,
             address: document.getElementById('inpAddr').value,
             city: document.getElementById('inpCity').value,
@@ -1079,6 +1157,7 @@ async function handleImportFile(file) {
             website: firstNonEmpty(r['Website'], ''),
             instagram: firstNonEmpty(r['Instagram'], social.instagram, ''),
             facebook: firstNonEmpty(r['Facebook'], social.facebook, ''),
+            openingHours: firstNonEmpty(r['Opening hours'], r['Horário de funcionamento'], r['Horario de funcionamento'], r['Horário'], r['Horario'], ''),
             stage: firstNonEmpty(r['Funil'], r['Stage'], ''),
             nextAction: '',
             tags: '',
@@ -1102,6 +1181,7 @@ async function handleImportFile(file) {
                 website: old.website || lead.website,
                 instagram: old.instagram || lead.instagram,
                 facebook: old.facebook || lead.facebook,
+                openingHours: old.openingHours || lead.openingHours,
                 url: old.url || lead.url,
                 lat: old.lat || lead.lat,
                 lng: old.lng || lead.lng,
@@ -1212,6 +1292,7 @@ function exportExcel() {
         "Website": i.website,
         "Instagram": i.instagram,
         "Facebook": i.facebook,
+        "Opening hours": i.openingHours,
         "Categoria": i.category,
         "Endereço Completo": i.address,
         "Cidade": i.city,
