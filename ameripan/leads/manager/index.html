@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Leads Local - V6.3 (IndexedDB)</title>
+    <title>Gestor de Leads Local - V6.4 (IndexedDB)</title>
     <script>
     // XLSX loader: tenta local primeiro (offline), se não existir usa CDN (online)
     (function(){
@@ -116,13 +116,23 @@
         .oh-badge { display:inline-block; font-size:0.70rem; padding:2px 8px; border-radius:999px; margin-left:6px; border:1px solid var(--border); }
         .oh-open { color: #bbf7d0; background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); }
         .oh-closed { color: #fecaca; background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.22); }
+
+/* Work links */
+.worklinks{margin:10px 0 16px; padding:12px; border:1px solid var(--border); border-radius:12px; background: rgba(59,130,246,0.06);}
+.worklinks-title{font-weight:700; margin-bottom:10px; color:var(--text-main);}
+.worklinks-row{display:flex; flex-wrap:wrap; gap:10px;}
+.btn-link{display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text-main); text-decoration:none; font-weight:600;}
+.btn-link:hover{background:rgba(255,255,255,0.06);}
+.btn-filter.danger{border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.10);}
+.btn-filter.danger:hover{background:rgba(239,68,68,0.16);}
+
 </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>Gestor de Leads <span class="badge-v">V6.3</span></h1>
+        <h1>Gestor de Leads <span class="badge-v">V6.4</span></h1>
         
         <div class="controls">
             <div class="file-box">
@@ -146,6 +156,15 @@
         <b>Não apague os dados do site</b> para não perder seus leads. Use <b>Backup (JSON)</b> regularmente.
     </div>
 
+    <div class="worklinks">
+        <div class="worklinks-title">Links de trabalho (GMAPS LEADS SCRAPER)</div>
+        <div class="worklinks-row">
+            <a class="btn-link" href="https://edimarpcosta.github.io/ameripan/leads/GMapScraper.exe" target="_blank">🧩 Configurar Extensão Auto (executável)</a>
+            <a class="btn-link" href="https://edimarpcosta.github.io/ameripan/leads/search/" target="_blank">🔎 Configurar Extensão Manual (pesquisa web)</a>
+            <a class="btn-link" href="https://edimarpcosta.github.io/ameripan/leads/manager/" target="_blank">📊 Gestão (manager)</a>
+        </div>
+    </div>
+
     <div class="stats-row">
         <div class="kpi-box"><div class="kpi-num" id="kTotal">0</div><div class="kpi-txt">Total</div></div>
         <div class="kpi-box"><div class="kpi-num" id="kAvg" style="color:var(--warning)">0.0</div><div class="kpi-txt">Nota Média</div></div>
@@ -153,7 +172,7 @@
         <div class="kpi-box"><div class="kpi-num" id="kDue" style="color:var(--warning)">0</div><div class="kpi-txt">Ações Atrasadas</div></div>
 
         <div class="search-row">
-            <input id="searchInput" class="search-input" placeholder="Buscar: nome, cidade, tel, email, insta..."
+            <input id="searchInput" class="search-input" placeholder="Buscar: nome, cidade, bairro, cep, tel, email, insta..."
                    oninput="applyFilters()">
             <select id="stageFilter" class="search-select" onchange="applyFilters()">
                 <option value="">Funil: Todos</option>
@@ -176,6 +195,28 @@
                 <option value="today">Ação Hoje</option>
             </select>
             <div class="muted" id="resultsInfo" style="white-space:nowrap"></div>
+        </div>
+
+        <div class="search-row" style="margin-top:10px">
+            <select id="cityFilter" class="search-select" onchange="applyFilters()">
+                <option value="">Cidade: Todas</option>
+            </select>
+            <select id="bairroFilter" class="search-select" onchange="applyFilters()">
+                <option value="">Bairro: Todos</option>
+            </select>
+            <select id="cep3Filter" class="search-select" onchange="applyFilters()">
+                <option value="">CEP (3 dígitos): Todos</option>
+            </select>
+            <div class="muted" id="locInfo" style="white-space:nowrap"></div>
+        </div>
+
+        <div class="filter-bar" style="margin-top:10px; justify-content:space-between; gap:10px;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span>Ações em lote:</span>
+                <button class="btn-filter danger" onclick="bulkDeleteOutsideFilter()">🧹 Excluir fora do filtro</button>
+                <button class="btn-filter danger" onclick="bulkDeleteInFilter()">🗑️ Excluir no filtro</button>
+            </div>
+            <div class="muted" style="text-align:right">Dica: faça Backup (JSON) antes de excluir em lote.</div>
         </div>
 
         <div class="filter-bar">
@@ -232,6 +273,17 @@
             <div class="form-col">
                 <label>Website</label>
                 <input type="text" id="inpWebsite" placeholder="https://...">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>Google Maps URL (cid)</label>
+                <input type="text" id="inpMapsUrl" placeholder="https://www.google.com/maps?cid=...">
+            </div>
+            <div class="form-col">
+                <label>CID (opcional)</label>
+                <input type="text" id="inpCid" placeholder="1535017326667043352">
             </div>
         </div>
 
@@ -338,10 +390,10 @@
 </div>
 
 <script>
-// Gestor de Leads Local - V6.3 (IndexedDB) - local-first
+// Gestor de Leads Local - V6.4 (IndexedDB) - local-first
 const STORAGE_KEY = 'crm_v6'; // usado só para migração (v6.1 -> v6.3)
 const SEEN_KEY = 'crm_v6_seen_warning';
-const APP_VERSION = '6.3';
+const APP_VERSION = '6.4';
 
 // IndexedDB
 const DB_NAME = 'gestor_leads_local';
@@ -425,6 +477,9 @@ function normalizeLead(x) {
     const lead = Object.assign({
         id: uid(),
         placeId: '',
+        cid: '',
+        bairro: '',
+        cep3: '',
         name: 'Sem Nome',
         address: '',
         city: '',
@@ -456,12 +511,23 @@ function normalizeLead(x) {
     lead.placeId = String(lead.placeId || '').trim();
     if(!lead.id) lead.id = lead.placeId || uid();
 
+    // Google Maps CID/URL
+    lead.cid = String(lead.cid || '').trim();
+    lead.url = String(lead.url || '').trim();
+    const cidFromUrl = lead.url ? extractCidFromUrl(lead.url) : '';
+    if(cidFromUrl) lead.cid = cidFromUrl; // URL é a fonte de verdade
+    if(!lead.url && lead.cid) lead.url = buildCidUrl(lead.cid);
+
     // textos
     lead.name = String(lead.name || 'Sem Nome').trim() || 'Sem Nome';
     lead.address = String(lead.address || '').trim();
     lead.city = String(lead.city || '').trim();
     lead.uf = String(lead.uf || '').trim().toUpperCase().slice(0,2);
     lead.cep = String(lead.cep || '').trim();
+    const cepDigits = lead.cep.replace(/\D/g,'');
+    lead.cep3 = cepDigits.length >= 3 ? cepDigits.slice(0,3) : '';
+    lead.bairro = String(lead.bairro || '').trim() || extractBairroFromAddress(lead.address);
+
     lead.category = String(lead.category || '').trim();
 
     // contatos
@@ -536,6 +602,32 @@ function parseAddress(addr) {
 
     return { cep, uf, city };
 }
+
+function extractCidFromUrl(url) {
+    const m = String(url||'').match(/[?&]cid=(\d+)/);
+    return m ? m[1] : '';
+}
+function buildCidUrl(cid) {
+    cid = String(cid||'').trim();
+    return cid ? `https://www.google.com/maps?cid=${cid}` : '';
+}
+function extractBairroFromAddress(addr) {
+    addr = String(addr||'').trim();
+    if(!addr) return '';
+    const parts = addr.split(',').map(p=>p.trim()).filter(Boolean);
+    const seg0 = parts[0] || '';
+    if(seg0.includes(' - ')) {
+        const cand = seg0.split(' - ').pop().trim();
+        if(cand && cand.length <= 40 && !/\d/.test(cand)) return cand;
+    }
+    // fallback: segundo bloco antes da cidade/UF (quando existir)
+    if(parts.length >= 3) {
+        const mid = parts[1];
+        if(mid && mid.length <= 40 && !/\d/.test(mid) && !/^[A-Za-z]{2}$/.test(mid)) return mid;
+    }
+    return '';
+}
+
 
 function parseCSV(text) {
     const lines = String(text||'').split(/\r?\n/).filter(l=>l.trim().length);
@@ -706,6 +798,23 @@ function idbDelete(store, key) {
     });
 }
 
+
+function idbBulkDelete(store, keys) {
+    keys = Array.isArray(keys) ? keys : [];
+    if(!keys.length) return Promise.resolve(true);
+    return new Promise((resolve, reject) => {
+        try {
+            const t = idb.transaction(store, 'readwrite');
+            const st = t.objectStore(store);
+            keys.forEach(k => st.delete(k));
+            t.oncomplete = () => resolve(true);
+            t.onerror = () => reject(t.error);
+        } catch(err) {
+            reject(err);
+        }
+    });
+}
+
 function idbClear(store) {
     return new Promise((resolve, reject) => {
         const req = tx(store, 'readwrite').clear();
@@ -777,7 +886,116 @@ function getFilters() {
     const stage = String(document.getElementById('stageFilter')?.value || '').trim().toLowerCase();
     const opp = String(document.getElementById('oppFilter')?.value || '').trim().toLowerCase();
     const act = String(document.getElementById('actionFilter')?.value || '').trim().toLowerCase();
-    return { q, stage, opp, act };
+    const city = String(document.getElementById('cityFilter')?.value || '').trim();
+    const bairro = String(document.getElementById('bairroFilter')?.value || '').trim();
+    const cep3 = String(document.getElementById('cep3Filter')?.value || '').trim();
+    return { q, stage, opp, act, city, bairro, cep3 };
+}
+
+function keyNorm(s){ return String(s||'').trim().toLowerCase(); }
+
+function refreshLocationFilterOptions() {
+    const citySel = document.getElementById('cityFilter');
+    const bairroSel = document.getElementById('bairroFilter');
+    const cepSel = document.getElementById('cep3Filter');
+    if(!citySel || !bairroSel || !cepSel) return;
+
+    const prevCity = citySel.value;
+    const prevBairro = bairroSel.value;
+    const prevCep = cepSel.value;
+
+    const cityMap = new Map();
+    const bairroMap = new Map();
+    const cepMap = new Map(); // prefix -> {count, cityCountMap}
+
+    db.forEach(l => {
+        const c = String(l.city||'').trim();
+        const b = String(l.bairro||'').trim();
+        const p = String(l.cep3||'').trim();
+
+        if(c) cityMap.set(c, (cityMap.get(c)||0) + 1);
+        if(b) bairroMap.set(b, (bairroMap.get(b)||0) + 1);
+
+        if(p) {
+            if(!cepMap.has(p)) cepMap.set(p, {count:0, cities:new Map()});
+            const obj = cepMap.get(p);
+            obj.count++;
+            if(c) obj.cities.set(c, (obj.cities.get(c)||0)+1);
+        }
+    });
+
+    function setOptions(sel, firstLabel, entries) {
+        sel.innerHTML = '';
+        const o0 = document.createElement('option');
+        o0.value = '';
+        o0.textContent = firstLabel;
+        sel.appendChild(o0);
+        entries.forEach(e => {
+            const o = document.createElement('option');
+            o.value = e.value;
+            o.textContent = e.label;
+            sel.appendChild(o);
+        });
+    }
+
+    const cities = [...cityMap.entries()]
+        .sort((a,b)=>a[0].localeCompare(b[0], 'pt-BR'))
+        .map(([c,n])=>({value:c, label:`${c} (${n})`}));
+    setOptions(citySel, 'Cidade: Todas', cities);
+
+    const bairros = [...bairroMap.entries()]
+        .sort((a,b)=>a[0].localeCompare(b[0], 'pt-BR'))
+        .map(([b,n])=>({value:b, label:`${b} (${n})`}));
+    setOptions(bairroSel, 'Bairro: Todos', bairros);
+
+    const ceps = [...cepMap.entries()]
+        .sort((a,b)=>a[0].localeCompare(b[0]))
+        .map(([p,obj])=>{
+            // cidade mais comum para esse prefixo (ajuda quando nome da cidade vem errado)
+            let topCity = '';
+            let topN = 0;
+            obj.cities.forEach((n, c)=>{ if(n>topN){ topN=n; topCity=c; } });
+            const hint = topCity ? ` — ${topCity}` : '';
+            return {value:p, label:`${p} (${obj.count})${hint}`};
+        });
+    setOptions(cepSel, 'CEP (3 dígitos): Todos', ceps);
+
+    // restaura seleção se ainda existir
+    if([...citySel.options].some(o=>o.value===prevCity)) citySel.value = prevCity;
+    if([...bairroSel.options].some(o=>o.value===prevBairro)) bairroSel.value = prevBairro;
+    if([...cepSel.options].some(o=>o.value===prevCep)) cepSel.value = prevCep;
+
+    const locInfo = document.getElementById('locInfo');
+    if(locInfo) locInfo.textContent = `${cities.length} cidades • ${bairros.length} bairros • ${ceps.length} prefixos CEP`;
+}
+
+function getFilteredLeads() {
+    const { q, stage, opp, act, city, bairro, cep3 } = getFilters();
+
+    return db.filter(item => {
+        if(stage && normalizeStage(item.stage) !== stage) return false;
+
+        if(opp === 'opp' && item.claimed) return false;
+        if(opp === 'claimed' && !item.claimed) return false;
+
+        if(act === 'has' && !item.nextAction) return false;
+        if(act === 'due' && !isDue(item.nextAction)) return false;
+        if(act === 'today' && !isToday(item.nextAction)) return false;
+
+        if(city && keyNorm(item.city) !== keyNorm(city)) return false;
+        if(bairro && keyNorm(item.bairro) !== keyNorm(bairro)) return false;
+        if(cep3 && String(item.cep3||'') !== String(cep3)) return false;
+
+        if(q) {
+            const hay = [
+                item.name, item.city, item.bairro, item.uf, item.address, item.cep, item.cep3,
+                item.phone, item.email, item.website, item.instagram, item.facebook, item.category,
+                item.tags, item.openingHours, item.cid, item.url
+            ].join(' ').toLowerCase();
+            if(!hay.includes(q)) return false;
+        }
+        return true;
+    });
 }
 
 function applyFilters() {
@@ -793,27 +1011,9 @@ function renderTable() {
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
 
-    const { q, stage, opp, act } = getFilters();
+    refreshLocationFilterOptions();
 
-    const filtered = db.filter(item => {
-        if(stage && normalizeStage(item.stage) !== stage) return false;
-
-        if(opp === 'opp' && item.claimed) return false;
-        if(opp === 'claimed' && !item.claimed) return false;
-
-        if(act === 'has' && !item.nextAction) return false;
-        if(act === 'due' && !isDue(item.nextAction)) return false;
-        if(act === 'today' && !isToday(item.nextAction)) return false;
-
-        if(q) {
-            const hay = [
-                item.name, item.city, item.uf, item.address, item.phone, item.email,
-                item.website, item.instagram, item.facebook, item.category, item.tags, item.openingHours
-            ].join(' ').toLowerCase();
-            if(!hay.includes(q)) return false;
-        }
-        return true;
-    });
+    const filtered = getFilteredLeads();
 
     // ordenação
     const view = [...filtered].sort((a,b) => {
@@ -822,7 +1022,7 @@ function renderTable() {
             return b.reviews - a.reviews;
         }
         if(currentSort.key === 'geo') {
-            return String(a.city||'').localeCompare(String(b.city||'')) || String(a.address||'').localeCompare(String(b.address||''));
+            return String(a.cep3||'').localeCompare(String(b.cep3||'')) || String(a.city||'').localeCompare(String(b.city||'')) || String(a.bairro||'').localeCompare(String(b.bairro||'')) || String(a.address||'').localeCompare(String(b.address||''));
         }
         // rating asc (opp)
         let vA = a[currentSort.key], vB = b[currentSort.key];
@@ -856,10 +1056,12 @@ function renderTable() {
 
         // Links de navegação (Google Maps / Waze)
         let mapsViewUrl = item.url;
+        if(!mapsViewUrl && item.cid) mapsViewUrl = buildCidUrl(item.cid);
         if(!mapsViewUrl) mapsViewUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
 
         let mapsNavUrl = '';
-        if(item.lat && item.lng) mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}`;
+        if(item.placeId) mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination_place_id=${encodeURIComponent(item.placeId)}&destination=${encodeURIComponent(item.name)}`;
+        else if(item.lat && item.lng) mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}`;
         else mapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.name + ' ' + item.address)}`;
 
         let gpsUrl = '';
@@ -900,7 +1102,7 @@ function renderTable() {
 
             <td>
                 <div class="cell-trunc">${escapeHtml(item.city || '')} - ${escapeHtml(item.uf || '')}</div>
-                <div style="font-size:0.7rem; color:#666">${escapeHtml(item.cep || '')}</div>
+                <div style="font-size:0.7rem; color:#666">${escapeHtml(item.bairro || '')}${item.bairro && item.cep ? ' • ' : ''}${escapeHtml(item.cep || '')}</div>
             </td>
 
             <td><span class="rating">★ ${(parseFloat(item.rating)||0).toFixed(1)}</span></td>
@@ -910,7 +1112,8 @@ function renderTable() {
 
             <td>
                 <div class="act-group">
-                    <a href="${mapsNavUrl}" target="_blank" class="btn-icon i-map" title="Navegar (Google Maps)">🗺️</a>
+                    <a href="${mapsViewUrl}" target="_blank" class="btn-icon i-map" title="Abrir no Google Maps (CID/URL)">🗺️</a>
+                    <a href="${mapsNavUrl}" target="_blank" class="btn-icon i-map" title="Rota no Google Maps">🧭</a>
                     <a href="${wazeUrl}" target="_blank" class="btn-icon i-waze" title="Navegar (Waze)">🚗</a>
                     ${item.lat && item.lng ? `<a href="${gpsUrl}" target="_blank" class="btn-icon i-gps" title="Abrir coordenadas no Maps (pino exato)">📍</a>` : ''}
                     ${hasZap ? `<a href="https://wa.me/${phoneClean}" target="_blank" class="btn-icon i-wa" title="WhatsApp">📱</a>` : ''}
@@ -942,6 +1145,38 @@ function applySort(key) {
     renderTable();
 }
 
+
+// ---------------- AÇÕES EM LOTE ----------------
+async function confirmBulkDelete(toDelete, label) {
+    toDelete = Array.isArray(toDelete) ? toDelete : [];
+    if(!toDelete.length) { alert('Nada para excluir.'); return; }
+
+    const sample = toDelete.slice(0,5).map(x => x.name).filter(Boolean).join(', ');
+    const msg = `${toDelete.length} leads serão EXCLUÍDOS (${label}).\n\nExemplo: ${sample || '(sem exemplo)'}\n\nDigite EXCLUIR para confirmar:`;
+    const typed = prompt(msg);
+    if(typed !== 'EXCLUIR') return;
+    const ok = confirm('Última confirmação: isso é irreversível. Deseja realmente excluir?');
+    if(!ok) return;
+
+    const ids = toDelete.map(x => x.id);
+    const idSet = new Set(ids);
+    await idbBulkDelete(STORE_LEADS, ids);
+    db = db.filter(x => !idSet.has(x.id));
+    renderTable();
+}
+
+async function bulkDeleteOutsideFilter() {
+    const visible = getFilteredLeads();
+    const keep = new Set(visible.map(x => x.id));
+    const toDelete = db.filter(x => !keep.has(x.id));
+    await confirmBulkDelete(toDelete, 'fora do filtro (manter apenas o que está filtrado)');
+}
+
+async function bulkDeleteInFilter() {
+    const visible = getFilteredLeads();
+    await confirmBulkDelete(visible, 'dentro do filtro (apagar o que está filtrado)');
+}
+
 // ---------------- CRUD ----------------
 function openModal() {
     document.querySelectorAll('.modal input:not(#editId), .modal textarea').forEach(i => i.value = '');
@@ -968,6 +1203,8 @@ function editLead(id) {
     document.getElementById('inpPhone').value = item.phone || '';
     document.getElementById('inpEmail').value = item.email || '';
     document.getElementById('inpWebsite').value = item.website || '';
+    document.getElementById('inpMapsUrl').value = item.url || '';
+    document.getElementById('inpCid').value = item.cid || '';
     document.getElementById('inpInstagram').value = item.instagram || '';
     document.getElementById('inpFacebook').value = item.facebook || '';
 
@@ -1011,6 +1248,8 @@ async function saveLead() {
             phone: document.getElementById('inpPhone').value,
             email: document.getElementById('inpEmail').value,
             website: document.getElementById('inpWebsite').value,
+            url: document.getElementById('inpMapsUrl').value,
+            cid: document.getElementById('inpCid').value,
             instagram: document.getElementById('inpInstagram').value,
             facebook: document.getElementById('inpFacebook').value,
             stage: document.getElementById('inpStage').value,
@@ -1036,7 +1275,8 @@ async function saveLead() {
                 // preserva campos que não aparecem no modal (ex: placeId, url, category)
                 const keep = db[idx];
                 leadObj.placeId = keep.placeId || leadObj.placeId;
-                leadObj.url = keep.url || leadObj.url;
+                leadObj.url = leadObj.url || keep.url;
+                leadObj.cid = leadObj.cid || keep.cid;
                 leadObj.category = keep.category || leadObj.category;
                 leadObj.createdAt = keep.createdAt || leadObj.createdAt;
                 db[idx] = leadObj;
@@ -1124,6 +1364,14 @@ async function handleImportFile(file) {
         const mun = firstNonEmpty(r['Municipality'], r['Município'], '');
         const placeId = firstNonEmpty(r['Place Id'], r['PlaceId'], '');
 
+        const cidRaw = firstNonEmpty(r['Cid'], r['CID'], '');
+        const urlRaw = firstNonEmpty(r['Google Maps URL'], r['Maps URL'], r['URL'], '');
+        let cid = String(cidRaw||'').trim();
+        let gUrl = String(urlRaw||'').trim();
+        const cidFromUrl = gUrl ? extractCidFromUrl(gUrl) : '';
+        if(cidFromUrl) cid = cidFromUrl; // URL é a fonte de verdade
+        if(!gUrl && cid) gUrl = buildCidUrl(cid);
+
         const parsedMun = parseMunicipality(mun);
         const parsedAddr = parseAddress(addr);
 
@@ -1146,7 +1394,8 @@ async function handleImportFile(file) {
             reviews: parseInt(firstNonEmpty(r['Review Count'], r['Reviews'], 0)) || 0,
             claimed: String(firstNonEmpty(r['Claimed'], r['Verificado'], '')).toUpperCase().includes('YES') || String(firstNonEmpty(r['Verificado'], '')).toUpperCase().includes('SIM'),
             phone: firstFromList(firstNonEmpty(r['Phone'], r['Telefone'], r['Phones'], '')),
-            url: firstNonEmpty(r['Google Maps URL'], r['Maps URL'], r['URL'], ''),
+            url: gUrl,
+            cid: cid,
             lat: firstNonEmpty(r['Latitude'], ''),
             lng: firstNonEmpty(r['Longitude'], ''),
             notes: '',
@@ -1183,6 +1432,7 @@ async function handleImportFile(file) {
                 facebook: old.facebook || lead.facebook,
                 openingHours: old.openingHours || lead.openingHours,
                 url: old.url || lead.url,
+                cid: old.cid || lead.cid,
                 lat: old.lat || lead.lat,
                 lng: old.lng || lead.lng,
                 rating: old.rating || lead.rating,
@@ -1303,7 +1553,10 @@ function exportExcel() {
         "Nota": i.rating,
         "Reviews": i.reviews,
         "Verificado": i.claimed ? "SIM" : "NÃO",
-        "Maps URL": i.url,
+        "Google Maps URL": i.url,
+        "Cid": i.cid,
+        "Bairro": i.bairro,
+        "CEP3": i.cep3,
         "Place Id": i.placeId
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
