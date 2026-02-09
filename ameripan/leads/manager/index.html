@@ -3,19 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Leads Local - V6.4 (IndexedDB)</title>
+    <title>Gestor de Leads Local - V6.6.8.5 (IndexedDB)</title>
     <script>
-    // XLSX loader: tenta local primeiro (offline), se não existir usa CDN (online)
+    // XLSX loader: tenta local primeiro (offline); se não existir, busca a última versão online
+    // (e tenta uma segunda fonte caso a primeira online falhe).
     (function(){
-        const local = document.createElement('script');
-        local.src = './xlsx.full.min.js';
-        local.onload = () => { /* ok */ };
-        local.onerror = () => {
-            const cdn = document.createElement('script');
-            cdn.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-            document.head.appendChild(cdn);
-        };
-        document.head.appendChild(local);
+        const sources = [
+            './xlsx.full.min.js',
+            'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+            'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'
+        ];
+        let i = 0;
+        function tryLoad(){
+            const s = document.createElement('script');
+            s.src = sources[i];
+            s.onload = () => { /* ok */ };
+            s.onerror = () => {
+                i++;
+                if(i < sources.length) tryLoad();
+                else console.warn('Falha ao carregar XLSX (SheetJS). Coloque xlsx.full.min.js ao lado do HTML ou use internet.');
+            };
+            document.head.appendChild(s);
+        }
+        tryLoad();
     })();
 </script>
     <style>
@@ -165,13 +175,14 @@
 
 <div class="container">
     <header>
-        <h1>Gestor de Leads <span class="badge-v">V6.4</span></h1>
+        <h1>Gestor de Leads <span class="badge-v">V6.6.8.5</span></h1>
         
         <div class="controls">
             <div class="file-box">
                 <button class="btn btn-blue">📂 Importar / Juntar</button>
                 <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
             </div>
+            <button class="btn btn-blue" onclick="importFromUrlPrompt()">🌐 Importar (URL)</button>
             <button class="btn btn-blue" onclick="openModal()">➕ Novo Lead</button>
             <button class="btn btn-green" onclick="exportExcel()">📤 Exportar (Rotas)</button>
 
@@ -432,10 +443,31 @@
 </div>
 
 <script>
-// Gestor de Leads Local - V6.4 (IndexedDB) - local-first
-const STORAGE_KEY = 'crm_v6'; // usado só para migração (v6.1 -> v6.3)
+// Gestor de Leads Local - V6.6.8.5 (IndexedDB)
+
+// ---------------- CONFIG / ESTADO GLOBAL ----------------
+// Chaves de migração/avisos (mantém compatibilidade com versões anteriores)
+const STORAGE_KEY = 'crm_v6'; // usado só para migração (localStorage -> IndexedDB)
 const SEEN_KEY = 'crm_v6_seen_warning';
-const APP_VERSION = '6.4';
+
+// Versão do app (UI)
+const APP_VERSION = '6.6.6';
+// Gerador de ID único (local). Evita colisões e funciona offline.
+function uid(prefix='l') {
+    try {
+        // Preferir crypto.randomUUID quando disponível
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return `${prefix}_${crypto.randomUUID()}`;
+        }
+        const arr = new Uint8Array(16);
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(arr);
+        let s = '';
+        for (let i=0;i<arr.length;i++) s += arr[i].toString(16).padStart(2,'0');
+        return `${prefix}_${Date.now().toString(16)}_${s}`;
+    } catch(e) {
+        return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+}
 
 // IndexedDB
 const DB_NAME = 'gestor_leads_local';
@@ -444,20 +476,55 @@ const STORE_LEADS = 'leads';
 const STORE_INTERACTIONS = 'interactions';
 const STORE_META = 'meta';
 
+// Funil
 const STAGES = ['novo','contatado','qualificado','proposta','fechado','perdido'];
 
+// Cache em memória
 let idb = null;   // IDBDatabase
-let db = [];      // cache em memória (leads)
-let currentSort = { key: 'best', dir: 'desc', type: 'base' }; // best | geo | column sorts
+let db = [];      // leads em memória
 
-// ---------------- UTIL ----------------
-function uid() {
-    try { return crypto.randomUUID(); } catch(e) {}
-    return 'id_' + Date.now() + '_' + Math.random().toString(16).slice(2);
-}
+// Ordenação atual
+let currentSort = { key: 'best', dir: 'desc', type: 'base' };
 
 function escapeHtml(s) {
-    return String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    return String(s || '').replace(/[&<>\"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
+}
+
+// Garante que a biblioteca XLSX esteja disponível (local ou online)
+let __xlsxPromise = null;
+function ensureXLSX() {
+    if(typeof XLSX !== 'undefined') return Promise.resolve(true);
+    if(__xlsxPromise) return __xlsxPromise;
+
+    const sources = [
+        './xlsx.full.min.js',
+        'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+        'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'
+    ];
+
+    __xlsxPromise = new Promise((resolve, reject) => {
+        let i = 0;
+        const tryOne = () => {
+            const src = sources[i++];
+            const s = document.createElement('script');
+            s.src = src;
+            s.onload = () => {
+                // Em casos raros, um script pode "carregar" mas não expor XLSX (arquivo corrompido/cache).
+                if(typeof XLSX !== 'undefined') return resolve(true);
+                // tenta próxima fonte
+                if(i < sources.length) return tryOne();
+                reject(new Error('Biblioteca XLSX não carregou. Coloque xlsx.full.min.js na mesma pasta do HTML ou conecte à internet.'));
+            };
+            s.onerror = () => {
+                if(i < sources.length) tryOne();
+                else reject(new Error('Biblioteca XLSX não carregou. Coloque xlsx.full.min.js na mesma pasta do HTML ou conecte à internet.'));
+            };
+            document.head.appendChild(s);
+        };
+        tryOne();
+    });
+
+    return __xlsxPromise;
 }
 
 function firstNonEmpty(...vals) {
@@ -475,6 +542,126 @@ function firstFromList(v) {
     const parts = s.split(/[,;|]/).map(x => x.trim()).filter(Boolean);
     return parts[0] || '';
 }
+
+
+// ==============================
+// Leitura resiliente de colunas + conversões (Google Sheets / XLSX / CSV)
+// - Evita erros de cabeçalho: "Average rating" vs "Average Rating"
+// - Lida com número PT-BR (ex.: "4,7")
+// - Lida com ratings que viraram DATA (ex.: 2026-07-04 => 4.7)
+// - Normaliza coordenadas que vieram escaladas (ex.: -224047356 => -22.4047356)
+// ==============================
+function _safeNormalize(str){
+    try { return String(str).normalize('NFD'); } catch(e) { return String(str); }
+}
+function _normKey(k){
+    return _safeNormalize(k || '')
+        .toLowerCase()
+        .replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-z0-9]/g,'');
+}
+function getField(row, ...names){
+    if(!row) return '';
+    if(!row.__normMap){
+        const map = {};
+        for(const k of Object.keys(row)){
+            map[_normKey(k)] = k;
+        }
+        Object.defineProperty(row,'__normMap',{value:map, enumerable:false});
+    }
+    for(const n of names){
+        if(row[n] !== undefined && row[n] !== null && String(row[n]).trim() !== '') return row[n];
+        const k = row.__normMap[_normKey(n)];
+        if(k && row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
+    }
+    return '';
+}
+
+function _ratingFromDateObj(d){
+    if(!(d instanceof Date) || isNaN(d.getTime())) return NaN;
+    const day = d.getDate();
+    const month = d.getMonth() + 1; // 1..12
+    // Heurística: rating costuma ser X.Y (1..5 e 0..9). Quando vira data, aparece como dia.mês
+    if(day >= 1 && day <= 5 && month >= 0 && month <= 9) return day + (month/10);
+    return NaN;
+}
+
+function toFloat(v, defVal=0){
+    if(v === undefined || v === null) return defVal;
+    if(typeof v === 'number' && Number.isFinite(v)) return v;
+    if(v instanceof Date){
+        const r = _ratingFromDateObj(v);
+        return Number.isFinite(r) ? r : defVal;
+    }
+    let s = String(v).trim();
+    if(!s) return defVal;
+
+    // GViz date: Date(YYYY,MM,DD)
+    const mG = s.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/i);
+    if(mG){
+        const d = new Date(Number(mG[1]), Number(mG[2]), Number(mG[3]));
+        const r = _ratingFromDateObj(d);
+        return Number.isFinite(r) ? r : defVal;
+    }
+
+    // ISO date (YYYY-MM-DD...) vindo de CSV/XLSX quando rating virou data
+    const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(mIso){
+        const d = new Date(Number(mIso[1]), Number(mIso[2])-1, Number(mIso[3]));
+        const r = _ratingFromDateObj(d);
+        return Number.isFinite(r) ? r : defVal;
+    }
+
+    // BR date (DD/MM/YYYY) (ou DD-MM-YYYY)
+    const mBr = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if(mBr){
+        const day = Number(mBr[1]), month = Number(mBr[2]);
+        if(day>=1 && day<=5 && month>=0 && month<=9){
+            return day + (month/10);
+        }
+    }
+
+    // número normal (pt-BR ou en)
+    s = s.replace(/\s/g,'');
+    // se tem vírgula como decimal e não tem ponto decimal, troca por ponto
+    if(s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+    // remove lixo mantendo - e .
+    s = s.replace(/[^0-9.\-]/g,'');
+    const n = Number.parseFloat(s);
+    return Number.isFinite(n) ? n : defVal;
+}
+
+function toInt(v, defVal=0){
+    if(v === undefined || v === null) return defVal;
+    if(typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
+    let s = String(v).trim();
+    if(!s) return defVal;
+    // remove separadores e tudo que não for dígito/sinal
+    s = s.replace(/[^0-9\-]/g,'');
+    const n = Number.parseInt(s, 10);
+    return Number.isFinite(n) ? n : defVal;
+}
+
+function toCoord(v, kind){ // kind: 'lat' | 'lng'
+    if(v === undefined || v === null) return '';
+    let n = toFloat(v, NaN);
+    if(!Number.isFinite(n)) return '';
+    const abs = Math.abs(n);
+    const lim = (kind === 'lat') ? 90 : 180;
+    if(abs <= lim) return n;
+
+    // Tentativas de escala
+    // Caso típico: -224047356 => -22.4047356 (1e7)
+    if(abs > lim && abs < 1e10) n = n / 1e7;
+    // Caso típico: -47555873899999904 => -47.555873899999904 (1e15)
+    if(Math.abs(n) > lim && Math.abs(n) > 1e12) n = n / 1e15;
+
+    if(Math.abs(n) <= lim) return n;
+    return '';
+}
+
+
+
 
 function normalizeWebUrl(s) {
     s = String(s || '').trim();
@@ -582,13 +769,15 @@ function normalizeLead(x) {
     lead.openingHours = String(lead.openingHours || '').trim();
 
     // números
-    lead.rating = Number.parseFloat(lead.rating || 0) || 0;
-    lead.reviews = Number.parseInt(lead.reviews || 0) || 0;
+    lead.rating = toFloat(lead.rating, 0);
+    lead.reviews = toInt(lead.reviews, 0);
     lead.claimed = !!lead.claimed;
 
-    // coords
-    lead.lat = String(lead.lat || '').trim();
-    lead.lng = String(lead.lng || '').trim();
+    // coords (normaliza escalas estranhas)
+    const _latN = toCoord(lead.lat, 'lat');
+    const _lngN = toCoord(lead.lng, 'lng');
+    lead.lat = _latN === '' ? '' : String(_latN);
+    lead.lng = _lngN === '' ? '' : String(_lngN);
 
     // funil / tags / nextAction
     lead.stage = normalizeStage(lead.stage);
@@ -1514,7 +1703,114 @@ async function clearDB() {
     }
 }
 
-// ---------------- IMPORTAÇÃO (XLSX/CSV) ----------------
+// ---------------- IMPORTAÇÃO (XLSX/CSV/URL) ----------------
+async function importRows(raw, sourceLabel) {
+    if(!Array.isArray(raw) || raw.length === 0) {
+        alert('Nenhum dado encontrado para importar.');
+        return;
+    }
+    let added = 0, merged = 0;
+        const changed = [];
+
+        raw.forEach(r => {
+            const name = firstNonEmpty(r['Name'], r['Empresa'], 'Sem Nome');
+            const addr = firstNonEmpty(r['Fulladdress'], r['Endereço Completo'], r['Street'], r['Endereço'], '');
+            const mun = firstNonEmpty(r['Municipality'], r['Município'], '');
+            const placeId = firstNonEmpty(r['Place Id'], r['PlaceId'], '');
+
+            const cidRaw = firstNonEmpty(r['Cid'], r['CID'], '');
+            const urlRaw = firstNonEmpty(r['Google Maps URL'], r['Maps URL'], r['URL'], '');
+            let cid = String(cidRaw||'').trim();
+            let gUrl = String(urlRaw||'').trim();
+            const cidFromUrl = gUrl ? extractCidFromUrl(gUrl) : '';
+            if(cidFromUrl) cid = cidFromUrl; // URL é a fonte de verdade
+            if(!gUrl && cid) gUrl = buildCidUrl(cid);
+
+            const parsedMun = parseMunicipality(mun);
+            const parsedAddr = parseAddress(addr);
+
+            let city = parsedMun.city || parsedAddr.city;
+            let uf = parsedMun.uf || parsedAddr.uf;
+
+            const socialStr = firstNonEmpty(r['Social Medias'], r['Social'], '');
+            let social = {};
+            if(socialStr && String(socialStr).trim().startsWith('{')) {
+                try { social = JSON.parse(socialStr); } catch(err) {}
+            }
+
+            const lead = normalizeLead({
+                id: placeId || uid(),
+                placeId: placeId,
+                name: name,
+                address: addr,
+                category: firstFromList(firstNonEmpty(getField(r,'Categories','Categoria','Category'), '')),
+                rating: toFloat(getField(r,'Average Rating','Average rating','Avg rating','Rating','Nota'), 0),
+                reviews: toInt(getField(r,'Review Count','Review count','Reviews','Avaliacoes','Avaliações'), 0),
+                claimed: String(firstNonEmpty(r['Claimed'], r['Verificado'], '')).toUpperCase().includes('YES') || String(firstNonEmpty(r['Verificado'], '')).toUpperCase().includes('SIM'),
+                phone: firstFromList(firstNonEmpty(r['Phone'], r['Telefone'], r['Phones'], '')),
+                url: gUrl,
+                cid: cid,
+                lat: firstNonEmpty(r['Latitude'], ''),
+                lng: firstNonEmpty(r['Longitude'], ''),
+                notes: '',
+                city: city,
+                uf: uf,
+                cep: parsedAddr.cep,
+                email: firstNonEmpty(r['Email'], ''),
+                website: firstNonEmpty(r['Website'], ''),
+                instagram: firstNonEmpty(r['Instagram'], social.instagram, ''),
+                facebook: firstNonEmpty(r['Facebook'], social.facebook, ''),
+                openingHours: firstNonEmpty(r['Opening hours'], r['Horário de funcionamento'], r['Horario de funcionamento'], r['Horário'], r['Horario'], ''),
+                stage: firstNonEmpty(r['Funil'], r['Stage'], ''),
+                nextAction: '',
+                tags: '',
+                source: sourceLabel || 'import'
+            });
+
+            const key = leadKey(lead.placeId, lead.name, lead.address);
+            const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
+
+            if(idx < 0) {
+                db.push(lead);
+                changed.push(lead);
+                added++;
+            } else {
+                const old = db[idx];
+                const mergedLead = normalizeLead({
+                    ...old,
+                    // só sobrepõe campos "vazios" do antigo
+                    phone: old.phone || lead.phone,
+                    email: old.email || lead.email,
+                    website: old.website || lead.website,
+                    instagram: old.instagram || lead.instagram,
+                    facebook: old.facebook || lead.facebook,
+                    openingHours: old.openingHours || lead.openingHours,
+                    url: old.url || lead.url,
+                    cid: old.cid || lead.cid,
+                    lat: old.lat || lead.lat,
+                    lng: old.lng || lead.lng,
+                    rating: old.rating || lead.rating,
+                    reviews: old.reviews || lead.reviews,
+                    claimed: old.claimed || lead.claimed,
+                    category: old.category || lead.category,
+                    address: old.address || lead.address,
+                    city: old.city || lead.city,
+                    uf: old.uf || lead.uf,
+                    cep: old.cep || lead.cep,
+                    placeId: old.placeId || lead.placeId,
+                    source: old.source || 'import_merge'
+                });
+                db[idx] = mergedLead;
+                changed.push(mergedLead);
+                merged++;
+            }
+        });
+
+        await idbBulkPut(STORE_LEADS, changed);
+        renderTable();
+        alert(`${added} leads importados (${merged} mesclados).`);
+}
+
 async function handleImportFile(file) {
     if(!file) return;
 
@@ -1522,8 +1818,10 @@ async function handleImportFile(file) {
     if(file.name.toLowerCase().endsWith('.csv')) {
         raw = parseCSV(await file.text());
     } else {
-        if(typeof XLSX === 'undefined') {
-            alert('Biblioteca XLSX não carregou. Se estiver offline, baixe xlsx.full.min.js e coloque na mesma pasta do HTML.');
+        try {
+            await ensureXLSX();
+        } catch(err) {
+            alert(err.message || String(err));
             return;
         }
         const ab = await file.arrayBuffer();
@@ -1531,107 +1829,143 @@ async function handleImportFile(file) {
         raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
     }
 
-    let added = 0, merged = 0;
-    const changed = [];
-
-    raw.forEach(r => {
-        const name = firstNonEmpty(r['Name'], r['Empresa'], 'Sem Nome');
-        const addr = firstNonEmpty(r['Fulladdress'], r['Endereço Completo'], r['Street'], r['Endereço'], '');
-        const mun = firstNonEmpty(r['Municipality'], r['Município'], '');
-        const placeId = firstNonEmpty(r['Place Id'], r['PlaceId'], '');
-
-        const cidRaw = firstNonEmpty(r['Cid'], r['CID'], '');
-        const urlRaw = firstNonEmpty(r['Google Maps URL'], r['Maps URL'], r['URL'], '');
-        let cid = String(cidRaw||'').trim();
-        let gUrl = String(urlRaw||'').trim();
-        const cidFromUrl = gUrl ? extractCidFromUrl(gUrl) : '';
-        if(cidFromUrl) cid = cidFromUrl; // URL é a fonte de verdade
-        if(!gUrl && cid) gUrl = buildCidUrl(cid);
-
-        const parsedMun = parseMunicipality(mun);
-        const parsedAddr = parseAddress(addr);
-
-        let city = parsedMun.city || parsedAddr.city;
-        let uf = parsedMun.uf || parsedAddr.uf;
-
-        const socialStr = firstNonEmpty(r['Social Medias'], r['Social'], '');
-        let social = {};
-        if(socialStr && String(socialStr).trim().startsWith('{')) {
-            try { social = JSON.parse(socialStr); } catch(err) {}
-        }
-
-        const lead = normalizeLead({
-            id: placeId || uid(),
-            placeId: placeId,
-            name: name,
-            address: addr,
-            category: firstFromList(firstNonEmpty(r['Categories'], r['Categoria'], '')),
-            rating: parseFloat(firstNonEmpty(r['Average Rating'], r['Nota'], 0)) || 0,
-            reviews: parseInt(firstNonEmpty(r['Review Count'], r['Reviews'], 0)) || 0,
-            claimed: String(firstNonEmpty(r['Claimed'], r['Verificado'], '')).toUpperCase().includes('YES') || String(firstNonEmpty(r['Verificado'], '')).toUpperCase().includes('SIM'),
-            phone: firstFromList(firstNonEmpty(r['Phone'], r['Telefone'], r['Phones'], '')),
-            url: gUrl,
-            cid: cid,
-            lat: firstNonEmpty(r['Latitude'], ''),
-            lng: firstNonEmpty(r['Longitude'], ''),
-            notes: '',
-            city: city,
-            uf: uf,
-            cep: parsedAddr.cep,
-            email: firstNonEmpty(r['Email'], ''),
-            website: firstNonEmpty(r['Website'], ''),
-            instagram: firstNonEmpty(r['Instagram'], social.instagram, ''),
-            facebook: firstNonEmpty(r['Facebook'], social.facebook, ''),
-            openingHours: firstNonEmpty(r['Opening hours'], r['Horário de funcionamento'], r['Horario de funcionamento'], r['Horário'], r['Horario'], ''),
-            stage: firstNonEmpty(r['Funil'], r['Stage'], ''),
-            nextAction: '',
-            tags: '',
-            source: 'import'
-        });
-
-        const key = leadKey(lead.placeId, lead.name, lead.address);
-        const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
-
-        if(idx < 0) {
-            db.push(lead);
-            changed.push(lead);
-            added++;
-        } else {
-            const old = db[idx];
-            const mergedLead = normalizeLead({
-                ...old,
-                // só sobrepõe campos "vazios" do antigo
-                phone: old.phone || lead.phone,
-                email: old.email || lead.email,
-                website: old.website || lead.website,
-                instagram: old.instagram || lead.instagram,
-                facebook: old.facebook || lead.facebook,
-                openingHours: old.openingHours || lead.openingHours,
-                url: old.url || lead.url,
-                cid: old.cid || lead.cid,
-                lat: old.lat || lead.lat,
-                lng: old.lng || lead.lng,
-                rating: old.rating || lead.rating,
-                reviews: old.reviews || lead.reviews,
-                claimed: old.claimed || lead.claimed,
-                category: old.category || lead.category,
-                address: old.address || lead.address,
-                city: old.city || lead.city,
-                uf: old.uf || lead.uf,
-                cep: old.cep || lead.cep,
-                placeId: old.placeId || lead.placeId,
-                source: old.source || 'import_merge'
-            });
-            db[idx] = mergedLead;
-            changed.push(mergedLead);
-            merged++;
-        }
-    });
-
-    await idbBulkPut(STORE_LEADS, changed);
-    renderTable();
-    alert(`${added} leads importados (${merged} mesclados).`);
+    await importRows(raw, 'import_file');
 }
+
+
+function isGoogleSheetsUrl(url) {
+    return /https?:\/\/docs\.google\.com\/spreadsheets\/d\//i.test(url);
+}
+
+function parseSheetsUrl(url) {
+    // aceita links /edit, /view, etc. e tenta extrair #gid=
+    const m = url.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+    const id = m ? m[1] : '';
+    let gid = '0';
+    const gidHash = url.match(/#gid=(\d+)/i);
+    const gidQuery = url.match(/[?&]gid=(\d+)/i);
+    if(gidHash) gid = gidHash[1];
+    if(gidQuery) gid = gidQuery[1];
+    return { id, gid };
+}
+
+function gvizTableToObjects(table) {
+    const cols = (table.cols || []).map(c => (c && (c.label || c.id)) ? (c.label || c.id) : '');
+    const rows = table.rows || [];
+    return rows.map(r => {
+        const obj = {};
+        const cells = (r && r.c) ? r.c : [];
+        cells.forEach((cell, idx) => {
+            const key = cols[idx] || ('col_' + idx);
+            // cell.v: valor "cru"; cell.f: formatado
+            let val = cell ? (cell.v !== undefined ? cell.v : '') : '';
+            if(val === null) val = '';
+            obj[key] = val;
+        });
+        return obj;
+    });
+}
+
+function loadSheetsViaGviz(id, gid) {
+    return new Promise((resolve, reject) => {
+        if(!id) return reject(new Error('ID da planilha inválido.'));
+
+        // cria stub do google.visualization.Query.setResponse para capturar a resposta
+        window.google = window.google || {};
+        google.visualization = google.visualization || {};
+        google.visualization.Query = google.visualization.Query || {};
+
+        const prev = google.visualization.Query.setResponse;
+        let done = false;
+
+        const cleanup = (scriptEl) => {
+            if(scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+            google.visualization.Query.setResponse = prev;
+        };
+
+        google.visualization.Query.setResponse = (resp) => {
+            done = true;
+            cleanup(s);
+            clearTimeout(t);
+            resolve(resp);
+        };
+
+        const s = document.createElement('script');
+        s.src = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid || 0}`;
+        s.async = true;
+        s.onerror = () => {
+            if(!done) cleanup(s);
+            clearTimeout(t);
+            reject(new Error('Falha ao carregar dados do Google Sheets (verifique se está público/compartilhado).'));
+        };
+
+        const t = setTimeout(() => {
+            if(!done) cleanup(s);
+            reject(new Error('Timeout ao carregar Google Sheets. Verifique compartilhamento/publicação.'));
+        }, 15000);
+
+        document.head.appendChild(s);
+    });
+}
+
+async function importFromUrlPrompt() {
+    const url = prompt('Cole a URL do Google Sheets (compartilhado) ou um link RAW (.xlsx/.csv) do GitHub:');
+    if(!url) return;
+    await importFromUrl(url.trim());
+}
+
+async function importFromUrl(url) {
+    try {
+        let raw = [];
+
+        if(isGoogleSheetsUrl(url)) {
+            const { id, gid } = parseSheetsUrl(url);
+            // 1) tenta GVIZ (dribla CORS e funciona bem quando a planilha está pública)
+            try {
+                const resp = await loadSheetsViaGviz(id, gid);
+                if(!resp || !resp.table) throw new Error('Resposta do Sheets inválida.');
+                raw = gvizTableToObjects(resp.table);
+            } catch(gvizErr) {
+                // 2) fallback CSV export (pode falhar por CORS dependendo do contexto)
+                try {
+                    const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid || 0}`;
+                    const res = await fetch(csvUrl);
+                    if(!res.ok) throw new Error('HTTP ' + res.status);
+                    raw = parseCSV(await res.text());
+                } catch(csvErr) {
+                    throw new Error(
+                        'Não foi possível ler esta planilha.\n' +
+                        'Confirme que ela está compartilhada como "Qualquer pessoa com o link" OU publicada na web.\n' +
+                        'Detalhe: ' + (gvizErr && gvizErr.message ? gvizErr.message : gvizErr)
+                    );
+                }
+            }
+        } else {
+            // URL direta (GitHub raw, etc.)
+            const lower = url.toLowerCase();
+            const res = await fetch(url);
+            if(!res.ok) throw new Error('HTTP ' + res.status);
+
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            const isCsv = lower.endsWith('.csv') || ct.includes('text/csv') || ct.includes('application/csv');
+
+            if(isCsv) {
+                raw = parseCSV(await res.text());
+            } else {
+                try { await ensureXLSX(); } catch(err) { alert(err.message || String(err)); return; }
+                const ab = await res.arrayBuffer();
+                const wb = XLSX.read(ab, {type:'array'});
+                raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
+            }
+        }
+
+        await importRows(raw, 'import_url');
+    } catch(err) {
+        alert('Erro ao importar por URL: ' + (err && err.message ? err.message : err));
+    } finally {
+    }
+}
+
 
 // ---------------- BACKUP (JSON) ----------------
 async function exportBackup() {
@@ -1702,12 +2036,9 @@ async function importBackupFile(file) {
 }
 
 // ---------------- EXPORTAR (XLSX) ----------------
-function exportExcel() {
-    if(typeof XLSX === 'undefined') {
-        alert('Biblioteca XLSX não carregou. Para exportar planilha, conecte na internet ou coloque xlsx.full.min.js local.');
-        return;
-    }
-    const rows = db.map(i => ({
+async function exportExcel() {
+    try { await ensureXLSX(); } catch(err) { alert(err.message || String(err)); return; }
+const rows = db.map(i => ({
         "Empresa": i.name,
         "Funil": i.stage,
         "Próxima Ação": i.nextAction ? fmtBR(i.nextAction) : '',
