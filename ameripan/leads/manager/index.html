@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Leads Local - V6.6.8.5 (IndexedDB)</title>
+    <title>Gestor de Leads Local - V6.6.9 (IndexedDB)</title>
     <script>
     // XLSX loader: tenta local primeiro (offline); se não existir, busca a última versão online
     // (e tenta uma segunda fonte caso a primeira online falhe).
@@ -175,7 +175,7 @@
 
 <div class="container">
     <header>
-        <h1>Gestor de Leads <span class="badge-v">V6.6.8.5</span></h1>
+        <h1>Gestor de Leads <span class="badge-v">V6.6.9</span></h1>
         
         <div class="controls">
             <div class="file-box">
@@ -191,6 +191,7 @@
                 <button class="btn btn-blue">📥 Importar Backup</button>
                 <input type="file" id="backupInput" accept=".json">
             </div>
+            <button class="btn btn-blue" onclick="importBackupFromUrlPrompt()">🔗 Resgatar Backup (URL)</button>
             <button class="btn btn-red" onclick="clearDB()">🗑️ Limpar</button>
         </div>
     </header>
@@ -443,7 +444,7 @@
 </div>
 
 <script>
-// Gestor de Leads Local - V6.6.8.5 (IndexedDB)
+// Gestor de Leads Local - V6.6.9 (IndexedDB)
 
 // ---------------- CONFIG / ESTADO GLOBAL ----------------
 // Chaves de migração/avisos (mantém compatibilidade com versões anteriores)
@@ -1990,48 +1991,102 @@ async function exportBackup() {
     }
 }
 
+async function importBackupData(data) {
+    const leads = Array.isArray(data?.leads) ? data.leads.map(normalizeLead) : (Array.isArray(data) ? data.map(normalizeLead) : []);
+    const interactions = Array.isArray(data?.interactions) ? data.interactions : [];
+
+    let added = 0, merged = 0;
+    const changed = [];
+
+    leads.forEach(lead => {
+        const key = leadKey(lead.placeId, lead.name, lead.address);
+        const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
+        if(idx < 0) {
+            db.push(lead);
+            changed.push(lead);
+            added++;
+        } else {
+            const old = db[idx];
+            const mergedLead = normalizeLead({ ...old, ...lead, id: old.id || lead.id });
+            mergedLead.createdAt = old.createdAt || mergedLead.createdAt;
+            db[idx] = mergedLead;
+            changed.push(mergedLead);
+            merged++;
+        }
+    });
+
+    if(changed.length) {
+        await idbBulkPut(STORE_LEADS, changed);
+    }
+
+    if(interactions.length) {
+        const ints = interactions.map(x => ({...x, id: x.id || uid()}));
+        await idbBulkPut(STORE_INTERACTIONS, ints);
+    }
+
+    renderTable();
+    alert(`Backup importado: ${added} adicionados, ${merged} mesclados.`);
+}
+
 async function importBackupFile(file) {
     if(!file) return;
     try {
         const text = await file.text();
         const data = JSON.parse(text);
-
-        const leads = Array.isArray(data.leads) ? data.leads.map(normalizeLead) : [];
-        const interactions = Array.isArray(data.interactions) ? data.interactions : [];
-
-        let added = 0, merged = 0;
-        const changed = [];
-
-        leads.forEach(lead => {
-            const key = leadKey(lead.placeId, lead.name, lead.address);
-            const idx = db.findIndex(x => leadKey(x.placeId, x.name, x.address) === key);
-            if(idx < 0) {
-                db.push(lead);
-                changed.push(lead);
-                added++;
-            } else {
-                const old = db[idx];
-                const mergedLead = normalizeLead({ ...old, ...lead, id: old.id || lead.id });
-                // preserva createdAt se existir
-                mergedLead.createdAt = old.createdAt || mergedLead.createdAt;
-                db[idx] = mergedLead;
-                changed.push(mergedLead);
-                merged++;
-            }
-        });
-
-        await idbBulkPut(STORE_LEADS, changed);
-
-        if(interactions.length) {
-            // não tenta dedupe aqui (v6.3 cuidará melhor); apenas insere.
-            const ints = interactions.map(x => ({...x, id: x.id || uid()}));
-            await idbBulkPut(STORE_INTERACTIONS, ints);
-        }
-
-        renderTable();
-        alert(`Backup importado: ${added} adicionados, ${merged} mesclados.`);
+        await importBackupData(data);
     } catch(err) {
         alert('Erro ao importar backup: ' + (err && err.message ? err.message : err));
+    }
+}
+
+// Importar backup a partir de uma URL (GitHub Raw, etc.)
+// Observação: o Google Drive pode bloquear fetch por CORS. Nesse caso, oferecemos abrir o link para download manual.
+function extractDriveFileId(url) {
+    try {
+        const u = String(url || '');
+        // Formatos comuns:
+        // https://drive.google.com/file/d/<ID>/view?usp=sharing
+        // https://drive.google.com/open?id=<ID>
+        // https://drive.google.com/uc?id=<ID>&export=download
+        let m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if(m && m[1]) return m[1];
+        m = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if(m && m[1]) return m[1];
+        return null;
+    } catch(e) { return null; }
+}
+
+function toDriveDirectDownload(url) {
+    const id = extractDriveFileId(url);
+    if(!id) return null;
+    return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`;
+}
+
+async function importBackupFromUrlPrompt() {
+    const url = prompt('Cole a URL do backup JSON (GitHub Raw / Drive / etc.):');
+    if(!url) return;
+    await importBackupFromUrl(url.trim());
+}
+
+async function importBackupFromUrl(url) {
+    if(!url) return;
+    const driveDirect = toDriveDirectDownload(url);
+    const finalUrl = driveDirect || url;
+
+    try {
+        const res = await fetch(finalUrl, { cache: 'no-store' });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const txt = await res.text();
+        const data = JSON.parse(txt);
+        await importBackupData(data);
+    } catch(err) {
+        // Se for drive, é comum bloquear por CORS. Oferece abrir para baixar manualmente.
+        if(driveDirect) {
+            const msg = 'Não foi possível baixar automaticamente do Google Drive (bloqueio do navegador/CORS).\n\nPosso abrir o link para você baixar o JSON. Depois, use "📥 Importar Backup" e selecione o arquivo baixado.\n\nAbrir agora?';
+            if(confirm(msg)) window.open(driveDirect, '_blank');
+        } else {
+            alert('Erro ao importar backup por URL: ' + (err && err.message ? err.message : err));
+        }
     }
 }
 
