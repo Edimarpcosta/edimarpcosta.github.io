@@ -1,0 +1,1988 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão Integrada de Rotas - Ameripan</title>
+  
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
+
+  <style>
+    /* Base */
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; display: flex; height: 100vh; overflow: hidden; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    
+    .menu-item.active { background-color: #eff6ff; color: #2563eb; border-right: 3px solid #2563eb; }
+    .view-section { display: none; height: 100%; overflow-y: auto; padding-bottom: 80px; }
+    .view-section.active { display: block; }
+
+    /* Grid do Calendário */
+    .calendar-grid { display: grid; grid-template-columns: 60px repeat(6, 1fr); gap: 1px; background-color: #cbd5e1; border: 1px solid #cbd5e1; }
+    .cal-header { background-color: #f8fafc; font-weight: bold; text-align: center; padding: 8px; font-size: 0.7rem; color: #475569; text-transform: uppercase; }
+    .cal-cell { background-color: white; min-height: 120px; padding: 6px; font-size: 0.7rem; display: flex; flex-direction: column; gap: 4px; }
+    
+    /* Itens dentro do dia */
+    .cal-city-item { padding: 3px 5px; background-color: #f8fafc; border-radius: 4px; border-left: 3px solid #3b82f6; line-height: 1.2; }
+    .cal-city-name { font-weight: bold; color: #334155; display: block; }
+    .cal-city-delivery { font-size: 0.6rem; color: #64748b; display: block; margin-top: 1px; }
+
+    /* Badges Logística */
+    .badge-log-ok { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    .badge-log-warn { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    .badge-log-err { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+
+    [un-cloak] { display: none; }
+  
+    /* Busca de cliente */
+    .search-results { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
+    .search-item.active { background: #eff6ff; }
+    /* Modal cliente */
+    .modal-backdrop { background: rgba(15,23,42,.55); }
+
+  
+
+    /* Experimental: micro-interações e componentes */
+    .glass-header { backdrop-filter: blur(10px); background: rgba(255,255,255,.82); }
+    .route-sticky { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); background: rgba(248,250,252,.92); }
+    .pill { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 999px; padding: 2px 10px; font-size: 11px; color: #475569; font-weight: 700; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .fade-in { animation: fadeIn .15s ease-out; }
+    @keyframes fadeIn { from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+    /* Virtualização (beta) */
+    .virt-row { height: 42px; }
+
+  </style>
+</head>
+<body un-cloak>
+
+  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 z-20 shadow-sm">
+    <div class="p-6 border-b border-slate-100">
+        <h1 class="text-xl font-bold text-blue-700 flex items-center gap-2"><i class="ph ph-truck-trailer"></i> Gestão Rotas</h1>
+        <p class="text-xs text-slate-400 mt-1">Ameripan Distribuidora</p>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-4">
+        <ul class="space-y-1">
+            <li><a href="#" onclick="switchView('dashboard')" class="menu-item active flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-chart-pie-slice text-lg"></i> Visão Geral</a></li>
+
+            <li><a href="#" onclick="switchView('rota')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-map-trifold text-lg"></i> Rota do Vendedor</a></li>
+
+            <li><a href="#" onclick="switchView('deliveries')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-truck text-lg"></i> Consulta Entregas</a></li>
+            <li><a href="#" onclick="switchView('calendar')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-calendar text-lg"></i> Calendário (Mês)</a></li>
+            <li><a href="#" onclick="switchView('logistica')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-map-pin text-lg"></i> Logística & Cobertura</a></li>
+            <li><a href="#" onclick="switchView('team')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-users-three text-lg"></i> Carga da Equipe</a></li>
+            <li><a href="#" onclick="switchView('reports')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-file-text text-lg"></i> Dados Brutos</a></li>
+        </ul>
+    </nav>
+    <div class="p-4 border-t border-slate-100 bg-slate-50">
+        <button onclick="carregarDados()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded shadow text-sm font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-arrows-clockwise"></i> Atualizar Dados</button>
+    </div>
+  </aside>
+
+  <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+    
+    <header class="glass-header border-b border-slate-200 p-4 flex flex-wrap gap-4 items-center justify-between shadow-sm z-10">
+        <div class="flex items-center gap-4 flex-1">
+            <div class="relative group">
+                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Equipe</div>
+                <select id="filtro-equipe" onchange="aplicarFiltros()" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded focus:ring-blue-500 focus:border-blue-500 block w-32 p-1.5"><option value="">Todas</option></select>
+            </div>
+            <div class="relative group">
+                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Vendedor</div>
+                <select id="filtro-vendedor" onchange="aplicarFiltros()" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded focus:ring-blue-500 focus:border-blue-500 block w-40 p-1.5"><option value="">Todos</option></select>
+            </div>
+            <div class="relative group">
+                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Cidade</div>
+                <select id="filtro-cidade" onchange="aplicarFiltros()" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded focus:ring-blue-500 focus:border-blue-500 block w-32 p-1.5"><option value="">Todas</option></select>
+            </div>
+            <div class="relative group min-w-[260px] max-w-[420px] flex-1">
+                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Buscar Cliente</div>
+                <div class="relative">
+                    <input id="client-search" type="text" placeholder="Código ou nome..." class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded focus:ring-blue-500 focus:border-blue-500 block w-full p-1.5 pl-9" autocomplete="off" oninput="onClientSearchInput()" onkeydown="onClientSearchKeydown(event)">
+                    <i class="ph ph-magnifying-glass absolute left-2 top-2 text-slate-400"></i>
+                    <div id="client-search-results" class="search-results hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg overflow-hidden z-50"></div>
+                </div>
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-2xl font-bold text-blue-700" id="kpi-total-top">0</p>
+            <p class="text-[10px] text-slate-400 uppercase font-bold">Clientes Filtrados</p>
+        </div>
+    </header>
+
+    <div class="flex-1 overflow-hidden bg-slate-50 relative">
+        
+        <div id="view-dashboard" class="view-section active p-6">
+            <h2 class="text-lg font-bold text-slate-700 mb-4">Resumo Operacional</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white p-4 rounded shadow-sm border-l-4 border-blue-500"><p class="text-xs text-slate-400 font-bold uppercase">Média Visitas/Dia</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-visitas-dia">0</h3></div>
+                <div class="bg-white p-4 rounded shadow-sm border-l-4 border-green-500"><p class="text-xs text-slate-400 font-bold uppercase">Cidades Ativas</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-cidades-ativas">0</h3></div>
+                <div class="bg-white p-4 rounded shadow-sm border-l-4 border-amber-500"><p class="text-xs text-slate-400 font-bold uppercase">Dia de Pico</p><h3 class="text-lg font-bold text-slate-700 truncate" id="kpi-dia-pico">-</h3></div>
+                <div class="bg-white p-4 rounded shadow-sm border-l-4 border-purple-500"><p class="text-xs text-slate-400 font-bold uppercase">Equipes Ativas</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-equipes-ativas">0</h3></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Distribuição Semanal (Escala: 0-20+)</h3><canvas id="chartDias"></canvas></div>
+                <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Top 5 Cidades</h3><canvas id="chartCidades"></canvas></div>
+            </div>
+        </div>
+
+        
+        <div id="view-rota" class="view-section p-6">
+            <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
+                <div class="min-w-0">
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i class="ph ph-compass"></i> Rota do Vendedor</h2>
+                    <p class="text-sm text-slate-500">Planeje o dia/semana, facilite o contato com o cliente e gere PDFs “prontos pra rua” (comprador, telefone e Cód. clicável no WhatsApp).</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportPDFRotaDia()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> PDF Rota do Dia</button>
+                    <button onclick="exportPDFContatosDia()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-address-book text-lg"></i> PDF Contatos</button>
+                    <button onclick="exportPDFRotaSemana()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-calendar-check text-lg"></i> PDF Semana</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                <!-- Painel de Controle -->
+                <div class="xl:col-span-4 space-y-4">
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Configuração</div>
+                                <div class="text-sm font-bold text-slate-700">O que o vendedor precisa hoje</div>
+                            </div>
+                            <div class="text-[10px] text-slate-400 font-bold uppercase" id="rota-last-update">—</div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">Vendedor</div>
+                                <select id="rota-vendedor" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2" onchange="onRotaControlsChange()">
+                                    <option value="">(Usar filtro do topo)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">Semana</div>
+                                <select id="rota-semana" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2" onchange="onRotaControlsChange()">
+                                    <option value="ALL">Todas</option>
+                                    <option value="1">Semana 1</option>
+                                    <option value="2">Semana 2</option>
+                                    <option value="3">Semana 3</option>
+                                    <option value="4">Semana 4</option>
+                                    <option value="5">Semana 5</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">Dia</div>
+                                <select id="rota-dia" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2" onchange="onRotaControlsChange()">
+                                    <option value="SEG">SEG</option>
+                                    <option value="TER">TER</option>
+                                    <option value="QUA">QUA</option>
+                                    <option value="QUI">QUI</option>
+                                    <option value="SEX">SEX</option>
+                                    <option value="SAB">SAB</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">Busca na rota</div>
+                                <input id="rota-search" type="text" placeholder="Código, cliente, cidade..." class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2" oninput="onRotaControlsChange()">
+                            </div>
+                            <label class="sm:col-span-2 flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-bold text-slate-700 flex items-center gap-2"><i class="ph ph-arrows-left-right"></i> Incluir dias secundários</div>
+                                    <div class="text-xs text-slate-500">Considera “Dias outros” como visita válida no dia escolhido.</div>
+                                </div>
+                                <input id="rota-inc-sec" type="checkbox" class="w-5 h-5 accent-blue-600" checked onchange="onRotaControlsChange()">
+                            </label>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-3">
+                            <div class="bg-slate-50 rounded-xl border border-slate-200 p-3">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Paradas</div>
+                                <div id="rota-kpi-paradas" class="text-2xl font-bold text-slate-800 mt-1">0</div>
+                                <div id="rota-kpi-paradas-sub" class="text-xs text-slate-500 mt-1">—</div>
+                            </div>
+                            <div class="bg-slate-50 rounded-xl border border-slate-200 p-3">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">WhatsApp</div>
+                                <div id="rota-kpi-wa" class="text-2xl font-bold text-slate-800 mt-1">0</div>
+                                <div id="rota-kpi-wa-sub" class="text-xs text-slate-500 mt-1">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">WhatsApp</div>
+                                <div class="text-sm font-bold text-slate-700">Mensagem rápida (template)</div>
+                            </div>
+                            <button class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-2" onclick="resetRotaTemplate()"><i class="ph ph-broom"></i> Reset</button>
+                        </div>
+                        <textarea id="rota-msg-template" class="mt-3 w-full h-28 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none" spellcheck="false">Bom dia {comprador}! Aqui é {vendedor} da Ameripan. Passo em {dia} em {cidade} e a entrega está em {entrega}. Precisa de algo hoje?</textarea>
+                        <div class="mt-2 text-[11px] text-slate-500">
+                            Placeholders: <span class="font-mono">{comprador}</span>, <span class="font-mono">{cliente}</span>, <span class="font-mono">{cidade}</span>, <span class="font-mono">{dia}</span>, <span class="font-mono">{entrega}</span>, <span class="font-mono">{vendedor}</span>, <span class="font-mono">{cod}</span>
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button onclick="copyRotaResumoTexto()" class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><i class="ph ph-copy"></i> Copiar resumo do dia</button>
+                            <button onclick="copyRotaContatosTexto()" class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><i class="ph ph-list-dashes"></i> Copiar lista de contatos</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 h-56">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Vendedor</div>
+                        <div class="text-sm font-bold text-slate-700">Distribuição de visitas (dias)</div>
+                        <div class="mt-3 h-40"><canvas id="chartRotaVendDias"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Lista da Rota -->
+                <div class="xl:col-span-8">
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Rota filtrada</div>
+                                <div id="rota-summary-title" class="text-sm font-bold text-slate-800 truncate">—</div>
+                                <div id="rota-summary-sub" class="text-xs text-slate-500 truncate">—</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2" onclick="toggleRotaCompact()"><i class="ph ph-arrows-out-line-horizontal"></i> Compacto</button>
+                                <button class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2" onclick="scrollRotaTop()"><i class="ph ph-arrow-up"></i> Topo</button>
+                            </div>
+                        </div>
+                        <div id="rota-list" class="overflow-y-auto" style="max-height: calc(100vh - 210px);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<div id="view-deliveries" class="view-section p-6">
+            <div class="max-w-2xl mx-auto">
+                <h2 class="text-lg font-bold text-slate-700 mb-2 text-center">Consulta Rápida de Entregas</h2>
+                <p class="text-sm text-slate-500 mb-6 text-center">Pesquise qualquer cidade para ver os dias em que o caminhão passa.</p>
+                <div class="relative mb-6">
+                    <input type="text" id="search-delivery" placeholder="Digite o nome da cidade..." class="w-full p-4 pl-12 border rounded-lg shadow-sm text-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="renderDeliveries()">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-5 text-xl text-gray-400"></i>
+                </div>
+                <div id="delivery-results" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="view-calendar" class="view-section p-6">
+            <div class="flex justify-between items-end mb-4">
+                <div><h2 class="text-lg font-bold text-slate-700">Calendário Mensal de Visitas</h2><p class="text-xs text-slate-500">Planejamento Semanal (1 a 5) x Dia da Semana.</p></div>
+                <button onclick="generateCalendarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF Mensal</button>
+            </div>
+            <div class="bg-white rounded shadow overflow-hidden border border-slate-200">
+                <div class="calendar-grid" style="border-bottom: 0;"><div class="cal-header bg-slate-100">SEM</div><div class="cal-header">SEGUNDA</div><div class="cal-header">TERÇA</div><div class="cal-header">QUARTA</div><div class="cal-header">QUINTA</div><div class="cal-header">SEXTA</div><div class="cal-header">SÁBADO</div></div>
+                <div class="calendar-grid" id="calendar-body"></div>
+            </div>
+        </div>
+
+        <div id="view-logistica" class="view-section p-6">
+            <h2 class="text-lg font-bold text-slate-700 mb-4">Inteligência Logística</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white rounded shadow overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50"><h3 class="font-bold text-slate-700 text-sm">Análise Visita vs. Entrega (Rota Filtrada)</h3></div>
+                    <div class="overflow-x-auto h-[500px]">
+                        <table class="w-full text-left text-xs"><thead class="bg-slate-100 text-slate-500 font-bold uppercase sticky top-0"><tr><th class="p-2">Cód</th><th class="p-2">Vendedor</th><th class="p-2">Cidade</th><th class="p-2">Dia Visita</th><th class="p-2">Dias Entrega</th><th class="p-2 text-center">Lead Time</th></tr></thead><tbody id="table-logistica-conflitos" class="divide-y divide-slate-100 text-slate-600"></tbody></table>
+                    </div>
+                    <div class="p-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500 font-bold uppercase text-[10px]">Página</span>
+                            <button class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" onclick="logPrevPage()"><i class="ph ph-caret-left"></i></button>
+                            <span id="log-page-info" class="font-bold text-slate-700">1/1</span>
+                            <button class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" onclick="logNextPage()"><i class="ph ph-caret-right"></i></button>
+                            <span class="text-slate-400" id="log-total-info">0 registros</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500 font-bold uppercase text-[10px]">Itens/página</span>
+                            <select id="log-page-size" class="bg-slate-50 border border-slate-200 rounded p-1" onchange="logChangePageSize()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="lg:col-span-1 bg-white rounded shadow overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 bg-red-50"><h3 class="font-bold text-red-700 text-sm">Oportunidades (Sem Vendedor)</h3></div>
+                    <div class="overflow-x-auto h-[500px] p-4"><ul id="list-cidades-vazias" class="space-y-2 text-sm text-slate-600"></ul></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-team" class="view-section p-6">
+            <h2 class="text-lg font-bold text-slate-700 mb-4">Carga da Equipe</h2>
+            <div class="bg-white rounded shadow overflow-hidden">
+                <table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-500 font-bold uppercase text-xs"><tr><th class="p-3">Vendedor</th><th class="p-3">Equipe</th><th class="p-3 text-center">Total Clientes</th><th class="p-3 text-center">Cidades</th><th class="p-3 text-center">Dias Ocupados</th><th class="p-3">Status</th></tr></thead><tbody id="table-team-body" class="divide-y divide-slate-100"></tbody></table>
+            </div>
+        </div>
+
+        
+        <div id="view-reports" class="view-section p-6">
+            <div class="flex flex-wrap justify-between items-end gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-700">Dados Brutos (Listagem)</h2>
+                    <p class="text-xs text-slate-500">Clique no cliente para ver detalhes. Cód. com WhatsApp vira link. Modo Virtual (beta) para bases grandes.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <label class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 flex items-center gap-2">
+                        <input id="report-virtual-toggle" type="checkbox" class="accent-blue-600" onchange="toggleReportVirtual()">
+                        Virtual (beta)
+                    </label>
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><i class="ph ph-file-xls text-lg"></i> Baixar Excel</button>
+                    <button onclick="exportPDFLista()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF (Lista Completa)</button>
+                </div>
+            </div>
+
+            <!-- Modo Tabela (com paginação) -->
+            <div id="report-table-mode">
+                <div class="bg-white rounded-2xl shadow-sm overflow-x-auto border border-slate-200">
+                    <table class="w-full text-left text-xs" id="report-table">
+                        <thead class="bg-slate-50 text-slate-500 font-bold uppercase">
+                            <tr>
+                                <th class="p-2">Cód.</th>
+                                <th class="p-2">Vendedor</th>
+                                <th class="p-2">Cidade</th>
+                                <th class="p-2">Cliente</th>
+                                <th class="p-2">Dia</th>
+                                <th class="p-2">Freq.</th>
+                                <th class="p-2">Ordem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-report-body" class="divide-y divide-slate-100 text-slate-600"></tbody>
+                    </table>
+                </div>
+                <div class="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Página</span>
+                        <button class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" onclick="reportPrevPage()"><i class="ph ph-caret-left"></i></button>
+                        <span id="report-page-info" class="font-bold text-slate-700">1/1</span>
+                        <button class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" onclick="reportNextPage()"><i class="ph ph-caret-right"></i></button>
+                        <span class="text-slate-400" id="report-total-info">0 registros</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Itens/página</span>
+                        <select id="report-page-size" class="bg-slate-50 border border-slate-200 rounded p-1" onchange="reportChangePageSize()">
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modo Virtual (sem paginação) -->
+            <div id="report-virtual-mode" class="hidden">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-[10px] text-slate-400 font-bold uppercase">Renderização eficiente</div>
+                            <div class="text-sm font-bold text-slate-700">Lista Virtual</div>
+                        </div>
+                        <div class="text-xs text-slate-500" id="report-virtual-info">—</div>
+                    </div>
+                    <div class="grid grid-cols-12 gap-2 text-[11px] font-bold uppercase text-slate-500 px-3 py-2 border-b border-slate-100">
+                        <div class="col-span-2">Cód.</div>
+                        <div class="col-span-3">Vendedor</div>
+                        <div class="col-span-2">Cidade</div>
+                        <div class="col-span-3">Cliente</div>
+                        <div class="col-span-1 text-center">Dia</div>
+                        <div class="col-span-1 text-center">Ord</div>
+                    </div>
+                    <div id="report-virtual-viewport" class="relative overflow-y-auto" style="height: calc(100vh - 260px);">
+                        <div id="report-virtual-spacer"></div>
+                        <div id="report-virtual-rows" class="absolute left-0 right-0 top-0"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+  </main>
+
+  <div id="loading-overlay" class="fixed inset-0 bg-white/90 z-[100] flex flex-col items-center justify-center">
+    <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+    <p class="text-slate-600 font-bold animate-pulse">Carregando base de dados...</p>
+  </div>
+
+
+  <!-- Modal: Detalhes do Cliente -->
+  <div id="client-modal" class="hidden fixed inset-0 z-[120]">
+    <div class="modal-backdrop absolute inset-0" onclick="closeClientModal()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] text-slate-400 font-bold uppercase">Cliente</div>
+            <h3 id="client-modal-title" class="text-base font-bold text-slate-800">—</h3>
+            <p id="client-modal-sub" class="text-xs text-slate-500">—</p>
+          </div>
+          <button class="px-3 py-2 rounded-lg border border-slate-200 hover:bg-white text-slate-600" onclick="closeClientModal()"><i class="ph ph-x"></i></button>
+        </div>
+        <div id="client-modal-body" class="p-4 max-h-[70vh] overflow-y-auto"></div>
+        <div class="p-4 border-t border-slate-100 bg-white flex flex-wrap gap-2 justify-end">
+          <button id="client-modal-whats" class="hidden bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2" onclick="openClientWhatsapp()"><i class="ph ph-whatsapp-logo text-lg"></i> WhatsApp</button>
+          <button class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2" onclick="closeClientModal()"><i class="ph ph-check"></i> Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+    // ============================================================
+    // 1) DADOS E CONFIGURAÇÕES
+    // ============================================================
+    const SPREADSHEET_ID = '1JXdW-RDSrG4or8WzvLBV_PbopVvug9B9og7fSMGOWj0';
+    const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
+
+    const URL_ROTAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ROTAS!A2:O?key=${API_KEY}`;
+    const URL_VENDEDORES = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/VENDEDORES!A2:C?key=${API_KEY}`;
+    const URL_ENTREGAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CIDADES-ENTREGAS!A2:B?key=${API_KEY}`;
+
+    const COL = { DATA:0, VEND_COD:1, VEND_NOME:2, EQUIPE:3, CLIENTE_COD:4, RAZAO:5, FANTASIA:6, CIDADE:7, ORDEM:8, FREQ:9, DIA_PRINC:10, DIAS_SEC:11, COMPRADOR:12, WHATSAPP:13, OBS:14 };
+    const DIAS_MAP = { 'SEG':1, 'SEGUNDA':1, 'TER':2, 'TERCA':2, 'QUA':3, 'QUARTA':3, 'QUI':4, 'QUINTA':4, 'SEX':5, 'SEXTA':5, 'SAB':6, 'SABADO':6 };
+    const DIAS_LISTA = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+    const DIAS_VALOR = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
+
+    // Estado (camada de dados)
+    let rawRotas = [];
+    let rawEntregas = {};
+    let cityDisplayMap = {};
+    let filteredData = [];
+    let charts = {};
+
+    // Paginação
+    let reportPaging = { page: 1, pageSize: 50 };
+    let logPaging = { page: 1, pageSize: 50, rows: [] };
+
+    // Rota do vendedor (estado local da view)
+    let rotaState = { vendedor: '', semana: 'ALL', dia: 'SEG', incluirSec: true, search: '', compacto: false };
+
+    // Virtualização (beta) - Dados Brutos
+    let reportVirtual = { enabled: false, rowHeight: 42, overscan: 12, lastTotal: 0 };
+
+
+    // Busca de cliente (índice)
+    let clientProfiles = [];
+    let clientByCode = new Map();
+    let clientSearchActiveIndex = -1;
+    let clientSelectedCode = null;
+
+    window.onload = () => {
+        setupClientSearchHandlers();
+        setupRotaControls();
+        setupReportVirtual();
+        carregarDados();
+    };
+
+    // ============================================================
+    // 2) CARREGAMENTO
+    // ============================================================
+    async function carregarDados() {
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const [resRotas, resEnt] = await Promise.all([fetch(URL_ROTAS), fetch(URL_ENTREGAS)]);
+            const jRotas = await resRotas.json();
+            const jEnt = await resEnt.json();
+
+            // Entregas (por cidade)
+            rawEntregas = {};
+            cityDisplayMap = {};
+            if (jEnt.values) {
+                jEnt.values.forEach(r => {
+                    const cidadeOriginal = (r[0] || '').toString().trim();
+                    const cidadeNorm = normalizarTexto(cidadeOriginal);
+                    cityDisplayMap[cidadeNorm] = cidadeOriginal ? cidadeOriginal.toUpperCase() : cidadeNorm;
+
+                    const diasStr = (r[1] || '').toString().toUpperCase();
+                    rawEntregas[cidadeNorm] = parseDiasEntrega(diasStr);
+                });
+            }
+
+            // Rotas (principal)
+            rawRotas = (jRotas.values || []).map(r => {
+                const razao = (r[COL.RAZAO] || '').toString();
+                const fantasia = (r[COL.FANTASIA] || '').toString();
+                const clienteNome = fantasia || razao || 'Cliente Sem Nome';
+                const whatsappRaw = (r[COL.WHATSAPP] || '').toString();
+                const whatsapp = parseWhatsapp(whatsappRaw);
+
+                return {
+                    data: (r[COL.DATA] || '').toString(),
+                    vendCod: (r[COL.VEND_COD] || '').toString(),
+                    vendedor: (r[COL.VEND_NOME] || 'N/A').toString(),
+                    equipe: (r[COL.EQUIPE] || 'Geral').toString(),
+                    cidade: (r[COL.CIDADE] || 'N/A').toString(),
+                    cidadeNorm: normalizarTexto((r[COL.CIDADE] || '').toString()),
+                    codCliente: (r[COL.CLIENTE_COD] || '000').toString(),
+                    razao,
+                    fantasia,
+                    cliente: clienteNome,
+                    ordem: parseInt(r[COL.ORDEM], 10) || 99,
+                    freq: normalizarFreq((r[COL.FREQ] || '').toString()),
+                    diaPrinc: normalizarDia((r[COL.DIA_PRINC] || '').toString()),
+                    diasSec: (r[COL.DIAS_SEC] ? r[COL.DIAS_SEC].toString().split(',').map(d => normalizarDia(d)).filter(Boolean) : []),
+                    comprador: (r[COL.COMPRADOR] || '').toString(),
+                    whatsappRaw,
+                    whatsappDigits55: whatsapp ? whatsapp.digits55 : '',
+                    whatsappUrl: whatsapp ? whatsapp.url : '',
+                    obs: (r[COL.OBS] || '').toString()
+                };
+            });
+
+            buildClientIndex();
+            popularFiltros();
+            syncRotaVendedorOptions();
+            aplicarFiltros();
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao carregar dados.");
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    // ============================================================
+    // 3) FUNÇÕES AUXILIARES (dados)
+    // ============================================================
+    function normalizarTexto(txt) {
+        return txt ? txt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase() : "";
+    }
+
+    function normalizarDia(d) {
+        if (!d) return null;
+        const c = d.trim().toUpperCase().substring(0, 3);
+        return DIAS_LISTA.includes(c) ? c : null;
+    }
+
+    function normalizarFreq(f) {
+        if (!f || f.toLowerCase().includes('toda') || f.toLowerCase().includes('indef')) return ['TODAS'];
+        return f.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    function parseDiasEntrega(str) {
+        if (!str) return [];
+        let dias = new Set();
+        const u = str.toUpperCase();
+        if (u.includes(' A ')) {
+            const p = u.split(' A ');
+            const i = DIAS_MAP[(p[0] || '').trim().substring(0, 3)];
+            const f = DIAS_MAP[(p[1] || '').trim().substring(0, 3)];
+            if (i && f) for (let k = i; k <= f; k++) dias.add(k);
+        } else {
+            u.replace(' E ', ',').split(',').forEach(s => {
+                const d = DIAS_MAP[(s || '').trim().substring(0, 3)];
+                if (d) dias.add(d);
+            });
+        }
+        return Array.from(dias).sort();
+    }
+
+    function getEntregaStr(cidadeNorm) {
+        const d = rawEntregas[cidadeNorm] || [];
+        return d.length === 0 ? "N/D" : d.map(n => DIAS_LISTA[n - 1]).join(', ');
+    }
+
+    function parseWhatsapp(raw) {
+        const digits = (raw || '').replace(/\D/g, '');
+        if (!digits) return null;
+
+        // Se vier com país (55...), mantém
+        let digits55 = digits;
+        if (digits.length === 10 || digits.length === 11) digits55 = '55' + digits;
+        // Se vier com 13/12 e não começar com 55, assume BR
+        if ((digits.length === 12 || digits.length === 13) && !digits.startsWith('55')) digits55 = '55' + digits;
+
+        // Regra simples: precisa ter 12 ou 13 dígitos (55 + DDD + número)
+        if (!(digits55.length === 12 || digits55.length === 13) || !digits55.startsWith('55')) return null;
+
+        return { digits, digits55, url: `https://wa.me/${digits55}` };
+    }
+
+    function escapeHtml(s) {
+        return (s || '').toString()
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // ============================================================
+    // 4) FILTROS / NAVEGAÇÃO
+    // ============================================================
+    function switchView(v, el) {
+        document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+        document.getElementById(`view-${v}`).classList.add('active');
+
+        document.querySelectorAll('.menu-item').forEach(mi => mi.classList.remove('active'));
+        const target = el || (window.event && window.event.currentTarget);
+        if (target) target.classList.add('active');
+
+        renderView(v);
+    }
+
+    function popularFiltros() {
+        const selEq = document.getElementById('filtro-equipe').value;
+        const selVend = document.getElementById('filtro-vendedor').value;
+        const selCid = document.getElementById('filtro-cidade').value;
+
+        const eq = [...new Set(rawRotas.map(i => i.equipe).filter(Boolean))].sort();
+        const ve = [...new Set(rawRotas.map(i => i.vendedor).filter(Boolean))].sort();
+        const ci = [...new Set(rawRotas.map(i => i.cidade).filter(Boolean))].sort();
+
+        povoar('filtro-equipe', eq, 'Todas');
+        povoar('filtro-vendedor', ve, 'Todos');
+        povoar('filtro-cidade', ci, 'Todas');
+
+        if (eq.includes(selEq)) document.getElementById('filtro-equipe').value = selEq;
+        if (ve.includes(selVend)) document.getElementById('filtro-vendedor').value = selVend;
+        if (ci.includes(selCid)) document.getElementById('filtro-cidade').value = selCid;
+    }
+
+    function povoar(id, lista, labelAll) {
+        const s = document.getElementById(id);
+        s.innerHTML = `<option value="">${labelAll}</option>`;
+        lista.forEach(i => s.appendChild(new Option(i, i)));
+    }
+
+    function aplicarFiltros() {
+        const fEq = document.getElementById('filtro-equipe').value;
+        const fVend = document.getElementById('filtro-vendedor').value;
+        const fCid = document.getElementById('filtro-cidade').value;
+
+        filteredData = rawRotas.filter(r =>
+            (!fEq || r.equipe === fEq) &&
+            (!fVend || r.vendedor === fVend) &&
+            (!fCid || r.cidade === fCid)
+        );
+
+        // Reset paginação ao filtrar
+        reportPaging.page = 1;
+        logPaging.page = 1;
+
+        document.getElementById('kpi-total-top').innerText = filteredData.length;
+
+        // Recalcula linhas de logística (camada de dados)
+        buildLogRows();
+
+        const active = document.querySelector('.view-section.active').id.replace('view-', '');
+        renderView(active);
+    }
+
+    function renderView(v) {
+        if (v === 'dashboard') renderDashboard();
+        else if (v === 'rota') renderRota();
+        else if (v === 'calendar') renderCalendar();
+        else if (v === 'team') renderTeamLoad();
+        else if (v === 'reports') renderReports();
+        else if (v === 'logistica') renderLogistics();
+        else if (v === 'deliveries') renderDeliveries();
+    }
+
+
+    // ============================================================
+    // 5) RENDERIZADORES (UI)
+    // ============================================================
+    function renderDashboard() {
+        document.getElementById('kpi-visitas-dia').innerText = (filteredData.length / 6).toFixed(1);
+        document.getElementById('kpi-cidades-ativas').innerText = new Set(filteredData.map(r => r.cidade)).size;
+        document.getElementById('kpi-equipes-ativas').innerText = new Set(filteredData.map(r => r.equipe)).size;
+
+        const diasCount = { SEG: 0, TER: 0, QUA: 0, QUI: 0, SEX: 0, SAB: 0 };
+        filteredData.forEach(r => { if (r.diaPrinc) diasCount[r.diaPrinc]++; });
+        const diaPico = Object.entries(diasCount).reduce((a, b) => a[1] > b[1] ? a : b)[0];
+        document.getElementById('kpi-dia-pico').innerText = diaPico;
+
+        renderChart('chartDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#3b82f6', {
+            scales: { y: { beginAtZero: true, suggestedMax: 20, ticks: { stepSize: 1 } } }
+        });
+
+        const cidCount = {};
+        filteredData.forEach(r => cidCount[r.cidade] = (cidCount[r.cidade] || 0) + 1);
+        const topCid = Object.entries(cidCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        renderChart('chartCidades', 'doughnut', topCid.map(x => x[0]), topCid.map(x => x[1]), ['#f59e0b', '#10b981', '#6366f1', '#ec4899', '#64748b']);
+    }
+
+    
+    // ============================================================
+    // 5.X) ROTA DO VENDEDOR (view experimental)
+    // ============================================================
+    function setupRotaControls() {
+        const dayMap = ['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
+        const hoje = dayMap[new Date().getDay()];
+        if (DIAS_LISTA.includes(hoje)) rotaState.dia = hoje;
+
+        const diaSel = document.getElementById('rota-dia');
+        const semSel = document.getElementById('rota-semana');
+        const incSec = document.getElementById('rota-inc-sec');
+        if (diaSel) diaSel.value = rotaState.dia;
+        if (semSel) semSel.value = rotaState.semana;
+        if (incSec) incSec.checked = rotaState.incluirSec;
+    }
+
+    function syncRotaVendedorOptions() {
+        const topVend = document.getElementById('filtro-vendedor');
+        const rotaVend = document.getElementById('rota-vendedor');
+        if (!topVend || !rotaVend) return;
+
+        // Reconstrói (mantendo 1ª opção "usar filtro do topo")
+        const keepFirst = rotaVend.options[0] ? rotaVend.options[0].outerHTML : '<option value="">(Usar filtro do topo)</option>';
+        rotaVend.innerHTML = keepFirst;
+
+        Array.from(topVend.options).forEach(opt => {
+            const v = (opt.value || '').toString();
+            if (!v) return;
+            if (v === 'Todos') return;
+            const o = document.createElement('option');
+            o.value = v;
+            o.textContent = v;
+            rotaVend.appendChild(o);
+        });
+    }
+
+    function onRotaControlsChange() {
+        const vend = document.getElementById('rota-vendedor')?.value || '';
+        const semana = document.getElementById('rota-semana')?.value || 'ALL';
+        const dia = document.getElementById('rota-dia')?.value || 'SEG';
+        const inc = !!document.getElementById('rota-inc-sec')?.checked;
+        const search = document.getElementById('rota-search')?.value || '';
+        rotaState = { ...rotaState, vendedor: vend, semana, dia, incluirSec: inc, search };
+
+        const active = document.querySelector('.view-section.active')?.id?.replace('view-', '');
+        if (active === 'rota') renderRota();
+    }
+
+    function getEffectiveRotaVendedor() {
+        const localVend = (rotaState.vendedor || '').trim();
+        if (localVend) return localVend;
+
+        const top = document.getElementById('filtro-vendedor')?.value || '';
+        if (top && top !== 'Todos') return top;
+        return '';
+    }
+
+    function rotaRowMatchesSearch(r, qNorm, qDigits) {
+        if (!qNorm && !qDigits) return true;
+        const cod = (r.codCliente || '').toString();
+        if (qDigits && cod.includes(qDigits)) return true;
+
+        const nome = normalizarTexto(r.cliente || '');
+        const cidade = normalizarTexto(r.cidade || '');
+        const comprador = normalizarTexto(r.comprador || '');
+        if (qNorm && (nome.includes(qNorm) || cidade.includes(qNorm) || comprador.includes(qNorm))) return true;
+        return false;
+    }
+
+    function getRotaSubset() {
+        const vend = getEffectiveRotaVendedor();
+        const semana = rotaState.semana;
+        const dia = rotaState.dia;
+        const incSec = rotaState.incluirSec;
+
+        const q = (rotaState.search || '').trim();
+        const qNorm = normalizarTexto(q);
+        const qDigits = q.replace(/\D/g, '');
+
+        const tagSemana = semana !== 'ALL' ? `S${semana}` : null;
+
+        const subset = filteredData.filter(r => {
+            if (vend && r.vendedor !== vend) return false;
+
+            const diaOk = (r.diaPrinc === dia) || (incSec && (r.diasSec || []).includes(dia));
+            if (!diaOk) return false;
+
+            if (tagSemana) {
+                const freq = r.freq || [];
+                if (!(freq.includes('TODAS') || freq.includes(tagSemana))) return false;
+            }
+
+            if (!rotaRowMatchesSearch(r, qNorm, qDigits)) return false;
+            return true;
+        });
+
+        subset.sort((a, b) => {
+            if (a.cidade !== b.cidade) return a.cidade.localeCompare(b.cidade);
+            return (a.ordem - b.ordem);
+        });
+        return subset;
+    }
+
+    function renderRota() {
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const dia = rotaState.dia;
+        const semanaLabel = rotaState.semana === 'ALL' ? 'Todas as semanas' : `Semana ${rotaState.semana}`;
+
+        // Atualiza “last update”
+        const lu = document.getElementById('rota-last-update');
+        if (lu) lu.textContent = `Atualizado ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+
+        const subset = getRotaSubset();
+
+        const total = subset.length;
+        const cities = new Set(subset.map(r => r.cidade)).size;
+        const waCount = subset.filter(r => !!r.whatsappUrl).length;
+        const semWa = total - waCount;
+
+        document.getElementById('rota-kpi-paradas').innerText = String(total);
+        document.getElementById('rota-kpi-paradas-sub').innerText = `${cities} cidades • ${semanaLabel}`;
+        document.getElementById('rota-kpi-wa').innerText = String(waCount);
+        document.getElementById('rota-kpi-wa-sub').innerText = semWa > 0 ? `${semWa} sem WhatsApp` : 'Cobertura total';
+
+        const title = `${vend} • ${dia} • ${semanaLabel}`;
+        document.getElementById('rota-summary-title').innerText = title;
+        document.getElementById('rota-summary-sub').innerText = `${total} paradas • ${waCount} com WhatsApp • clique no Cód. para abrir o contato`;
+
+        renderRotaVendChart(vend);
+        renderRotaList(subset);
+    }
+
+    function renderRotaVendChart(vend) {
+        // Se vend = Todos, mostra distribuição geral
+        const base = vend === 'Todos' ? filteredData : filteredData.filter(r => r.vendedor === vend);
+        const diasCount = { SEG:0, TER:0, QUA:0, QUI:0, SEX:0, SAB:0 };
+        base.forEach(r => { if (r.diaPrinc) diasCount[r.diaPrinc] = (diasCount[r.diaPrinc] || 0) + 1; });
+
+        // Se canvas não existir (primeiro load), ignora
+        const el = document.getElementById('chartRotaVendDias');
+        if (!el) return;
+
+        renderChart('chartRotaVendDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#0ea5e9', {
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 10 } } }
+        });
+    }
+
+    function renderRotaList(subset) {
+        const list = document.getElementById('rota-list');
+        if (!list) return;
+
+        if (subset.length === 0) {
+            list.innerHTML = `<div class="p-10 text-center text-slate-400">
+                <div class="text-3xl mb-2"><i class="ph ph-magnifying-glass"></i></div>
+                <div class="font-bold">Nada por aqui</div>
+                <div class="text-sm">Ajuste Vendedor/Semana/Dia ou a busca.</div>
+            </div>`;
+            return;
+        }
+
+        const groups = new Map();
+        subset.forEach(r => {
+            const key = r.cidade || 'N/A';
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(r);
+        });
+
+        const compact = !!rotaState.compacto;
+
+        let html = '';
+        Array.from(groups.entries()).sort((a,b) => a[0].localeCompare(b[0])).forEach(([cidade, rows]) => {
+            const cidadeNorm = normalizarTexto(cidade);
+            const entrega = getEntregaStr(cidadeNorm);
+
+            html += `
+                <div class="border-b border-slate-100">
+                    <div class="route-sticky px-4 py-2 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(cidade)}</div>
+                            <div class="text-[11px] text-slate-500 truncate">Entrega: <span class="font-bold text-slate-700">${escapeHtml(entrega)}</span> • ${rows.length} clientes</div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap justify-end">
+                            <span class="pill">ENT: ${escapeHtml(entrega)}</span>
+                            <span class="pill">${rows.length} paradas</span>
+                        </div>
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        ${rows.map(r => rotaRowHtml(r, compact)).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        list.innerHTML = html;
+    }
+
+    function rotaRowHtml(r, compact) {
+        const cod = escapeHtml(r.codCliente);
+        const entrega = getEntregaStr(r.cidadeNorm);
+        const freqStr = (r.freq || []).join(',');
+        const comprador = r.comprador ? escapeHtml(r.comprador) : '-';
+        const obs = r.obs ? escapeHtml(r.obs) : '';
+
+        const codEl = r.whatsappUrl
+            ? `<a class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400" href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener">${cod}</a>`
+            : `<span class="mono text-slate-700 font-bold">${cod}</span>`;
+
+        const waBtn = r.whatsappUrl
+            ? `<button class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2" onclick="openWhatsTemplate('${escapeHtml(r.codCliente)}')"><i class="ph ph-whatsapp-logo"></i> Whats</button>`
+            : `<button class="bg-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-not-allowed" title="Sem WhatsApp"><i class="ph ph-whatsapp-logo"></i> Whats</button>`;
+
+        const msgBtn = r.whatsappUrl
+            ? `<button class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2" onclick="openWhatsTemplate('${escapeHtml(r.codCliente)}', true)"><i class="ph ph-chat-teardrop-text"></i> Msg</button>`
+            : `<button class="bg-white border border-slate-200 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-not-allowed" title="Sem WhatsApp"><i class="ph ph-chat-teardrop-text"></i> Msg</button>`;
+
+        const infoLine = compact
+            ? `<div class="text-[11px] text-slate-500 mt-1 truncate">Comprador: ${comprador} • Entrega: ${escapeHtml(entrega)}</div>`
+            : `<div class="text-[11px] text-slate-500 mt-1">
+                    <span class="mono">${cod}</span> • Comprador: <b class="text-slate-700">${comprador}</b> • Visita: <b class="text-blue-600">${escapeHtml(r.diaPrinc || '-')}</b> • Entrega: <b class="text-slate-700">${escapeHtml(entrega)}</b> • Freq: ${escapeHtml(freqStr || '-')}
+               </div>`;
+
+        const obsLine = (!compact && obs) ? `<div class="text-[11px] text-slate-400 mt-1">Obs: ${obs}</div>` : '';
+
+        return `
+            <div class="p-3 hover:bg-slate-50 fade-in">
+                <div class="flex items-start gap-3">
+                    <div class="w-12 flex-shrink-0">
+                        <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-slate-700 mono">${r.ordem || ''}</div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            ${codEl}
+                            <button class="text-left hover:underline font-bold text-slate-800 truncate" onclick="openClientModal('${escapeHtml(r.codCliente)}')">${escapeHtml(r.cliente || '')}</button>
+                            ${r.whatsappRaw ? `<span class="pill">${escapeHtml(r.whatsappRaw)}</span>` : `<span class="pill">sem tel</span>`}
+                        </div>
+                        ${infoLine}
+                        ${obsLine}
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        ${waBtn}
+                        ${msgBtn}
+                        <button class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2" onclick="copyRotaLinha('${escapeHtml(r.codCliente)}')"><i class="ph ph-copy"></i> Copiar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleRotaCompact() {
+        rotaState.compacto = !rotaState.compacto;
+        renderRota();
+    }
+
+    function scrollRotaTop() {
+        const list = document.getElementById('rota-list');
+        if (list) list.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetRotaTemplate() {
+        const ta = document.getElementById('rota-msg-template');
+        if (!ta) return;
+        ta.value = "Bom dia {comprador}! Aqui é {vendedor} da Ameripan. Passo em {dia} em {cidade} e a entrega está em {entrega}. Precisa de algo hoje?";
+    }
+
+    function buildTemplateMessage(r) {
+        const ta = document.getElementById('rota-msg-template');
+        const tpl = (ta?.value || '').toString();
+
+        const comprador = (r.comprador || '').trim() || 'tudo bem';
+        const vend = getEffectiveRotaVendedor() || (r.vendedor || '');
+        const entrega = getEntregaStr(r.cidadeNorm);
+
+        return tpl
+            .replaceAll('{comprador}', comprador)
+            .replaceAll('{cliente}', (r.cliente || '').toString())
+            .replaceAll('{cidade}', (r.cidade || '').toString())
+            .replaceAll('{dia}', (rotaState.dia || r.diaPrinc || '').toString())
+            .replaceAll('{entrega}', (entrega || 'N/D').toString())
+            .replaceAll('{vendedor}', vend.toString())
+            .replaceAll('{cod}', (r.codCliente || '').toString());
+    }
+
+    function openWhatsTemplate(codCliente, withText = false) {
+        const r = filteredData.find(x => (x.codCliente || '') === (codCliente || ''));
+        if (!r || !r.whatsappDigits55) return;
+
+        if (!withText) {
+            window.open(r.whatsappUrl, '_blank', 'noopener');
+            return;
+        }
+
+        const msg = buildTemplateMessage(r);
+        const url = `https://wa.me/${r.whatsappDigits55}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank', 'noopener');
+    }
+
+    function copyRotaLinha(codCliente) {
+        const r = filteredData.find(x => (x.codCliente || '') === (codCliente || ''));
+        if (!r) return;
+        const entrega = getEntregaStr(r.cidadeNorm);
+        const txt = [
+            `Cód: ${r.codCliente}`,
+            `Cliente: ${r.cliente}`,
+            `Comprador: ${r.comprador || '-'}`,
+            `WhatsApp: ${r.whatsappRaw || '-'}`,
+            `Cidade: ${r.cidade}`,
+            `Visita: ${r.diaPrinc || '-'}`,
+            `Entrega: ${entrega || 'N/D'}`,
+            `Freq: ${(r.freq || []).join(',') || '-'}`,
+            r.obs ? `Obs: ${r.obs}` : ''
+        ].filter(Boolean).join('\n');
+        copyText(txt);
+    }
+
+    function copyRotaResumoTexto() {
+        const subset = getRotaSubset();
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const entregaCities = Array.from(new Set(subset.map(r => r.cidade))).sort();
+        const wa = subset.filter(r => !!r.whatsappUrl).length;
+
+        const linhas = [
+            `ROTA — ${vend} — ${rotaState.dia} — ${rotaState.semana === 'ALL' ? 'Todas as semanas' : 'Semana ' + rotaState.semana}`,
+            `Paradas: ${subset.length} | Cidades: ${entregaCities.length} | WhatsApp: ${wa}`,
+            '',
+            'CIDADES:',
+            ...entregaCities.map(c => `- ${c}`)
+        ];
+        copyText(linhas.join('\n'));
+    }
+
+    function copyRotaContatosTexto() {
+        const subset = getRotaSubset().filter(r => !!r.whatsappUrl);
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const linhas = [
+            `CONTATOS (WhatsApp) — ${vend} — ${rotaState.dia} — ${rotaState.semana === 'ALL' ? 'Todas as semanas' : 'Semana ' + rotaState.semana}`,
+            ''
+        ];
+        subset.forEach(r => {
+            linhas.push(`${r.codCliente} | ${r.cliente} | ${r.whatsappRaw || '-'} | ${r.cidade} | Comprador: ${r.comprador || '-'}`);
+        });
+        copyText(linhas.join('\n'));
+    }
+
+
+    function renderDeliveries() {
+        const search = document.getElementById('search-delivery').value.trim().toUpperCase();
+        const container = document.getElementById('delivery-results');
+        container.innerHTML = '';
+
+        const lista = Object.entries(rawEntregas).map(([cidadeNorm, diasNum]) => {
+            const nomeBonito = cityDisplayMap[cidadeNorm] || cidadeNorm;
+            return { nome: nomeBonito, norm: cidadeNorm, dias: diasNum };
+        }).sort((a, b) => a.nome.localeCompare(b.nome));
+
+        const filtrados = lista.filter(i => i.norm.includes(search) || i.nome.toUpperCase().includes(search));
+        filtrados.slice(0, 50).forEach(item => {
+            const diasStr = item.dias.length > 0 ? item.dias.map(d => DIAS_LISTA[d - 1]).join(', ') : 'SEM ENTREGAS DEFINIDAS';
+            container.innerHTML += `<div class="bg-white p-4 rounded shadow-sm border border-slate-200 flex justify-between items-center"><div><h3 class="font-bold text-slate-700 text-lg">${escapeHtml(item.nome)}</h3></div><div class="text-right"><span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">${escapeHtml(diasStr)}</span></div></div>`;
+        });
+
+        if (filtrados.length === 0) container.innerHTML = '<div class="text-center text-slate-400 p-4">Nenhuma cidade encontrada.</div>';
+    }
+
+    function renderCalendar() {
+        const c = document.getElementById('calendar-body');
+        c.innerHTML = '';
+        for (let sem = 1; sem <= 5; sem++) {
+            c.innerHTML += `<div class="cal-header bg-slate-100 flex items-center justify-center border-b border-slate-200">SEMANA ${sem}</div>`;
+            DIAS_LISTA.forEach(dia => {
+                const clientes = filteredData.filter(r =>
+                    (r.diaPrinc === dia || r.diasSec.includes(dia)) &&
+                    (r.freq.includes('TODAS') || r.freq.includes(`S${sem}`))
+                );
+
+                let html = `<div class="cal-cell border border-slate-100">`;
+                if (clientes.length > 0) {
+                    const cids = {};
+                    clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
+                    Object.entries(cids).sort().forEach(([n, q]) => {
+                        html += `<div class="cal-city-item"><span class="cal-city-name">${escapeHtml(n)} (${q})</span><span class="cal-city-delivery">[ENT: ${escapeHtml(getEntregaStr(normalizarTexto(n)))}]</span></div>`;
+                    });
+                }
+                html += `</div>`;
+                c.appendChild(new DOMParser().parseFromString(html, 'text/html').body.firstChild);
+            });
+        }
+    }
+
+    function buildLogRows() {
+        const rows = [];
+        filteredData.forEach(r => {
+            const diaVisitaNum = DIAS_MAP[r.diaPrinc];
+            const diasEntrega = rawEntregas[r.cidadeNorm] || [];
+            if (diaVisitaNum && diasEntrega.length > 0) {
+                let gap = 99;
+                for (let d of diasEntrega) {
+                    let diff = d - diaVisitaNum;
+                    if (diff < 0) diff += 7;
+                    if (diff < gap) gap = diff;
+                }
+                const entregaStr = getEntregaStr(r.cidadeNorm);
+                const level = gap <= 2 ? 'ok' : gap <= 4 ? 'warn' : 'err';
+                rows.push({ codCliente: r.codCliente, vendedor: r.vendedor, cidade: r.cidade, diaPrinc: r.diaPrinc, entregaStr, gap, level });
+            }
+        });
+        logPaging.rows = rows;
+    }
+
+    function renderLogistics() {
+        // Lista de cidades sem vendedor (mantém)
+        const cidadesComRota = new Set(rawRotas.map(r => r.cidadeNorm));
+        const listaVazias = document.getElementById('list-cidades-vazias');
+        listaVazias.innerHTML = '';
+        let countVazias = 0;
+        Object.keys(rawEntregas).forEach(cidNorm => {
+            if (!cidadesComRota.has(cidNorm)) {
+                const nomeBonito = cityDisplayMap[cidNorm] || cidNorm;
+                listaVazias.innerHTML += `<li class="border-b border-red-100 pb-1"><i class="ph ph-warning text-red-500"></i> <b>${escapeHtml(nomeBonito)}</b> <span class="text-xs text-gray-400">(Sem Visitas)</span></li>`;
+                countVazias++;
+            }
+        });
+        if (countVazias === 0) listaVazias.innerHTML = '<li class="text-green-600 italic">Cobertura Total!</li>';
+
+        // Paginação
+        const tbody = document.getElementById('table-logistica-conflitos');
+        const total = logPaging.rows.length;
+        const pageSize = logPaging.pageSize;
+        const pages = Math.max(1, Math.ceil(total / pageSize));
+        logPaging.page = Math.min(Math.max(1, logPaging.page), pages);
+
+        const start = (logPaging.page - 1) * pageSize;
+        const slice = logPaging.rows.slice(start, start + pageSize);
+
+        tbody.innerHTML = slice.map(r => {
+            const badge =
+                r.level === 'ok' ? `<span class="badge-log-ok">Ótimo (${r.gap}d)</span>` :
+                r.level === 'warn' ? `<span class="badge-log-warn">Atenção (${r.gap}d)</span>` :
+                `<span class="badge-log-err">Crítico (${r.gap}d)</span>`;
+
+            return `<tr class="hover:bg-slate-50 border-b border-slate-100">
+                <td class="p-2 font-mono text-xs">${escapeHtml(r.codCliente)}</td>
+                <td class="p-2 font-bold">${escapeHtml(r.vendedor)}</td>
+                <td class="p-2">${escapeHtml(r.cidade)}</td>
+                <td class="p-2 text-blue-600 font-bold">${escapeHtml(r.diaPrinc || '')}</td>
+                <td class="p-2 text-xs">${escapeHtml(r.entregaStr)}</td>
+                <td class="p-2 text-center">${badge}</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('log-page-info').innerText = `${logPaging.page}/${pages}`;
+        document.getElementById('log-total-info').innerText = `${total} registros`;
+    }
+
+    function renderReports() {
+        setReportModeUI();
+        if (reportVirtual.enabled) { renderReportsVirtual(); return; }
+        const tb = document.getElementById('table-report-body');
+
+        const total = filteredData.length;
+        const pageSize = reportPaging.pageSize;
+        const pages = Math.max(1, Math.ceil(total / pageSize));
+        reportPaging.page = Math.min(Math.max(1, reportPaging.page), pages);
+
+        const start = (reportPaging.page - 1) * pageSize;
+        const slice = filteredData.slice(start, start + pageSize);
+
+        tb.innerHTML = slice.map(r => {
+            const codCell = r.whatsappUrl
+                ? `<a href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener" class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400">${escapeHtml(r.codCliente)}</a>`
+                : `<span class="font-mono text-slate-700">${escapeHtml(r.codCliente)}</span>`;
+
+            return `<tr class="hover:bg-slate-50 border-b border-slate-100">
+                <td class="p-2 font-mono">${codCell}</td>
+                <td class="p-2 font-bold text-slate-700">${escapeHtml(r.vendedor)}</td>
+                <td class="p-2">${escapeHtml(r.cidade)}</td>
+                <td class="p-2 truncate max-w-[180px]">
+                    <button class="text-left hover:underline" onclick="openClientModal('${escapeHtml(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                </td>
+                <td class="p-2">${escapeHtml(r.diaPrinc || '-')}</td>
+                <td class="p-2 text-[10px]">${escapeHtml((r.freq || []).join(','))}</td>
+                <td class="p-2 text-center">${r.ordem}</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('report-page-info').innerText = `${reportPaging.page}/${pages}`;
+        document.getElementById('report-total-info').innerText = `${total} registros`;
+    }
+
+    function renderTeamLoad() {
+        const tb = document.getElementById('table-team-body');
+        tb.innerHTML = '';
+
+        const load = {};
+        filteredData.forEach(r => {
+            if (!load[r.vendedor]) load[r.vendedor] = { eq: r.equipe, tot: 0, cid: new Set(), dias: new Set() };
+            load[r.vendedor].tot++;
+            load[r.vendedor].cid.add(r.cidade);
+            if (r.diaPrinc) load[r.vendedor].dias.add(r.diaPrinc);
+        });
+
+        tb.innerHTML = Object.entries(load).map(([v, d]) => {
+            return `<tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold">${escapeHtml(v)}</td>
+                <td class="p-3">${escapeHtml(d.eq)}</td>
+                <td class="p-3 text-center">${d.tot}</td>
+                <td class="p-3 text-center">${d.cid.size}</td>
+                <td class="p-3 text-center">${d.dias.size}</td>
+                <td class="p-3">${d.tot > 100 ? 'Cheio' : 'OK'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    
+    // ============================================================
+    // 5.Y) DADOS BRUTOS - VIRTUALIZAÇÃO (beta)
+    // ============================================================
+    function setupReportVirtual() {
+        const vp = document.getElementById('report-virtual-viewport');
+        if (!vp) return;
+        vp.addEventListener('scroll', () => {
+            if (reportVirtual.enabled) renderReportsVirtual();
+        }, { passive: true });
+    }
+
+    function setReportModeUI() {
+        const tableMode = document.getElementById('report-table-mode');
+        const virtualMode = document.getElementById('report-virtual-mode');
+        if (!tableMode || !virtualMode) return;
+
+        if (reportVirtual.enabled) {
+            tableMode.classList.add('hidden');
+            virtualMode.classList.remove('hidden');
+        } else {
+            virtualMode.classList.add('hidden');
+            tableMode.classList.remove('hidden');
+        }
+    }
+
+    function toggleReportVirtual() {
+        reportVirtual.enabled = !!document.getElementById('report-virtual-toggle')?.checked;
+        setReportModeUI();
+
+        const vp = document.getElementById('report-virtual-viewport');
+        if (vp) vp.scrollTop = 0;
+
+        // Se estiver vendo a aba, re-renderiza agora
+        const active = document.querySelector('.view-section.active')?.id?.replace('view-', '');
+        if (active === 'reports') renderReports();
+    }
+
+    function renderReportsVirtual() {
+        setReportModeUI();
+
+        const vp = document.getElementById('report-virtual-viewport');
+        const spacer = document.getElementById('report-virtual-spacer');
+        const rowsEl = document.getElementById('report-virtual-rows');
+        const info = document.getElementById('report-virtual-info');
+        if (!vp || !spacer || !rowsEl || !info) return;
+
+        const total = filteredData.length;
+        const rowH = reportVirtual.rowHeight;
+        const overscan = reportVirtual.overscan;
+
+        spacer.style.height = `${total * rowH}px`;
+
+        const scrollTop = vp.scrollTop;
+        const viewportH = vp.clientHeight;
+
+        let start = Math.floor(scrollTop / rowH) - overscan;
+        let end = Math.ceil((scrollTop + viewportH) / rowH) + overscan;
+
+        start = Math.max(0, start);
+        end = Math.min(total, end);
+
+        info.textContent = `${total} registros • mostrando ${start + 1}-${end}`;
+
+        // Renderiza apenas o slice visível
+        let html = '';
+        for (let i = start; i < end; i++) {
+            const r = filteredData[i];
+            const top = i * rowH;
+
+            const cod = escapeHtml(r.codCliente);
+            const codEl = r.whatsappUrl
+                ? `<a class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400" href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener">${cod}</a>`
+                : `<span class="mono text-slate-700 font-bold">${cod}</span>`;
+
+            html += `
+                <div class="virt-row grid grid-cols-12 gap-2 px-3 items-center border-b border-slate-100 hover:bg-slate-50 absolute left-0 right-0" style="top:${top}px;">
+                    <div class="col-span-2">${codEl}</div>
+                    <div class="col-span-3 truncate font-bold text-slate-700">${escapeHtml(r.vendedor)}</div>
+                    <div class="col-span-2 truncate">${escapeHtml(r.cidade)}</div>
+                    <div class="col-span-3 truncate">
+                        <button class="text-left hover:underline" onclick="openClientModal('${escapeHtml(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                    </div>
+                    <div class="col-span-1 text-center font-bold text-blue-600">${escapeHtml(r.diaPrinc || '-')}</div>
+                    <div class="col-span-1 text-center mono">${escapeHtml(String(r.ordem || ''))}</div>
+                </div>
+            `;
+        }
+
+        rowsEl.innerHTML = html;
+    }
+
+
+    // ============================================================
+    // 6) PAGINAÇÃO (handlers)
+    // ============================================================
+    function reportPrevPage() { reportPaging.page = Math.max(1, reportPaging.page - 1); renderReports(); }
+    function reportNextPage() { reportPaging.page = reportPaging.page + 1; renderReports(); }
+    function reportChangePageSize() {
+        const sel = document.getElementById('report-page-size');
+        reportPaging.pageSize = parseInt(sel.value, 10) || 50;
+        reportPaging.page = 1;
+        renderReports();
+    }
+
+    function logPrevPage() { logPaging.page = Math.max(1, logPaging.page - 1); renderLogistics(); }
+    function logNextPage() { logPaging.page = logPaging.page + 1; renderLogistics(); }
+    function logChangePageSize() {
+        const sel = document.getElementById('log-page-size');
+        logPaging.pageSize = parseInt(sel.value, 10) || 50;
+        logPaging.page = 1;
+        renderLogistics();
+    }
+
+    // ============================================================
+    // 7) EXPORTAÇÕES
+    // ============================================================
+    function exportToExcel() {
+        if (filteredData.length === 0) { alert("Sem dados."); return; }
+        const ws = XLSX.utils.json_to_sheet(filteredData.map(r => ({
+            "Cód. Cliente": r.codCliente,
+            "Vendedor": r.vendedor,
+            "Equipe": r.equipe,
+            "Cidade": r.cidade,
+            "Dias Entrega": getEntregaStr(r.cidadeNorm),
+            "Cliente": r.cliente,
+            "Razão": r.razao,
+            "Fantasia": r.fantasia,
+            "Dia Visita": r.diaPrinc,
+            "Dias Sec": (r.diasSec || []).join(','),
+            "Freq": (r.freq || []).join(','),
+            "Ordem": r.ordem,
+            "Comprador": r.comprador,
+            "WhatsApp": r.whatsappRaw,
+            "Obs": r.obs
+        })));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Roteiro");
+        XLSX.writeFile(wb, "Roteiro_Ameripan.xlsx");
+    }
+
+    function exportPDFLista() {
+        if (filteredData.length === 0) { alert("Sem dados."); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+
+        const fVend = document.getElementById('filtro-vendedor').value || "Todos";
+        const fEq = document.getElementById('filtro-equipe').value || "Todas";
+
+        let tituloRelatorio = "Relatório Geral de Rotas";
+        if (fVend !== "Todos") tituloRelatorio = `Relatório de Vendas - ${fVend}`;
+        else if (fEq !== "Todas") tituloRelatorio = `Relatório de Equipe - ${fEq}`;
+
+        const dadosSort = [...filteredData].sort((a, b) => {
+            if (a.equipe !== b.equipe) return a.equipe.localeCompare(b.equipe);
+            if (a.vendedor !== b.vendedor) return a.vendedor.localeCompare(b.vendedor);
+            const diaA = DIAS_VALOR[a.diaPrinc] || 9;
+            const diaB = DIAS_VALOR[b.diaPrinc] || 9;
+            if (diaA !== diaB) return diaA - diaB;
+            return a.ordem - b.ordem;
+        });
+
+        const tableBody = dadosSort.map(r => {
+            const entrega = getEntregaStr(r.cidadeNorm);
+            const cidadeDisplay = `${r.cidade}\n[Ent: ${entrega}]`;
+
+            const codCell = r.whatsappUrl
+                ? { content: r.codCliente, whatsappUrl: r.whatsappUrl, styles: { textColor: [14, 165, 233], fontStyle: 'bold' } } // azul claro
+                : r.codCliente;
+
+            return [r.equipe, r.vendedor, r.diaPrinc || '-', cidadeDisplay, codCell, r.cliente, r.ordem];
+        });
+
+        doc.setFontSize(14);
+        doc.text(tituloRelatorio, 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${filteredData.length}`, 14, 22);
+
+        doc.autoTable({
+            head: [['Equipe', 'Vend', 'Dia', 'Cidade (Entrega)', 'Cód.', 'Cliente', 'Ord']],
+            body: tableBody,
+            startY: 30,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+            columnStyles: { 3: { cellWidth: 35 }, 4: { cellWidth: 15 } },
+            didParseCell: function (data) {
+                // Mantém separadores entre vendedores (como no v14)
+                if (data.section === 'body' && data.row.index > 0) {
+                    const prevRow = data.table.body[data.row.index - 1];
+                    if (prevRow.cells[1].raw !== data.row.cells[1].raw) {
+                        data.cell.styles.borderTopWidth = 0.1;
+                        data.cell.styles.borderTopColor = [100, 100, 100];
+                    }
+                }
+            },
+            didDrawCell: function (data) {
+                // Link no Cód. para WhatsApp quando existir
+                if (data.section === 'body' && data.column.index === 4) {
+                    const raw = data.cell.raw;
+                    if (raw && typeof raw === 'object' && raw.whatsappUrl) {
+                        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: raw.whatsappUrl });
+                    }
+                }
+            }
+        });
+
+        doc.save("Relatorio_Lista_Completa.pdf");
+    }
+
+    
+    // ============================================================
+    // 7.X) EXPORTAÇÕES — ROTAS (experimental)
+    // ============================================================
+    function getCurrentWeekOfMonth() {
+        const d = new Date();
+        return Math.min(5, Math.max(1, Math.ceil(d.getDate() / 7)));
+    }
+
+    function getRotaSubsetFor({ vend, dia, semana, incluirSec }) {
+        const tagSemana = semana && semana !== 'ALL' ? `S${semana}` : null;
+        return filteredData.filter(r => {
+            if (vend && vend !== 'Todos' && r.vendedor !== vend) return false;
+
+            const diaOk = (r.diaPrinc === dia) || (incluirSec && (r.diasSec || []).includes(dia));
+            if (!diaOk) return false;
+
+            if (tagSemana) {
+                const freq = r.freq || [];
+                if (!(freq.includes('TODAS') || freq.includes(tagSemana))) return false;
+            }
+            return true;
+        }).sort((a, b) => (a.cidade.localeCompare(b.cidade) || (a.ordem - b.ordem)));
+    }
+
+    function buildPdfCodeCell(r) {
+        return r.whatsappUrl
+            ? { content: r.codCliente, whatsappUrl: r.whatsappUrl, styles: { textColor: [14, 165, 233], fontStyle: 'bold' } } // azul claro
+            : r.codCliente;
+    }
+
+    function exportPDFRotaDia() {
+        const subset = getRotaSubset();
+        if (subset.length === 0) { alert("Sem dados para a rota do dia."); return; }
+
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const dia = rotaState.dia;
+        const semana = rotaState.semana === 'ALL' ? getCurrentWeekOfMonth() : rotaState.semana;
+        const semanaLabel = rotaState.semana === 'ALL' ? `Semana ${semana} (auto)` : `Semana ${semana}`;
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+
+        doc.setFontSize(14);
+        doc.text(`ROTA DO DIA — ${vend}`, 14, 15);
+        doc.setFontSize(10);
+        doc.text(`${dia} • ${semanaLabel} • Gerado em: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`, 14, 22);
+
+        const total = subset.length;
+        const wa = subset.filter(r => !!r.whatsappUrl).length;
+        const cidades = new Set(subset.map(r => r.cidade)).size;
+        doc.setFontSize(9);
+        doc.text(`Paradas: ${total} • Cidades: ${cidades} • WhatsApp: ${wa}`, 14, 28);
+
+        const body = subset.map(r => ([
+            r.ordem,
+            buildPdfCodeCell(r),
+            r.cliente,
+            r.comprador || '',
+            r.whatsappRaw || '',
+            r.cidade,
+            getEntregaStr(r.cidadeNorm),
+            (r.freq || []).join(','),
+            r.obs || ''
+        ]));
+
+        doc.autoTable({
+            head: [['Ord', 'Cód.', 'Cliente', 'Comprador', 'WhatsApp', 'Cidade', 'Entrega', 'Freq', 'Obs']],
+            body,
+            startY: 32,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+            columnStyles: {
+                0: { cellWidth: 10 },
+                1: { cellWidth: 16 },
+                2: { cellWidth: 42 },
+                3: { cellWidth: 26 },
+                4: { cellWidth: 26 },
+                5: { cellWidth: 22 },
+                6: { cellWidth: 18 },
+                7: { cellWidth: 16 },
+                8: { cellWidth: 24 },
+            },
+            didDrawCell: function (data) {
+                if (data.section === 'body' && data.column.index === 1) {
+                    const raw = data.cell.raw;
+                    if (raw && typeof raw === 'object' && raw.whatsappUrl) {
+                        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: raw.whatsappUrl });
+                    }
+                }
+            }
+        });
+
+        doc.save(`Rota_${vend}_${dia}.pdf`);
+    }
+
+    function exportPDFContatosDia() {
+        const subset = getRotaSubset();
+        if (subset.length === 0) { alert("Sem dados para exportar contatos."); return; }
+
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const dia = rotaState.dia;
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+
+        doc.setFontSize(14);
+        doc.text(`CONTATOS — ${vend}`, 14, 15);
+        doc.setFontSize(10);
+        doc.text(`${dia} • Gerado em: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`, 14, 22);
+
+        const body = subset.map(r => ([
+            buildPdfCodeCell(r),
+            r.cliente,
+            r.comprador || '',
+            r.whatsappRaw || '',
+            r.cidade,
+            r.obs || ''
+        ]));
+
+        doc.autoTable({
+            head: [['Cód.', 'Cliente', 'Comprador', 'WhatsApp', 'Cidade', 'Obs']],
+            body,
+            startY: 28,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+            columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 62 }, 2: { cellWidth: 32 }, 3: { cellWidth: 32 }, 4: { cellWidth: 25 }, 5: { cellWidth: 20 } },
+            didDrawCell: function (data) {
+                if (data.section === 'body' && data.column.index === 0) {
+                    const raw = data.cell.raw;
+                    if (raw && typeof raw === 'object' && raw.whatsappUrl) {
+                        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: raw.whatsappUrl });
+                    }
+                }
+            }
+        });
+
+        doc.save(`Contatos_${vend}_${dia}.pdf`);
+    }
+
+    function exportPDFRotaSemana() {
+        const vend = getEffectiveRotaVendedor() || 'Todos';
+        const semana = rotaState.semana === 'ALL' ? getCurrentWeekOfMonth() : rotaState.semana;
+        const semanaLabel = rotaState.semana === 'ALL' ? `Semana ${semana} (auto)` : `Semana ${semana}`;
+
+        // Junta todos os dias da semana selecionada
+        const rows = [];
+        DIAS_LISTA.forEach(dia => {
+            const subsetDia = getRotaSubsetFor({ vend, dia, semana, incluirSec: rotaState.incluirSec });
+            subsetDia.forEach(r => rows.push({ ...r, __dia: dia }));
+        });
+
+        if (rows.length === 0) { alert("Sem dados para a semana selecionada."); return; }
+
+        // Ordena por dia, cidade, ordem
+        rows.sort((a, b) => (DIAS_VALOR[a.__dia] - DIAS_VALOR[b.__dia]) || a.cidade.localeCompare(b.cidade) || (a.ordem - b.ordem));
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+
+        doc.setFontSize(14);
+        doc.text(`ROTA DA SEMANA — ${vend}`, 14, 15);
+        doc.setFontSize(10);
+        doc.text(`${semanaLabel} • Gerado em: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`, 14, 22);
+
+        const body = rows.map(r => ([
+            r.__dia,
+            r.ordem,
+            r.cidade,
+            buildPdfCodeCell(r),
+            r.cliente,
+            r.comprador || '',
+            r.whatsappRaw || '',
+            getEntregaStr(r.cidadeNorm),
+            (r.freq || []).join(',')
+        ]));
+
+        doc.autoTable({
+            head: [['Dia', 'Ord', 'Cidade', 'Cód.', 'Cliente', 'Comprador', 'WhatsApp', 'Entrega', 'Freq']],
+            body,
+            startY: 28,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+            columnStyles: {
+                0: { cellWidth: 12, fontStyle: 'bold' },
+                1: { cellWidth: 10 },
+                2: { cellWidth: 34 },
+                3: { cellWidth: 16 },
+                4: { cellWidth: 62 },
+                5: { cellWidth: 26 },
+                6: { cellWidth: 30 },
+                7: { cellWidth: 18 },
+                8: { cellWidth: 18 },
+            },
+            didDrawCell: function (data) {
+                if (data.section === 'body' && data.column.index === 3) {
+                    const raw = data.cell.raw;
+                    if (raw && typeof raw === 'object' && raw.whatsappUrl) {
+                        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: raw.whatsappUrl });
+                    }
+                }
+            }
+        });
+
+        doc.save(`Rota_Semana_${vend}_S${semana}.pdf`);
+    }
+
+
+
+    async function generateCalendarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const fVend = document.getElementById('filtro-vendedor').value || "Todos";
+
+        doc.setFontSize(16);
+        doc.text(`VISÃO MENSAL: VISITAS X ENTREGAS`, 14, 15);
+        doc.setFontSize(10);
+        doc.text(`Filtro: ${fVend} | Gerado em: ${new Date().toLocaleDateString()}`, 14, 22);
+
+        const tableBody = [];
+        for (let sem = 1; sem <= 5; sem++) {
+            const rowData = [`SEM ${sem}`];
+            DIAS_LISTA.forEach(dia => {
+                const clientes = filteredData.filter(r =>
+                    (r.diaPrinc === dia || r.diasSec.includes(dia)) &&
+                    (r.freq.includes('TODAS') || r.freq.includes(`S${sem}`))
+                );
+
+                if (clientes.length === 0) rowData.push("");
+                else {
+                    const cids = {};
+                    clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
+                    let cellText = "";
+                    Object.keys(cids).sort().forEach(c => {
+                        cellText += `${c} (${cids[c]})\n[Ent: ${getEntregaStr(normalizarTexto(c))}]\n\n`;
+                    });
+                    rowData.push(cellText.trim());
+                }
+            });
+            tableBody.push(rowData);
+        }
+
+        doc.autoTable({
+            head: [['', ...DIAS_LISTA]],
+            body: tableBody,
+            startY: 30,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2 },
+            headStyles: { fillColor: [30, 41, 59] },
+            columnStyles: { 0: { cellWidth: 15, fontStyle: 'bold' } }
+        });
+
+        doc.save(`Calendario_Rotas.pdf`);
+    }
+
+    function renderChart(id, type, lab, dat, col, extraOptions = {}) {
+        const ctx = document.getElementById(id).getContext('2d');
+        if (charts[id]) charts[id].destroy();
+        const options = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar' } }, ...extraOptions };
+        charts[id] = new Chart(ctx, { type, data: { labels: lab, datasets: [{ data: dat, backgroundColor: col }] }, options: options });
+    }
+
+    // ============================================================
+    // 8) BUSCA DE CLIENTE (perfil)
+    // ============================================================
+    function buildClientIndex() {
+        const groups = new Map();
+        rawRotas.forEach(r => {
+            const key = (r.codCliente || '').toString();
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    codCliente: key,
+                    razao: r.razao || '',
+                    fantasia: r.fantasia || '',
+                    nome: r.cliente || '',
+                    cidades: new Set(),
+                    equipes: new Set(),
+                    vendedores: new Set(),
+                    diasVisita: new Set(),
+                    diasSec: new Set(),
+                    frequencias: new Set(),
+                    compradores: new Set(),
+                    observacoes: new Set(),
+                    whatsappRaw: '',
+                    whatsappUrl: '',
+                    linhas: []
+                });
+            }
+            const g = groups.get(key);
+            if (r.cidade) g.cidades.add(r.cidade);
+            if (r.equipe) g.equipes.add(r.equipe);
+            if (r.vendedor) g.vendedores.add(r.vendedor);
+            if (r.diaPrinc) g.diasVisita.add(r.diaPrinc);
+            (r.diasSec || []).forEach(d => g.diasSec.add(d));
+            (r.freq || []).forEach(f => g.frequencias.add(f));
+            if (r.comprador) g.compradores.add(r.comprador);
+            if (r.obs) g.observacoes.add(r.obs);
+            if (!g.whatsappRaw && r.whatsappRaw) g.whatsappRaw = r.whatsappRaw;
+            if (!g.whatsappUrl && r.whatsappUrl) g.whatsappUrl = r.whatsappUrl;
+
+            g.linhas.push({
+                vendedor: r.vendedor,
+                equipe: r.equipe,
+                cidade: r.cidade,
+                dia: r.diaPrinc || '-',
+                freq: (r.freq || []).join(','),
+                ordem: r.ordem,
+                entrega: getEntregaStr(r.cidadeNorm)
+            });
+        });
+
+        clientProfiles = Array.from(groups.values()).map(g => {
+            const cidades = Array.from(g.cidades).sort();
+            return {
+                ...g,
+                nome: g.fantasia || g.razao || g.nome || '',
+                nomeNorm: normalizarTexto(g.fantasia || g.razao || g.nome || ''),
+                razaoNorm: normalizarTexto(g.razao || ''),
+                cidadesArr: cidades
+            };
+        }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+        clientByCode = new Map(clientProfiles.map(p => [p.codCliente, p]));
+    }
+
+    function setupClientSearchHandlers() {
+        document.addEventListener('click', (e) => {
+            const box = document.getElementById('client-search-results');
+            const input = document.getElementById('client-search');
+            if (!box || !input) return;
+            if (!box.contains(e.target) && e.target !== input) hideClientSearchResults();
+        });
+    }
+
+    function onClientSearchInput() {
+        const input = document.getElementById('client-search');
+        const q = (input.value || '').trim();
+        if (!q) { hideClientSearchResults(); return; }
+
+        const qNorm = normalizarTexto(q);
+        const qDigits = q.replace(/\D/g, '');
+
+        const results = clientProfiles.filter(p => {
+            if (qDigits && p.codCliente.includes(qDigits)) return true;
+            if (p.nomeNorm.includes(qNorm)) return true;
+            if (p.razaoNorm.includes(qNorm)) return true;
+            return false;
+        }).slice(0, 12);
+
+        renderClientSearchResults(results);
+    }
+
+    function renderClientSearchResults(results) {
+        const box = document.getElementById('client-search-results');
+        if (!box) return;
+
+        if (results.length === 0) {
+            box.innerHTML = `<div class="p-3 text-sm text-slate-500">Nenhum cliente encontrado.</div>`;
+            box.classList.remove('hidden');
+            clientSearchActiveIndex = -1;
+            return;
+        }
+
+        box.innerHTML = results.map((p, idx) => {
+            const cidade = (p.cidadesArr && p.cidadesArr[0]) ? p.cidadesArr[0] : '-';
+            const extra = p.cidadesArr.length > 1 ? ` +${p.cidadesArr.length - 1}` : '';
+            return `<button class="search-item w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100" data-idx="${idx}" onclick="openClientModal('${escapeHtml(p.codCliente)}')">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-sm font-bold text-slate-700 truncate">${escapeHtml(p.nome || '—')}</div>
+                        <div class="text-[11px] text-slate-400 truncate">Cód: <span class="font-mono">${escapeHtml(p.codCliente)}</span> • ${escapeHtml(cidade)}${escapeHtml(extra)}</div>
+                    </div>
+                    <i class="ph ph-arrow-right text-slate-300"></i>
+                </div>
+            </button>`;
+        }).join('');
+
+        box.classList.remove('hidden');
+        clientSearchActiveIndex = -1;
+    }
+
+    function hideClientSearchResults() {
+        const box = document.getElementById('client-search-results');
+        if (box) box.classList.add('hidden');
+        clientSearchActiveIndex = -1;
+    }
+
+    function onClientSearchKeydown(ev) {
+        const box = document.getElementById('client-search-results');
+        if (!box || box.classList.contains('hidden')) return;
+
+        const items = Array.from(box.querySelectorAll('.search-item'));
+        if (items.length === 0) return;
+
+        if (ev.key === 'ArrowDown') {
+            ev.preventDefault();
+            clientSearchActiveIndex = Math.min(items.length - 1, clientSearchActiveIndex + 1);
+            highlightClientSearchItem(items);
+        } else if (ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            clientSearchActiveIndex = Math.max(0, clientSearchActiveIndex - 1);
+            highlightClientSearchItem(items);
+        } else if (ev.key === 'Enter') {
+            ev.preventDefault();
+            if (clientSearchActiveIndex >= 0) items[clientSearchActiveIndex].click();
+        } else if (ev.key === 'Escape') {
+            hideClientSearchResults();
+        }
+    }
+
+    function highlightClientSearchItem(items) {
+        items.forEach((el, i) => el.classList.toggle('active', i === clientSearchActiveIndex));
+        if (clientSearchActiveIndex >= 0) {
+            items[clientSearchActiveIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function openClientModal(cod) {
+        hideClientSearchResults();
+        const p = clientByCode.get(cod);
+        if (!p) return;
+
+        clientSelectedCode = cod;
+
+        const cidades = p.cidadesArr || [];
+        const cidadePrincipalNorm = normalizarTexto(cidades[0] || '');
+        const entregaStr = cidadePrincipalNorm ? getEntregaStr(cidadePrincipalNorm) : 'N/D';
+
+        document.getElementById('client-modal-title').innerText = `${p.nome || '—'} (Cód. ${p.codCliente})`;
+        document.getElementById('client-modal-sub').innerText = `${cidades.join(' • ') || 'Cidade: -'} | Entrega: ${entregaStr}`;
+
+        const diasVisita = Array.from(p.diasVisita).sort((a, b) => (DIAS_VALOR[a] || 9) - (DIAS_VALOR[b] || 9)).join(', ') || '-';
+        const diasSec = Array.from(p.diasSec).sort((a, b) => (DIAS_VALOR[a] || 9) - (DIAS_VALOR[b] || 9)).join(', ') || '-';
+        const equipes = Array.from(p.equipes).sort().join(' • ') || '-';
+        const vendedores = Array.from(p.vendedores).sort().join(' • ') || '-';
+        const freq = Array.from(p.frequencias).sort().join(', ') || '-';
+        const compradores = Array.from(p.compradores).sort().join(' • ') || '-';
+        const obs = Array.from(p.observacoes).slice(0, 10).join(' • ') || '-';
+
+        const linhasHtml = (p.linhas || [])
+            .sort((a, b) => (DIAS_VALOR[a.dia] || 9) - (DIAS_VALOR[b.dia] || 9) || (a.ordem - b.ordem))
+            .slice(0, 100)
+            .map(l => `
+                <tr class="border-b border-slate-100">
+                    <td class="p-2 font-mono text-xs">${escapeHtml(l.vendedor || '-')}</td>
+                    <td class="p-2">${escapeHtml(l.equipe || '-')}</td>
+                    <td class="p-2">${escapeHtml(l.cidade || '-')}</td>
+                    <td class="p-2 font-bold text-blue-600">${escapeHtml(l.dia || '-')}</td>
+                    <td class="p-2 text-[10px]">${escapeHtml(l.freq || '-')}</td>
+                    <td class="p-2 text-[10px]">${escapeHtml(l.entrega || 'N/D')}</td>
+                    <td class="p-2 text-center">${escapeHtml(String(l.ordem || ''))}</td>
+                </tr>
+            `).join('');
+
+        document.getElementById('client-modal-body').innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Atendimento</div>
+                    <div class="text-sm font-bold text-slate-700 mt-1">${escapeHtml(vendedores)}</div>
+                    <div class="text-xs text-slate-500 mt-1">Equipe: ${escapeHtml(equipes)}</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Dias</div>
+                    <div class="text-sm text-slate-700 mt-1"><b>Visita:</b> ${escapeHtml(diasVisita)}</div>
+                    <div class="text-sm text-slate-700 mt-1"><b>Sec:</b> ${escapeHtml(diasSec)}</div>
+                    <div class="text-xs text-slate-500 mt-1">Entrega: ${escapeHtml(entregaStr)}</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Frequência</div>
+                    <div class="text-sm font-bold text-slate-700 mt-1">${escapeHtml(freq)}</div>
+                    <div class="text-xs text-slate-500 mt-1">Comprador: ${escapeHtml(compradores)}</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Contato</div>
+                    <div class="text-sm font-bold text-slate-700 mt-1">${escapeHtml(p.whatsappRaw || '-')}</div>
+                    <div class="text-xs text-slate-500 mt-1">${escapeHtml(obs)}</div>
+                    ${p.whatsappUrl ? `<div class="mt-2 flex gap-2">
+                        <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2" onclick="openClientWhatsapp()"><i class="ph ph-whatsapp-logo"></i> Abrir</button>
+                        <button class="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2" onclick="copyText('${escapeHtml(p.whatsappRaw || '')}')"><i class="ph ph-copy"></i> Copiar</button>
+                    </div>` : ''}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div class="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Rotas do Cliente</div>
+                        <div class="text-xs text-slate-500">Mostrando até 100 linhas</div>
+                    </div>
+                    <button class="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2" onclick="copyText('${escapeHtml(p.codCliente)}')"><i class="ph ph-hash"></i> Copiar Cód</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-white text-slate-500 font-bold uppercase">
+                            <tr>
+                                <th class="p-2">Vendedor</th>
+                                <th class="p-2">Equipe</th>
+                                <th class="p-2">Cidade</th>
+                                <th class="p-2">Dia</th>
+                                <th class="p-2">Freq</th>
+                                <th class="p-2">Entrega</th>
+                                <th class="p-2 text-center">Ord</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-600">${linhasHtml || ''}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        const btnWhats = document.getElementById('client-modal-whats');
+        if (p.whatsappUrl) btnWhats.classList.remove('hidden');
+        else btnWhats.classList.add('hidden');
+
+        document.getElementById('client-modal').classList.remove('hidden');
+    }
+
+    function closeClientModal() {
+        document.getElementById('client-modal').classList.add('hidden');
+        clientSelectedCode = null;
+    }
+
+    function openClientWhatsapp() {
+        if (!clientSelectedCode) return;
+        const p = clientByCode.get(clientSelectedCode);
+        if (p && p.whatsappUrl) window.open(p.whatsappUrl, '_blank', 'noopener');
+    }
+
+    async function copyText(t) {
+        try {
+            await navigator.clipboard.writeText(t || '');
+        } catch {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = t || '';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+    }
+  </script>
+</body>
+</html>
