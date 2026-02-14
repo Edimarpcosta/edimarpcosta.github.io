@@ -603,7 +603,7 @@
           <div class="name">Gestor de Leads <span class="muted">PRO</span></div>
           <div class="sub">Offline + Multi-Conjuntos + Clientes + Google Sheets (opcional)</div>
         </div>
-        <div class="toggleBtn" title="Recolher/Expandir menu" onclick="toggleSidebarCollapse()">↔️</div>
+        <div class="toggleBtn" title="Recolher/Expandir menu" onclick="toggleSidebarUniversal()">↔️</div>
       </div>
 
       <div class="section">
@@ -654,13 +654,13 @@
       </div>
 
       <div class="muted" style="margin-top:auto; padding: 4px 2px 10px; font-size: 12px;">
-        <b>V7.1</b> • GitHub Pages • Mobile ok
+        <b>V7.3.2</b> • GitHub Pages • Mobile ok
       </div>
     </aside>
 
     <div class="main">
       <div class="topbar">
-        <div class="hamb" onclick="openSidebar()" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div>
+        <div class="hamb" onclick="toggleSidebarUniversal()" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div>
 
         <div style="display:flex; flex-direction:column; gap:2px;">
           <div style="font-weight:1000;">Gestor de Leads <span class="muted">PRO</span></div>
@@ -789,7 +789,7 @@
             </div>
 
             <div class="filters">
-              <input id="clientSearch" placeholder="Buscar: cliente, cidade, comprador, WhatsApp..." oninput="renderClients()" />
+              <input id="clientSearch" placeholder="Buscar: cod, cliente, cidade, comprador, WhatsApp, obs, produtos de interesse..." oninput="renderClients()" />
               <select id="clientCity" onchange="renderClients()"><option value="">Cidade: Todas</option></select>
               <select id="clientVisitDay" onchange="renderClients()">
                 <option value="">Dia Visita: Todos</option>
@@ -2156,25 +2156,33 @@ function fabAction(){
 
 
 // ---------- Sidebar / Banner ----------
-function openSidebar(){
+function toggleSidebarUniversal(){
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebarBackdrop');
   if(!sb || !bd) return;
 
-  // Desktop/Tablet: usa o botão ☰ para recolher/expandir o menu lateral
-  if(window.innerWidth > 720){
-    toggleSidebarCollapse();
+  const isMobile = window.innerWidth <= 720;
+
+  // Se estiver em modo mobile (sidebar off-canvas), usamos open/close.
+  if(isMobile){
+    if(sb.classList.contains('open')){
+      closeSidebar();
+      return;
+    }
+    sb.classList.add('open');
+    bd.classList.add('open');
     return;
   }
 
-  // Mobile: toggle abre/fecha
-  if(sb.classList.contains('open')){
-    closeSidebar();
-    return;
-  }
+  // Desktop/Tablet: recolher/expandir (colapsar) e garantir que não fique "open" por acidente.
+  sb.classList.remove('open');
+  bd.classList.remove('open');
+  toggleSidebarCollapse();
+}
 
-  sb.classList.add('open');
-  bd.classList.add('open');
+// compat: versões antigas chamavam openSidebar()
+function openSidebar(){
+  toggleSidebarUniversal();
 }
 function closeSidebar(){
   const sb = document.getElementById('sidebar');
@@ -3449,13 +3457,20 @@ async function importClientsFromRows(rows, filename='import'){
   for(const r0 of rows){
     const r = r0 || {};
 
-    let cod = pick(r, 'Cód. Cliente','Cod. Cliente','Cod Cliente','Cod','Código','Codigo','ID Cliente');
+    let cod = pick(r, 'cod','COD','Cód. Cliente','Cod. Cliente','Cod Cliente','Cod','Código','Codigo','ID Cliente','Codigo Cliente','Cód Cliente','CodCliente','codcliente');
 
-// Fallback ultra-robusto: se a planilha vier com cabeçalho "quebrado" (ex: __EMPTY / encoding),
-// pega o valor da primeira coluna (coluna A).
+// Fallback ultra-robusto: tenta pegar "qualquer coluna" que pareça código (cod/codcliente/codigo/idcliente).
 if(!normStr(cod)){
-  const k0 = Object.keys(r).find(k=> !String(k).startsWith('__') && String(k).trim() !== '');
-  if(k0) cod = r[k0];
+  const wantedNorms = new Set(['cod','codcliente','codigo','codigocliente','idcliente']);
+  const keys = Object.keys(r||{});
+  const kFound = keys.find(k=> wantedNorms.has(normHeader(k)));
+  if(kFound) cod = r[kFound];
+}
+
+// Fallback final: usa a PRIMEIRA coluna real da linha (mesmo que seja __EMPTY), pois costuma ser a coluna A.
+if(!normStr(cod)){
+  const keys = Object.keys(r||{});
+  if(keys.length) cod = r[keys[0]];
 }
     const vendedor = pick(r, 'Vendedor','Seller');
     const equipe = pick(r, 'Equipe','Team');
