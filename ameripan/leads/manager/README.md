@@ -82,3 +82,68 @@ O sistema possui dois modos de operação com planilhas:
 **Exemplo de chamada API (Modo Leitura):**
 ```javascript
 const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID}/values/${SHEET}!A:ZZ?key=${API_KEY}`;
+
+```
+
+---
+
+## 📂 Importação e Exportação
+
+### Importar
+
+* **Leads (MapsScraper):** O sistema reconhece colunas como Nome, Telefone, Categoria, Reviews, URL do Maps, etc.
+* **Clientes:** Reconhece cabeçalhos variados (com/sem acento). Fallback: Se não achar o cabeçalho "Cód.", usa a **Coluna A**.
+* **Prevenção de Duplicatas:** O sistema tenta casar registros por Código, WhatsApp ou Nome+Cidade.
+
+### Exportar
+
+* **📤 Exportar Leads:** Gera planilha com dados enriquecidos e links.
+* **🔁 Leads → Clientes:** Converte leads selecionados para o formato de Clientes Ativos (útil após fechar a venda).
+* **💾 Backup JSON:** Salva todo o estado do aplicativo (incluindo configurações).
+
+---
+
+## ✨ Enriquecimento de Dados (CNPJ)
+
+Se um Lead possuir um **CNPJ válido (14 dígitos)**, o sistema habilita funções de automação:
+
+* **Botão ✨ Atualizar por CNPJ:** Consulta APIs públicas para preencher campos vazios (Endereço, Nome Fantasia, Atividade, etc.).
+* **Regra:** Por segurança, o sistema preenche apenas campos que estão vazios (a menos que configurado para sobrescrever).
+
+---
+
+## 🗺 Guia de Ícones
+
+A interface utiliza ícones contextuais na coluna de **Ações**:
+
+| Ícone | Condição | Ação |
+| --- | --- | --- |
+| 🗺️ | Endereço ou Link Maps | Abre o local no Google Maps. |
+| 📍 | Lat/Long preenchidos | Inicia navegação GPS por coordenadas. |
+| 📱 | Telefone válido | Abre WhatsApp (sem mensagem pronta). |
+| 💬 | Template ativo | Abre WhatsApp com mensagem pré-definida. |
+| ✉️ | Email preenchido | Abre cliente de email. |
+| 🌐 | Site preenchido | Abre o website da empresa. |
+| 📷 | Link Instagram | Abre o perfil no Instagram. |
+| ✏️ | Sempre visível | Edição completa do registro. |
+
+---
+
+## ⚙️ Configurações e Solução de Problemas
+
+### Configurações Úteis
+
+* **Equipes Sugeridas:** Edite a lista de equipes/rotas em Configurações para facilitar o cadastro.
+* **Mensagens WhatsApp:** Defina templates com variáveis (ex: Olá {nome}, sou da Ameripan...).
+
+### FAQ / Troubleshooting
+
+* **Dados Sumiram?** O sistema usa `LocalStorage`/`IndexedDB`. Se limpar o cache do navegador, os dados locais somem. **Faça backups.**
+* **Menu Lateral não abre?** Em telas pequenas, clique no ícone `☰`.
+* **Erro no Google Sheets?** Verifique se a planilha está compartilhada como "Leitor" (para API Key) ou se o Web App foi implantado corretamente.
+
+---
+
+<div align="center">
+<small>Desenvolvido para produtividade em vendas e desenvolvimento.</small>
+</div>
