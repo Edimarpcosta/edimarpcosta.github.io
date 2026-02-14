@@ -1,0 +1,4073 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Ameripan • Gestor de Leads PRO (Offline + Google Sheets)</title>
+
+  <!-- SheetJS (XLSX) loader: tenta local primeiro; se não existir, usa CDN -->
+  <script>
+  (function(){
+    const sources = [
+      './xlsx.full.min.js',
+      'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+      'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'
+    ];
+    let i = 0;
+    function tryLoad(){
+      const s = document.createElement('script');
+      s.src = sources[i];
+      s.onload = () => { /* ok */ };
+      s.onerror = () => {
+        i++;
+        if(i < sources.length) tryLoad();
+        else console.warn('Falha ao carregar XLSX (SheetJS). Coloque xlsx.full.min.js ao lado do HTML ou use internet.');
+      };
+      document.head.appendChild(s);
+    }
+    tryLoad();
+  })();
+  </script>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --surface:#111a2b;
+      --border:#253247;
+      --text:#e5e7eb;
+      --muted:#9aa4b2;
+      --primary:#3b82f6;
+      --success:#10b981;
+      --warning:#f59e0b;
+      --danger:#ef4444;
+      --shadow: 0 12px 30px rgba(0,0,0,.35);
+      --radius: 14px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial;
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,.20), transparent 55%),
+                  radial-gradient(1200px 600px at 90% 0%, rgba(16,185,129,.12), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    a{ color: inherit; }
+    .app{ max-width: 100%; margin: 0; padding: 14px 14px 90px; }
+
+    /* ===== Layout: Sidebar + Main (V7.2) ===== */
+    .layout{ min-height: 100vh; display:flex; width:100%; }
+    .sidebar{
+      position: sticky; top: 0;
+      height: 100vh;
+      width: 280px;
+      flex: 0 0 auto;
+      padding: 12px;
+      border-right: 1px solid rgba(37,50,71,.75);
+      background: rgba(11,18,32,.75);
+      backdrop-filter: blur(12px);
+      display:flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 30;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sidebar.collapsed{ width: 78px; }
+    .sidebar-backdrop{ display:none; }
+
+    .sidebar .brandRow{ display:flex; align-items:center; gap:10px; }
+    .sidebar .brandRow .logo{
+      width: 38px; height: 38px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(16,185,129,.75));
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: var(--shadow);
+      flex: 0 0 auto;
+    }
+    .sidebar .brandText .name{ font-weight: 1000; }
+    .sidebar .brandText .sub{ margin-top: 2px; font-size: 12px; color: var(--muted); }
+    .sidebar .toggleBtn{
+      margin-left:auto;
+      width: 38px; height: 38px;
+      border-radius: 12px;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.04);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      user-select:none;
+    }
+
+    .sidebar .section{
+      border: 1px solid rgba(37,50,71,.9);
+      border-radius: 14px;
+      padding: 10px;
+      background: rgba(255,255,255,.03);
+    }
+    .sidebar .sectionTitle{
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 1000;
+      margin-bottom: 10px;
+    }
+
+    .snav{
+      width: 100%;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.03);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display:flex; align-items:center; gap:10px;
+      cursor:pointer;
+      color: var(--muted);
+      font-weight: 950;
+      user-select:none;
+      text-align:left;
+    }
+    .snav.active{ background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.45); color: #bfdbfe; }
+    .snav .txt{ flex:1; }
+
+    .sidebar.collapsed .txt,
+    .sidebar.collapsed .sectionTitle,
+    .sidebar.collapsed .brandText,
+    .sidebar.collapsed .pill,
+    .sidebar.collapsed .file-box button span.txt{
+      display:none;
+    }
+    .sidebar.collapsed .file-box button{ padding: 10px; }
+
+    .sidebar.collapsed .brandRow{ flex-direction: column; align-items:center; gap: 6px; }
+    .sidebar.collapsed .toggleBtn{ margin-left: 0; }
+
+    .main{
+      flex: 1;
+      min-width: 0;
+      display:flex;
+      flex-direction: column;
+    }
+
+    .topbar{
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(12px);
+      background: rgba(11,18,32,.60);
+      border-bottom: 1px solid rgba(37,50,71,.6);
+      padding: 10px 14px;
+      display:flex; align-items:center; gap: 12px;
+      flex-wrap: wrap;
+    }
+    .topbar .hamb{
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.04);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .topbar .right{ margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    .banner{ margin: 12px 14px 0; }
+
+    @media (max-width: 720px){
+      .layout{ display:block; }
+      .sidebar{
+        position: fixed;
+        left: 0; top: 0;
+        height: 100vh;
+        transform: translateX(-105%);
+        transition: transform .18s ease;
+        width: min(86vw, 340px);
+        box-shadow: var(--shadow);
+      }
+      .sidebar.open{ transform: translateX(0); }
+      .sidebar-backdrop{
+        display:none;
+        position: fixed; inset:0; z-index: 25;
+        background: rgba(0,0,0,.55);
+      }
+      .sidebar-backdrop.open{ display:block; }
+      .topbar .hamb{ display:flex; }
+      .banner{ margin: 10px 14px 0; }
+    }
+
+    header{
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(12px);
+      background: rgba(11,18,32,.60);
+      border-bottom: 1px solid rgba(37,50,71,.6);
+      padding: 10px 0 12px;
+    }
+    .header-inner{
+      display:flex; gap:12px; align-items: center; justify-content: space-between;
+      padding: 0 6px; flex-wrap: wrap;
+    }
+    .brand{ display:flex; gap:10px; align-items:center; min-width: 240px; }
+    .brand .logo{
+      width: 38px; height: 38px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(16,185,129,.75));
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: var(--shadow);
+      flex: 0 0 auto;
+    }
+    .brand h1{ margin:0; font-size: 16px; line-height: 1.15; letter-spacing: .2px; }
+    .brand .sub{ margin-top: 2px; font-size: 12px; color: var(--muted); }
+
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      padding: 8px 10px; border-radius: 999px; min-height: 40px;
+    }
+    .pill label{ color: var(--muted); font-size: 12px; }
+
+    select, input, textarea{
+      width: 100%;
+      background: rgba(15,23,42,.75);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+    }
+    select{ padding: 10px 36px 10px 12px; }
+    textarea{ min-height: 70px; resize: vertical; }
+
+    .btn{
+      appearance: none;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight: 800;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      justify-content:center;
+      min-height: 40px;
+      text-decoration:none;
+      transition: transform .08s ease, filter .12s ease, background .12s ease;
+      user-select: none;
+    }
+    .btn:active{ transform: scale(.98); }
+    .btn:hover{ filter: brightness(1.06); }
+    .btn.primary{ background: rgba(59,130,246,.92); border-color: rgba(59,130,246,.22); }
+    .btn.success{ background: rgba(16,185,129,.90); border-color: rgba(16,185,129,.22); }
+    .btn.danger{ background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.4); color: #fecaca; }
+    .btn.ghost{ background: transparent; border-color: var(--border); color: var(--text); }
+    .btn.small{ padding: 8px 10px; border-radius: 10px; min-height: 36px; font-weight: 900; }
+
+    .file-box{ position: relative; overflow: hidden; }
+    .file-box input[type=file]{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+
+    .header-actions{ display:flex; gap:8px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .tabs{ display:flex; gap:8px; margin: 12px 14px 0; flex-wrap: wrap; }
+    .tab{
+      flex: 0 0 auto;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      padding: 9px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 900;
+      min-height: 40px;
+      display:flex; align-items:center; gap:8px;
+      user-select:none;
+    }
+    .tab.active{
+      background: rgba(59,130,246,.14);
+      border-color: rgba(59,130,246,.40);
+      color: #bfdbfe;
+    }
+
+    .banner{
+      margin: 12px 14px 0;
+      border: 1px solid rgba(245,158,11,.28);
+      background: rgba(245,158,11,.10);
+      color: #fde68a;
+      padding: 10px 12px;
+      border-radius: 12px;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .banner small{ color: rgba(253,230,138,.9); }
+    .banner .right{ display:flex; gap:8px; align-items:center; }
+    .muted{ color: var(--muted); }
+
+    .view{ display:none; margin: 14px 14px 0; }
+    .view.active{ display:block; }
+
+    .grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .card{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 22px rgba(0,0,0,.22);
+      overflow:hidden;
+    }
+    .card-header{
+      padding: 12px 12px 10px;
+      display:flex; justify-content: space-between; align-items:center; gap:10px;
+      border-bottom: 1px solid rgba(37,50,71,.8);
+      background: rgba(15,23,42,.35);
+    }
+    .card-title{ font-weight: 950; }
+    .card-sub{ color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .card-body{ padding: 12px; }
+
+    .kpis{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+    .kpi{
+      border: 1px solid rgba(37,50,71,.8);
+      border-radius: 12px;
+      padding: 10px 10px;
+      background: rgba(255,255,255,.03);
+      text-align: center;
+    }
+    .kpi .n{ font-size: 18px; font-weight: 950; }
+    .kpi .t{ font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+
+    .filters{
+      display:grid;
+      grid-template-columns: 2fr repeat(4, 1fr);
+      gap: 10px;
+      align-items:center;
+    }
+
+    .table-wrap{
+      border: 1px solid rgba(37,50,71,.9);
+      border-radius: var(--radius);
+      overflow:hidden;
+      background: rgba(255,255,255,.02);
+      height: 62vh;
+      display:flex;
+      flex-direction: column;
+    }
+    .table-scroll{ overflow:auto; -webkit-overflow-scrolling: touch; flex: 1; }
+    table{ width:max-content; min-width:100%; border-collapse: collapse; }
+    th{
+      position: sticky; top: 0; z-index: 3;
+      background: rgba(2,6,23,.95);
+      color: var(--muted);
+      text-align:left;
+      padding: 12px 10px;
+      border-bottom: 2px solid rgba(37,50,71,.9);
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      user-select:none;
+      white-space: nowrap;
+    }
+    td{ padding: 10px 10px; border-bottom: 1px solid rgba(37,50,71,.7); vertical-align: top; white-space: nowrap; }
+    tr:hover{ background: rgba(255,255,255,.03); }
+
+    .badge{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.03);
+      font-size: 12px; font-weight: 950;
+      white-space: nowrap;
+    }
+    .badge.stage-novo{ background: rgba(59,130,246,.12); color: #bfdbfe; border-color: rgba(59,130,246,.35); }
+    .badge.stage-contatado{ background: rgba(16,185,129,.12); color: #bbf7d0; border-color: rgba(16,185,129,.35); }
+    .badge.stage-qualificado{ background: rgba(245,158,11,.12); color: #fde68a; border-color: rgba(245,158,11,.35); }
+    .badge.stage-proposta{ background: rgba(139,92,246,.12); color: #ddd6fe; border-color: rgba(139,92,246,.35); }
+    .badge.stage-fechado{ background: rgba(16,185,129,.18); color: #86efac; border-color: rgba(16,185,129,.40); }
+    .badge.stage-perdido{ background: rgba(239,68,68,.12); color: #fecaca; border-color: rgba(239,68,68,.35); }
+    .badge.good{ background: rgba(16,185,129,.14); color:#bbf7d0; border-color: rgba(16,185,129,.35); }
+    .badge.bad{ background: rgba(239,68,68,.12); color:#fecaca; border-color: rgba(239,68,68,.35); }
+
+    .actions{ display:flex; gap: 6px; flex-wrap: nowrap; align-items:center; justify-content:flex-end; }
+    .mini{
+      width: 36px; min-width: 36px; height: 36px;
+      border-radius: 10px;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.04);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      text-decoration:none;
+      user-select:none;
+    }
+    .mini.wa{ border-color: rgba(37,211,102,.35); }
+    .mini.map{ border-color: rgba(59,130,246,.35); }
+    .mini.edit{ border-color: rgba(245,158,11,.35); }
+    .mini.del{ border-color: rgba(239,68,68,.40); }
+    .mini.ok{ border-color: rgba(16,185,129,.40); }
+
+    .cards-mobile{ display:none; }
+    .lead-card{
+      border:1px solid rgba(37,50,71,.9);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255,255,255,.03);
+      margin-bottom: 10px;
+    }
+    .lead-card .top{ display:flex; justify-content: space-between; gap: 10px; }
+    .lead-card .name{ font-weight: 950; }
+    .lead-card .sub{ color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .lead-card .row{ display:flex; gap:8px; flex-wrap: wrap; margin-top: 10px; }
+    .lead-card .row2{ margin-top: 10px; display:flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+    .fab{
+      position: fixed; right: 14px; bottom: 84px; z-index: 40;
+      width: 56px; height: 56px;
+      border-radius: 18px;
+      border: 1px solid rgba(59,130,246,.25);
+      background: rgba(59,130,246,.92);
+      box-shadow: var(--shadow);
+      color: white;
+      font-weight: 1000;
+      font-size: 24px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      user-select:none;
+    }
+
+    .bottom-nav{
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+      border-top: 1px solid rgba(37,50,71,.8);
+      background: rgba(11,18,32,.82);
+      backdrop-filter: blur(12px);
+      padding: 10px max(14px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-right));
+      display:none;
+    }
+    .bottom-nav .row{ display:flex; gap: 10px; justify-content: space-between; }
+    .navbtn{
+      flex:1;
+      border: 1px solid rgba(37,50,71,.9);
+      background: rgba(255,255,255,.03);
+      border-radius: 16px;
+      padding: 10px 10px;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      cursor:pointer;
+      color: var(--muted);
+      font-weight: 950;
+      min-height: 46px;
+      user-select:none;
+    }
+    .navbtn.active{ background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.45); color: #bfdbfe; }
+
+    .modal-bg{
+      position: fixed; inset:0; z-index: 80;
+      display:none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0,0,0,.64);
+      backdrop-filter: blur(6px);
+    }
+    .modal{
+      width: 720px;
+      max-width: 96vw;
+      max-height: 88vh;
+      overflow: auto;
+      background: rgba(17,26,43,.98);
+      border: 1px solid rgba(37,50,71,.95);
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.55);
+    }
+    .modal header{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(17,26,43,.98);
+      border-bottom: 1px solid rgba(37,50,71,.9);
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .modal header .title{ font-weight: 1000; }
+    .modal .content{ padding: 12px 14px 14px; }
+    .form{ display:grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
+    .col-12{ grid-column: 1 / -1; }
+    .col-6{ grid-column: span 6; }
+    .col-4{ grid-column: span 4; }
+    .col-3{ grid-column: span 3; }
+    .col-8{ grid-column: span 8; }
+    .col-2{ grid-column: span 2; }
+    .field label{
+      display:block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+    .modal .footer{
+      padding: 12px 14px 14px;
+      border-top: 1px solid rgba(37,50,71,.9);
+      display:flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .help{
+      border: 1px dashed rgba(59,130,246,.35);
+      background: rgba(59,130,246,.08);
+      padding: 12px;
+      border-radius: 14px;
+      color: #bfdbfe;
+    }
+    .help h3{ margin: 0 0 8px; font-size: 14px; }
+    .help ol{ margin: 0 0 0 18px; padding:0; color: #cfe1ff; }
+    .help li{ margin: 8px 0; }
+    .help a{ color: #cfe1ff; text-decoration: underline; }
+    .split{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    @media (max-width: 980px){
+      .filters{ grid-template-columns: 1fr 1fr; }
+      .kpis{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .split{ grid-template-columns: 1fr; }
+      .brand{ min-width: unset; }
+    }
+    @media (max-width: 720px){
+      .app{ padding-bottom: 110px; }
+      .table-wrap{ display:none; }
+      .cards-mobile{ display:block; }
+      .bottom-nav{ display:block; }
+      .tabs{ display:none; }
+      .header-actions .btn span.txt{ display:none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout">
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="brandRow">
+        <div class="logo">🧊</div>
+        <div class="brandText">
+          <div class="name">Gestor de Leads <span class="muted">PRO</span></div>
+          <div class="sub">Offline + Multi-Conjuntos + Clientes + Google Sheets (opcional)</div>
+        </div>
+        <div class="toggleBtn" title="Recolher/Expandir menu" onclick="toggleSidebarCollapse()">↔️</div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">Navegação</div>
+        <button class="snav active" data-view="leads" onclick="setView('leads')">📌 <span class="txt">Leads</span></button>
+        <button class="snav" data-view="clients" onclick="setView('clients')">🧾 <span class="txt">Clientes Ativos</span></button>
+        <button class="snav" data-view="agenda" onclick="setView('agenda')">🗓️ <span class="txt">Agenda</span></button>
+        <button class="snav" data-view="help" onclick="setView('help')">📘 <span class="txt">Como usar</span></button>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">Importar</div>
+
+        <div class="file-box" style="margin-bottom:8px;">
+          <button class="btn ghost" style="width:100%;" title="Importar Leads (XLSX/CSV)">📂 <span class="txt">Leads</span></button>
+          <input type="file" id="fileImportLeads" accept=".xlsx,.xls,.csv" />
+        </div>
+
+        <div class="file-box" style="margin-bottom:8px;">
+          <button class="btn ghost" style="width:100%;" title="Importar Clientes Ativos (XLSX/CSV)">📥 <span class="txt">Clientes</span></button>
+          <input type="file" id="fileImportClients" accept=".xlsx,.xls,.csv" />
+        </div>
+
+        <button class="btn ghost" style="width:100%; margin-bottom:8px;" onclick="importFromUrlPrompt()">🌐 <span class="txt">Importar URL</span></button>
+
+        <div class="file-box">
+          <button class="btn ghost" style="width:100%;">📥 <span class="txt">Importar Backup</span></button>
+          <input type="file" id="fileImportBackup" accept=".json" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">Exportar</div>
+        <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportLeadsXlsx()">📤 <span class="txt">Exportar Leads</span></button>
+        <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportLeadsAsClientsXlsx()">🧾 <span class="txt">Leads→Clientes</span></button>
+        <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportClientsXlsx()">📤 <span class="txt">Exportar Clientes</span></button>
+        <button class="btn ghost" style="width:100%;" onclick="exportBackup()">💾 <span class="txt">Backup (JSON)</span></button>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">Sistema</div>
+        <button class="btn ghost" style="width:100%; margin-bottom:8px;" onclick="openSettingsModal()">🧩 <span class="txt">Config / Google Sheets</span></button>
+        <button class="btn ghost" style="width:100%; margin-bottom:8px;" onclick="openSetsModal()">⚙️ <span class="txt">Conjuntos</span></button>
+        <button class="btn danger" style="width:100%;" onclick="dangerZone()">🗑️ <span class="txt">Limpar</span></button>
+        <div class="muted" style="margin-top:10px; font-size:12px; line-height:1.35;">
+          ⚠️ Os dados ficam salvos <b>neste</b> navegador (IndexedDB). Faça Backup e/ou use Google Sheets para não perder.
+        </div>
+      </div>
+
+      <div class="muted" style="margin-top:auto; padding: 4px 2px 10px; font-size: 12px;">
+        <b>V7.2</b> • GitHub Pages • Mobile ok
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="hamb" onclick="openSidebar()" title="Menu">☰</div>
+
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div style="font-weight:1000;">Gestor de Leads <span class="muted">PRO</span></div>
+          <div class="muted" style="font-size:12px;">Trabalho offline + sincronização opcional</div>
+        </div>
+
+        <div class="right">
+          <div class="pill" style="gap:10px;">
+            <label>Conjunto</label>
+            <select id="setSelect" style="min-width: 190px;"></select>
+            <button class="btn small ghost" onclick="openSetsModal()">⚙️ <span class="txt">Gerenciar</span></button>
+          </div>
+
+          <button class="btn small ghost" onclick="openSettingsModal()" title="Configurações">🧩</button>
+        </div>
+      </div>
+
+      <div class="banner" id="banner">
+        <div>
+          <div><b>⚠️ Atenção:</b> este sistema salva os dados no navegador (IndexedDB). Use Backup e/ou Google Sheets para não perder.</div>
+          <small>Dica: no Android/iPhone, use “Adicionar à tela inicial” para ficar como app.</small>
+        </div>
+        <div class="right">
+          <button class="btn small ghost" onclick="exportBackup()">💾 Backup</button>
+          <button class="btn small ghost" onclick="hideBanner()" title="Ocultar aviso">✖</button>
+        </div>
+      </div>
+
+      <div class="app">
+
+    <!-- LEADS -->
+    <section class="view active" id="view-leads">
+      <div class="grid">
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📌 Leads do conjunto</div>
+              <div class="card-sub" id="leadsInfo">—</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn primary" onclick="openLeadModal()">➕ Novo Lead</button>
+              <button class="btn ghost" onclick="exportBackup()">💾 Backup</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="kpis" style="margin-bottom: 12px;">
+              <div class="kpi"><div class="n" id="kLeadsTotal">0</div><div class="t">Total</div></div>
+              <div class="kpi"><div class="n" id="kLeadsAvg" style="color:var(--warning)">0.0</div><div class="t">Nota Média</div></div>
+              <div class="kpi"><div class="n" id="kLeadsOpp" style="color:var(--danger)">0</div><div class="t">Oportunidades</div></div>
+              <div class="kpi"><div class="n" id="kLeadsDue" style="color:var(--warning)">0</div><div class="t">Ações Atrasadas</div></div>
+            </div>
+
+            <div class="filters">
+              <input id="leadSearch" placeholder="Buscar: nome, cidade, cep, tel, email, tags..." oninput="renderLeads()" />
+              <select id="leadStage" onchange="renderLeads()">
+                <option value="">Funil: Todos</option>
+                <option value="novo">Novo</option>
+                <option value="contatado">Contatado</option>
+                <option value="qualificado">Qualificado</option>
+                <option value="proposta">Proposta</option>
+                <option value="fechado">Fechado</option>
+                <option value="perdido">Perdido</option>
+              </select>
+              <select id="leadOpp" onchange="renderLeads()">
+                <option value="">Oportunidade: Todas</option>
+                <option value="opp">Somente Oportunidades</option>
+                <option value="claimed">Somente Verificados</option>
+              </select>
+              <select id="leadAction" onchange="renderLeads()">
+                <option value="">Ação: Todas</option>
+                <option value="has">Com Próxima Ação</option>
+                <option value="due">Ação Atrasada</option>
+                <option value="today">Ação Hoje</option>
+              </select>
+              <select id="leadCity" onchange="renderLeads()"><option value="">Cidade: Todas</option></select>
+            </div>
+
+            <div class="table-wrap" style="margin-top: 12px;">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th onclick="toggleLeadSort('name','text')">Empresa</th>
+                      <th onclick="toggleLeadSort('stage','stage')">Funil / Próxima</th>
+                      <th onclick="toggleLeadSort('city','text')">Cidade</th>
+                      <th onclick="toggleLeadSort('rating','num')">Nota</th>
+                      <th onclick="toggleLeadSort('reviews','num')">Reviews</th>
+                      <th onclick="toggleLeadSort('claimed','bool')">Oportunidade</th>
+                      <th style="text-align:right;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="leadsTbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="cards-mobile" id="leadsCards"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLIENTES -->
+    <section class="view" id="view-clients">
+      <div class="grid">
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🧾 Clientes Ativos</div>
+              <div class="card-sub" id="clientsInfo">—</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn primary" onclick="openClientModal()">➕ Novo Cliente</button>
+              <button class="btn ghost" onclick="exportBackup()">💾 Backup</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="kpis" style="margin-bottom: 12px;">
+              <div class="kpi"><div class="n" id="kClientsTotal">0</div><div class="t">Total</div></div>
+              <div class="kpi"><div class="n" id="kClientsDue" style="color:var(--warning)">0</div><div class="t">Visitas Atrasadas</div></div>
+              <div class="kpi"><div class="n" id="kClientsToday" style="color:var(--success)">0</div><div class="t">Visitas Hoje</div></div>
+              <div class="kpi"><div class="n" id="kClientsNoWA" style="color:var(--danger)">0</div><div class="t">Sem WhatsApp</div></div>
+            </div>
+
+            <div class="filters">
+              <input id="clientSearch" placeholder="Buscar: cliente, cidade, comprador, WhatsApp..." oninput="renderClients()" />
+              <select id="clientCity" onchange="renderClients()"><option value="">Cidade: Todas</option></select>
+              <select id="clientVisitDay" onchange="renderClients()">
+                <option value="">Dia Visita: Todos</option>
+                <option value="SEG">SEG</option><option value="TER">TER</option><option value="QUA">QUA</option>
+                <option value="QUI">QUI</option><option value="SEX">SEX</option>
+                <option value="SAB">SAB</option><option value="DOM">DOM</option>
+              </select>
+              <select id="clientDue" onchange="renderClients()">
+                <option value="">Agenda: Tudo</option>
+                <option value="due">Visita atrasada</option>
+                <option value="today">Visita hoje</option>
+                <option value="has">Com próxima visita</option>
+              </select>
+              <select id="clientSeller" onchange="renderClients()"><option value="">Vendedor: Todos</option></select>
+            </div>
+
+            <div class="table-wrap" style="margin-top: 12px;">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th onclick="toggleClientSort('codCliente','text')">Cód.</th>
+                      <th onclick="toggleClientSort('cliente','text')">Cliente</th>
+                      <th onclick="toggleClientSort('cidade','text')">Cidade</th>
+                      <th onclick="toggleClientSort('diasEntrega','text')">Entrega</th>
+                      <th onclick="toggleClientSort('diaVisita','text')">Visita</th>
+                      <th onclick="toggleClientSort('nextVisit','date')">Próxima</th>
+                      <th>Comprador</th>
+                      <th>WhatsApp</th>
+                      <th style="text-align:right;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="clientsTbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="cards-mobile" id="clientsCards"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGENDA -->
+    <section class="view" id="view-agenda">
+      <div class="grid">
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🗓️ Agenda (próximas ações e visitas)</div>
+              <div class="card-sub">Ações de Leads + Próximas Visitas de Clientes (conjunto atual)</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn ghost" onclick="renderAgenda()">🔄 Atualizar</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="filters" style="margin-bottom: 10px;">
+              <select id="agendaRange" onchange="renderAgenda()">
+                <option value="7">Próximos 7 dias</option>
+                <option value="14">Próximos 14 dias</option>
+                <option value="30">Próximos 30 dias</option>
+                <option value="365">Tudo (1 ano)</option>
+              </select>
+              <select id="agendaType" onchange="renderAgenda()">
+                <option value="">Tipos: Todos</option>
+                <option value="lead">Somente Leads</option>
+                <option value="client">Somente Clientes</option>
+              </select>
+              <div class="muted" id="agendaInfo" style="grid-column: 1 / -1;">—</div>
+            </div>
+
+            <div class="table-wrap" style="height: 64vh;">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Quando</th>
+                      <th>Tipo</th>
+                      <th>Nome</th>
+                      <th>Detalhes</th>
+                      <th style="text-align:right;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="agendaTbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- COMO USAR -->
+    <section class="view" id="view-help">
+      <div class="grid">
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📘 Como usar</div>
+              <div class="card-sub">Este painel carrega o arquivo <b>ajuda.html</b> (na mesma pasta do sistema). Você pode editar a ajuda sem mexer no app.</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <a class="btn ghost" href="ajuda.html" target="_blank" rel="noreferrer">🔎 Abrir ajuda.html</a>
+              <button class="btn ghost" onclick="loadHelpView(true)">🔄 Recarregar</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="helpContent" class="muted">Carregando ajuda…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom nav (mobile) -->
+
+  <div class="bottom-nav">
+    <div class="row">
+      <div class="navbtn active" data-view="leads" onclick="setView('leads')">📌 Leads</div>
+      <div class="navbtn" data-view="clients" onclick="setView('clients')">🧾 Clientes</div>
+      <div class="navbtn" data-view="agenda" onclick="setView('agenda')">🗓️ Agenda</div>
+      <div class="navbtn" data-view="help" onclick="setView('help')">📘 Como usar</div>
+    </div>
+  </div>
+
+  <div class="fab" id="fab" onclick="fabAction()">+</div>
+
+  <!-- Modal: Lead -->
+  <div class="modal-bg" id="modalLeadBg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title">📌 Lead</div>
+        <button class="btn small ghost" onclick="closeModal('modalLeadBg')">Fechar</button>
+      </header>
+      <div class="content">
+        <input type="hidden" id="lead_id" />
+        <div class="help" style="margin-bottom: 12px;">
+          <h3>Ações rápidas</h3>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn ghost" onclick="openLeadMapsFromModal()">🗺️ Abrir Maps</button>
+            <button class="btn ghost" onclick="openLeadWhatsAppChatFromModal()">📱 WhatsApp</button>
+            <button class="btn ghost" onclick="openLeadWhatsAppMsgFromModal()">💬 Mensagem</button>
+          </div>
+          <div class="muted" style="margin-top:6px;">📱 abre apenas a conversa. 💬 usa a mensagem das Configurações (opcional).</div>
+        </div>
+        <div class="form">
+          <div class="field col-8">
+            <label>Empresa</label>
+            <input id="lead_name" />
+          </div>
+          <div class="field col-4">
+            <label>Telefone / WhatsApp</label>
+            <input id="lead_phone" placeholder="(DDD) 9xxxx-xxxx" />
+          </div>
+
+          <div class="field col-6">
+            <label>Email</label>
+            <input id="lead_email" placeholder="email@dominio.com (pode ser múltiplos)" />
+          </div>
+          <div class="field col-6">
+            <label>Website</label>
+            <input id="lead_website" placeholder="https://..." />
+          </div>
+
+          <div class="field col-6">
+            <label>Instagram</label>
+            <input id="lead_instagram" placeholder="https://instagram.com/..." />
+          </div>
+          <div class="field col-6">
+            <label>Facebook</label>
+            <input id="lead_facebook" placeholder="https://facebook.com/..." />
+          </div>
+
+          <div class="field col-6">
+            <label>Google Maps URL (cid)</label>
+            <input id="lead_url" placeholder="https://www.google.com/maps?cid=..." />
+          </div>
+          <div class="field col-6">
+            <label>CID (opcional)</label>
+            <input id="lead_cid" placeholder="1535017326667043352" />
+          </div>
+
+          <div class="field col-3">
+            <label>Latitude (opcional)</label>
+            <input id="lead_lat" placeholder="-22.12345" />
+          </div>
+          <div class="field col-3">
+            <label>Longitude (opcional)</label>
+            <input id="lead_lng" placeholder="-47.12345" />
+          </div>
+
+          <div class="field col-6">
+            <label>Cidade</label>
+            <input id="lead_city" />
+          </div>
+          <div class="field col-2">
+            <label>UF</label>
+            <input id="lead_uf" maxlength="2" />
+          </div>
+          <div class="field col-4">
+            <label>CEP</label>
+            <input id="lead_cep" placeholder="00000-000" />
+          </div>
+
+          <div class="field col-12">
+            <label>Endereço Completo</label>
+            <input id="lead_address" />
+          </div>
+
+          <div class="field col-4">
+            <label>Funil</label>
+            <select id="lead_stage">
+              <option value="novo">Novo</option>
+              <option value="contatado">Contatado</option>
+              <option value="qualificado">Qualificado</option>
+              <option value="proposta">Proposta</option>
+              <option value="fechado">Fechado</option>
+              <option value="perdido">Perdido</option>
+            </select>
+          </div>
+          <div class="field col-4">
+            <label>Próxima Ação</label>
+            <input type="datetime-local" id="lead_nextAction" />
+          </div>
+          <div class="field col-4">
+            <label>Tags</label>
+            <input id="lead_tags" placeholder="ex: atacado, decisor..." />
+          </div>
+
+          <div class="field col-4">
+            <label>Nota</label>
+            <input type="number" step="0.1" id="lead_rating" />
+          </div>
+          <div class="field col-4">
+            <label>Reviews</label>
+            <input type="number" id="lead_reviews" />
+          </div>
+          <div class="field col-4">
+            <label>Oportunidade</label>
+            <select id="lead_claimed">
+              <option value="NO">Oportunidade</option>
+              <option value="YES">Verificado</option>
+            </select>
+          </div>
+
+          <div class="field col-12">
+            <label>⏱️ Horário de funcionamento</label>
+            <textarea id="lead_opening"></textarea>
+          </div>
+
+          <div class="field col-12">
+            <label>📝 Anotações</label>
+            <textarea id="lead_notes" placeholder="Ex: Cliente interessado em Paletas, pediu catálogo..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn danger" onclick="deleteLeadFromModal()">🗑️ Excluir</button>
+        <button class="btn ghost" onclick="convertLeadToClient()">✅ Converter p/ Cliente</button>
+        <button class="btn primary" onclick="saveLeadFromModal()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Client -->
+  <div class="modal-bg" id="modalClientBg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title">🧾 Cliente Ativo</div>
+        <button class="btn small ghost" onclick="closeModal('modalClientBg')">Fechar</button>
+      </header>
+      <div class="content">
+        <input type="hidden" id="client_id" />
+        <div class="help" style="margin-bottom: 12px;">
+          <h3>Padrão Ameripan (import/export)</h3>
+          <div class="muted">Este cadastro mantém o formato do arquivo de clientes (Edimar_Clientes.xlsx). Campos extras (ex.: Produtos de interesse) ficam guardados aqui e podem ser “embutidos” na coluna <b>Obs</b> ao exportar.</div>
+        </div>
+
+        <div class="form">
+          <div class="field col-3">
+            <label>Cód. Cliente</label>
+            <input id="client_cod" placeholder="opcional" />
+          </div>
+          <div class="field col-5">
+            <label>Vendedor</label>
+            <input id="client_vendedor" placeholder="Ex: EDIMAR..." />
+          </div>
+          <div class="field col-4">
+            <label>Equipe</label>
+            <input id="client_equipe" placeholder="Ex: EQUIPE SORVETERIA" />
+          </div>
+
+          <div class="field col-6">
+            <label>Cidade</label>
+            <input id="client_cidade" />
+          </div>
+          <div class="field col-6">
+            <label>Dias Entrega</label>
+            <input id="client_diasEntrega" placeholder="Ex: TER, SEX" />
+          </div>
+
+          <div class="field col-6">
+            <label>Cliente</label>
+            <input id="client_cliente" placeholder="Nome (padrão: Cliente)" />
+          </div>
+          <div class="field col-6">
+            <label>Fantasia</label>
+            <input id="client_fantasia" placeholder="Nome fantasia" />
+          </div>
+
+          <div class="field col-6">
+            <label>Razão</label>
+            <input id="client_razao" placeholder="Razão social" />
+          </div>
+          <div class="field col-3">
+            <label>Dia Visita</label>
+            <input id="client_diaVisita" placeholder="SEG/TER/..." />
+          </div>
+          <div class="field col-3">
+            <label>Freq</label>
+            <input id="client_freq" placeholder="Ex: S3 / TODAS" />
+          </div>
+
+          <div class="field col-3">
+            <label>Ordem</label>
+            <input type="number" id="client_ordem" />
+          </div>
+          <div class="field col-3">
+            <label>Dias Sec</label>
+            <input id="client_diasSec" />
+          </div>
+          <div class="field col-6">
+            <label>Comprador</label>
+            <input id="client_comprador" placeholder="Nome do comprador" />
+          </div>
+
+          <div class="field col-6">
+            <label>WhatsApp</label>
+            <input id="client_whatsapp" placeholder="(DDD) 9xxxx-xxxx" />
+          </div>
+          <div class="field col-6">
+            <label>Próxima visita (agenda interna)</label>
+            <input type="datetime-local" id="client_nextVisit" />
+          </div>
+
+          <div class="field col-12">
+            <label>Produtos de interesse (interno)</label>
+            <textarea id="client_produtos" placeholder="Ex: Paletas 90ml, Linha Zero, Açaí..."></textarea>
+          </div>
+
+          <div class="field col-12">
+            <label>Obs</label>
+            <textarea id="client_obs" placeholder="Observações gerais (padrão do export)"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn danger" onclick="deleteClientFromModal()">🗑️ Excluir</button>
+        <button class="btn ghost" onclick="openClientWhatsApp()">📱 WhatsApp</button>
+        <button class="btn ghost" onclick="openClientWhatsAppMsg()">💬 Mensagem</button>
+        <button class="btn primary" onclick="saveClientFromModal()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Sets -->
+  <div class="modal-bg" id="modalSetsBg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title">⚙️ Conjuntos de Leads</div>
+        <button class="btn small ghost" onclick="closeModal('modalSetsBg')">Fechar</button>
+      </header>
+      <div class="content">
+        <div class="help" style="margin-bottom: 12px;">
+          <h3>O que é um conjunto?</h3>
+          <div class="muted">É uma “lista/território/campanha”. Ex.: <b>Leads Sul de Minas</b>, <b>Leads Piracicaba</b>, <b>Entrega Sábado</b>. Cada conjunto tem seus Leads, Clientes e Agenda.</div>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <div style="flex:1;">
+            <div class="muted" style="font-weight:900; margin-bottom:6px;">Novo conjunto</div>
+            <input id="newSetName" placeholder="Nome do conjunto (ex.: Leads Piracicaba)" />
+          </div>
+          <button class="btn primary" onclick="createSet()">➕ Criar</button>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <div class="muted" style="font-weight:900; margin-bottom:8px;">Seus conjuntos</div>
+          <div id="setsList"></div>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn ghost" onclick="exportBackup()">💾 Backup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Settings / Help -->
+  <div class="modal-bg" id="modalSettingsBg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title">🧩 Configurações e Ajuda</div>
+        <button class="btn small ghost" onclick="closeModal('modalSettingsBg')">Fechar</button>
+      </header>
+      <div class="content">
+        <div class="split">
+          <div>
+            <div class="card" style="box-shadow:none;">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Google Sheets (opcional)</div>
+                  <div class="card-sub">Para usar em outro celular/PC sem perder progresso</div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="help" style="margin-bottom: 12px;">
+                  <h3>Google Sheets (2 modos)</h3>
+                  <div class="muted" style="line-height:1.45;">
+                    • <b>Básico (somente leitura)</b>: ideal para usuário final. Basta planilha pública/compartilhada + aba de Leads/Clientes.<br/>
+                    • <b>Completo (ler+editar)</b>: sincroniza tudo (sets, leads, clientes, settings) via Web App (Apps Script).
+                  </div>
+                </div>
+
+                <div class="field" style="margin-bottom:10px;">
+                  <label>Link/ID da planilha</label>
+                  <input id="gs_sheet" placeholder="Cole o link da planilha do Google Sheets" />
+                  <div class="muted" style="margin-top:6px;">Dica: o ID é a parte entre <b>/d/</b> e <b>/edit</b>.</div>
+                </div>
+
+                <div class="field" style="margin-bottom:10px;">
+                  <label>API Key (opcional – para listar abas)</label>
+                  <input id="gs_apiKey" placeholder="Cole sua API Key (Google Cloud) — opcional" />
+                  <div class="muted" style="margin-top:6px;">Para <b>somente leitura</b>, a planilha precisa estar pública/compartilhada. A API Key ajuda a <b>listar</b> as abas.</div>
+                </div>
+
+                <div class="split" style="gap:10px;">
+                  <div class="field">
+                    <label>Aba de Leads (padrão: leads)</label>
+                    <input id="gs_leadsTab" list="gs_tabsList" placeholder="leads" />
+                  </div>
+                  <div class="field">
+                    <label>Aba de Clientes (padrão: clientes)</label>
+                    <input id="gs_clientsTab" list="gs_tabsList" placeholder="clientes" />
+                  </div>
+                </div>
+                <datalist id="gs_tabsList"></datalist>
+
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px;">
+                  <button class="btn ghost" onclick="gsListTabs()">📑 Listar abas</button>
+                  <button class="btn success" onclick="gsPullReadOnly('leads')">⬇️ Puxar Leads</button>
+                  <button class="btn success" onclick="gsPullReadOnly('clients')">⬇️ Puxar Clientes</button>
+                  <button class="btn primary" onclick="gsPullReadOnly('all')">⬇️ Puxar Tudo</button>
+                </div>
+
+                <details style="margin-top: 12px;">
+                  <summary style="cursor:pointer; font-weight:1000;">🔒 Modo Completo (ler+editar) — Web App (Apps Script)</summary>
+                  <div class="muted" style="margin-top:6px; line-height:1.45;">
+                    Use este modo se você quer <b>sincronizar</b> o banco inteiro entre dispositivos e/ou <b>auto-criar</b> abas.
+                    O usuário final não precisa mexer no código do Apps Script — basta colar a URL do Web App.
+                  </div>
+
+                  <div class="field" style="margin-top:10px;">
+                    <label>URL do Web App (Apps Script)</label>
+                    <input id="gs_scriptUrl" placeholder="Cole a URL do Web App (Apps Script)" />
+                  </div>
+
+                  <div class="field" style="margin-top:10px;">
+                    <label>Token de segurança (opcional)</label>
+                    <input id="gs_token" placeholder="Ex: ameripan-2026" />
+                    <div class="muted" style="margin-top:6px;">Se você ativar token no script, só quem tiver o token consegue acessar.</div>
+                  </div>
+
+                  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                    <button class="btn ghost" onclick="testConnector()">Testar Conector</button>
+                    <button class="btn primary" onclick="gsEnsure()">Auto-criar abas</button>
+                    <button class="btn success" onclick="gsPush()">Enviar p/ Sheets</button>
+                    <button class="btn success" onclick="gsPull()">Puxar do Sheets</button>
+                  </div>
+                </details>
+
+                <div style="margin-top: 12px; border-top: 1px solid rgba(37,50,71,.7); padding-top: 12px;">
+                  <div class="field" style="margin-bottom:10px;">
+                    <label>Vendedor padrão (para converter Lead → Cliente)</label>
+                    <input id="cfg_defaultSeller" placeholder="Ex: EDIMAR PINHEIRO COSTA" />
+                  </div>
+
+                  <div class="field" style="margin-bottom:10px;">
+                    <label>Equipe padrão</label>
+                    <input id="cfg_defaultTeam" placeholder="Ex: EQUIPE SORVETERIA" />
+                  </div>
+
+                  <div class="help" style="margin-bottom: 10px;">
+                    <h3>WhatsApp (mensagem opcional)</h3>
+                    <div class="muted" style="line-height:1.45;">
+                      • O ícone <b>📱</b> abre o WhatsApp <b>sem mensagem</b> (apenas conversa).<br/>
+                      • Se você ativar abaixo, aparece o ícone <b>💬</b> para abrir com mensagem pronta.
+                    </div>
+                  </div>
+
+                  <div class="field" style="margin-bottom:10px;">
+                    <label style="display:flex; align-items:center; gap:10px; font-weight:900;">
+                      <input type="checkbox" id="cfg_waEnableTemplate" style="width:auto; transform: scale(1.15);" />
+                      Ativar ícone 💬 (mensagem pronta)
+                    </label>
+                  </div>
+
+                  <div class="field" style="margin-bottom:10px;">
+                    <label>Mensagem padrão (Leads)</label>
+                    <textarea id="cfg_waTemplateLead" placeholder="Ex: Olá, tudo bem? Aqui é {{vendedor}} da Ameripan. Vi a empresa {{nome}} e gostaria de apresentar nosso catálogo."></textarea>
+                    <div class="muted" style="margin-top:6px;">Variáveis: <b>{{nome}}</b>, <b>{{vendedor}}</b></div>
+                  </div>
+
+                  <div class="field" style="margin-bottom:10px;">
+                    <label>Mensagem padrão (Clientes)</label>
+                    <textarea id="cfg_waTemplateClient" placeholder="Ex: Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da Ameripan."></textarea>
+                    <div class="muted" style="margin-top:6px;">Variáveis: <b>{{nome}}</b>, <b>{{comprador}}</b>, <b>{{vendedor}}</b></div>
+                  </div>
+                </div>
+
+                <div class="muted" style="margin-top:10px;" id="gs_status">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="help" id="helpBlock">
+              <h3>Ajuda rápida (usuário básico)</h3>
+              <ol>
+                <li><b>Coletar leads</b> no MapsScraper → exportar em <b>.xlsx</b> e usar <b>📂 Leads</b>.</li>
+                <li><b>Clientes Ativos</b>: importar <b>Edimar_Clientes.xlsx</b> (aba “Roteiro”) em <b>📥 Clientes</b>.</li>
+                <li>Para abrir WhatsApp, use o botão <b>📱</b>. No celular, ele abre direto o app.</li>
+                <li>Para usar em outro aparelho sem perder dados: crie uma planilha no Google e configure o <b>Conector</b>.</li>
+              </ol>
+              <div style="margin-top:12px;">
+                <div class="muted"><b>Links oficiais (Google):</b></div>
+                <ul style="margin:8px 0 0 18px;">
+                  <li><a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noreferrer">Apps Script – Web Apps</a></li>
+                  <li><a href="https://developers.google.com/workspace/sheets/api/guides/concepts" target="_blank" rel="noreferrer">Sheets API – conceitos</a></li>
+                  <li><a href="https://sheets.new" target="_blank" rel="noreferrer">Criar uma planilha (sheets.new)</a></li>
+                  <li><a href="https://support.google.com/docs/answer/9331169" target="_blank" rel="noreferrer">Como compartilhar uma planilha</a></li>
+                  <li><a href="https://support.google.com/googleapi/answer/6158862" target="_blank" rel="noreferrer">Como criar API Key</a></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top: 12px;">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Backup & Segurança</div>
+                  <div class="card-sub">Recomendado: 1 backup por semana</div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="muted" style="line-height: 1.45;">
+                  • O navegador pode apagar dados se faltar espaço. Por isso existe o Backup e o Google Sheets.<br/>
+                  • Se usar API Key, aplique restrição por domínio (GitHub Pages) no Google Cloud.<br/>
+                  • Se usar Conector (Apps Script), ative um Token.
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px;">
+                  <button class="btn ghost" onclick="exportBackup()">💾 Backup (JSON)</button>
+                  <button class="btn ghost" onclick="importBackupFromUrlPrompt()">🔗 Resgatar Backup (URL)</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+      <div class="footer">
+        <button class="btn ghost" onclick="closeModal('modalSettingsBg')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ======================================================
+// Gestor de Leads PRO V7 — Offline + Multi-Conjuntos
+// ======================================================
+const APP_NAME = 'Gestor de Leads PRO';
+const APP_VERSION = '7.1.0';
+
+// ---------- IndexedDB ----------
+const DB_NAME = 'ameripan_gestor_leads_pro';
+const DB_VERSION = 2;
+const STORE_SETS = 'sets';
+const STORE_LEADS = 'leads';
+const STORE_CLIENTS = 'clients';
+const STORE_INTERACTIONS = 'interactions';
+const STORE_META = 'meta';
+
+let idb = null;
+
+// Cache em memória
+let sets = [];
+let leads = [];
+let clients = [];
+let activeSetId = null;
+
+// View state
+let currentView = 'leads';
+
+// Ordenação
+let leadSort = { key: 'best', dir: 'desc', type: 'base' };
+let clientSort = { key: 'cliente', dir: 'asc', type: 'text' };
+
+// ---------- Utils ----------
+function uid(prefix='id'){
+  try{
+    if(crypto && crypto.randomUUID) return prefix + '_' + crypto.randomUUID();
+  }catch(e){}
+  return prefix + '_' + Date.now().toString(16) + '_' + Math.random().toString(16).slice(2);
+}
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+function normStr(s){ return String(s ?? '').trim(); }
+function normLower(s){ return normStr(s).toLowerCase(); }
+
+function toInt(v, defVal=0){
+  if(v === undefined || v === null || v === '') return defVal;
+  if(typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
+  const s = String(v).replace(/[^0-9\-]/g,'');
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : defVal;
+}
+function toFloat(v, defVal=0){
+  if(v === undefined || v === null || v === '') return defVal;
+  if(typeof v === 'number' && Number.isFinite(v)) return v;
+  let s = String(v).trim();
+  if(!s) return defVal;
+  if(s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+  s = s.replace(/[^0-9.\-]/g,'');
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : defVal;
+}
+function toDatetimeLocal(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromDatetimeLocal(val){
+  val = String(val||'').trim();
+  if(!val) return '';
+  const d = new Date(val);
+  if(isNaN(d.getTime())) return '';
+  return d.toISOString();
+}
+function fmtBR(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  return d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function isDue(iso){
+  if(!iso) return false;
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return false;
+  return d.getTime() < Date.now();
+}
+function isToday(iso){
+  if(!iso) return false;
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return false;
+  const n = new Date();
+  return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
+}
+
+function cleanPhoneToWa(phone){
+  let p = String(phone||'').replace(/\D/g,'');
+  if(!p) return '';
+  if(p.length === 10 || p.length === 11) p = '55' + p;
+  if(p.length < 11) return '';
+  return p;
+}
+function buildWaLink(phone, text){
+  const p = cleanPhoneToWa(phone);
+  if(!p) return '';
+  const base = `https://wa.me/${p}`;
+  if(text && String(text).trim()) return base + `?text=${encodeURIComponent(String(text))}`;
+  return base;
+}
+
+function normalizeTags(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  return s.split(/[,;]/).map(x=>x.trim()).filter(Boolean).join(', ');
+}
+function normalizeWebUrl(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  if(/^https?:\/\//i.test(s)) return s;
+  if(s.startsWith('//')) return 'https:' + s;
+  if(s.includes('.') || s.includes('/')) return 'https://' + s.replace(/^\/+/, '');
+  return s;
+}
+
+const STAGES = ['novo','contatado','qualificado','proposta','fechado','perdido'];
+function normalizeStage(s){
+  s = String(s||'').trim().toLowerCase();
+  if(STAGES.includes(s)) return s;
+  const map = { new:'novo', contacted:'contatado', qualified:'qualificado', proposal:'proposta', closed:'fechado', won:'fechado', lost:'perdido' };
+  return map[s] || 'novo';
+}
+function stageBadgeClass(stage){ return 'badge stage-' + normalizeStage(stage); }
+
+function extractCidFromUrl(url){
+  const m = String(url||'').match(/[?&]cid=(\d+)/);
+  return m ? m[1] : '';
+}
+function buildCidUrl(cid){
+  cid = String(cid||'').trim();
+  return cid ? `https://www.google.com/maps?cid=${cid}` : '';
+}
+
+function buildMapsViewLink(l){
+  if(!l) return '';
+  const direct = normStr(l.url) || (l.cid ? buildCidUrl(l.cid) : '');
+  if(direct) return direct;
+  const q = [l.name, l.address, l.city, l.uf].filter(Boolean).join(' ');
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : '';
+}
+function buildMapsNavLink(l){
+  if(!l) return '';
+  if(l.placeId){
+    return `https://www.google.com/maps/dir/?api=1&destination_place_id=${encodeURIComponent(l.placeId)}`;
+  }
+  const dest = [l.address, l.city, l.uf, l.cep].filter(Boolean).join(' ') || [l.name, l.city, l.uf].filter(Boolean).join(' ');
+  return dest ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}` : '';
+}
+function buildMapsGpsLink(lat, lng){
+  const la = toFloat(lat, null);
+  const lo = toFloat(lng, null);
+  if(la === null || lo === null) return '';
+  if(Math.abs(la) < 0.000001 && Math.abs(lo) < 0.000001) return '';
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(la + ',' + lo)}`;
+}
+function firstEmail(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  const parts = s.split(/[;, \n\t]+/).map(x=>x.trim()).filter(Boolean);
+  const m = parts.find(p => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
+  return m || '';
+}
+function parseAddressCEP(addr){
+  addr = String(addr||'');
+  const m = addr.match(/(\d{5}-?\d{3})/);
+  if(!m) return '';
+  const digits = m[1].replace(/\D/g,'');
+  return digits.length===8 ? digits.slice(0,5)+'-'+digits.slice(5) : m[1];
+}
+function parseSpreadsheetIdOrUrl(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  const m = s.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9-_]{20,}$/.test(s)) return s;
+  return '';
+}
+
+// ---------- XLSX loader ----------
+let __xlsxPromise = null;
+function ensureXLSX(){
+  if(typeof XLSX !== 'undefined') return Promise.resolve(true);
+  if(__xlsxPromise) return __xlsxPromise;
+  const sources = [
+    './xlsx.full.min.js',
+    'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+    'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'
+  ];
+  __xlsxPromise = new Promise((resolve, reject)=>{
+    let i=0;
+    const tryOne = ()=>{
+      const src = sources[i++];
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = ()=> (typeof XLSX!=='undefined') ? resolve(true) : (i<sources.length?tryOne():reject(new Error('XLSX não carregou.')));
+      s.onerror = ()=> (i<sources.length?tryOne():reject(new Error('XLSX não carregou.')));
+      document.head.appendChild(s);
+    };
+    tryOne();
+  });
+  return __xlsxPromise;
+}
+function parseCSV(text){
+  const lines = String(text||'').split(/\r?\n/).filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const headers = splitCSVLine(lines[0]).map(h=>h.trim());
+  const res=[];
+  for(let i=1;i<lines.length;i++){
+    const row = splitCSVLine(lines[i]);
+    const obj={};
+    headers.forEach((h,idx)=> obj[h]=(row[idx]||'').replace(/^"|"$/g,''));
+    res.push(obj);
+  }
+  return res;
+}
+function splitCSVLine(line){
+  const out=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch === '"'){ inQ=!inQ; cur += ch; continue; }
+    if(ch === ',' && !inQ){ out.push(cur); cur=''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+// ---------- Settings (meta) ----------
+async function metaGet(key){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(STORE_META,'readonly').objectStore(STORE_META).get(key);
+    req.onsuccess = ()=> resolve(req.result ? req.result.value : null);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+async function metaSet(key,value){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(STORE_META,'readwrite').objectStore(STORE_META).put({key, value});
+    req.onsuccess = ()=> resolve(true);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+// ---------- IndexedDB helpers ----------
+function openIDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const dbx = req.result;
+
+      if(!dbx.objectStoreNames.contains(STORE_SETS)){
+        const s = dbx.createObjectStore(STORE_SETS, { keyPath:'id' });
+        s.createIndex('name_lc','name_lc',{unique:false});
+        s.createIndex('updatedAt','updatedAt',{unique:false});
+      }
+
+      if(!dbx.objectStoreNames.contains(STORE_LEADS)){
+        const s = dbx.createObjectStore(STORE_LEADS, { keyPath:'id' });
+        s.createIndex('setId','setId',{unique:false});
+        s.createIndex('placeId','placeId',{unique:false});
+        s.createIndex('name_lc','name_lc',{unique:false});
+        s.createIndex('city_lc','city_lc',{unique:false});
+        s.createIndex('stage','stage',{unique:false});
+        s.createIndex('claimed','claimed',{unique:false});
+        s.createIndex('nextAction','nextAction',{unique:false});
+        s.createIndex('updatedAt','updatedAt',{unique:false});
+      }else{
+        const s = req.transaction.objectStore(STORE_LEADS);
+        if(!s.indexNames.contains('setId')) s.createIndex('setId','setId',{unique:false});
+      }
+
+      if(!dbx.objectStoreNames.contains(STORE_CLIENTS)){
+        const s = dbx.createObjectStore(STORE_CLIENTS, { keyPath:'id' });
+        s.createIndex('setId','setId',{unique:false});
+        s.createIndex('city_lc','city_lc',{unique:false});
+        s.createIndex('seller_lc','seller_lc',{unique:false});
+        s.createIndex('whatsapp','whatsapp',{unique:false});
+        s.createIndex('nextVisit','nextVisit',{unique:false});
+        s.createIndex('updatedAt','updatedAt',{unique:false});
+      }
+
+      if(!dbx.objectStoreNames.contains(STORE_INTERACTIONS)){
+        const s = dbx.createObjectStore(STORE_INTERACTIONS, { keyPath:'id' });
+        s.createIndex('setId','setId',{unique:false});
+        s.createIndex('entityId','entityId',{unique:false});
+        s.createIndex('entityType','entityType',{unique:false});
+        s.createIndex('createdAt','createdAt',{unique:false});
+      }
+
+      if(!dbx.objectStoreNames.contains(STORE_META)){
+        dbx.createObjectStore(STORE_META, { keyPath:'key' });
+      }
+    };
+    req.onsuccess = ()=>{
+      idb = req.result;
+      idb.onversionchange = ()=> idb.close();
+      resolve(idb);
+    };
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+function idbGetAll(store){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(store,'readonly').objectStore(store).getAll();
+    req.onsuccess = ()=> resolve(req.result || []);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+function idbPut(store, value){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(store,'readwrite').objectStore(store).put(value);
+    req.onsuccess = ()=> resolve(true);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+function idbBulkPut(store, items){
+  return new Promise((resolve,reject)=>{
+    if(!items || !items.length) return resolve(true);
+    const tr = idb.transaction(store,'readwrite');
+    const os = tr.objectStore(store);
+    items.forEach(it => os.put(it));
+    tr.oncomplete = ()=> resolve(true);
+    tr.onerror = ()=> reject(tr.error);
+    tr.onabort = ()=> reject(tr.error);
+  });
+}
+function idbDelete(store, key){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(store,'readwrite').objectStore(store).delete(key);
+    req.onsuccess = ()=> resolve(true);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+function idbClear(store){
+  return new Promise((resolve,reject)=>{
+    const req = idb.transaction(store,'readwrite').objectStore(store).clear();
+    req.onsuccess = ()=> resolve(true);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+// ---------- Persistence request ----------
+async function requestPersistence(){
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      await navigator.storage.persist();
+    }
+  }catch(e){}
+}
+
+// ---------- Normalização de registros ----------
+function normalizeSet(s){
+  const now = new Date().toISOString();
+  const name = normStr(s?.name || 'Conjunto');
+  return {
+    id: s?.id || uid('set'),
+    name,
+    name_lc: name.toLowerCase(),
+    createdAt: s?.createdAt || now,
+    updatedAt: now
+  };
+}
+
+function normalizeLead(x){
+  const now = new Date().toISOString();
+  const lead = Object.assign({
+    id: uid('lead'),
+    setId: activeSetId || 'default',
+    placeId: '',
+    cid: '',
+    url: '',
+    name: 'Sem Nome',
+    address: '',
+    city: '',
+    uf: '',
+    cep: '',
+    category: '',
+    rating: 0,
+    reviews: 0,
+    claimed: false,
+    phone: '',
+    email: '',
+    website: '',
+    instagram: '',
+    facebook: '',
+    lat: null,
+    lng: null,
+    openingHours: '',
+    stage: 'novo',
+    nextAction: '',
+    tags: '',
+    notes: '',
+    convertedClientId: '',
+    createdAt: now,
+    updatedAt: now,
+    source: 'local'
+  }, x || {});
+
+  lead.setId = lead.setId || (activeSetId || 'default');
+
+  lead.placeId = normStr(lead.placeId);
+  lead.cid = normStr(lead.cid);
+  lead.url = normStr(lead.url);
+
+  const cidFromUrl = lead.url ? extractCidFromUrl(lead.url) : '';
+  if(cidFromUrl) lead.cid = cidFromUrl;
+  if(!lead.url && lead.cid) lead.url = buildCidUrl(lead.cid);
+
+  lead.name = normStr(lead.name) || 'Sem Nome';
+  lead.address = normStr(lead.address);
+  lead.city = normStr(lead.city);
+  lead.uf = normStr(lead.uf).toUpperCase().slice(0,2);
+  lead.cep = normStr(lead.cep) || parseAddressCEP(lead.address);
+
+  lead.category = normStr(lead.category);
+  lead.rating = toFloat(lead.rating, 0);
+  lead.reviews = toInt(lead.reviews, 0);
+  lead.claimed = !!lead.claimed;
+
+  lead.phone = normStr(lead.phone);
+  lead.email = normStr(lead.email);
+  lead.website = normalizeWebUrl(lead.website);
+  lead.instagram = normalizeWebUrl(lead.instagram);
+  lead.facebook = normalizeWebUrl(lead.facebook);
+
+  lead.lat = toFloat(lead.lat, null);
+  lead.lng = toFloat(lead.lng, null);
+  if(lead.lat === null || lead.lng === null){
+    lead.lat = null; lead.lng = null;
+  }else{
+    // evita marcar GPS inválido (0,0)
+    if(Math.abs(lead.lat) < 0.000001 && Math.abs(lead.lng) < 0.000001){
+      lead.lat = null; lead.lng = null;
+    }
+  }
+
+  lead.openingHours = normStr(lead.openingHours);
+
+  lead.stage = normalizeStage(lead.stage);
+  lead.nextAction = normStr(lead.nextAction);
+  lead.tags = normalizeTags(lead.tags);
+  lead.notes = normStr(lead.notes);
+
+  lead.convertedClientId = normStr(lead.convertedClientId);
+
+  lead.name_lc = lead.name.toLowerCase();
+  lead.city_lc = lead.city.toLowerCase();
+
+  lead.updatedAt = now;
+  if(!lead.createdAt) lead.createdAt = now;
+
+  return lead;
+}
+
+function normalizeClient(x){
+  const now = new Date().toISOString();
+  const c = Object.assign({
+    id: uid('cli'),
+    setId: activeSetId || 'default',
+    codCliente: '',
+    vendedor: '',
+    equipe: '',
+    cidade: '',
+    diasEntrega: '',
+    cliente: '',
+    razao: '',
+    fantasia: '',
+    diaVisita: '',
+    diasSec: '',
+    freq: '',
+    ordem: 0,
+    comprador: '',
+    whatsapp: '',
+    obs: '',
+    produtosInteresse: '',
+    nextVisit: '',
+    sourceLeadId: '',
+    createdAt: now,
+    updatedAt: now,
+    source: 'local'
+  }, x || {});
+
+  c.setId = c.setId || (activeSetId || 'default');
+
+  c.codCliente = normStr(c.codCliente);
+  c.vendedor = normStr(c.vendedor);
+  c.equipe = normStr(c.equipe);
+  c.cidade = normStr(c.cidade);
+  c.diasEntrega = normStr(c.diasEntrega);
+  c.cliente = normStr(c.cliente);
+  c.razao = normStr(c.razao);
+  c.fantasia = normStr(c.fantasia);
+  c.diaVisita = normStr(c.diaVisita).toUpperCase();
+  c.diasSec = normStr(c.diasSec);
+  c.freq = normStr(c.freq);
+  c.ordem = toInt(c.ordem, 0);
+  c.comprador = normStr(c.comprador);
+  c.whatsapp = normStr(c.whatsapp);
+  c.obs = normStr(c.obs);
+
+  c.produtosInteresse = normStr(c.produtosInteresse);
+  c.nextVisit = normStr(c.nextVisit);
+  c.sourceLeadId = normStr(c.sourceLeadId);
+
+  c.city_lc = c.cidade.toLowerCase();
+  c.seller_lc = c.vendedor.toLowerCase();
+
+  c.updatedAt = now;
+  if(!c.createdAt) c.createdAt = now;
+
+  return c;
+}
+
+// ---------- Dedupe keys ----------
+function leadKey(l){
+  const pid = normStr(l.placeId);
+  if(pid) return 'pid:' + pid;
+  return 'na:' + normLower(l.name) + '|' + normLower(l.address);
+}
+function clientKey(c){
+  const code = normStr(c.codCliente);
+  if(code) return 'code:' + code;
+  const wa = cleanPhoneToWa(c.whatsapp);
+  if(wa) return 'wa:' + wa;
+  return 'nc:' + normLower(c.cliente) + '|' + normLower(c.cidade);
+}
+
+// ---------- Vincular Leads ↔ Clientes (comprantes) ----------
+/**
+ * Marca automaticamente Leads como "Verificado/Cliente" quando existe um Cliente Ativo
+ * com mesmo WhatsApp (preferencial) ou mesmo Nome+Cidade.
+ *
+ * Isso ajuda a identificar rapidamente "leads já conquistados/cadastrados no sistema".
+ */
+async function syncLeadClientLinks(){
+  const setId = activeSetId;
+  if(!setId) return 0;
+
+  const setClients = clients.filter(c=>c.setId===setId);
+  const waMap = new Map();
+  const ncMap = new Map();
+
+  setClients.forEach(c=>{
+    const wa = cleanPhoneToWa(c.whatsapp);
+    if(wa) waMap.set(wa, c.id);
+
+    const name = normLower(c.cliente || c.fantasia);
+    const city = normLower(c.cidade);
+    if(name && city) ncMap.set(name + '|' + city, c.id);
+  });
+
+  const changed = [];
+  let count = 0;
+
+  leads = leads.map(l=>{
+    if(l.setId !== setId) return l;
+
+    const wa = cleanPhoneToWa(l.phone);
+    const key = normLower(l.name) + '|' + normLower(l.city);
+    const clientId = (wa && waMap.get(wa)) || ncMap.get(key) || '';
+
+    if(!clientId) return l;
+
+    // já linkado
+    if(l.claimed && l.convertedClientId) return l;
+
+    const updated = Object.assign({}, l, {
+      claimed: true,
+      convertedClientId: l.convertedClientId || clientId
+    });
+
+    count++;
+    changed.push(normalizeLead(updated));
+    return updated;
+  });
+
+  if(changed.length){
+    await idbBulkPut(STORE_LEADS, changed);
+  }
+  return count;
+}
+
+
+// ---------- View switching ----------
+function setView(view){
+  currentView = view;
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view)?.classList.add('active');
+
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.snav').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+
+  // fecha menu lateral no mobile ao trocar de tela
+  closeSidebar();
+
+  updateFab();
+
+  if(view === 'leads') renderLeads();
+  if(view === 'clients') renderClients();
+  if(view === 'agenda') renderAgenda();
+  if(view === 'help') loadHelpView(false);
+}
+function updateFab(){
+  const fab = document.getElementById('fab');
+  if(!fab) return;
+  const show = (window.innerWidth <= 720) && (currentView === 'leads' || currentView === 'clients');
+  fab.style.display = show ? 'flex' : 'none';
+  fab.textContent = (currentView === 'clients') ? '＋' : '＋';
+}
+function fabAction(){
+  if(currentView === 'clients') openClientModal();
+  else openLeadModal();
+}
+
+
+// ---------- Sidebar / Banner ----------
+function openSidebar(){
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  if(!sb || !bd) return;
+
+  // Desktop/Tablet: usa o botão ☰ para recolher/expandir o menu lateral
+  if(window.innerWidth > 720){
+    toggleSidebarCollapse();
+    return;
+  }
+
+  // Mobile: toggle abre/fecha
+  if(sb.classList.contains('open')){
+    closeSidebar();
+    return;
+  }
+
+  sb.classList.add('open');
+  bd.classList.add('open');
+}
+function closeSidebar(){
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  if(!sb || !bd) return;
+  sb.classList.remove('open');
+  bd.classList.remove('open');
+}
+function toggleSidebarCollapse(){
+  const sb = document.getElementById('sidebar');
+  if(!sb) return;
+  const next = !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', next);
+  settings.uiSidebarCollapsed = next;
+  persistSettings().catch(()=>{});
+}
+function applySidebarState(){
+  const sb = document.getElementById('sidebar');
+  if(!sb) return;
+  sb.classList.toggle('collapsed', !!settings.uiSidebarCollapsed);
+}
+function hideBanner(){
+  const b = document.getElementById('banner');
+  if(b) b.style.display = 'none';
+  settings.uiHideBanner = true;
+  persistSettings().catch(()=>{});
+}
+function applyBannerState(){
+  const b = document.getElementById('banner');
+  if(!b) return;
+  if(settings.uiHideBanner) b.style.display = 'none';
+}
+
+// ---------- Ajuda (ajuda.html) ----------
+let __helpLoaded = false;
+async function loadHelpView(force=false){
+  const wrap = document.getElementById('helpContent');
+  if(!wrap) return;
+  if(__helpLoaded && !force) return;
+
+  wrap.innerHTML = '<div class="muted">Carregando ajuda…</div>';
+
+  try{
+    const res = await fetch('ajuda.html', { cache: 'no-store' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const html = await res.text();
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('title', 'Como usar');
+    iframe.style.width = '100%';
+    iframe.style.height = '78vh';
+    iframe.style.border = '1px solid rgba(37,50,71,.9)';
+    iframe.style.borderRadius = '14px';
+    iframe.style.background = 'rgba(255,255,255,.02)';
+    iframe.srcdoc = html;
+
+    wrap.innerHTML = '';
+    wrap.appendChild(iframe);
+    __helpLoaded = true;
+  }catch(e){
+    console.error(e);
+    wrap.innerHTML = `
+      <div class="help">
+        <h3>Ajuda não encontrada</h3>
+        <div class="muted">Coloque um arquivo <b>ajuda.html</b> na mesma pasta do sistema (GitHub Pages) para mostrar a ajuda completa.</div>
+        <div class="muted" style="margin-top:10px;">Sugestão: você pode converter seu README (.md) para HTML e salvar como <b>ajuda.html</b>.</div>
+        <div style="margin-top:10px;">
+          <a class="btn ghost" href="ajuda.html" target="_blank" rel="noreferrer">Tentar abrir ajuda.html</a>
+        </div>
+      </div>
+    `;
+    __helpLoaded = false;
+  }
+}
+// ---------- Sets UI ----------
+function refreshSetSelect(){
+  const sel = document.getElementById('setSelect');
+  if(!sel) return;
+  sel.innerHTML = '';
+  sets.forEach(s=>{
+    const o = document.createElement('option');
+    o.value = s.id;
+    o.textContent = s.name;
+    sel.appendChild(o);
+  });
+  sel.value = activeSetId || (sets[0]?.id || 'default');
+}
+async function onSetChanged(){
+  const sel = document.getElementById('setSelect');
+  activeSetId = sel.value;
+  await metaSet('activeSetId', activeSetId);
+  renderLeads();
+  renderClients();
+  renderAgenda();
+}
+function openSetsModal(){
+  renderSetsModal();
+  openModal('modalSetsBg');
+}
+function renderSetsModal(){
+  const box = document.getElementById('setsList');
+  box.innerHTML = '';
+  sets.forEach(s=>{
+    const row = document.createElement('div');
+    row.style.display='flex';
+    row.style.gap='10px';
+    row.style.flexWrap='wrap';
+    row.style.alignItems='center';
+    row.style.padding='10px';
+    row.style.border='1px solid rgba(37,50,71,.8)';
+    row.style.borderRadius='14px';
+    row.style.background='rgba(255,255,255,.03)';
+    row.style.marginBottom='10px';
+
+    row.innerHTML = `
+      <div style="flex:1; min-width: 200px;">
+        <div style="font-weight:950">${escapeHtml(s.name)}</div>
+        <div class="muted" style="font-size:12px;">ID: ${escapeHtml(s.id)}</div>
+      </div>
+      <button class="btn small ghost" data-act="select">✅ Usar</button>
+      <button class="btn small ghost" data-act="rename">✏️ Renomear</button>
+      <button class="btn small danger" data-act="delete">🗑️ Excluir</button>
+    `;
+    row.querySelector('[data-act="select"]').onclick = async ()=>{
+      activeSetId = s.id;
+      await metaSet('activeSetId', activeSetId);
+      refreshSetSelect();
+      closeModal('modalSetsBg');
+      setView(currentView);
+    };
+    row.querySelector('[data-act="rename"]').onclick = async ()=>{
+      const name = prompt('Novo nome do conjunto:', s.name);
+      if(!name) return;
+      s.name = name.trim();
+      s.name_lc = s.name.toLowerCase();
+      s.updatedAt = new Date().toISOString();
+      await idbPut(STORE_SETS, s);
+      sets = sets.map(x => x.id===s.id ? s : x);
+      refreshSetSelect();
+      renderSetsModal();
+      setView(currentView);
+    };
+    row.querySelector('[data-act="delete"]').onclick = async ()=>{
+      if(sets.length <= 1) { alert('Você precisa ter pelo menos 1 conjunto.'); return; }
+      const ok = confirm(`Excluir o conjunto "${s.name}"?\n\nIsso NÃO apaga automaticamente os registros (por segurança).`);
+      if(!ok) return;
+      await idbDelete(STORE_SETS, s.id);
+      sets = sets.filter(x=>x.id!==s.id);
+      if(activeSetId === s.id) activeSetId = sets[0].id;
+      await metaSet('activeSetId', activeSetId);
+      refreshSetSelect();
+      renderSetsModal();
+      setView(currentView);
+    };
+    box.appendChild(row);
+  });
+}
+async function createSet(){
+  const inp = document.getElementById('newSetName');
+  const name = (inp.value || '').trim();
+  if(!name){ alert('Digite um nome.'); return; }
+  const s = normalizeSet({ name });
+  sets.push(s);
+  await idbPut(STORE_SETS, s);
+  inp.value = '';
+  refreshSetSelect();
+  renderSetsModal();
+}
+
+// ---------- Modal helpers ----------
+function openModal(id){ document.getElementById(id).style.display = 'flex'; }
+function closeModal(id){ document.getElementById(id).style.display = 'none'; }
+window.addEventListener('click', (e)=>{
+  const ids = ['modalLeadBg','modalClientBg','modalSetsBg','modalSettingsBg'];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if(e.target === el) closeModal(id);
+  });
+});
+
+// ---------- Leads: filters, render, sort ----------
+function getActiveSetLeads(){ return leads.filter(l => l.setId === activeSetId); }
+
+function refreshLeadCityOptions(){
+  const sel = document.getElementById('leadCity');
+  const prev = sel.value;
+  const map = new Map();
+  getActiveSetLeads().forEach(l=>{
+    const c = normStr(l.city);
+    if(c) map.set(c, (map.get(c)||0)+1);
+  });
+  const list = [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([c,n])=>({c,n}));
+  sel.innerHTML = '<option value="">Cidade: Todas</option>';
+  list.forEach(x=>{
+    const o=document.createElement('option');
+    o.value=x.c;
+    o.textContent = `${x.c} (${x.n})`;
+    sel.appendChild(o);
+  });
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+function getLeadFilters(){
+  const q = normLower(document.getElementById('leadSearch').value);
+  const stage = normLower(document.getElementById('leadStage').value);
+  const opp = normLower(document.getElementById('leadOpp').value);
+  const act = normLower(document.getElementById('leadAction').value);
+  const city = normStr(document.getElementById('leadCity').value);
+  return { q, stage, opp, act, city };
+}
+function leadMatches(l, f){
+  if(f.stage && normalizeStage(l.stage) !== f.stage) return false;
+  if(f.opp === 'opp' && l.claimed) return false;
+  if(f.opp === 'claimed' && !l.claimed) return false;
+  if(f.act === 'has' && !l.nextAction) return false;
+  if(f.act === 'due' && !isDue(l.nextAction)) return false;
+  if(f.act === 'today' && !isToday(l.nextAction)) return false;
+  if(f.city && normLower(l.city) !== normLower(f.city)) return false;
+  if(f.q){
+    const hay = [l.name,l.city,l.uf,l.address,l.cep,l.phone,l.email,l.website,l.tags,l.notes,l.cid,l.url].join(' ').toLowerCase();
+    if(!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+function toggleLeadSort(key,type){
+  if(leadSort.key === key && leadSort.type === type){
+    leadSort.dir = leadSort.dir === 'asc' ? 'desc' : 'asc';
+  }else{
+    leadSort = { key, type, dir: (type==='num'?'desc':'asc') };
+  }
+  renderLeads();
+}
+function compare(a,b,dir,type){
+  const mul = dir==='asc'?1:-1;
+  const aNil = (a===null||a===undefined||a==='');
+  const bNil = (b===null||b===undefined||b==='');
+  if(aNil && bNil) return 0;
+  if(aNil) return 1;
+  if(bNil) return -1;
+
+  if(type === 'num' || type === 'bool') return (a-b) * mul;
+  if(type === 'date') return (a-b) * mul;
+  return String(a).localeCompare(String(b),'pt-BR',{sensitivity:'base'}) * mul;
+}
+
+function renderLeads(){
+  if(!activeSetId) return;
+  refreshLeadCityOptions();
+
+  const all = getActiveSetLeads();
+  const f = getLeadFilters();
+  let view = all.filter(l => leadMatches(l,f));
+
+  // KPIs
+  let sum=0, opp=0, due=0;
+  all.forEach(l=>{
+    sum += (parseFloat(l.rating)||0);
+    if(!l.claimed) opp++;
+    if(l.nextAction && isDue(l.nextAction)) due++;
+  });
+  document.getElementById('kLeadsTotal').textContent = all.length;
+  document.getElementById('kLeadsAvg').textContent = all.length ? (sum/all.length).toFixed(1) : '0.0';
+  document.getElementById('kLeadsOpp').textContent = opp;
+  document.getElementById('kLeadsDue').textContent = due;
+  document.getElementById('leadsInfo').textContent = (view.length === all.length) ? `${view.length} leads` : `${view.length} de ${all.length} leads`;
+
+  // sort
+  view = [...view].sort((a,b)=>{
+    if(leadSort.key === 'best'){
+      if((b.rating||0)!==(a.rating||0)) return (b.rating||0)-(a.rating||0);
+      return (b.reviews||0)-(a.reviews||0);
+    }
+    if(leadSort.key === 'claimed'){
+      return compare(a.claimed?1:0, b.claimed?1:0, leadSort.dir, 'bool');
+    }
+    if(leadSort.key === 'rating'){
+      return compare(parseFloat(a.rating)||0, parseFloat(b.rating)||0, leadSort.dir, 'num');
+    }
+    if(leadSort.key === 'reviews'){
+      return compare(parseInt(a.reviews)||0, parseInt(b.reviews)||0, leadSort.dir, 'num');
+    }
+    if(leadSort.key === 'stage'){
+      const sa = STAGES.indexOf(normalizeStage(a.stage));
+      const sb = STAGES.indexOf(normalizeStage(b.stage));
+      const mul = leadSort.dir==='asc'?1:-1;
+      if(sa!==sb) return (sa-sb)*mul;
+      const ta = a.nextAction ? new Date(a.nextAction).getTime() : null;
+      const tb = b.nextAction ? new Date(b.nextAction).getTime() : null;
+      return compare(ta, tb, leadSort.dir, 'date');
+    }
+    return compare(a[leadSort.key], b[leadSort.key], leadSort.dir, leadSort.type);
+  });
+
+  // table
+  const tbody = document.getElementById('leadsTbody');
+  tbody.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  view.forEach(l=>{
+    const mapsView = buildMapsViewLink(l);
+    const mapsNav = buildMapsNavLink(l) || mapsView;
+    const mapsGps = (l.lat !== null && l.lng !== null) ? buildMapsGpsLink(l.lat, l.lng) : '';
+    const waChat = buildWaLink(l.phone, '');
+    const waMsg = (waMsgEnabled() ? buildWaLink(l.phone, buildWaTemplateForLead(l)) : '');
+    const em = firstEmail(l.email);
+    const emailLink = em ? `mailto:${em}` : '';
+    const site = l.website || '';
+    const ig = l.instagram || '';
+    const fb = l.facebook || '';
+    const next = l.nextAction ? fmtBR(l.nextAction) : '—';
+    const nextDue = l.nextAction && isDue(l.nextAction);
+
+    const tr = document.createElement('tr');
+    if(nextDue) tr.style.background = 'rgba(239,68,68,.06)';
+
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:950">${mapsView ? `<a href="${mapsView}" target="_blank" rel="noreferrer" style="text-decoration:none;">${escapeHtml(l.name)}</a>` : escapeHtml(l.name)}</div>
+        <div class="muted" style="font-size:12px;">${escapeHtml(l.category||'')}${l.tags?(' • 🏷️ '+escapeHtml(l.tags)) : ''}</div>
+      </td>
+      <td>
+        <div><span class="${stageBadgeClass(l.stage)}">${escapeHtml(normalizeStage(l.stage))}</span></div>
+        <div class="muted" style="font-size:12px; margin-top:4px;">⏰ ${escapeHtml(next)} ${nextDue?'(atrasado)':''}</div>
+        ${l.convertedClientId ? `<div style="margin-top:6px;"><span class="badge good">✅ Cliente Ativo</span></div>` : ''}
+      </td>
+      <td>
+        <div>${escapeHtml(l.city||'')}</div>
+        <div class="muted" style="font-size:12px;">${escapeHtml(l.uf||'')}${l.cep?(' • '+escapeHtml(l.cep)) : ''}</div>
+      </td>
+      <td><span class="badge" style="border-color: rgba(245,158,11,.45); color:#fde68a;">★ ${(parseFloat(l.rating)||0).toFixed(1)}</span></td>
+      <td>${parseInt(l.reviews)||0}</td>
+      <td><span class="badge ${l.claimed?'good':'bad'}">${l.claimed?'Verificado':'Oportunidade'}</span></td>
+      <td>
+        <div class="actions">
+          ${mapsNav ? `<a class="mini map" href="${mapsNav}" target="_blank" title="Navegar (endereço)">🗺️</a>` : ''}
+          ${mapsGps ? `<a class="mini map" href="${mapsGps}" target="_blank" title="Navegar (GPS)">📍</a>` : ''}
+          ${waChat ? `<a class="mini wa" href="${waChat}" target="_blank" title="WhatsApp (chat)">📱</a>` : ''}
+          ${waMsg ? `<a class="mini wa" href="${waMsg}" target="_blank" title="WhatsApp (mensagem)">💬</a>` : ''}
+          ${emailLink ? `<a class="mini" href="${emailLink}" title="Email">✉️</a>` : ''}
+          ${site ? `<a class="mini" href="${site}" target="_blank" title="Website">🌐</a>` : ''}
+          ${ig ? `<a class="mini" href="${ig}" target="_blank" title="Instagram">📷</a>` : ''}
+          ${fb ? `<a class="mini" href="${fb}" target="_blank" title="Facebook">📘</a>` : ''}
+          <div class="mini edit" title="Editar" onclick="openLeadModal('${escapeHtml(l.id)}')">✏️</div>
+          <div class="mini del" title="Excluir" onclick="deleteLead('${escapeHtml(l.id)}')">🗑️</div>
+        </div>
+      </td>
+    `;
+    tr.ondblclick = ()=> openLeadModal(l.id);
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+
+  // cards mobile
+  const cards = document.getElementById('leadsCards');
+  cards.innerHTML = '';
+  view.forEach(l=>{
+    const mapsView = buildMapsViewLink(l);
+    const mapsNav = buildMapsNavLink(l) || mapsView;
+    const mapsGps = (l.lat !== null && l.lng !== null) ? buildMapsGpsLink(l.lat, l.lng) : '';
+    const waChat = buildWaLink(l.phone, '');
+    const waMsg = (waMsgEnabled() ? buildWaLink(l.phone, buildWaTemplateForLead(l)) : '');
+    const em = firstEmail(l.email);
+    const emailLink = em ? `mailto:${em}` : '';
+    const site = l.website || '';
+    const ig = l.instagram || '';
+    const fb = l.facebook || '';
+    const next = l.nextAction ? fmtBR(l.nextAction) : '—';
+    const nextDue = l.nextAction && isDue(l.nextAction);
+
+    const div = document.createElement('div');
+    div.className = 'lead-card';
+    if(nextDue) div.style.borderColor = 'rgba(239,68,68,.55)';
+    div.innerHTML = `
+      <div class="top">
+        <div>
+          <div class="name">${mapsView ? `<a href="${mapsView}" target="_blank" rel="noreferrer" style="text-decoration:none;">${escapeHtml(l.name)}</a>` : escapeHtml(l.name)}</div>
+          <div class="sub">${escapeHtml(l.city||'')} ${l.uf?('• '+escapeHtml(l.uf)) : ''} ${l.cep?('• '+escapeHtml(l.cep)) : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="badge" style="border-color: rgba(245,158,11,.45); color:#fde68a;">★ ${(parseFloat(l.rating)||0).toFixed(1)}</div>
+          <div class="muted" style="font-size:12px; margin-top:6px;">${parseInt(l.reviews)||0} reviews</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="${stageBadgeClass(l.stage)}">${escapeHtml(normalizeStage(l.stage))}</span>
+        <span class="badge ${l.claimed?'good':'bad'}">${l.claimed?'Verificado':'Oportunidade'}</span>
+        ${l.tags ? `<span class="badge">🏷️ ${escapeHtml(l.tags)}</span>` : ''}
+        ${l.convertedClientId ? `<span class="badge good">✅ Cliente</span>` : ''}
+      </div>
+      <div class="muted" style="margin-top:8px;">⏰ Próxima: ${escapeHtml(next)} ${nextDue?'(atrasado)':''}</div>
+
+      <div class="row2">
+        ${mapsNav ? `<a class="mini map" href="${mapsNav}" target="_blank" title="Navegar (endereço)">🗺️</a>` : ''}
+        ${mapsGps ? `<a class="mini map" href="${mapsGps}" target="_blank" title="Navegar (GPS)">📍</a>` : ''}
+        ${waChat ? `<a class="mini wa" href="${waChat}" target="_blank" title="WhatsApp (chat)">📱</a>` : ''}
+        ${waMsg ? `<a class="mini wa" href="${waMsg}" target="_blank" title="WhatsApp (mensagem)">💬</a>` : ''}
+        ${emailLink ? `<a class="mini" href="${emailLink}" title="Email">✉️</a>` : ''}
+        ${site ? `<a class="mini" href="${site}" target="_blank" title="Website">🌐</a>` : ''}
+        ${ig ? `<a class="mini" href="${ig}" target="_blank" title="Instagram">📷</a>` : ''}
+        ${fb ? `<a class="mini" href="${fb}" target="_blank" title="Facebook">📘</a>` : ''}
+        <div class="mini edit" title="Editar" onclick="openLeadModal('${escapeHtml(l.id)}')">✏️</div>
+        <div class="mini del" title="Excluir" onclick="deleteLead('${escapeHtml(l.id)}')">🗑️</div>
+      </div>
+    `;
+    div.ondblclick = ()=> openLeadModal(l.id);
+    cards.appendChild(div);
+  });
+
+  renderAgenda(false);
+}
+
+// ---------- Clients: filters, render, sort ----------
+function getActiveSetClients(){ return clients.filter(c => c.setId === activeSetId); }
+
+function refreshClientFilters(){
+  const citySel = document.getElementById('clientCity');
+  const sellerSel = document.getElementById('clientSeller');
+
+  const prevCity = citySel.value;
+  const prevSeller = sellerSel.value;
+
+  const cityMap = new Map();
+  const sellerMap = new Map();
+  getActiveSetClients().forEach(c=>{
+    const city = normStr(c.cidade);
+    if(city) cityMap.set(city, (cityMap.get(city)||0)+1);
+    const s = normStr(c.vendedor);
+    if(s) sellerMap.set(s, (sellerMap.get(s)||0)+1);
+  });
+
+  const cityList = [...cityMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR'));
+  citySel.innerHTML = '<option value="">Cidade: Todas</option>';
+  cityList.forEach(([city,n])=>{
+    const o=document.createElement('option');
+    o.value=city; o.textContent=`${city} (${n})`;
+    citySel.appendChild(o);
+  });
+
+  const selList = [...sellerMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR'));
+  sellerSel.innerHTML = '<option value="">Vendedor: Todos</option>';
+  selList.forEach(([s,n])=>{
+    const o=document.createElement('option');
+    o.value=s; o.textContent=`${s} (${n})`;
+    sellerSel.appendChild(o);
+  });
+
+  if([...citySel.options].some(o=>o.value===prevCity)) citySel.value = prevCity;
+  if([...sellerSel.options].some(o=>o.value===prevSeller)) sellerSel.value = prevSeller;
+}
+
+function getClientFilters(){
+  const q = normLower(document.getElementById('clientSearch').value);
+  const city = normStr(document.getElementById('clientCity').value);
+  const day = normStr(document.getElementById('clientVisitDay').value).toUpperCase();
+  const due = normLower(document.getElementById('clientDue').value);
+  const seller = normStr(document.getElementById('clientSeller').value);
+  return { q, city, day, due, seller };
+}
+
+function clientMatches(c, f){
+  if(f.city && normLower(c.cidade) !== normLower(f.city)) return false;
+  if(f.seller && normLower(c.vendedor) !== normLower(f.seller)) return false;
+  if(f.day && normStr(c.diaVisita).toUpperCase() !== f.day) return false;
+
+  if(f.due === 'has' && !c.nextVisit) return false;
+  if(f.due === 'due' && !isDue(c.nextVisit)) return false;
+  if(f.due === 'today' && !isToday(c.nextVisit)) return false;
+
+  if(f.q){
+    const hay = [c.codCliente,c.vendedor,c.equipe,c.cidade,c.diasEntrega,c.cliente,c.razao,c.fantasia,c.diaVisita,c.diasSec,c.freq,c.ordem,c.comprador,c.whatsapp,c.obs,c.produtosInteresse].join(' ').toLowerCase();
+    if(!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+
+function toggleClientSort(key,type){
+  if(clientSort.key === key && clientSort.type === type){
+    clientSort.dir = clientSort.dir === 'asc' ? 'desc' : 'asc';
+  }else{
+    clientSort = { key, type, dir: (type==='date'?'asc':'asc') };
+  }
+  renderClients();
+}
+
+function renderClients(){
+  if(!activeSetId) return;
+
+  refreshClientFilters();
+
+  const all = getActiveSetClients();
+  const f = getClientFilters();
+  let view = all.filter(c=> clientMatches(c,f));
+
+  // KPIs
+  let due=0, today=0, nowA=0;
+  all.forEach(c=>{
+    if(c.nextVisit && isDue(c.nextVisit)) due++;
+    if(c.nextVisit && isToday(c.nextVisit)) today++;
+    if(!cleanPhoneToWa(c.whatsapp)) nowA++;
+  });
+  document.getElementById('kClientsTotal').textContent = all.length;
+  document.getElementById('kClientsDue').textContent = due;
+  document.getElementById('kClientsToday').textContent = today;
+  document.getElementById('kClientsNoWA').textContent = nowA;
+  document.getElementById('clientsInfo').textContent = (view.length === all.length) ? `${view.length} clientes` : `${view.length} de ${all.length} clientes`;
+
+  // sort
+  view = [...view].sort((a,b)=>{
+    if(clientSort.key === 'nextVisit'){
+      const ta = a.nextVisit ? new Date(a.nextVisit).getTime() : null;
+      const tb = b.nextVisit ? new Date(b.nextVisit).getTime() : null;
+      return compare(ta, tb, clientSort.dir, 'date');
+    }
+    return compare(a[clientSort.key], b[clientSort.key], clientSort.dir, clientSort.type);
+  });
+
+  // table
+  const tbody = document.getElementById('clientsTbody');
+  tbody.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  view.forEach(c=>{
+    const next = c.nextVisit ? fmtBR(c.nextVisit) : '—';
+    const nextDue = c.nextVisit && isDue(c.nextVisit);
+    const nextToday = c.nextVisit && isToday(c.nextVisit);
+
+    const waChat = buildWaLink(c.whatsapp, '');
+    const waMsg = (waMsgEnabled() ? buildWaLink(c.whatsapp, buildWaTemplateForClient(c)) : '');
+    const tr = document.createElement('tr');
+    if(nextDue) tr.style.background='rgba(239,68,68,.06)';
+    if(nextToday) tr.style.background='rgba(16,185,129,.06)';
+
+    tr.innerHTML = `
+      <td><span class="badge">${escapeHtml(c.codCliente||'—')}</span></td>
+      <td>
+        <div style="font-weight:950">${escapeHtml(c.cliente || c.fantasia || '—')}</div>
+        <div class="muted" style="font-size:12px;">${escapeHtml(c.fantasia||'')}</div>
+      </td>
+      <td>${escapeHtml(c.cidade||'')}</td>
+      <td><span class="badge">${escapeHtml((c.diasEntrega||'').toUpperCase()||'—')}</span></td>
+      <td><span class="badge">${escapeHtml((c.diaVisita||'').toUpperCase()||'—')}</span></td>
+      <td>
+        <div class="muted">⏰ ${escapeHtml(next)} ${nextDue?'(atrasado)':''}</div>
+      </td>
+      <td>${escapeHtml(c.comprador||'')}</td>
+      <td>${escapeHtml(c.whatsapp||'')}</td>
+      <td>
+        <div class="actions">
+          ${waChat ? `<a class="mini wa" href="${waChat}" target="_blank" title="WhatsApp (chat)">📱</a>` : ''}
+          ${waMsg ? `<a class="mini wa" href="${waMsg}" target="_blank" title="WhatsApp (mensagem)">💬</a>` : ''}
+          <div class="mini edit" title="Editar" onclick="openClientModal('${escapeHtml(c.id)}')">✏️</div>
+          <div class="mini del" title="Excluir" onclick="deleteClient('${escapeHtml(c.id)}')">🗑️</div>
+        </div>
+      </td>
+    `;
+    tr.ondblclick = ()=> openClientModal(c.id);
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+
+  // cards mobile
+  const cards = document.getElementById('clientsCards');
+  cards.innerHTML = '';
+  view.forEach(c=>{
+    const next = c.nextVisit ? fmtBR(c.nextVisit) : '—';
+    const nextDue = c.nextVisit && isDue(c.nextVisit);
+    const nextToday = c.nextVisit && isToday(c.nextVisit);
+    const waChat = buildWaLink(c.whatsapp, '');
+    const waMsg = (waMsgEnabled() ? buildWaLink(c.whatsapp, buildWaTemplateForClient(c)) : '');
+
+    const div = document.createElement('div');
+    div.className='lead-card';
+    if(nextDue) div.style.borderColor='rgba(239,68,68,.55)';
+    if(nextToday) div.style.borderColor='rgba(16,185,129,.55)';
+    div.innerHTML = `
+      <div class="top">
+        <div>
+          <div class="name">${escapeHtml(c.cliente || c.fantasia || '—')}</div>
+          <div class="sub">${escapeHtml(c.cidade||'')} ${c.diaVisita?('• '+escapeHtml(c.diaVisita)) : ''} ${c.codCliente?('• '+escapeHtml(c.codCliente)) : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="badge">${escapeHtml((c.diaVisita||'').toUpperCase()||'—')}</div>
+          <div class="muted" style="font-size:12px; margin-top:6px;">⏰ ${escapeHtml(next)}</div>
+        </div>
+      </div>
+
+      <div class="row">
+        ${c.vendedor ? `<span class="badge">🧑‍💼 ${escapeHtml(c.vendedor)}</span>` : ''}
+        ${c.comprador ? `<span class="badge">👤 ${escapeHtml(c.comprador)}</span>` : ''}
+        ${c.diasEntrega ? `<span class="badge">🚚 ${escapeHtml(c.diasEntrega)}</span>` : ''}
+      </div>
+
+      ${c.produtosInteresse ? `<div class="muted" style="margin-top:8px;">🧊 Produtos: ${escapeHtml(c.produtosInteresse)}</div>` : ''}
+
+      <div class="row2">
+        ${waChat ? `<a class="mini wa" href="${waChat}" target="_blank" title="WhatsApp (chat)">📱</a>` : ''}
+        ${waMsg ? `<a class="mini wa" href="${waMsg}" target="_blank" title="WhatsApp (mensagem)">💬</a>` : ''}
+        <div class="mini edit" title="Editar" onclick="openClientModal('${escapeHtml(c.id)}')">✏️</div>
+        <div class="mini del" title="Excluir" onclick="deleteClient('${escapeHtml(c.id)}')">🗑️</div>
+      </div>
+    `;
+    div.ondblclick = ()=> openClientModal(c.id);
+    cards.appendChild(div);
+  });
+
+  renderAgenda(false);
+}
+
+// ---------- Agenda ----------
+function renderAgenda(force=true){
+  if(!activeSetId) return;
+  if(!force && currentView !== 'agenda') return;
+
+  const rangeDays = parseInt(document.getElementById('agendaRange')?.value || '7', 10);
+  const type = normLower(document.getElementById('agendaType')?.value || '');
+  const maxTime = Date.now() + rangeDays*24*60*60*1000;
+
+  const items = [];
+
+  // Leads: nextAction
+  getActiveSetLeads().forEach(l=>{
+    if(!l.nextAction) return;
+    const t = new Date(l.nextAction).getTime();
+    if(!Number.isFinite(t)) return;
+    if(t > maxTime) return;
+    if(type && type !== 'lead') return;
+    items.push({
+      when: t,
+      whenIso: l.nextAction,
+      kind: 'lead',
+      name: l.name,
+      detail: `${normalizeStage(l.stage)} • ${l.city||''} ${l.uf||''}`,
+      entityId: l.id,
+      waChat: buildWaLink(l.phone, ''),
+      waMsg: (waMsgEnabled() ? buildWaLink(l.phone, buildWaTemplateForLead(l)) : ''),
+      map: l.url || (l.cid?buildCidUrl(l.cid):'')
+    });
+  });
+
+  // Clients: nextVisit
+  getActiveSetClients().forEach(c=>{
+    if(!c.nextVisit) return;
+    const t = new Date(c.nextVisit).getTime();
+    if(!Number.isFinite(t)) return;
+    if(t > maxTime) return;
+    if(type && type !== 'client') return;
+    items.push({
+      when: t,
+      whenIso: c.nextVisit,
+      kind: 'client',
+      name: c.cliente || c.fantasia || 'Cliente',
+      detail: `${c.cidade||''} • ${c.diaVisita||''} • ${c.vendedor||''}`,
+      entityId: c.id,
+      waChat: buildWaLink(c.whatsapp, ''),
+      waMsg: (waMsgEnabled() ? buildWaLink(c.whatsapp, buildWaTemplateForClient(c)) : ''),
+      map: ''
+    });
+  });
+
+  items.sort((a,b)=> a.when - b.when);
+
+  const tbody = document.getElementById('agendaTbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+
+  items.forEach(it=>{
+    const due = isDue(it.whenIso);
+    const today = isToday(it.whenIso);
+    const tr = document.createElement('tr');
+    if(due) tr.style.background='rgba(239,68,68,.06)';
+    if(today) tr.style.background='rgba(16,185,129,.06)';
+
+    const kindBadge = it.kind === 'lead'
+      ? '<span class="badge stage-novo">Lead</span>'
+      : '<span class="badge good">Cliente</span>';
+
+    tr.innerHTML = `
+      <td>${escapeHtml(fmtBR(it.whenIso))}</td>
+      <td>${kindBadge}</td>
+      <td style="font-weight:950">${escapeHtml(it.name)}</td>
+      <td class="muted">${escapeHtml(it.detail)}</td>
+      <td>
+        <div class="actions">
+          ${it.map ? `<a class="mini map" href="${it.map}" target="_blank" title="Maps">🗺️</a>` : ''}
+          ${it.waChat ? `<a class="mini wa" href="${it.waChat}" target="_blank" title="WhatsApp (chat)">📱</a>` : ''}
+          ${it.waMsg ? `<a class="mini wa" href="${it.waMsg}" target="_blank" title="WhatsApp (mensagem)">💬</a>` : ''}
+          <div class="mini edit" title="Abrir" onclick="${it.kind==='lead' ? `openLeadModal('${escapeHtml(it.entityId)}')` : `openClientModal('${escapeHtml(it.entityId)}')`}">✏️</div>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('agendaInfo').textContent = `${items.length} itens nos próximos ${rangeDays} dias`;
+}
+
+// ---------- WhatsApp templates ----------
+function buildWaTemplateForLead(l){
+  const seller = settings.defaultSeller || '';
+  const template =
+    (settings.waTemplateLead || settings.waTemplate || '').trim()
+    || 'Olá, tudo bem? Aqui é {{vendedor}} da Ameripan. Vi a empresa {{nome}} e gostaria de apresentar nosso catálogo.';
+  return template
+    .replaceAll('{{nome}}', l.name || '')
+    .replaceAll('{{vendedor}}', seller)
+    .replaceAll('{{comprador}}', '');
+}
+function buildWaTemplateForClient(c){
+  const seller = c.vendedor || settings.defaultSeller || '';
+  const template =
+    (settings.waTemplateClient || settings.waTemplate || '').trim()
+    || 'Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da Ameripan.';
+  return template
+    .replaceAll('{{nome}}', c.cliente || c.fantasia || '')
+    .replaceAll('{{vendedor}}', seller)
+    .replaceAll('{{comprador}}', c.comprador || '');
+}
+
+function waMsgEnabled(){
+  return !!settings.waEnableTemplate;
+}
+// ---------- Lead modal CRUD ----------
+function openLeadModal(id=null){
+  const l = id ? leads.find(x=>x.id===id) : null;
+  document.getElementById('lead_id').value = l?.id || '';
+  document.getElementById('lead_name').value = l?.name || '';
+  document.getElementById('lead_phone').value = l?.phone || '';
+  document.getElementById('lead_email').value = l?.email || '';
+  document.getElementById('lead_website').value = l?.website || '';
+  document.getElementById('lead_instagram').value = l?.instagram || '';
+  document.getElementById('lead_facebook').value = l?.facebook || '';
+  document.getElementById('lead_url').value = l?.url || '';
+  document.getElementById('lead_cid').value = l?.cid || '';
+  document.getElementById('lead_lat').value = (l?.lat ?? '') === null ? '' : (l?.lat ?? '');
+  document.getElementById('lead_lng').value = (l?.lng ?? '') === null ? '' : (l?.lng ?? '');
+  document.getElementById('lead_city').value = l?.city || '';
+  document.getElementById('lead_uf').value = l?.uf || '';
+  document.getElementById('lead_cep').value = l?.cep || '';
+  document.getElementById('lead_address').value = l?.address || '';
+  document.getElementById('lead_stage').value = normalizeStage(l?.stage || 'novo');
+  document.getElementById('lead_nextAction').value = toDatetimeLocal(l?.nextAction || '');
+  document.getElementById('lead_tags').value = l?.tags || '';
+  document.getElementById('lead_rating').value = (l?.rating ?? '');
+  document.getElementById('lead_reviews').value = (l?.reviews ?? '');
+  document.getElementById('lead_claimed').value = l?.claimed ? 'YES' : 'NO';
+  document.getElementById('lead_opening').value = l?.openingHours || '';
+  document.getElementById('lead_notes').value = l?.notes || '';
+  openModal('modalLeadBg');
+}
+
+function getLeadDraftFromModal(){
+  const id = document.getElementById('lead_id').value || '';
+  const mem = id ? leads.find(x=>x.id===id) : null;
+
+  // monta um "rascunho" com o que está na tela (sem gravar)
+  const draft = normalizeLead(Object.assign({}, mem || {}, {
+    id: id || uid('lead'),
+    setId: activeSetId,
+    name: document.getElementById('lead_name').value,
+    phone: document.getElementById('lead_phone').value,
+    email: document.getElementById('lead_email').value,
+    website: document.getElementById('lead_website').value,
+    instagram: document.getElementById('lead_instagram').value,
+    facebook: document.getElementById('lead_facebook').value,
+    url: document.getElementById('lead_url').value,
+    cid: document.getElementById('lead_cid').value,
+    lat: document.getElementById('lead_lat').value,
+    lng: document.getElementById('lead_lng').value,
+    city: document.getElementById('lead_city').value,
+    uf: document.getElementById('lead_uf').value,
+    cep: document.getElementById('lead_cep').value,
+    address: document.getElementById('lead_address').value
+  }));
+  return draft;
+}
+
+function openLeadMapsFromModal(){
+  const l = getLeadDraftFromModal();
+  const url = buildMapsViewLink(l);
+  if(!url){ alert('Lead sem link do Maps.'); return; }
+  window.open(url, '_blank');
+}
+function openLeadWhatsAppChatFromModal(){
+  const l = getLeadDraftFromModal();
+  const url = buildWaLink(l.phone, '');
+  if(!url){ alert('Lead sem WhatsApp válido.'); return; }
+  window.open(url, '_blank');
+}
+function openLeadWhatsAppMsgFromModal(){
+  const l = getLeadDraftFromModal();
+  if(!waMsgEnabled()){ alert('Ative a mensagem nas Configurações (WhatsApp).'); return; }
+  const url = buildWaLink(l.phone, buildWaTemplateForLead(l));
+  if(!url){ alert('Lead sem WhatsApp válido.'); return; }
+  window.open(url, '_blank');
+}
+
+async function saveLeadFromModal(){
+  let id = document.getElementById('lead_id').value || '';
+  let existing = id ? leads.find(x=>x.id===id) : null;
+  const lead = normalizeLead(Object.assign({}, existing || {}, {
+    id: id || uid('lead'),
+    setId: activeSetId,
+    name: document.getElementById('lead_name').value,
+    phone: document.getElementById('lead_phone').value,
+    email: document.getElementById('lead_email').value,
+    website: document.getElementById('lead_website').value,
+    instagram: document.getElementById('lead_instagram').value,
+    facebook: document.getElementById('lead_facebook').value,
+    url: document.getElementById('lead_url').value,
+    cid: document.getElementById('lead_cid').value,
+    lat: document.getElementById('lead_lat').value,
+    lng: document.getElementById('lead_lng').value,
+    city: document.getElementById('lead_city').value,
+    uf: document.getElementById('lead_uf').value,
+    cep: document.getElementById('lead_cep').value,
+    address: document.getElementById('lead_address').value,
+    stage: document.getElementById('lead_stage').value,
+    nextAction: fromDatetimeLocal(document.getElementById('lead_nextAction').value),
+    tags: document.getElementById('lead_tags').value,
+    rating: document.getElementById('lead_rating').value,
+    reviews: document.getElementById('lead_reviews').value,
+    claimed: document.getElementById('lead_claimed').value === 'YES',
+    openingHours: document.getElementById('lead_opening').value,
+    notes: document.getElementById('lead_notes').value
+  }));
+
+  // Dedup por key dentro do conjunto
+  const key = leadKey(lead);
+  const dup = leads.find(x=> x.setId===activeSetId && x.id !== lead.id && leadKey(x)===key);
+  if(dup){
+    const ok = confirm(`Já existe um lead muito parecido: "${dup.name}".\\nDeseja MESMO salvar duplicado?`);
+    if(!ok) return;
+  }
+
+  await idbPut(STORE_LEADS, lead);
+  if(existing){
+    leads = leads.map(x=> x.id===lead.id ? lead : x);
+  }else{
+    leads.push(lead);
+  }
+
+  closeModal('modalLeadBg');
+  renderLeads();
+}
+
+async function deleteLeadFromModal(){
+  const id = document.getElementById('lead_id').value || '';
+  if(!id) { closeModal('modalLeadBg'); return; }
+  await deleteLead(id);
+  closeModal('modalLeadBg');
+}
+async function deleteLead(id){
+  const l = leads.find(x=>x.id===id);
+  if(!l) return;
+  const ok = confirm(`Excluir lead "${l.name}"?`);
+  if(!ok) return;
+  await idbDelete(STORE_LEADS, id);
+  leads = leads.filter(x=>x.id!==id);
+  renderLeads();
+}
+
+async function convertLeadToClient(id=null){
+  // 2 formas: do botão no modal, ou passando id direto
+  if(!id){
+    id = document.getElementById('lead_id').value || '';
+  }
+  if(!id){ alert('Selecione um lead.'); return; }
+  const l = leads.find(x=>x.id===id);
+  if(!l){ alert('Lead não encontrado.'); return; }
+
+  // Se já foi convertido
+  if(l.convertedClientId){
+    const c = clients.find(x=>x.id===l.convertedClientId);
+    if(c){
+      alert('Este lead já está como Cliente Ativo. Abrindo cadastro.');
+      openClientModal(c.id);
+      return;
+    }
+  }
+
+  // Criar cliente baseado no lead
+  const cli = normalizeClient({
+    setId: activeSetId,
+    vendedor: settings.defaultSeller || '',
+    equipe: settings.defaultTeam || '',
+    cidade: l.city || '',
+    diasEntrega: '',
+    cliente: l.name || '',
+    fantasia: '',
+    razao: '',
+    diaVisita: '',
+    diasSec: '',
+    freq: '',
+    ordem: 0,
+    comprador: '',
+    whatsapp: l.phone || '',
+    obs: `Convertido de lead. Endereço: ${l.address||''}. Maps: ${l.url||buildCidUrl(l.cid)||''}`.trim(),
+    produtosInteresse: '',
+    nextVisit: '',
+    sourceLeadId: l.id,
+    source: 'lead'
+  });
+
+  await idbPut(STORE_CLIENTS, cli);
+  clients.push(cli);
+
+  // marcar lead como convertido e como verificado
+  l.convertedClientId = cli.id;
+  l.claimed = true;
+  l.stage = normalizeStage(l.stage);
+  await idbPut(STORE_LEADS, normalizeLead(l));
+  leads = leads.map(x=> x.id===l.id ? l : x);
+
+  closeModal('modalLeadBg');
+  renderLeads();
+  renderClients();
+  setView('clients');
+  openClientModal(cli.id);
+}
+
+// ---------- Client modal CRUD ----------
+function openClientModal(id=null){
+  const c = id ? clients.find(x=>x.id===id) : null;
+
+  document.getElementById('client_id').value = c?.id || '';
+  document.getElementById('client_cod').value = c?.codCliente || '';
+  document.getElementById('client_vendedor').value = c?.vendedor || (settings.defaultSeller||'');
+  document.getElementById('client_equipe').value = c?.equipe || (settings.defaultTeam||'');
+  document.getElementById('client_cidade').value = c?.cidade || '';
+  document.getElementById('client_diasEntrega').value = c?.diasEntrega || '';
+  document.getElementById('client_cliente').value = c?.cliente || '';
+  document.getElementById('client_fantasia').value = c?.fantasia || '';
+  document.getElementById('client_razao').value = c?.razao || '';
+  document.getElementById('client_diaVisita').value = c?.diaVisita || '';
+  document.getElementById('client_freq').value = c?.freq || '';
+  document.getElementById('client_ordem').value = c?.ordem ?? '';
+  document.getElementById('client_diasSec').value = c?.diasSec || '';
+  document.getElementById('client_comprador').value = c?.comprador || '';
+  document.getElementById('client_whatsapp').value = c?.whatsapp || '';
+  document.getElementById('client_nextVisit').value = toDatetimeLocal(c?.nextVisit || '');
+  document.getElementById('client_produtos').value = c?.produtosInteresse || '';
+  document.getElementById('client_obs').value = c?.obs || '';
+
+  openModal('modalClientBg');
+}
+
+async function saveClientFromModal(){
+  let id = document.getElementById('client_id').value || '';
+  let existing = id ? clients.find(x=>x.id===id) : null;
+
+  const c = normalizeClient(Object.assign({}, existing||{}, {
+    id: id || uid('cli'),
+    setId: activeSetId,
+    codCliente: document.getElementById('client_cod').value,
+    vendedor: document.getElementById('client_vendedor').value,
+    equipe: document.getElementById('client_equipe').value,
+    cidade: document.getElementById('client_cidade').value,
+    diasEntrega: document.getElementById('client_diasEntrega').value,
+    cliente: document.getElementById('client_cliente').value,
+    fantasia: document.getElementById('client_fantasia').value,
+    razao: document.getElementById('client_razao').value,
+    diaVisita: document.getElementById('client_diaVisita').value,
+    freq: document.getElementById('client_freq').value,
+    ordem: document.getElementById('client_ordem').value,
+    diasSec: document.getElementById('client_diasSec').value,
+    comprador: document.getElementById('client_comprador').value,
+    whatsapp: document.getElementById('client_whatsapp').value,
+    nextVisit: fromDatetimeLocal(document.getElementById('client_nextVisit').value),
+    produtosInteresse: document.getElementById('client_produtos').value,
+    obs: document.getElementById('client_obs').value
+  }));
+
+  const key = clientKey(c);
+  const dup = clients.find(x=> x.setId===activeSetId && x.id !== c.id && clientKey(x)===key);
+  if(dup){
+    const ok = confirm(`Já existe um cliente parecido: "${dup.cliente||dup.fantasia}".\\nSalvar duplicado?`);
+    if(!ok) return;
+  }
+
+  await idbPut(STORE_CLIENTS, c);
+  if(existing){
+    clients = clients.map(x=>x.id===c.id ? c : x);
+  }else{
+    clients.push(c);
+  }
+
+  await syncLeadClientLinks();
+
+  closeModal('modalClientBg');
+  renderClients();
+}
+
+async function deleteClientFromModal(){
+  const id = document.getElementById('client_id').value || '';
+  if(!id) { closeModal('modalClientBg'); return; }
+  await deleteClient(id);
+  closeModal('modalClientBg');
+}
+async function deleteClient(id){
+  const c = clients.find(x=>x.id===id);
+  if(!c) return;
+  const ok = confirm(`Excluir cliente "${c.cliente||c.fantasia||'—'}"?`);
+  if(!ok) return;
+  await idbDelete(STORE_CLIENTS, id);
+  clients = clients.filter(x=>x.id!==id);
+
+  // se veio de lead, desmarca lead convertido?
+  if(c.sourceLeadId){
+    const l = leads.find(x=>x.id===c.sourceLeadId);
+    if(l && l.convertedClientId === c.id){
+      l.convertedClientId = '';
+      await idbPut(STORE_LEADS, normalizeLead(l));
+      leads = leads.map(x=>x.id===l.id ? l : x);
+    }
+  }
+
+  renderClients();
+  renderLeads();
+}
+
+function openClientWhatsApp(){
+  const id = document.getElementById('client_id').value || '';
+  const c = id ? clients.find(x=>x.id===id) : null;
+  if(!c){ alert('Selecione um cliente.'); return; }
+  const url = buildWaLink(c.whatsapp, '');
+  if(!url){ alert('Cliente sem WhatsApp válido.'); return; }
+  window.open(url, '_blank');
+}
+
+function openClientWhatsAppMsg(){
+  const id = document.getElementById('client_id').value || '';
+  const c = id ? clients.find(x=>x.id===id) : null;
+  if(!c){ alert('Selecione um cliente.'); return; }
+  if(!waMsgEnabled()){ alert('Ative a mensagem nas Configurações (WhatsApp).'); return; }
+  const url = buildWaLink(c.whatsapp, buildWaTemplateForClient(c));
+  if(!url){ alert('Cliente sem WhatsApp válido.'); return; }
+  window.open(url, '_blank');
+}
+
+// ---------- Imports (Leads / Clients) ----------
+async function handleImportLeadsFile(file){
+  if(!file) return;
+  const ext = (file.name||'').toLowerCase().split('.').pop();
+  try{
+    let rows = [];
+    if(ext === 'csv'){
+      const text = await file.text();
+      rows = parseCSV(text);
+    }else{
+      await ensureXLSX();
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+    }
+
+    const result = await importLeadsFromRows(rows, file.name);
+    alert(`Importação concluída (Leads)\n\nInseridos: ${result.inserted}\nAtualizados: ${result.updated}\nIgnorados: ${result.skipped}`);
+    renderLeads();
+  }catch(e){
+    console.error(e);
+    alert('Falha ao importar Leads: ' + (e?.message || e));
+  }finally{
+    document.getElementById('fileImportLeads').value = '';
+  }
+}
+
+function pickFirstPhone(phone, phones){
+  const a = normStr(phone);
+  if(a) return a;
+  const b = normStr(phones);
+  if(!b) return '';
+  // tenta pegar primeiro número
+  const parts = b.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
+  return parts[0] || b;
+}
+function parseMunicipality(m){
+  m = normStr(m);
+  if(!m) return {city:'', uf:''};
+  // formatos comuns: "Rio Claro - SP" / "Rio Claro-SP"
+  const mm = m.split('-').map(x=>x.trim()).filter(Boolean);
+  if(mm.length>=2){
+    const city = mm.slice(0, mm.length-1).join(' - ');
+    const uf = mm[mm.length-1].replace(/\s+/g,'').toUpperCase().slice(0,2);
+    return {city, uf};
+  }
+  return {city:m, uf:''};
+}
+function boolFromYesNo(v){
+  const s = String(v||'').trim().toUpperCase();
+  if(['YES','SIM','TRUE','1','VERDADEIRO'].includes(s)) return true;
+  if(['NO','NÃO','NAO','FALSE','0','FALSO'].includes(s)) return false;
+  return !!v;
+}
+
+async function importLeadsFromRows(rows, filename='import'){
+  const now = new Date().toISOString();
+  const existing = getActiveSetLeads();
+  const mapExisting = new Map();
+  existing.forEach(l=> mapExisting.set(leadKey(l), l));
+
+  let inserted=0, updated=0, skipped=0;
+  const toUpsert = [];
+
+  for(const r0 of rows){
+    const r = r0 || {};
+    const name = r['Name'] || r['name'] || r['Title'] || r['title'] || r['Business Name'] || r['Empresa'] || r['Nome'] || '';
+    const fulladdress = r['Fulladdress'] || r['Full Address'] || r['Address'] || r['Endereço'] || r['Endereco'] || '';
+    const street = r['Street'] || r['Rua'] || '';
+    const mun = r['Municipality'] || r['Cidade'] || r['City'] || '';
+    const {city, uf} = parseMunicipality(mun);
+    const category = r['Categories'] || r['Category'] || r['Categorias'] || '';
+    const phone = pickFirstPhone(r['Phone'] || r['Telefone'] || r['WhatsApp'] || '', r['Phones'] || '');
+    const claimed = boolFromYesNo(r['Claimed'] ?? r['Verificado'] ?? r['Oportunidade'] ?? r['Is claimed']);
+    const reviews = r['Review Count'] || r['Reviews'] || r['Avaliações'] || '';
+    const rating = r['Average Rating'] || r['Rating'] || r['Nota'] || '';
+    const url = r['Google Maps URL'] || r['Maps URL'] || r['Google url'] || r['URL'] || r['Link'] || '';
+    const website = r['Website'] || r['Site'] || '';
+    const email = r['Email'] || r['E-mail'] || r['email'] || '';
+    const instagram = r['Instagram'] || r['Instagram link'] || r['instagram'] || '';
+    const facebook = r['Facebook'] || r['Facebook link'] || r['facebook'] || '';
+    const lat = r['Latitude'] || r['Lat'] || r['lat'] || '';
+    const lng = r['Longitude'] || r['Lng'] || r['lon'] || r['long'] || r['lng'] || '';
+    const opening = r['Opening hours'] || r['Horário'] || r['Horario'] || r['Opening Hours'] || '';
+    const cid = r['Cid'] || r['CID'] || '';
+    const placeId = r['Place Id'] || r['Place ID'] || r['PlaceId'] || r['place_id'] || '';
+
+    const address = fulladdress || street || '';
+    if(!normStr(name) && !normStr(address) && !normStr(phone)) { skipped++; continue; }
+
+    const incoming = normalizeLead({
+      id: uid('lead'),
+      setId: activeSetId,
+      placeId: placeId,
+      cid: cid,
+      url: url,
+      name: name,
+      address: address,
+      city: city,
+      uf: uf,
+      category: category,
+      phone: phone,
+      email: email,
+      website: website,
+      instagram: instagram,
+      facebook: facebook,
+      lat: lat,
+      lng: lng,
+      openingHours: opening,
+      rating: rating,
+      reviews: reviews,
+      claimed: claimed,
+      stage: 'novo',
+      nextAction: '',
+      tags: '',
+      notes: '',
+      source: filename
+    });
+
+    // dedupe / merge
+    const key = leadKey(incoming);
+    const old = mapExisting.get(key);
+    if(old){
+      // merge: preserva funil/notes/tags/nextAction
+      const merged = normalizeLead(Object.assign({}, old, {
+        name: old.name || incoming.name,
+        address: old.address || incoming.address,
+        city: old.city || incoming.city,
+        uf: old.uf || incoming.uf,
+        cep: old.cep || incoming.cep,
+        category: old.category || incoming.category,
+        phone: old.phone || incoming.phone,
+        email: old.email || incoming.email,
+        website: old.website || incoming.website,
+        instagram: old.instagram || incoming.instagram,
+        facebook: old.facebook || incoming.facebook,
+        lat: (old.lat ?? null) !== null ? old.lat : incoming.lat,
+        lng: (old.lng ?? null) !== null ? old.lng : incoming.lng,
+        url: old.url || incoming.url,
+        cid: old.cid || incoming.cid,
+        placeId: old.placeId || incoming.placeId,
+        openingHours: old.openingHours || incoming.openingHours,
+        rating: Math.max(old.rating||0, incoming.rating||0),
+        reviews: Math.max(old.reviews||0, incoming.reviews||0),
+        claimed: (old.claimed || incoming.claimed),
+        source: old.source || incoming.source,
+        updatedAt: now
+      }));
+      toUpsert.push(merged);
+      mapExisting.set(key, merged);
+      updated++;
+    }else{
+      toUpsert.push(incoming);
+      mapExisting.set(key, incoming);
+      inserted++;
+    }
+  }
+
+  await idbBulkPut(STORE_LEADS, toUpsert);
+  // recarrega do db? melhor manter em memória
+  // atualizar leads (somente do conjunto atual)
+  const other = leads.filter(l=>l.setId !== activeSetId);
+  leads = other.concat(Array.from(mapExisting.values()));
+
+  await syncLeadClientLinks();
+
+  await syncLeadClientLinks();
+
+  return { inserted, updated, skipped };
+}
+
+async function handleImportClientsFile(file){
+  if(!file) return;
+  try{
+    let rows = [];
+    await ensureXLSX();
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type:'array' });
+
+    // tenta achar aba "Roteiro" ou a primeira
+    const wanted = wb.SheetNames.find(n=> n.toLowerCase().includes('roteiro')) || wb.SheetNames[0];
+    const ws = wb.Sheets[wanted];
+    rows = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+
+    const result = await importClientsFromRows(rows, file.name);
+    alert(`Importação concluída (Clientes)\n\nInseridos: ${result.inserted}\nAtualizados: ${result.updated}\nIgnorados: ${result.skipped}`);
+    renderClients();
+  }catch(e){
+    console.error(e);
+    alert('Falha ao importar Clientes: ' + (e?.message || e));
+  }finally{
+    document.getElementById('fileImportClients').value = '';
+  }
+}
+
+async function importClientsFromRows(rows, filename='import'){
+  const existing = getActiveSetClients();
+  const mapExisting = new Map();
+  existing.forEach(c=> mapExisting.set(clientKey(c), c));
+
+  let inserted=0, updated=0, skipped=0;
+  const toUpsert = [];
+
+  for(const r0 of rows){
+    const r = r0 || {};
+
+    const cod = r['Cod Cliente'] ?? r['Cod'] ?? r['Código'] ?? r['Codigo'] ?? '';
+    const vendedor = r['Vendedor'] ?? '';
+    const equipe = r['Equipe'] ?? '';
+    const cidade = r['Cidade'] ?? r['city'] ?? '';
+    const diasEntrega = r['Dias Entrega'] ?? '';
+    const cliente = r['Cliente'] ?? '';
+    const razao = r['Razao'] ?? r['Razão'] ?? '';
+    const fantasia = r['Fantasia'] ?? '';
+    const diaVisita = r['Dia Visita'] ?? '';
+    const diasSec = r['Dias Sec'] ?? '';
+    const freq = r['Freq'] ?? '';
+    const ordem = r['Ordem'] ?? '';
+    const comprador = r['Comprador'] ?? '';
+    const whatsapp = r['Whatsapp'] ?? r['WhatsApp'] ?? r['Telefone'] ?? '';
+    const obs = r['Obs'] ?? '';
+
+    if(!normStr(cliente) && !normStr(fantasia) && !normStr(whatsapp) && !normStr(cod)) { skipped++; continue; }
+
+    const incoming = normalizeClient({
+      id: uid('cli'),
+      setId: activeSetId,
+      codCliente: cod,
+      vendedor: vendedor,
+      equipe: equipe,
+      cidade: cidade,
+      diasEntrega: diasEntrega,
+      cliente: cliente,
+      razao: razao,
+      fantasia: fantasia,
+      diaVisita: diaVisita,
+      diasSec: diasSec,
+      freq: freq,
+      ordem: ordem,
+      comprador: comprador,
+      whatsapp: whatsapp,
+      obs: obs,
+      produtosInteresse: '',
+      nextVisit: '',
+      source: filename
+    });
+
+    const key = clientKey(incoming);
+    const old = mapExisting.get(key);
+    if(old){
+      const merged = normalizeClient(Object.assign({}, old, {
+        codCliente: old.codCliente || incoming.codCliente,
+        vendedor: old.vendedor || incoming.vendedor,
+        equipe: old.equipe || incoming.equipe,
+        cidade: old.cidade || incoming.cidade,
+        diasEntrega: old.diasEntrega || incoming.diasEntrega,
+        cliente: old.cliente || incoming.cliente,
+        razao: old.razao || incoming.razao,
+        fantasia: old.fantasia || incoming.fantasia,
+        diaVisita: old.diaVisita || incoming.diaVisita,
+        diasSec: old.diasSec || incoming.diasSec,
+        freq: old.freq || incoming.freq,
+        ordem: old.ordem || incoming.ordem,
+        comprador: old.comprador || incoming.comprador,
+        whatsapp: old.whatsapp || incoming.whatsapp,
+        obs: old.obs || incoming.obs,
+        source: old.source || incoming.source
+      }));
+      toUpsert.push(merged);
+      mapExisting.set(key, merged);
+      updated++;
+    }else{
+      toUpsert.push(incoming);
+      mapExisting.set(key, incoming);
+      inserted++;
+    }
+  }
+
+  await idbBulkPut(STORE_CLIENTS, toUpsert);
+  const other = clients.filter(c=>c.setId !== activeSetId);
+  clients = other.concat(Array.from(mapExisting.values()));
+
+  return { inserted, updated, skipped };
+}
+
+async function importFromUrlPrompt(){
+  const url = prompt('Cole a URL direta de um arquivo .xlsx/.csv (Leads) ou .json (Backup):');
+  if(!url) return;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const contentType = res.headers.get('content-type') || '';
+    const lower = url.toLowerCase();
+    if(lower.endsWith('.json') || contentType.includes('application/json')){
+      const data = await res.json();
+      await importBackupData(data, {mode:'merge'});
+      alert('Backup importado com sucesso.');
+      renderLeads(); renderClients();
+      return;
+    }
+    const blob = await res.blob();
+    const file = new File([blob], 'import_url.'+(lower.split('.').pop()||'xlsx'));
+    await handleImportLeadsFile(file);
+  }catch(e){
+    console.error(e);
+    alert('Não foi possível importar por URL. Pode ser bloqueio de CORS do servidor.\n\nDetalhe: ' + (e?.message||e));
+  }
+}
+
+async function importBackupFromUrlPrompt(){
+  const url = prompt('Cole a URL de um backup .json:');
+  if(!url) return;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    await importBackupData(data, {mode:'merge'});
+    alert('Backup importado.');
+    renderLeads(); renderClients();
+  }catch(e){
+    console.error(e);
+    alert('Falha ao importar backup por URL: ' + (e?.message||e));
+  }
+}
+
+// ---------- Exports (XLSX) ----------
+async function exportLeadsXlsx(){
+  try{
+    await ensureXLSX();
+    const wb = XLSX.utils.book_new();
+    const data = getActiveSetLeads().map(l=>({
+      'Name': l.name,
+      'Fulladdress': l.address,
+      'Municipality': `${l.city||''}${l.uf?(' - '+l.uf):''}`,
+      'Categories': l.category,
+      'Phone': l.phone,
+      'Email': l.email,
+      'Website': l.website,
+      'Instagram': l.instagram,
+      'Facebook': l.facebook,
+      'Latitude': l.lat,
+      'Longitude': l.lng,
+      'Claimed': l.claimed ? 'YES' : 'NO',
+      'Review Count': l.reviews,
+      'Average Rating': l.rating,
+      'Google Maps URL': l.url || buildCidUrl(l.cid),
+      'Cid': l.cid,
+      'Place Id': l.placeId,
+      'Opening hours': l.openingHours,
+      'Stage': normalizeStage(l.stage),
+      'Next Action': l.nextAction ? fmtBR(l.nextAction) : '',
+      'Tags': l.tags,
+      'Notes': l.notes,
+      'Converted Client ID': l.convertedClientId,
+      'UpdatedAt': l.updatedAt
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+    const name = `Leads_${sanitizeFilename(getActiveSetName())}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, name);
+  }catch(e){
+    console.error(e);
+    alert('Falha ao exportar Leads: ' + (e?.message||e));
+  }
+}
+
+async function exportClientsXlsx(){
+  try{
+    await ensureXLSX();
+    const wb = XLSX.utils.book_new();
+
+    const data = getActiveSetClients().map(c=>{
+      // embute extras em Obs (sem quebrar o padrão)
+      let obs = c.obs || '';
+      const extras = [];
+      if(c.produtosInteresse) extras.push('Produtos: '+c.produtosInteresse);
+      if(c.nextVisit) extras.push('Próxima visita: '+fmtBR(c.nextVisit));
+      if(extras.length){
+        obs = (obs ? (obs + ' | ') : '') + extras.join(' | ');
+      }
+
+      return {
+        'Cod Cliente': c.codCliente,
+        'Vendedor': c.vendedor,
+        'Equipe': c.equipe,
+        'Cidade': c.cidade,
+        'Dias Entrega': c.diasEntrega,
+        'Cliente': c.cliente,
+        'Razao': c.razao,
+        'Fantasia': c.fantasia,
+        'Dia Visita': c.diaVisita,
+        'Dias Sec': c.diasSec,
+        'Freq': c.freq,
+        'Ordem': c.ordem,
+        'Comprador': c.comprador,
+        'Whatsapp': c.whatsapp,
+        'Obs': obs
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Roteiro');
+
+    const name = `Clientes_${sanitizeFilename(getActiveSetName())}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, name);
+  }catch(e){
+    console.error(e);
+    alert('Falha ao exportar Clientes: ' + (e?.message||e));
+  }
+}
+
+
+async function exportLeadsAsClientsXlsx(){
+  try{
+    await ensureXLSX();
+    const wb = XLSX.utils.book_new();
+
+    const data = getActiveSetLeads().map(l=>{
+      const obsParts = [];
+      if(l.address) obsParts.push('Endereço: '+l.address);
+      const maps = l.url || (l.cid ? buildCidUrl(l.cid) : '');
+      if(maps) obsParts.push('Maps: '+maps);
+      if(l.category) obsParts.push('Categoria: '+l.category);
+      if(l.rating) obsParts.push('Nota: '+l.rating);
+      if(l.reviews) obsParts.push('Reviews: '+l.reviews);
+      if(l.tags) obsParts.push('Tags: '+l.tags);
+
+      return {
+        'Cod Cliente': '',
+        'Vendedor': settings.defaultSeller || '',
+        'Equipe': settings.defaultTeam || '',
+        'Cidade': l.city || '',
+        'Dias Entrega': '',
+        'Cliente': l.name || '',
+        'Razao': '',
+        'Fantasia': '',
+        'Dia Visita': '',
+        'Dias Sec': '',
+        'Freq': '',
+        'Ordem': '',
+        'Comprador': '',
+        'Whatsapp': l.phone || '',
+        'Obs': obsParts.join(' | ')
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Roteiro');
+    const name = `LeadsComoClientes_${sanitizeFilename(getActiveSetName())}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, name);
+  }catch(e){
+    console.error(e);
+    alert('Falha ao exportar Leads→Clientes: ' + (e?.message||e));
+  }
+}
+
+function sanitizeFilename(s){
+  s = String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  s = s.replace(/[^a-zA-Z0-9-_]+/g,'_').replace(/^_+|_+$/g,'');
+  return s || 'arquivo';
+}
+function getActiveSetName(){
+  return sets.find(s=>s.id===activeSetId)?.name || 'Conjunto';
+}
+
+// ---------- Backup JSON ----------
+function exportBackup(){
+  const data = {
+    app: APP_NAME,
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    activeSetId,
+    settings,
+    sets,
+    leads,
+    clients
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Backup_${sanitizeFilename(APP_NAME)}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+}
+
+async function handleImportBackupFile(file){
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    await importBackupData(data, {mode:'merge'});
+    alert('Backup importado com sucesso.');
+    renderLeads(); renderClients();
+  }catch(e){
+    console.error(e);
+    alert('Falha ao importar backup: ' + (e?.message||e));
+  }finally{
+    document.getElementById('fileImportBackup').value = '';
+  }
+}
+
+async function importBackupData(data, {mode='merge'}={}){
+  if(!data) throw new Error('Backup vazio.');
+  const incomingSets = (data.sets||[]).map(normalizeSet);
+  const incomingLeads = (data.leads||[]).map(normalizeLead);
+  const incomingClients = (data.clients||[]).map(normalizeClient);
+  const incomingSettings = data.settings || {};
+
+  if(mode === 'replace'){
+    sets = incomingSets;
+    leads = incomingLeads;
+    clients = incomingClients;
+  }else{
+    // merge sets
+    const mapSets = new Map(sets.map(s=>[s.id,s]));
+    incomingSets.forEach(s=> mapSets.set(s.id, Object.assign({}, mapSets.get(s.id)||{}, s)));
+    sets = Array.from(mapSets.values()).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+
+    // merge leads by id
+    const mapLeads = new Map(leads.map(l=>[l.id,l]));
+    incomingLeads.forEach(l=> mapLeads.set(l.id, Object.assign({}, mapLeads.get(l.id)||{}, l)));
+    leads = Array.from(mapLeads.values());
+
+    // merge clients by id
+    const mapClients = new Map(clients.map(c=>[c.id,c]));
+    incomingClients.forEach(c=> mapClients.set(c.id, Object.assign({}, mapClients.get(c.id)||{}, c)));
+    clients = Array.from(mapClients.values());
+  }
+
+  settings = Object.assign({}, settings, incomingSettings);
+
+  // persist all
+  await idbClear(STORE_SETS);
+  await idbClear(STORE_LEADS);
+  await idbClear(STORE_CLIENTS);
+  await idbBulkPut(STORE_SETS, sets);
+  await idbBulkPut(STORE_LEADS, leads);
+  await idbBulkPut(STORE_CLIENTS, clients);
+  await metaSet('settings', settings);
+  activeSetId = data.activeSetId || activeSetId || sets[0]?.id || 'default';
+  await metaSet('activeSetId', activeSetId);
+
+  refreshSetSelect();
+}
+
+function dangerZone(){
+  const choice = prompt(
+    'ZONA DE RISCO\\n\\nDigite uma opção:\\n' +
+    '1 = Limpar apenas LEADS do conjunto atual\\n' +
+    '2 = Limpar apenas CLIENTES do conjunto atual\\n' +
+    '3 = Limpar LEADS + CLIENTES do conjunto atual\\n' +
+    '9 = RESET TOTAL (apaga tudo)\\n\\n' +
+    'Digite 1,2,3 ou 9:'
+  );
+  if(!choice) return;
+  if(choice === '1') return clearCurrentSet({leads:true, clients:false});
+  if(choice === '2') return clearCurrentSet({leads:false, clients:true});
+  if(choice === '3') return clearCurrentSet({leads:true, clients:true});
+  if(choice === '9') return resetAll();
+  alert('Opção inválida.');
+}
+
+async function clearCurrentSet({leads:clrLeads, clients:clrClients}){
+  const setName = getActiveSetName();
+  const ok = confirm(`Confirmar limpeza em "${setName}"?`);
+  if(!ok) return;
+  if(clrLeads){
+    // apagar no db e memória
+    const ids = leads.filter(l=>l.setId===activeSetId).map(l=>l.id);
+    for(const id of ids) await idbDelete(STORE_LEADS, id);
+    leads = leads.filter(l=>l.setId!==activeSetId);
+  }
+  if(clrClients){
+    const ids = clients.filter(c=>c.setId===activeSetId).map(c=>c.id);
+    for(const id of ids) await idbDelete(STORE_CLIENTS, id);
+    clients = clients.filter(c=>c.setId!==activeSetId);
+  }
+  renderLeads(); renderClients(); renderAgenda();
+  alert('Limpeza concluída.');
+}
+
+async function resetAll(){
+  const ok = confirm('CONFIRMA RESET TOTAL? Isso apaga tudo do navegador.');
+  if(!ok) return;
+  await idbClear(STORE_SETS);
+  await idbClear(STORE_LEADS);
+  await idbClear(STORE_CLIENTS);
+  await idbClear(STORE_INTERACTIONS);
+  await idbClear(STORE_META);
+  location.reload();
+}
+
+// ---------- Settings & Google Sheets Connector ----------
+let settings = {
+  gsSheet: '',
+  gsApiKey: '',
+  // abas padrão (modo básico – leitura)
+  gsLeadsTab: 'leads',
+  gsClientsTab: 'clientes',
+
+  // modo completo (Web App)
+  gsScriptUrl: '',
+  gsToken: '',
+
+  // padrão comercial
+  defaultSeller: '',
+  defaultTeam: '',
+  waEnableTemplate: false,
+  waTemplateLead: '',
+  waTemplateClient: '',
+  // legado (V7.0/7.1)
+  waTemplate: '',
+
+  // UI
+  uiSidebarCollapsed: false,
+  uiHideBanner: false
+};
+
+function openSettingsModal(tab=''){
+  // preencher inputs
+  document.getElementById('gs_sheet').value = settings.gsSheet || '';
+  document.getElementById('gs_apiKey').value = settings.gsApiKey || '';
+  document.getElementById('gs_leadsTab').value = settings.gsLeadsTab || 'leads';
+  document.getElementById('gs_clientsTab').value = settings.gsClientsTab || 'clientes';
+
+  document.getElementById('gs_scriptUrl').value = settings.gsScriptUrl || '';
+  document.getElementById('gs_token').value = settings.gsToken || '';
+  document.getElementById('cfg_defaultSeller').value = settings.defaultSeller || '';
+  document.getElementById('cfg_defaultTeam').value = settings.defaultTeam || '';
+  document.getElementById('cfg_waEnableTemplate').checked = !!settings.waEnableTemplate;
+  document.getElementById('cfg_waTemplateLead').value = settings.waTemplateLead || settings.waTemplate || '';
+  document.getElementById('cfg_waTemplateClient').value = settings.waTemplateClient || settings.waTemplate || '';
+
+  openModal('modalSettingsBg');
+
+  if(tab === 'help'){
+    setTimeout(()=>{
+      document.getElementById('helpBlock')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 60);
+  }
+}
+
+async function saveSettings(){
+  settings.gsSheet = document.getElementById('gs_sheet').value.trim();
+  settings.gsApiKey = document.getElementById('gs_apiKey').value.trim();
+  settings.gsLeadsTab = (document.getElementById('gs_leadsTab').value || '').trim() || 'leads';
+  settings.gsClientsTab = (document.getElementById('gs_clientsTab').value || '').trim() || 'clientes';
+
+  settings.gsScriptUrl = document.getElementById('gs_scriptUrl').value.trim();
+  settings.gsToken = document.getElementById('gs_token').value.trim();
+  settings.defaultSeller = document.getElementById('cfg_defaultSeller').value.trim();
+  settings.defaultTeam = document.getElementById('cfg_defaultTeam').value.trim();
+  settings.waEnableTemplate = document.getElementById('cfg_waEnableTemplate').checked;
+  settings.waTemplateLead = document.getElementById('cfg_waTemplateLead').value.trim();
+  settings.waTemplateClient = document.getElementById('cfg_waTemplateClient').value.trim();
+  // mantém preenchido também no campo legado
+  settings.waTemplate = (settings.waTemplateLead || settings.waTemplateClient || '').trim();
+
+  await persistSettings();
+  gsSetStatus('Config salva.');
+}
+
+async function persistSettings(){
+  try{
+    localStorage.setItem('ameripan_settings', JSON.stringify(settings));
+  }catch(e){}
+  await metaSet('settings', settings);
+}
+
+function gsSetStatus(msg){
+
+  const el = document.getElementById('gs_status');
+  if(el) el.textContent = msg;
+}
+
+function getSheetId(){
+  return parseSpreadsheetIdOrUrl(settings.gsSheet);
+}
+
+// ---------- Google Sheets (Básico – somente leitura) ----------
+function a1QuoteSheetName(name){
+  let n = String(name||'').trim();
+  if(!n) return 'Sheet1';
+  // Se tiver espaço ou caracteres especiais, envolve em aspas simples (A1 notation)
+  if(/[^A-Za-z0-9_]/.test(n)){
+    n = "'" + n.replace(/'/g, "''") + "'";
+  }
+  return n;
+}
+
+async function sheetsApiReadRows(sheetId, apiKey, tabName){
+  const tabA1 = a1QuoteSheetName(tabName);
+  const rangeA1 = `${tabA1}!A:ZZ`; // ✅ A1 válido: colunas A..ZZ, todas as linhas
+  const range = encodeURIComponent(rangeA1);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${range}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&key=${encodeURIComponent(apiKey)}&_=${Date.now()}`;
+
+  const res = await fetch(url, { cache: 'no-store' });
+  const data = await res.json().catch(()=> ({}));
+  if(!res.ok){
+    const msg = data?.error?.message || ('HTTP ' + res.status);
+    throw new Error(msg);
+  }
+  const values = Array.isArray(data.values) ? data.values : [];
+  if(values.length <= 1) return [];
+
+  const headers = (values[0] || []).map(h=> String(h ?? '').trim());
+  const rows = [];
+  for(let i=1;i<values.length;i++){
+    const arr = values[i] || [];
+    const obj = {};
+    for(let c=0;c<headers.length;c++){
+      const key = headers[c] || ('COL_' + (c+1));
+      obj[key] = (arr[c] ?? '');
+    }
+    // ignora linhas totalmente vazias
+    const hasAny = Object.values(obj).some(v=> String(v??'').trim() !== '');
+    if(hasAny) rows.push(obj);
+  }
+  return rows;
+}
+
+// Fallback sem API (planilha publicada/compartilhada): JSONP (script injection) para evitar CORS
+async function gvizReadRows(sheetId, tabName){
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&t=${Date.now()}`;
+
+  return await new Promise((resolve, reject)=>{
+    const timeoutMs = 15000;
+    let done = false;
+    let script = null;
+
+    // garante namespace
+    window.google = window.google || {};
+    google.visualization = google.visualization || {};
+    google.visualization.Query = google.visualization.Query || {};
+
+    const prev = google.visualization.Query.setResponse;
+
+    const cleanup = (err)=>{
+      if(done) return;
+      done = true;
+      google.visualization.Query.setResponse = prev;
+      if(script && script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+      if(err) reject(err);
+    };
+
+    google.visualization.Query.setResponse = (resp)=>{
+      try{
+        const table = resp?.table;
+        if(!table) throw new Error('Resposta gviz sem "table".');
+        const cols = (table.cols || []).map(c=> (c.label || '').trim());
+        const rows = [];
+        for(const r of (table.rows || [])){
+          const obj = {};
+          (r.c || []).forEach((cell, i)=>{
+            const key = cols[i] || ('COL_' + (i+1));
+            obj[key] = (cell && (cell.v ?? cell.f)) ?? '';
+          });
+          const hasAny = Object.values(obj).some(v=> String(v??'').trim() !== '');
+          if(hasAny) rows.push(obj);
+        }
+        cleanup();
+        resolve(rows);
+      }catch(e){
+        cleanup(e);
+      }
+    };
+
+    script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.onerror = ()=> cleanup(new Error('Falha ao carregar gviz (script).'));
+
+    const timer = setTimeout(()=> cleanup(new Error('Timeout lendo gviz.')), timeoutMs);
+
+    document.head.appendChild(script);
+  });
+}
+async function gsListTabs(){
+  try{
+    await saveSettings();
+    const sheetId = getSheetId();
+    const apiKey = (settings.gsApiKey || '').trim();
+
+    if(!sheetId) throw new Error('Informe o link/ID da planilha.');
+    if(!apiKey) throw new Error('Para listar abas, informe a API Key.');
+
+    gsSetStatus('Listando abas…');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}?fields=sheets.properties(title,sheetId)&key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(()=> ({}));
+    if(!res.ok){
+      const msg = data?.error?.message || ('HTTP ' + res.status);
+      throw new Error(msg);
+    }
+
+    const tabs = (data.sheets || []).map(s=> s?.properties?.title).filter(Boolean);
+
+    const dl = document.getElementById('gs_tabsList');
+    if(dl){
+      dl.innerHTML = '';
+      tabs.forEach(t=>{
+        const o = document.createElement('option');
+        o.value = t;
+        dl.appendChild(o);
+      });
+    }
+
+    if(tabs.length){
+      gsSetStatus('Abas encontradas: ' + tabs.join(', '));
+    }else{
+      gsSetStatus('Nenhuma aba encontrada. Verifique permissões.');
+    }
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message || e));
+
+    alert(
+      'Não foi possível listar abas no Google Sheets.\n\n' +
+      'Detalhe: ' + (e?.message || e) + '\n\n' +
+      'Dicas:\n' +
+      '• Verifique se a API Key está correta.\n' +
+      '• Se a planilha estiver privada, compartilhe como "qualquer pessoa com o link pode ver" ou publique na web.'
+    );
+  }
+}
+
+async function gsPullReadOnly(mode='all'){
+  try{
+    await saveSettings();
+    const sheetId = getSheetId();
+    const apiKey = (settings.gsApiKey || '').trim();
+
+    if(!sheetId) throw new Error('Informe o link/ID da planilha.');
+
+    const tabLeads = (settings.gsLeadsTab || 'leads').trim() || 'leads';
+    const tabClients = (settings.gsClientsTab || 'clientes').trim() || 'clientes';
+
+    const readRows = async (tab)=>{
+      if(apiKey){
+        try{
+          return await sheetsApiReadRows(sheetId, apiKey, tab);
+        }catch(e){
+          // fallback gviz
+          console.warn('Sheets API falhou, tentando gviz…', e);
+          return await gvizReadRows(sheetId, tab);
+        }
+      }
+      return await gvizReadRows(sheetId, tab);
+    };
+
+    let msgParts = [];
+
+    if(mode === 'leads' || mode === 'all'){
+      gsSetStatus('Lendo Leads da aba "'+tabLeads+'"…');
+      const rows = await readRows(tabLeads);
+      const result = await importLeadsFromRows(rows, 'gsheets:' + tabLeads);
+      msgParts.push(`Leads — inseridos: ${result.inserted}, atualizados: ${result.updated}, ignorados: ${result.skipped}`);
+    }
+
+    if(mode === 'clients' || mode === 'all'){
+      gsSetStatus('Lendo Clientes da aba "'+tabClients+'"…');
+      const rows = await readRows(tabClients);
+      const result = await importClientsFromRows(rows, 'gsheets:' + tabClients);
+      msgParts.push(`Clientes — inseridos: ${result.inserted}, atualizados: ${result.updated}, ignorados: ${result.skipped}`);
+    }
+
+    gsSetStatus('Concluído ✅');
+    renderLeads(); renderClients(); renderAgenda();
+
+    alert('Importação do Google Sheets concluída.\n\n' + msgParts.join('\n'));
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message || e));
+    alert(
+      'Falha ao puxar do Google Sheets (somente leitura).\n\n' +
+      'Detalhe: ' + (e?.message || e) + '\n\n' +
+      'Requisitos do modo básico:\n' +
+      '• Planilha pública/compartilhada (visualização).\n' +
+      '• Aba correta (ex.: leads / clientes).\n' +
+      '• Para listar abas, é necessário API Key.'
+    );
+  }
+}
+
+async function connectorCall(action, payload={}, method='POST'){
+  const url = (settings.gsScriptUrl||'').trim();
+  if(!url) throw new Error('Informe a URL do Conector (Apps Script Web App).');
+
+  const body = Object.assign({
+    action,
+    token: settings.gsToken || '',
+    sheetId: getSheetId() || ''
+  }, payload);
+
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  };
+  const res = await fetch(url, opts);
+  if(!res.ok){
+    const txt = await res.text().catch(()=> '');
+    throw new Error('HTTP '+res.status+' ' + txt);
+  }
+  const data = await res.json();
+  if(!data.ok){
+    throw new Error(data.error || 'Conector retornou erro.');
+  }
+  return data;
+}
+
+async function testConnector(){
+  try{
+    await saveSettings();
+    gsSetStatus('Testando conector...');
+    const data = await connectorCall('ping', {ts: Date.now()});
+    gsSetStatus('Conector OK: ' + (data.message || 'ping'));
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message||e));
+    alert('Erro ao testar conector: ' + (e?.message||e));
+  }
+}
+
+async function gsEnsure(){
+  try{
+    await saveSettings();
+    gsSetStatus('Criando/validando abas...');
+    const data = await connectorCall('ensure', { sets });
+    gsSetStatus('Abas ok: ' + (data.message||'ensure'));
+    alert('Abas criadas/validadas no Google Sheets.');
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message||e));
+    alert('Falha ao auto-criar abas: ' + (e?.message||e));
+  }
+}
+
+function packAllData(){
+  return {
+    app: APP_NAME,
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    activeSetId,
+    settings,
+    sets,
+    leads,
+    clients
+  };
+}
+
+async function gsPush(){
+  try{
+    await saveSettings();
+    gsSetStatus('Enviando dados para Sheets...');
+    const payload = packAllData();
+    const data = await connectorCall('push', { payload });
+    gsSetStatus('Enviado: ' + (data.message || 'push'));
+    alert('Dados enviados para Google Sheets com sucesso.');
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message||e));
+    alert('Falha ao enviar para Sheets: ' + (e?.message||e));
+  }
+}
+
+async function gsPull(){
+  try{
+    await saveSettings();
+    gsSetStatus('Puxando dados do Sheets...');
+    const data = await connectorCall('pull', {});
+    const payload = data.payload;
+    if(!payload) throw new Error('Conector não retornou payload.');
+    await importBackupData(payload, {mode:'merge'});
+    gsSetStatus('Dados puxados e mesclados.');
+    alert('Dados puxados do Google Sheets.');
+    renderLeads(); renderClients(); renderAgenda();
+  }catch(e){
+    console.error(e);
+    gsSetStatus('Erro: ' + (e?.message||e));
+    alert('Falha ao puxar do Sheets: ' + (e?.message||e));
+  }
+}
+
+// ---------- Init ----------
+async function init(){
+  await openIDB();
+  await requestPersistence();
+
+  // load meta
+  // 1) localStorage (preferência do usuário final)
+  try{
+    const ls = JSON.parse(localStorage.getItem('ameripan_settings') || 'null');
+    if(ls) settings = Object.assign({}, settings, ls);
+  }catch(e){}
+
+  // 2) IndexedDB (meta) — mantém compatibilidade
+  const savedSettings = await metaGet('settings');
+  if(savedSettings) settings = Object.assign({}, settings, savedSettings);
+
+  // Migração (V7.2): antigo waTemplate -> novos campos
+  if(settings.waTemplate && !settings.waTemplateLead && !settings.waTemplateClient){
+    settings.waEnableTemplate = true;
+    settings.waTemplateLead = settings.waTemplate;
+    settings.waTemplateClient = settings.waTemplate;
+  }
+  // Se o usuário preencheu templates novos, garante que o toggle acompanhe
+  if((settings.waTemplateLead || settings.waTemplateClient) && (settings.waEnableTemplate === undefined)){
+    settings.waEnableTemplate = true;
+  }
+
+  // aplicar preferências de UI
+  applySidebarState();
+  applyBannerState();
+
+  const savedActiveSetId = await metaGet('activeSetId');
+  if(savedActiveSetId) activeSetId = savedActiveSetId;
+
+  // load data
+  sets = await idbGetAll(STORE_SETS);
+  leads = await idbGetAll(STORE_LEADS);
+  clients = await idbGetAll(STORE_CLIENTS);
+
+  if(!sets.length){
+    const s = normalizeSet({ id:'default', name:'Leads Padrão' });
+    sets = [s];
+    await idbPut(STORE_SETS, s);
+  }
+
+  // sort sets
+  sets = sets.sort((a,b)=> a.name.localeCompare(b.name,'pt-BR'));
+  if(!activeSetId || !sets.some(s=>s.id===activeSetId)){
+    activeSetId = sets[0].id;
+    await metaSet('activeSetId', activeSetId);
+  }
+
+  // bind UI events
+  refreshSetSelect();
+  document.getElementById('setSelect').addEventListener('change', onSetChanged);
+
+  document.getElementById('fileImportLeads').addEventListener('change', (e)=> handleImportLeadsFile(e.target.files?.[0]));
+  document.getElementById('fileImportClients').addEventListener('change', (e)=> handleImportClientsFile(e.target.files?.[0]));
+  document.getElementById('fileImportBackup').addEventListener('change', (e)=> handleImportBackupFile(e.target.files?.[0]));
+
+  window.addEventListener('resize', updateFab);
+  updateFab();
+
+  // initial renders
+  setView('leads');
+  renderLeads();
+  renderClients();
+  renderAgenda();
+
+  gsSetStatus('—');
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  init().catch(e=>{
+    console.error(e);
+    alert('Erro ao iniciar: ' + (e?.message||e));
+  });
+});
+</script>
+
+</body>
+</html>
