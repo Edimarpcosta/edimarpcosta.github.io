@@ -562,7 +562,12 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    .help{
+    
+    .details{ border: 1px solid rgba(255,255,255,.10); border-radius: 14px; padding: 10px 12px; background: rgba(255,255,255,.03); }
+    .details > summary{ cursor:pointer; list-style:none; font-weight: 900; }
+    .details > summary::-webkit-details-marker{ display:none; }
+    .details[open]{ background: rgba(255,255,255,.04); }
+.help{
       border: 1px dashed rgba(59,130,246,.35);
       background: rgba(59,130,246,.08);
       padding: 12px;
@@ -1103,7 +1108,7 @@
       <div class="content">
         <input type="hidden" id="client_id" />
         <div class="help" style="margin-bottom: 12px;">
-          <h3>Padrão Ameripan (import/export)</h3>
+          <h3>Padrão Amp (import/export)</h3>
           <div class="muted">Este cadastro mantém o formato do arquivo de clientes (Clientes.xlsx). Campos extras (ex.: Produtos de interesse) ficam guardados aqui e podem ser “embutidos” na coluna <b>Obs</b> ao exportar.</div>
         </div>
 
@@ -1172,6 +1177,74 @@
           <div class="field col-6">
             <label>Próxima visita (agenda interna)</label>
             <input type="datetime-local" id="client_nextVisit" />
+          </div>
+
+          <div class="field col-12">
+            <details class="details">
+              <summary>🔗 Campos extras (contato, links, GPS e documento) — opcional</summary>
+              <div class="muted" style="margin:8px 0 10px 0;">
+                Estes campos vêm do MapsScraper/Leads e podem ser preenchidos manualmente. Eles sincronizam automaticamente
+                quando houver ligação por <b>cid</b>, <b>cod</b>, <b>convertedClientId</b> ou <b>telefone</b>.
+              </div>
+              <div class="form" style="margin-top:10px;">
+                <div class="field col-6">
+                  <label>Telefone (phone)</label>
+                  <input id="client_phone" placeholder="Telefone alternativo (sem WhatsApp)" />
+                </div>
+                <div class="field col-6">
+                  <label>Email</label>
+                  <input id="client_email" placeholder="email@exemplo.com" />
+                </div>
+                <div class="field col-6">
+                  <label>Website</label>
+                  <input id="client_website" placeholder="https://..." />
+                </div>
+                <div class="field col-6">
+                  <label>URL (Google Maps / CID)</label>
+                  <input id="client_url" placeholder="https://www.google.com/maps?cid=..." />
+                </div>
+
+                <div class="field col-4">
+                  <label>Instagram</label>
+                  <input id="client_instagram" placeholder="https://instagram.com/..." />
+                </div>
+                <div class="field col-4">
+                  <label>Facebook</label>
+                  <input id="client_facebook" placeholder="https://facebook.com/..." />
+                </div>
+                <div class="field col-4">
+                  <label>Twitter</label>
+                  <input id="client_twitter" placeholder="https://twitter.com/..." />
+                </div>
+
+                <div class="field col-6">
+                  <label>CID (apenas números)</label>
+                  <input id="client_cid" placeholder="Ex: 5381224799170235676" />
+                </div>
+                <div class="field col-3">
+                  <label>Latitude</label>
+                  <input id="client_lat" inputmode="decimal" placeholder="-22.4037..." />
+                </div>
+                <div class="field col-3">
+                  <label>Longitude</label>
+                  <input id="client_lng" inputmode="decimal" placeholder="-47.5737..." />
+                </div>
+
+                <div class="field col-6">
+                  <label>CPF/CNPJ (doc)</label>
+                  <input id="client_doc" placeholder="Somente se tiver" />
+                </div>
+                <div class="field col-6">
+                  <label>docDigits (auto)</label>
+                  <input id="client_docDigits" placeholder="Somente números" />
+                </div>
+
+                <div class="field col-12">
+                  <label>sourceLeadId (interno)</label>
+                  <input id="client_sourceLeadId" placeholder="(preenchido automaticamente quando vem de lead)" />
+                </div>
+              </div>
+            </details>
           </div>
 
           <div class="field col-12">
@@ -1296,7 +1369,7 @@
 
                   <div class="field" style="margin-top:10px;">
                     <label>Token de segurança (opcional)</label>
-                    <input id="gs_token" placeholder="Ex: ameripan-2026" />
+                    <input id="gs_token" placeholder="Ex: amp-2026" />
                     <div class="muted" style="margin-top:6px;">Se você ativar token no script, só quem tiver o token consegue acessar.</div>
                   </div>
 
@@ -1327,7 +1400,7 @@
 
                   <div class="field" style="margin-bottom:10px;">
                     <label>Mensagem padrão do WhatsApp ({{nome}} e {{comprador}})</label>
-                    <textarea id="cfg_waTemplate" placeholder="Ex: Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da Ameripan..."></textarea>
+                    <textarea id="cfg_waTemplate" placeholder="Ex: Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da *Empresa*..."></textarea>
                   </div>
                   <div class="field" style="margin-bottom:10px;">
                     <label style="display:flex; gap:10px; align-items:center;">
@@ -1496,10 +1569,10 @@
 // Gestor de Leads PRO V7 — Offline + Multi-Conjuntos
 // ======================================================
 const APP_NAME = 'Gestor de Leads PRO';
-const APP_VERSION = '7.4.1';
+const APP_VERSION = '7.4.3';
 
 // ---------- IndexedDB ----------
-const DB_NAME = 'ameripan_gestor_leads_pro';
+const DB_NAME = 'gestor_leads_pro';
 const DB_VERSION = 2;
 const STORE_SETS = 'sets';
 const STORE_LEADS = 'leads';
@@ -1556,11 +1629,29 @@ function normCoord(v){
   if(v === undefined || v === null) return '';
   let s = String(v).trim();
   if(!s) return '';
+  // remove apóstrofo (Sheets: força texto)
+  s = s.replace(/^'+/, '').trim();
+
+  // se vier com vírgula decimal e sem ponto, troca para ponto
   if(s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+
+  // Corrige quando o Sheets pt-BR interpretou '.' como milhar:
+  // -47.555.873.899.999.900 -> -47.555873899999900
+  const dots = (s.match(/\./g) || []).length;
+  if(dots > 1 && !s.includes(',')){
+    const neg = s.startsWith('-');
+    s = s.replace(/-/g,'');
+    const parts = s.split('.');
+    s = (neg ? '-' : '') + parts[0] + '.' + parts.slice(1).join('');
+  }
+
+  // remove lixo
   s = s.replace(/[^0-9.\-]/g,'');
-  const n = parseFloat(s);
+  if(s === '-' || s === '.' || s === '-.') return '';
+
+  // valida sem arredondar (mantém string)
+  const n = Number(s);
   if(!Number.isFinite(n)) return '';
-  // preserva o texto limpo (sem arredondar)
   return s;
 }
 function toDatetimeLocal(iso){
@@ -2062,6 +2153,21 @@ function normalizeClient(x){
     produtosInteresse: '',
     nextVisit: '',
     sourceLeadId: '',
+
+    // enriquecimento opcional (espelha CLIENTS__default)
+    phone: '',
+    email: '',
+    website: '',
+    instagram: '',
+    facebook: '',
+    twitter: '',
+    cid: '',
+    url: '',
+    lat: '',
+    lng: '',
+    doc: '',
+    docDigits: '',
+
     createdAt: now,
     updatedAt: now,
     source: 'local'
@@ -2089,6 +2195,20 @@ function normalizeClient(x){
   c.nextVisit = normStr(c.nextVisit);
   c.sourceLeadId = normStr(c.sourceLeadId);
 
+  // extras
+  c.phone = normStr(c.phone);
+  c.email = normStr(c.email);
+  c.website = normStr(c.website);
+  c.instagram = normStr(c.instagram);
+  c.facebook = normStr(c.facebook);
+  c.twitter = normStr(c.twitter);
+  c.url = normStr(c.url);
+  c.cid = String(c.cid||'').replace(/\D/g,'');
+  c.doc = normStr(c.doc);
+  c.docDigits = String(c.docDigits || c.doc || '').replace(/\D/g,'');
+  c.lat = normCoord(c.lat);
+  c.lng = normCoord(c.lng);
+
   c.city_lc = c.cidade.toLowerCase();
   c.seller_lc = c.vendedor.toLowerCase();
 
@@ -2105,9 +2225,11 @@ function leadKey(l){
   return 'na:' + normLower(l.name) + '|' + normLower(l.address);
 }
 function clientKey(c){
+  const cid = String(c.cid||'').replace(/\D/g,'');
+  if(cid) return 'cid:' + cid;
   const code = normStr(c.codCliente);
   if(code) return 'code:' + code;
-  const wa = cleanPhoneToWa(c.whatsapp);
+  const wa = cleanPhoneToWa(c.whatsapp) || cleanPhoneToWa(c.phone);
   if(wa) return 'wa:' + wa;
   return 'nc:' + normLower(c.cliente) + '|' + normLower(c.cidade);
 }
@@ -2119,18 +2241,28 @@ function clientKey(c){
  *
  * Isso ajuda a identificar rapidamente "leads já conquistados/cadastrados no sistema".
  */
-async function syncLeadClientLinks(){
+async function syncLeadClientLinks(opts={syncData:true}){
   const setId = activeSetId;
   if(!setId) return 0;
 
   const setClients = clients.filter(c=>c.setId===setId);
+
+  const byId = new Map();
   const waMap = new Map();
   const codMap = new Map();
+  const cidMap = new Map();
   const ncMap = new Map();
 
   setClients.forEach(c=>{
-    const wa = cleanPhoneToWa(c.whatsapp);
-    if(wa) waMap.set(wa, c.id);
+    byId.set(c.id, c.id);
+
+    const cid = String(c.cid||'').replace(/\D/g,'');
+    if(cid) cidMap.set(cid, c.id);
+
+    const wa1 = cleanPhoneToWa(c.whatsapp);
+    const wa2 = cleanPhoneToWa(c.phone);
+    if(wa1) waMap.set(wa1, c.id);
+    if(wa2) waMap.set(wa2, c.id);
 
     const code = normStr(c.codCliente);
     if(code) codMap.set(code, c.id);
@@ -2140,38 +2272,131 @@ async function syncLeadClientLinks(){
     if(name && city) ncMap.set(name + '|' + city, c.id);
   });
 
-  const changed = [];
+  const leadUpdates = [];
+  const clientUpdates = [];
   let count = 0;
+
+  // map clients for quick access
+  const clientById = new Map(setClients.map(c=>[c.id, c]));
+
+  const fillIfEmpty = (obj, k, v)=>{
+    if(v === undefined || v === null) return false;
+    const s = String(v).trim();
+    if(!s) return false;
+    if(obj[k] && String(obj[k]).trim()) return false;
+    obj[k] = v;
+    return true;
+  };
+
+  const pickLeadCid = (l)=>{
+    const cid0 = String(l.cid||'').replace(/\D/g,'');
+    if(cid0) return cid0;
+    // tenta extrair de url, se existir
+    const u = String(l.url||'');
+    const m = u.match(/cid=(\d+)/i);
+    return m ? m[1] : '';
+  };
+
+  const pickClientCid = (c)=> String(c.cid||'').replace(/\D/g,'');
 
   leads = leads.map(l=>{
     if(l.setId !== setId) return l;
 
     const wa = cleanPhoneToWa(l.phone);
     const code = normStr(l.cod);
+    const lcId = String(l.convertedClientId||'').trim();
+    const lcCid = pickLeadCid(l);
     const key = normLower(l.name) + '|' + normLower(l.city);
-    const clientId = (code && codMap.get(code)) || (wa && waMap.get(wa)) || ncMap.get(key) || '';
+
+    let clientId = '';
+    if(lcId && byId.has(lcId)) clientId = lcId;
+    else if(lcCid && cidMap.get(lcCid)) clientId = cidMap.get(lcCid);
+    else if(code && codMap.get(code)) clientId = codMap.get(code);
+    else if(wa && waMap.get(wa)) clientId = waMap.get(wa);
+    else if(ncMap.get(key)) clientId = ncMap.get(key);
 
     if(!clientId) return l;
 
-    // já linkado
-    if(l.claimed && l.convertedClientId) return l;
+    let updatedLead = l;
+    if(!(l.claimed && l.convertedClientId)){
+      updatedLead = Object.assign({}, l, {
+        claimed: true,
+        convertedClientId: lcId || clientId
+      });
+      count++;
+    }
 
-    const updated = Object.assign({}, l, {
-      claimed: true,
-      convertedClientId: l.convertedClientId || clientId
-    });
+    if(opts && opts.syncData){
+      const c = clientById.get(clientId);
+      if(c){
+        // ---- sync lead -> client (preenche vazios)
+        let c2 = Object.assign({}, c);
+        let cChanged = false;
 
-    count++;
-    changed.push(normalizeLead(updated));
-    return updated;
+        cChanged = fillIfEmpty(c2,'cid', lcCid) || cChanged;
+        cChanged = fillIfEmpty(c2,'url', updatedLead.url) || cChanged;
+        cChanged = fillIfEmpty(c2,'lat', updatedLead.lat) || cChanged;
+        cChanged = fillIfEmpty(c2,'lng', updatedLead.lng) || cChanged;
+        cChanged = fillIfEmpty(c2,'phone', updatedLead.phone) || cChanged;
+        cChanged = fillIfEmpty(c2,'whatsapp', updatedLead.phone) || cChanged;
+        cChanged = fillIfEmpty(c2,'email', updatedLead.email) || cChanged;
+        cChanged = fillIfEmpty(c2,'website', updatedLead.website) || cChanged;
+        cChanged = fillIfEmpty(c2,'instagram', updatedLead.instagram) || cChanged;
+        cChanged = fillIfEmpty(c2,'facebook', updatedLead.facebook) || cChanged;
+        cChanged = fillIfEmpty(c2,'twitter', updatedLead.twitter) || cChanged;
+        cChanged = fillIfEmpty(c2,'doc', updatedLead.doc) || cChanged;
+        cChanged = fillIfEmpty(c2,'docDigits', updatedLead.docDigits) || cChanged;
+        cChanged = fillIfEmpty(c2,'sourceLeadId', updatedLead.id) || cChanged;
+
+        // ---- sync client -> lead (preenche vazios)
+        let l2 = Object.assign({}, updatedLead);
+        let lChanged = false;
+
+        lChanged = fillIfEmpty(l2,'cod', c2.codCliente) || lChanged;
+        lChanged = fillIfEmpty(l2,'cid', pickClientCid(c2)) || lChanged;
+        lChanged = fillIfEmpty(l2,'url', c2.url) || lChanged;
+        lChanged = fillIfEmpty(l2,'lat', c2.lat) || lChanged;
+        lChanged = fillIfEmpty(l2,'lng', c2.lng) || lChanged;
+        lChanged = fillIfEmpty(l2,'phone', c2.whatsapp || c2.phone) || lChanged;
+        lChanged = fillIfEmpty(l2,'email', c2.email) || lChanged;
+        lChanged = fillIfEmpty(l2,'website', c2.website) || lChanged;
+        lChanged = fillIfEmpty(l2,'instagram', c2.instagram) || lChanged;
+        lChanged = fillIfEmpty(l2,'facebook', c2.facebook) || lChanged;
+        lChanged = fillIfEmpty(l2,'twitter', c2.twitter) || lChanged;
+        lChanged = fillIfEmpty(l2,'doc', c2.doc) || lChanged;
+        lChanged = fillIfEmpty(l2,'docDigits', c2.docDigits) || lChanged;
+
+        if(cChanged){
+          c2 = normalizeClient(c2);
+          clientUpdates.push(c2);
+          clientById.set(c2.id, c2);
+        }
+        if(lChanged){
+          l2 = normalizeLead(l2);
+          leadUpdates.push(l2);
+          updatedLead = l2;
+        }
+      }
+    }
+
+    return updatedLead;
   });
 
-  if(changed.length){
-    await idbBulkPut(STORE_LEADS, changed);
+  if(clientUpdates.length){
+    await idbBulkPut(STORE_CLIENTS, clientUpdates);
+    // refresh in-memory
+    const uMap = new Map(clientUpdates.map(x=>[x.id,x]));
+    clients = clients.map(x=> uMap.get(x.id) || x);
   }
+
+  if(leadUpdates.length){
+    await idbBulkPut(STORE_LEADS, leadUpdates);
+    const uMap = new Map(leadUpdates.map(x=>[x.id,x]));
+    leads = leads.map(x=> uMap.get(x.id) || x);
+  }
+
   return count;
 }
-
 
 // ---------- View switching ----------
 function setView(view){
@@ -2716,7 +2941,7 @@ function clientMatches(c, f){
   if(f.due === 'today' && !isToday(c.nextVisit)) return false;
 
   if(f.q){
-    const hay = [c.codCliente,c.vendedor,c.equipe,c.cidade,c.diasEntrega,c.cliente,c.razao,c.fantasia,c.diaVisita,c.diasSec,c.freq,c.ordem,c.comprador,c.whatsapp,c.obs,c.produtosInteresse].join(' ').toLowerCase();
+    const hay = [c.codCliente,c.vendedor,c.equipe,c.cidade,c.diasEntrega,c.cliente,c.razao,c.fantasia,c.diaVisita,c.diasSec,c.freq,c.ordem,c.comprador,c.whatsapp,c.phone,c.email,c.website,c.instagram,c.facebook,c.twitter,c.cid,c.url,c.lat,c.lng,c.doc,c.docDigits,c.sourceLeadId,c.obs,c.produtosInteresse].join(' ').toLowerCase();
     if(!hay.includes(f.q)) return false;
   }
   return true;
@@ -2941,7 +3166,7 @@ function renderAgenda(force=true){
 // ---------- WhatsApp templates ----------
 function buildWaTemplateForLead(l){
   const seller = settings.defaultSeller || '';
-  const template = settings.waTemplate || 'Olá, tudo bem? Aqui é {{vendedor}} da Ameripan. Vi a empresa {{nome}} e gostaria de apresentar nosso catálogo.';
+  const template = settings.waTemplate || 'Olá, tudo bem? Aqui é {{vendedor}} da *Empresa*. Vi a empresa {{nome}} e gostaria de apresentar nosso catálogo.';
   return template
     .replaceAll('{{nome}}', l.name || '')
     .replaceAll('{{vendedor}}', seller)
@@ -2949,7 +3174,7 @@ function buildWaTemplateForLead(l){
 }
 function buildWaTemplateForClient(c){
   const seller = c.vendedor || settings.defaultSeller || '';
-  const template = settings.waTemplate || 'Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da Ameripan.';
+  const template = settings.waTemplate || 'Olá {{comprador}}, tudo bem? Aqui é {{vendedor}} da *Empresa*.';
   return template
     .replaceAll('{{nome}}', c.cliente || c.fantasia || '')
     .replaceAll('{{vendedor}}', seller)
@@ -3098,6 +3323,8 @@ async function saveLeadFromModal(){
     leads.push(lead);
   }
 
+  await syncLeadClientLinks({syncData:true});
+
   closeModal('modalLeadBg');
   renderLeads();
 }
@@ -3153,6 +3380,18 @@ async function convertLeadToClient(id=null){
     ordem: 0,
     comprador: '',
     whatsapp: l.phone || '',
+    phone: l.phone || '',
+    email: l.email || '',
+    website: l.website || '',
+    instagram: l.instagram || '',
+    facebook: l.facebook || '',
+    twitter: l.twitter || '',
+    cid: l.cid || '',
+    url: l.url || (buildCidUrl(l.cid)||''),
+    lat: l.lat || '',
+    lng: l.lng || '',
+    doc: l.doc || '',
+    docDigits: l.docDigits || '',
     obs: `Convertido de lead. Endereço: ${l.address||''}. Maps: ${l.url||buildCidUrl(l.cid)||''}`.trim(),
     produtosInteresse: '',
     nextVisit: '',
@@ -3169,6 +3408,8 @@ async function convertLeadToClient(id=null){
   l.stage = normalizeStage(l.stage);
   await idbPut(STORE_LEADS, normalizeLead(l));
   leads = leads.map(x=> x.id===l.id ? l : x);
+
+  await syncLeadClientLinks({syncData:true});
 
   closeModal('modalLeadBg');
   renderLeads();
@@ -3199,6 +3440,19 @@ function openClientModal(id=null){
   document.getElementById('client_nextVisit').value = toDatetimeLocal(c?.nextVisit || '');
   document.getElementById('client_produtos').value = c?.produtosInteresse || '';
   document.getElementById('client_obs').value = c?.obs || '';
+  document.getElementById('client_phone')?.value = c?.phone || '';
+  document.getElementById('client_email')?.value = c?.email || '';
+  document.getElementById('client_website')?.value = c?.website || '';
+  document.getElementById('client_instagram')?.value = c?.instagram || '';
+  document.getElementById('client_facebook')?.value = c?.facebook || '';
+  document.getElementById('client_twitter')?.value = c?.twitter || '';
+  document.getElementById('client_cid')?.value = c?.cid || '';
+  document.getElementById('client_url')?.value = c?.url || '';
+  document.getElementById('client_lat')?.value = c?.lat || '';
+  document.getElementById('client_lng')?.value = c?.lng || '';
+  document.getElementById('client_doc')?.value = c?.doc || '';
+  document.getElementById('client_docDigits')?.value = c?.docDigits || (String(c?.doc||'').replace(/\D/g,'')) || '';
+  document.getElementById('client_sourceLeadId')?.value = c?.sourceLeadId || '';
 
   openModal('modalClientBg');
 }
@@ -3224,6 +3478,19 @@ async function saveClientFromModal(){
     diasSec: document.getElementById('client_diasSec').value,
     comprador: document.getElementById('client_comprador').value,
     whatsapp: document.getElementById('client_whatsapp').value,
+    phone: document.getElementById('client_phone')?.value || '',
+    email: document.getElementById('client_email')?.value || '',
+    website: document.getElementById('client_website')?.value || '',
+    instagram: document.getElementById('client_instagram')?.value || '',
+    facebook: document.getElementById('client_facebook')?.value || '',
+    twitter: document.getElementById('client_twitter')?.value || '',
+    cid: document.getElementById('client_cid')?.value || '',
+    url: document.getElementById('client_url')?.value || '',
+    lat: document.getElementById('client_lat')?.value || '',
+    lng: document.getElementById('client_lng')?.value || '',
+    doc: document.getElementById('client_doc')?.value || '',
+    docDigits: document.getElementById('client_docDigits')?.value || '',
+    sourceLeadId: document.getElementById('client_sourceLeadId')?.value || '',
     nextVisit: fromDatetimeLocal(document.getElementById('client_nextVisit').value),
     produtosInteresse: document.getElementById('client_produtos').value,
     obs: document.getElementById('client_obs').value
@@ -4990,6 +5257,7 @@ async function gsPull(){
     const payload = data.payload;
     if(!payload) throw new Error('Conector não retornou payload.');
     await importBackupData(payload, {mode:'merge'});
+    await syncLeadClientLinks({syncData:true});
     gsSetStatus('Dados puxados e mesclados.');
     alert('Dados puxados do Google Sheets.');
     renderLeads(); renderClients(); renderAgenda();
