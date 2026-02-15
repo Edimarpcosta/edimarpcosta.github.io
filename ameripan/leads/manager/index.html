@@ -939,6 +939,7 @@
           <a class="mini web" id="leadQaWeb" href="#" target="_blank" rel="noreferrer" title="Website">🌐</a>
           <a class="mini ig" id="leadQaIg" href="#" target="_blank" rel="noreferrer" title="Instagram">📷</a>
           <a class="mini fb" id="leadQaFb" href="#" target="_blank" rel="noreferrer" title="Facebook">📘</a>
+          <a class="mini tw" id="leadQaTw" href="#" target="_blank" rel="noreferrer" title="Twitter/X">🐦</a>
         </div>
 
         <div class="form">
@@ -949,6 +950,11 @@
           <div class="field col-4">
             <label>Telefone / WhatsApp</label>
             <input id="lead_phone" placeholder="(DDD) 9xxxx-xxxx" />
+          </div>
+
+          <div class="field col-4">
+            <label>Código interno (cod)</label>
+            <input id="lead_cod" placeholder="Ex: 4567 (opcional)" />
           </div>
 
           <div class="field col-4">
@@ -979,13 +985,17 @@
             <input id="lead_website" placeholder="https://..." />
           </div>
 
-          <div class="field col-6">
+          <div class="field col-4">
             <label>Instagram</label>
             <input id="lead_instagram" placeholder="https://instagram.com/..." />
           </div>
-          <div class="field col-6">
+          <div class="field col-4">
             <label>Facebook</label>
             <input id="lead_facebook" placeholder="https://facebook.com/..." />
+          </div>
+          <div class="field col-4">
+            <label>Twitter / X</label>
+            <input id="lead_twitter" placeholder="https://x.com/... ou https://twitter.com/..." />
           </div>
 
           <div class="field col-6">
@@ -1255,12 +1265,12 @@
 
                 <div class="split" style="gap:10px;">
                   <div class="field">
-                    <label>Aba de Leads (padrão: LEADS__default)</label>
-                    <input id="gs_leadsTab" list="gs_tabsList" placeholder="LEADS__default" />
+                    <label>Aba de Leads (padrão: leads)</label>
+                    <input id="gs_leadsTab" list="gs_tabsList" placeholder="leads" />
                   </div>
                   <div class="field">
-                    <label>Aba de Clientes (padrão: CLIENTS__default)</label>
-                    <input id="gs_clientsTab" list="gs_tabsList" placeholder="CLIENTS__default" />
+                    <label>Aba de Clientes (padrão: clientes)</label>
+                    <input id="gs_clientsTab" list="gs_tabsList" placeholder="clientes" />
                   </div>
                 </div>
                 <datalist id="gs_tabsList"></datalist>
@@ -1486,7 +1496,7 @@
 // Gestor de Leads PRO V7 — Offline + Multi-Conjuntos
 // ======================================================
 const APP_NAME = 'Gestor de Leads PRO';
-const APP_VERSION = '7.3.1';
+const APP_VERSION = '7.4.1';
 
 // ---------- IndexedDB ----------
 const DB_NAME = 'ameripan_gestor_leads_pro';
@@ -1541,6 +1551,17 @@ function toFloat(v, defVal=0){
   s = s.replace(/[^0-9.\-]/g,'');
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : defVal;
+}
+function normCoord(v){
+  if(v === undefined || v === null) return '';
+  let s = String(v).trim();
+  if(!s) return '';
+  if(s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+  s = s.replace(/[^0-9.\-]/g,'');
+  const n = parseFloat(s);
+  if(!Number.isFinite(n)) return '';
+  // preserva o texto limpo (sem arredondar)
+  return s;
 }
 function toDatetimeLocal(iso){
   if(!iso) return '';
@@ -1631,6 +1652,16 @@ function normalizeFacebookUrl(s){
   if(!s.includes('.')) return 'https://facebook.com/' + encodeURIComponent(s);
   return 'https://' + s;
 }
+
+function normalizeTwitterUrl(v){
+  v = normStr(v);
+  if(!v) return '';
+  // aceita twitter.com e x.com; garante https
+  if(/^@/.test(v)) return 'https://x.com/' + v.replace(/^@+/,'');
+  if(!/^https?:\/\//i.test(v)) v = 'https://' + v;
+  return v;
+}
+
 
 
 const STAGES = ['novo','contatado','qualificado','proposta','fechado','perdido'];
@@ -1905,6 +1936,8 @@ function normalizeLead(x){
   const lead = Object.assign({
     id: uid('lead'),
     setId: activeSetId || 'default',
+    cod: '',
+    socialMedias: '',
     placeId: '',
     cid: '',
     url: '',
@@ -1912,6 +1945,7 @@ function normalizeLead(x){
     lng: '',
     facebook: '',
     instagram: '',
+    twitter: '',
     name: 'Sem Nome',
     address: '',
     city: '',
@@ -1941,6 +1975,9 @@ function normalizeLead(x){
 
   lead.setId = lead.setId || (activeSetId || 'default');
 
+
+  lead.cod = normStr(lead.cod);
+  lead.socialMedias = normStr(lead.socialMedias);
   lead.placeId = normStr(lead.placeId);
   lead.cid = normStr(lead.cid);
   lead.url = normStr(lead.url);
@@ -1972,8 +2009,18 @@ function normalizeLead(x){
   lead.website = normalizeWebUrl(lead.website);
   lead.instagram = normalizeInstagramUrl(lead.instagram);
   lead.facebook = normalizeFacebookUrl(lead.facebook);
-  lead.lat = toFloat(lead.lat, '');
-  lead.lng = toFloat(lead.lng, '');
+  lead.twitter = normalizeTwitterUrl(lead.twitter);
+
+  // Social Medias (string JSON) — útil para interoperar com export do MapsScraper
+  if(!lead.socialMedias){
+    const sm = { facebook: lead.facebook||'', instagram: lead.instagram||'', twitter: lead.twitter||'' };
+    // só salva se houver algum link
+    if(sm.facebook || sm.instagram || sm.twitter) lead.socialMedias = JSON.stringify(sm);
+  }
+  // Preserve precisão (string) — converta para número apenas quando necessário (ex: GPS)
+  lead.lat = normCoord(lead.lat);
+  lead.lng = normCoord(lead.lng);
+
   lead.openingHours = normStr(lead.openingHours);
 
   lead.stage = normalizeStage(lead.stage);
@@ -2078,11 +2125,15 @@ async function syncLeadClientLinks(){
 
   const setClients = clients.filter(c=>c.setId===setId);
   const waMap = new Map();
+  const codMap = new Map();
   const ncMap = new Map();
 
   setClients.forEach(c=>{
     const wa = cleanPhoneToWa(c.whatsapp);
     if(wa) waMap.set(wa, c.id);
+
+    const code = normStr(c.codCliente);
+    if(code) codMap.set(code, c.id);
 
     const name = normLower(c.cliente || c.fantasia);
     const city = normLower(c.cidade);
@@ -2096,8 +2147,9 @@ async function syncLeadClientLinks(){
     if(l.setId !== setId) return l;
 
     const wa = cleanPhoneToWa(l.phone);
+    const code = normStr(l.cod);
     const key = normLower(l.name) + '|' + normLower(l.city);
-    const clientId = (wa && waMap.get(wa)) || ncMap.get(key) || '';
+    const clientId = (code && codMap.get(code)) || (wa && waMap.get(wa)) || ncMap.get(key) || '';
 
     if(!clientId) return l;
 
@@ -2401,7 +2453,7 @@ function leadMatches(l, f){
   if(f.act === 'today' && !isToday(l.nextAction)) return false;
   if(f.city && normLower(l.city) !== normLower(f.city)) return false;
   if(f.q){
-    const hay = [l.name,l.city,l.uf,l.address,l.cep,l.doc,l.phone,l.email,l.website,l.instagram,l.facebook,l.placeId,l.cid,l.url,l.lat,l.lng,l.tags,l.notes].join(' ').toLowerCase();
+    const hay = [l.cod,l.name,l.city,l.uf,l.address,l.cep,l.doc,l.phone,l.email,l.website,l.instagram,l.facebook,l.twitter,l.socialMedias,l.placeId,l.cid,l.url,l.lat,l.lng,l.tags,l.notes].join(' ').toLowerCase();
     if(!hay.includes(f.q)) return false;
   }
   return true;
@@ -2496,6 +2548,7 @@ function renderLeads(){
     const web = l.website ? normalizeWebUrl(l.website) : '';
     const ig = l.instagram ? normalizeInstagramUrl(l.instagram) : '';
     const fb = l.facebook ? normalizeFacebookUrl(l.facebook) : '';
+    const tw = l.twitter ? normalizeTwitterUrl(l.twitter) : '';
 
     const rating = toFloat(l.rating, 0).toFixed(1);
     const reviews = l.reviews || 0;
@@ -2536,6 +2589,7 @@ function renderLeads(){
           ${web ? `<a class="mini web" href="${web}" target="_blank" rel="noreferrer" title="Website">🌐</a>` : ''}
           ${ig ? `<a class="mini ig" href="${ig}" target="_blank" rel="noreferrer" title="Instagram">📷</a>` : ''}
           ${fb ? `<a class="mini fb" href="${fb}" target="_blank" rel="noreferrer" title="Facebook">📘</a>` : ''}
+          ${tw ? `<a class="mini tw" href="${tw}" target="_blank" rel="noreferrer" title="Twitter/X">🐦</a>` : ''}
           <div class="mini edit" title="Editar / anotar" onclick="openLeadModal('${escapeHtml(l.id)}')">✏️</div>
           <div class="mini del" title="Excluir lead" onclick="deleteLead('${escapeHtml(l.id)}')">🗑️</div>
         </div>
@@ -2559,6 +2613,7 @@ function renderLeads(){
     const web = l.website ? normalizeWebUrl(l.website) : '';
     const ig = l.instagram ? normalizeInstagramUrl(l.instagram) : '';
     const fb = l.facebook ? normalizeFacebookUrl(l.facebook) : '';
+    const tw = l.twitter ? normalizeTwitterUrl(l.twitter) : '';
     const stage = normalizeStage(l.stage);
     const next = l.nextAction ? fmtBR(l.nextAction) : '—';
     const nextDue = l.nextAction && isDue(l.nextAction);
@@ -2591,6 +2646,7 @@ function renderLeads(){
         ${web ? `<a class="mini web" href="${web}" target="_blank" rel="noreferrer" title="Website">🌐</a>` : ''}
         ${ig ? `<a class="mini ig" href="${ig}" target="_blank" rel="noreferrer" title="Instagram">📷</a>` : ''}
         ${fb ? `<a class="mini fb" href="${fb}" target="_blank" rel="noreferrer" title="Facebook">📘</a>` : ''}
+          ${tw ? `<a class="mini tw" href="${tw}" target="_blank" rel="noreferrer" title="Twitter/X">🐦</a>` : ''}
         <div class="mini edit" title="Editar / anotar" onclick="openLeadModal('${escapeHtml(l.id)}')">✏️</div>
         <div class="mini del" title="Excluir lead" onclick="deleteLead('${escapeHtml(l.id)}')">🗑️</div>
       </div>
@@ -2954,6 +3010,7 @@ function updateLeadQuickActions(){
   setQuickActionLink('leadQaWeb', l.website || '');
   setQuickActionLink('leadQaIg', l.instagram || '');
   setQuickActionLink('leadQaFb', l.facebook || '');
+  setQuickActionLink('leadQaTw', l.twitter || '');
 }
 
 
@@ -2963,11 +3020,13 @@ function openLeadModal(id=null){
   document.getElementById('lead_id').value = l?.id || '';
   document.getElementById('lead_name').value = l?.name || '';
   document.getElementById('lead_phone').value = l?.phone || '';
+  document.getElementById('lead_cod').value = l?.cod || '';
   document.getElementById('lead_doc').value = l?.doc || '';
   document.getElementById('lead_email').value = l?.email || '';
   document.getElementById('lead_website').value = l?.website || '';
   document.getElementById('lead_instagram').value = l?.instagram || '';
   document.getElementById('lead_facebook').value = l?.facebook || '';
+  document.getElementById('lead_twitter').value = l?.twitter || '';
   document.getElementById('lead_url').value = l?.url || '';
   document.getElementById('lead_cid').value = l?.cid || '';
   document.getElementById('lead_lat').value = (l?.lat ?? '');
@@ -2998,11 +3057,13 @@ async function saveLeadFromModal(){
     setId: activeSetId,
     name: document.getElementById('lead_name').value,
     phone: document.getElementById('lead_phone').value,
+    cod: document.getElementById('lead_cod').value,
     doc: document.getElementById('lead_doc').value,
     email: document.getElementById('lead_email').value,
     website: document.getElementById('lead_website').value,
     instagram: document.getElementById('lead_instagram').value,
     facebook: document.getElementById('lead_facebook').value,
+    twitter: document.getElementById('lead_twitter').value,
     url: document.getElementById('lead_url').value,
     cid: document.getElementById('lead_cid').value,
     lat: document.getElementById('lead_lat').value,
@@ -3290,29 +3351,121 @@ async function importLeadsFromRows(rows, filename='import'){
   let inserted=0, updated=0, skipped=0;
   const toUpsert = [];
 
+  const normHeader = (s)=> String(s||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'');
+
+  const getRow = (r, ...names)=>{
+    if(!r || typeof r!=='object') return '';
+    // cache de cabeçalhos normalizados por linha (não enumerável)
+    if(!r.___hdrMap){
+      const map = new Map();
+      for(const k of Object.keys(r)){
+        map.set(normHeader(k), k);
+      }
+      Object.defineProperty(r, '___hdrMap', { value: map, enumerable:false });
+    }
+    const map = r.___hdrMap;
+    for(const name of names){
+      if(name in r){
+        const v = r[name];
+        if(v!==undefined && v!==null && String(v).trim()!=='') return v;
+      }
+      const k = map.get(normHeader(name));
+      if(k){
+        const v = r[k];
+        if(v!==undefined && v!==null && String(v).trim()!=='') return v;
+      }
+    }
+    return '';
+  };
+
+  const parseSocialMedias = (v)=>{
+    const out = { facebook:'', instagram:'', twitter:'', website:'' };
+    let s = String(v||'').trim();
+    if(!s) return out;
+
+    // 1) JSON: {"facebook":"...","instagram":"..."}
+    if(s.startsWith('{') && s.endsWith('}')){
+      try{
+        // alguns exports podem vir com aspas “curvas” ou aspas simples
+        const fixed = s.replace(/\u201C|\u201D/g,'"').replace(/'/g,'"');
+        const obj = JSON.parse(fixed);
+        if(obj && typeof obj==='object'){
+          out.facebook = String(obj.facebook || obj.fb || obj.face || '') || '';
+          out.instagram = String(obj.instagram || obj.ig || '') || '';
+          out.twitter = String(obj.twitter || obj.x || obj.twitter_url || '') || '';
+          out.website = String(obj.website || obj.site || '') || '';
+          return out;
+        }
+      }catch(_e){}
+    }
+
+    // 2) Lista de URLs em texto
+    const urls = s.match(/https?:\/\/[^\s,;]+/gi) || [];
+    for(const u0 of urls){
+      const u = String(u0).trim();
+      const lu = u.toLowerCase();
+      if(!out.facebook && lu.includes('facebook.com')) out.facebook = u;
+      else if(!out.instagram && lu.includes('instagram.com')) out.instagram = u;
+      else if(!out.twitter && (lu.includes('twitter.com') || lu.includes('x.com'))) out.twitter = u;
+      else if(!out.website && !lu.includes('google.com/maps') && !lu.includes('maps.app.goo.gl')) out.website = u;
+    }
+    return out;
+  };
+
+  const extractCid = (url)=>{
+    const s = String(url||'');
+    const m = s.match(/[?&]cid=(\d+)/i) || s.match(/\/\?cid=(\d+)/i);
+    return m ? m[1] : '';
+  };
+
   for(const r0 of rows){
     const r = r0 || {};
-    const name = r['Name'] || r['name'] || r['Title'] || r['title'] || r['Business Name'] || r['Empresa'] || r['Nome'] || '';
-    const fulladdress = r['Fulladdress'] || r['Full Address'] || r['Address'] || r['Endereço'] || r['Endereco'] || '';
-    const street = r['Street'] || r['Rua'] || '';
-    const mun = r['Municipality'] || r['Cidade'] || r['City'] || '';
+
+    // suporta tanto formato do app quanto export direto do MapsScraper (variações de header, acentos, espaços, etc.)
+    const name = getRow(r, 'Name','Business Name','Empresa','Nome','Title','title','name','Business name') || '';
+    const fulladdress = getRow(r, 'Fulladdress','Full Address','Address','Endereço','Endereco','Full address') || '';
+    const street = getRow(r, 'Street','Rua') || '';
+    const mun = getRow(r, 'Municipality','Cidade','City','Município','Municipio','Localidade','Locality') || '';
     const {city, uf} = parseMunicipality(mun);
-    const category = r['Categories'] || r['Category'] || r['Categorias'] || '';
-    const doc = r['CPF/CNPJ'] || r['Doc'] || r['Documento'] || r['CNPJ'] || r['CPF'] || '';
-    const phone = pickFirstPhone(r['Phone'] || r['Telefone'] || r['WhatsApp'] || '', r['Phones'] || '');
-    const claimed = boolFromYesNo(r['Claimed'] ?? r['Verificado'] ?? r['Oportunidade'] ?? r['Is claimed']);
-    const reviews = r['Review Count'] || r['Reviews'] || r['Avaliações'] || '';
-    const rating = r['Average Rating'] || r['Rating'] || r['Nota'] || '';
-    const url = r['Google Maps URL'] || r['Maps URL'] || r['Google url'] || r['URL'] || r['Link'] || '';
-    const email = r['Email'] || r['email'] || r['E-mail'] || r['Mail'] || '';
-    const website = r['Website'] || r['Site'] || '';
-    const lat = r['Latitude'] || r['Lat'] || r['latitude'] || '';
-    const lng = r['Longitude'] || r['Lng'] || r['longitude'] || '';
-    const facebook = r['Facebook'] || r['facebook'] || '';
-    const instagram = r['Instagram'] || r['instagram'] || '';
-    const opening = r['Opening hours'] || r['Horário'] || r['Horario'] || r['Opening Hours'] || '';
-    const cid = r['Cid'] || r['CID'] || '';
-    const placeId = r['Place Id'] || r['Place ID'] || r['PlaceId'] || r['place_id'] || '';
+    const category = getRow(r, 'Categories','Category','Categorias','Categoria') || '';
+
+    const doc = getRow(r, 'CPF/CNPJ','Doc','Documento','CNPJ','CPF','cpf','cnpj','Documento (CPF/CNPJ)') || '';
+
+    const phone = pickFirstPhone(
+      getRow(r, 'Phone','Telefone','WhatsApp','Whatsapp','Celular','Mobile','Phone Number','Phone number'),
+      getRow(r, 'Phones','Telefones','Phones (all)','All phones','Phones all')
+    );
+
+    const claimed = boolFromYesNo(getRow(r, 'Claimed','Is claimed','Verificado','Oportunidade','Claimed?'));
+
+    const reviews = getRow(r, 'Review Count','Reviews','Avaliações','Avaliacoes','Review count','Number of reviews','User ratings total','Total reviews');
+    const rating = getRow(r, 'Average Rating','Rating','Nota','Average rating');
+
+    const url = getRow(r, 'Google Maps URL','Maps URL','Google url','URL','Link','Google Maps Link','Google Maps Url','Google Maps url','Google Maps URL (cid)','Google Maps');
+    const email = getRow(r, 'Email','E-mail','Mail','email');
+    const website = getRow(r, 'Website','Site','website');
+
+    // Latitude/Longitude (export do MapsScraper costuma vir com esses nomes)
+    const lat = getRow(r, 'Latitude','Lat','latitude','LAT','Lat.','lat.');
+    const lng = getRow(r, 'Longitude','Lng','longitude','LNG','Long','Lon','long','lon');
+
+    // redes sociais
+    const facebookCol = getRow(r, 'Facebook','facebook','FB','fb');
+    const instagramCol = getRow(r, 'Instagram','instagram','IG','ig');
+    const twitterCol = getRow(r, 'Twitter','twitter','X','x');
+    const socialMedias = getRow(r, 'Social Medias','Social Media','Social medias','Social media','Social','Socials');
+
+    const sm = parseSocialMedias(socialMedias);
+
+    const facebook = facebookCol || sm.facebook || '';
+    const instagram = instagramCol || sm.instagram || '';
+    const twitter = twitterCol || sm.twitter || '';
+
+    const opening = getRow(r, 'Opening hours','Opening Hours','Horário','Horario','Horas','Horário de funcionamento');
+    const cid = getRow(r, 'Cid','CID','Google Maps CID','Maps CID') || extractCid(url);
+    const placeId = getRow(r, 'Place Id','Place ID','PlaceId','place_id','Place id');
 
     const address = fulladdress || street || '';
     if(!normStr(name) && !normStr(address) && !normStr(phone)) { skipped++; continue; }
@@ -3330,11 +3483,14 @@ async function importLeadsFromRows(rows, filename='import'){
       category: category,
       phone: phone,
       email: email,
-      website: website,
+      website: website || sm.website || '',
       lat: lat,
       lng: lng,
       facebook: facebook,
       instagram: instagram,
+      // campo "extra" (não quebra versões antigas)
+      twitter: twitter,
+      doc: doc,
       openingHours: opening,
       rating: rating,
       reviews: reviews,
@@ -3349,6 +3505,7 @@ async function importLeadsFromRows(rows, filename='import'){
     // dedupe / merge
     const key = leadKey(incoming);
     const old = mapExisting.get(key);
+
     if(old){
       // merge: preserva funil/notes/tags/nextAction
       const merged = normalizeLead(Object.assign({}, old, {
@@ -3365,6 +3522,7 @@ async function importLeadsFromRows(rows, filename='import'){
         lng: (old.lng ?? '') || (incoming.lng ?? ''),
         facebook: old.facebook || incoming.facebook,
         instagram: old.instagram || incoming.instagram,
+        twitter: old.twitter || incoming.twitter,
         url: old.url || incoming.url,
         cid: old.cid || incoming.cid,
         placeId: old.placeId || incoming.placeId,
@@ -3386,13 +3544,11 @@ async function importLeadsFromRows(rows, filename='import'){
   }
 
   await idbBulkPut(STORE_LEADS, toUpsert);
-  // recarrega do db? melhor manter em memória
   // atualizar leads (somente do conjunto atual)
   const other = leads.filter(l=>l.setId !== activeSetId);
   leads = other.concat(Array.from(mapExisting.values()));
 
   await syncLeadClientLinks();
-
   await syncLeadClientLinks();
 
   return { inserted, updated, skipped };
@@ -3633,6 +3789,9 @@ async function exportLeadsXlsx(){
       'CNPJ CNAE': l.cnpjInfo?.cnae_fiscal_descricao || '',
       'CNPJ Atualizado Em': l.cnpjInfo?.fetchedAt || '',
       'CNPJ API': l.cnpjInfo?.api_origem || l.cnpjInfo?.api || '',
+      'cod': l.cod || '',
+      'Twitter': l.twitter || '',
+      'Social Medias': l.socialMedias || JSON.stringify({facebook:l.facebook||'', instagram:l.instagram||'', twitter:l.twitter||''}),
       'Phone': l.phone,
       'Email': l.email,
       'Website': l.website,
