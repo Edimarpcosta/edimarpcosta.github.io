@@ -27,10 +27,85 @@
 
     .input-editable { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.25rem; padding: 0.25rem 0.5rem; }
     
-    /* Indicador de Campo Obrigatório (Adicionado via JS) */
+    /* Indicador de Campo Obrigatório */
     .required-mark::after { content: " *"; color: #ef4444; font-weight: bold; }
 
     [un-cloak] { display: none; }
+
+    /* ============================================================
+       ANIMAÇÃO DE PISCAR - NÃO ENCONTRADO
+       ============================================================ */
+    @keyframes flashError {
+      0%   { background-color: #fee2e2; }
+      20%  { background-color: #ef4444; }
+      40%  { background-color: #fee2e2; }
+      60%  { background-color: #ef4444; }
+      80%  { background-color: #fee2e2; }
+      100% { background-color: transparent; }
+    }
+    @keyframes shakeInput {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-6px); }
+      40%       { transform: translateX(6px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
+    }
+    .flash-error {
+      animation: flashError 0.8s ease-in-out;
+    }
+    .shake-input {
+      animation: shakeInput 0.4s ease-in-out;
+      border-color: #ef4444 !important;
+    }
+
+    /* Estado de "não encontrado" nos cards */
+    .card-not-found {
+      border-left-color: #ef4444 !important;
+      background-color: #fff5f5 !important;
+    }
+    .card-found {
+      border-left-color: #16a34a !important;
+      background-color: #f0fdf4 !important;
+      transition: background-color 0.4s;
+    }
+
+    /* Badge manual */
+    .badge-manual {
+      background-color: #f59e0b;
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      vertical-align: middle;
+    }
+
+    /* Input editável ativo (manual) */
+    .input-manual {
+      background-color: #fffbeb !important;
+      border-color: #f59e0b !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+    }
+    .input-manual::placeholder { color: #d97706; opacity: 0.7; }
+
+    /* Tooltip de aviso não encontrado */
+    .nao-encontrado-aviso {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background-color: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #92400e;
+      margin-top: 4px;
+    }
+    .nao-encontrado-aviso i { color: #d97706; font-size: 14px; }
   </style>
 </head>
 <body class="pb-24" un-cloak>
@@ -47,29 +122,37 @@
   <div class="max-w-md mx-auto p-3">
     <form id="rotaForm" onsubmit="return false;">
       
-      <div class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-blue-500">
-        <div class="flex justify-between mb-1"><label class="text-xs font-bold text-gray-700" id="lbl_cod_vend">Vendedor</label></div>
+      <!-- ===== CARD VENDEDOR ===== -->
+      <div id="cardVendedor" class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-blue-500" style="transition: all 0.3s;">
+        <div class="flex justify-between items-center mb-1">
+          <label class="text-xs font-bold text-gray-700" id="lbl_cod_vend">Vendedor</label>
+          <span id="badgeManualVendedor" class="badge-manual hidden">✏ Manual</span>
+        </div>
         <div class="flex gap-2 relative mb-1">
           <div class="relative w-20">
             <input type="number" id="codVendedor" class="w-full p-1.5 border rounded text-sm bg-gray-50 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Cód" oninput="buscarVendedorLocal()">
           </div>
-          <input type="text" id="nomeVendedor" class="flex-1 p-1.5 border rounded text-sm bg-white text-gray-700 font-medium outline-none" placeholder="Nome" readonly>
+          <input type="text" id="nomeVendedor" class="flex-1 p-1.5 border rounded text-sm bg-white text-gray-700 font-medium outline-none" placeholder="Nome do Vendedor">
         </div>
         <div class="flex items-center gap-2 bg-blue-50 p-1.5 rounded border border-blue-100">
            <span class="text-[10px] text-blue-600 font-bold uppercase">Equipe:</span>
-           <input type="text" id="equipeVendedor" class="bg-transparent text-xs font-semibold text-blue-800 w-full outline-none" placeholder="..." readonly>
+           <input type="text" id="equipeVendedor" class="bg-transparent text-xs font-semibold text-blue-800 w-full outline-none" placeholder="Equipe...">
         </div>
         <div id="msgVendedor" class="text-[10px] mt-1 min-h-[1rem]"></div>
       </div>
 
-      <div class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-orange-500">
-        <label class="block text-xs font-bold text-gray-700 mb-1" id="lbl_cod_cliente">Cliente</label>
+      <!-- ===== CARD CLIENTE ===== -->
+      <div id="cardCliente" class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-orange-500" style="transition: all 0.3s;">
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-xs font-bold text-gray-700" id="lbl_cod_cliente">Cliente</label>
+          <span id="badgeManualCliente" class="badge-manual hidden">✏ Manual</span>
+        </div>
         <div class="flex gap-2 relative">
           <input type="number" id="codCliente" class="w-full p-2 border rounded bg-white focus:ring-1 focus:ring-orange-500 outline-none pl-8 text-base font-bold" placeholder="Cód Cliente..." oninput="buscarClienteLocal()">
           <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-gray-400 text-lg"></i>
           <button type="button" onclick="limparCliente()" class="bg-gray-200 text-gray-600 px-3 rounded hover:bg-gray-300"><i class="ph ph-eraser"></i></button>
         </div>
-        <div id="msgCliente" class="text-[10px] mt-1 h-4 font-bold text-blue-600"></div>
+        <div id="msgCliente" class="min-h-[1rem] mt-1"></div>
         
         <div class="mt-2 grid grid-cols-1 gap-1 bg-orange-50 p-2 rounded border border-orange-100">
           <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_razao">Razão Social</span><input type="text" id="razaoSocial" class="input-editable w-full font-bold text-gray-800 text-xs" placeholder="..."></div>
@@ -78,6 +161,7 @@
         </div>
       </div>
 
+      <!-- ===== ORDEM / FREQUÊNCIA / DIAS ===== -->
       <div class="bg-white p-3 rounded shadow-sm mb-3">
         
         <div class="mb-3">
@@ -126,6 +210,7 @@
         </div>
       </div>
 
+      <!-- ===== COMPRADOR / WHATSAPP / OBS ===== -->
       <div class="bg-white p-3 rounded shadow-sm mb-4">
         <div class="grid grid-cols-1 gap-2">
           <div class="flex gap-2">
@@ -142,18 +227,21 @@
       </div>
     </form>
 
+    <!-- ===== LISTA ===== -->
     <div id="areaLista" class="bg-white rounded shadow-sm border border-gray-200 mb-20 hidden">
       <div class="bg-gray-100 p-2 border-b border-gray-200 flex justify-between items-center"><h3 class="font-bold text-xs text-gray-700">LISTA DE GRAVAÇÃO (MEMÓRIA)</h3><span id="contadorLista" class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span></div>
       <div id="listaClientesContainer" class="divide-y divide-gray-100"></div>
     </div>
   </div>
 
+  <!-- ===== BARRA SALVAR ===== -->
   <div id="barraSalvar" class="fixed bottom-0 left-0 w-full bg-white border-t p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hidden z-50">
     <div class="max-w-md mx-auto">
       <button onclick="salvarLote()" class="w-full btn-green font-bold py-3 rounded shadow-lg flex justify-center items-center gap-2 text-base"><i class="ph ph-paper-plane-right text-xl"></i> ENVIAR TUDO (<span id="btnCount">0</span>)</button>
     </div>
   </div>
 
+  <!-- ===== OVERLAY MODAL ===== -->
   <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4"><div class="bg-white rounded-lg p-6 w-full max-w-sm text-center shadow-xl"><div id="modalContent"></div></div></div>
 
   <script>
@@ -165,26 +253,32 @@
     const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
     
     const ABA_VENDEDORES = 'VENDEDORES'; const RANGE_VENDEDORES = 'A2:C';
-    const ABA_CLIENTES = 'CLIENTES'; const RANGE_CLIENTES = 'A2:C';
-    const ABA_EXIGIDO = 'EXIGIDO'; const RANGE_EXIGIDO = 'A2:B'; // Nova aba de regras
+    const ABA_CLIENTES = 'CLIENTES'; const RANGE_CLIENTES = 'A2:D'; // Expandido para pegar fantasia
+    const ABA_EXIGIDO = 'EXIGIDO'; const RANGE_EXIGIDO = 'A2:B';
 
-    // Mapa: Nome na Planilha "EXIGIDO" -> ID/Lógica no HTML
     const mapaCampos = {
         'COD VEND': { id: 'codVendedor', label: 'lbl_cod_vend', tipo: 'input' },
         'COD CLIENTE': { id: 'codCliente', label: 'lbl_cod_cliente', tipo: 'input' },
         'RAZAO SOCIAL': { id: 'razaoSocial', label: 'lbl_razao', tipo: 'input' },
         'FANTASIA': { id: 'nomeFantasia', label: 'lbl_fantasia', tipo: 'input' },
         'CIDADE': { id: 'cidade', label: 'lbl_cidade', tipo: 'input' },
-        'ORDEM ROTA': { id: 'ordemManual', label: 'lbl_ordem', tipo: 'ordem' }, // Logica especial
-        'FREQUENCIA': { label: 'lbl_frequencia', tipo: 'frequencia' }, // Logica especial
-        'DIA VISITA': { label: 'lbl_dia_visita', tipo: 'dia' }, // Logica especial
+        'ORDEM ROTA': { id: 'ordemManual', label: 'lbl_ordem', tipo: 'ordem' },
+        'FREQUENCIA': { label: 'lbl_frequencia', tipo: 'frequencia' },
+        'DIA VISITA': { label: 'lbl_dia_visita', tipo: 'dia' },
         'OUTROS DIAS VISITA': { label: 'lbl_outros_dias', tipo: 'outros_dias' },
         'NOME COMPRADOR': { id: 'comprador', label: 'lbl_comprador', tipo: 'input' },
         'WHATSAPP': { id: 'whatsapp', label: 'lbl_whatsapp', tipo: 'input' },
         'OBSERVAÇÕES': { id: 'obs', label: 'lbl_obs', tipo: 'input' }
     };
 
-    let dbVendedores = []; let dbClientes = []; let listaDeRotas = []; let regrasObrigatoriedade = {};
+    let dbVendedores = []; 
+    let dbClientes = []; 
+    let listaDeRotas = []; 
+    let regrasObrigatoriedade = {};
+
+    // Estado: controla se vendedor/cliente foram encontrados ou estão em modo manual
+    let statusVendedor = 'vazio';  // 'vazio' | 'encontrado' | 'manual'
+    let statusCliente = 'vazio';   // 'vazio' | 'encontrado' | 'manual'
 
     // ============================================================
     // 2. INICIALIZAÇÃO
@@ -193,7 +287,7 @@
         const s = localStorage.getItem('rotasTemp'); 
         if(s) { listaDeRotas = JSON.parse(s); renderizarLista(); }
         restaurarEstadoFormulario();
-        await carregarBasesDeDados(); // Carrega dados E regras
+        await carregarBasesDeDados();
         restaurarVendedor();
     };
 
@@ -201,7 +295,6 @@
         const loadingBar = document.getElementById('loadingBar');
         try {
             loadingBar.innerText = "Baixando regras e dados...";
-            // Baixa as 3 tabelas em paralelo
             const [resV, resC, resR] = await Promise.all([
                 fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_VENDEDORES}!${RANGE_VENDEDORES}?key=${API_KEY}`),
                 fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_CLIENTES}!${RANGE_CLIENTES}?key=${API_KEY}`),
@@ -210,40 +303,40 @@
 
             const jV = await resV.json(); const jC = await resC.json(); const jR = await resR.json();
 
-            // Processa Vendedores e Clientes
-            if (jV.values) dbVendedores = jV.values.map(r => ({ codigo: String(r[0]).trim(), nome: r[1], equipe: r[2] }));
-            if (jC.values) dbClientes = jC.values.map(r => ({ codigo: String(r[0]).trim(), cidade: r[1], razao: r[2], fantasia: r[2] }));
+            if (jV.values) dbVendedores = jV.values.map(r => ({ codigo: String(r[0]).trim(), nome: r[1] || '', equipe: r[2] || '' }));
+            
+            // CLIENTES: A=codigo, B=cidade, C=razao, D=fantasia
+            // Se a planilha tiver só 3 colunas, fantasia cai para r[2] mesmo
+            if (jC.values) dbClientes = jC.values.map(r => ({
+                codigo: String(r[0]).trim(),
+                cidade: r[1] || '',
+                razao: r[2] || '',
+                fantasia: r[3] || r[2] || ''  // se não tiver coluna D, usa C
+            }));
 
-            // PROCESSA REGRAS DE OBRIGATORIEDADE
-            regrasObrigatoriedade = {}; // Reseta
+            regrasObrigatoriedade = {};
             if (jR.values) {
                 jR.values.forEach(row => {
-                    const nomeCampo = String(row[0]).trim().toUpperCase(); // Coluna A: Nome
-                    const flag = String(row[1] || '').trim(); // Coluna B: X ou letra
-                    if (flag.length > 0) {
-                        // Se tem qualquer coisa na coluna B, é obrigatório
-                        regrasObrigatoriedade[nomeCampo] = true;
-                    }
+                    const nomeCampo = String(row[0]).trim().toUpperCase();
+                    const flag = String(row[1] || '').trim();
+                    if (flag.length > 0) regrasObrigatoriedade[nomeCampo] = true;
                 });
             }
             aplicarAsteriscosVisuais();
 
             loadingBar.className = "bg-green-100 text-green-800 text-xs font-bold text-center p-1 border-b border-green-200";
-            loadingBar.innerText = `Sistema Pronto! Regras Carregadas.`; 
-            setTimeout(() => { loadingBar.style.display = 'none'; }, 1500);
+            loadingBar.innerText = `Sistema Pronto! ${dbVendedores.length} vendedores, ${dbClientes.length} clientes.`; 
+            setTimeout(() => { loadingBar.style.display = 'none'; }, 2000);
 
         } catch (e) { 
             console.error(e);
             loadingBar.className = "bg-red-100 text-red-800 text-xs font-bold text-center p-1"; 
-            loadingBar.innerText = "Erro ao carregar. Verifique conexão."; 
+            loadingBar.innerText = "Erro ao carregar. Modo offline - preencha manualmente."; 
         }
     }
 
     function aplicarAsteriscosVisuais() {
-        // Remove marcas anteriores
         document.querySelectorAll('.required-mark').forEach(e => e.classList.remove('required-mark'));
-        
-        // Aplica novas marcas baseado nas regras carregadas
         for (const [nomePlanilha, config] of Object.entries(mapaCampos)) {
             if (regrasObrigatoriedade[nomePlanilha]) {
                 const label = document.getElementById(config.label);
@@ -253,97 +346,258 @@
     }
 
     // ============================================================
-    // 3. VALIDAÇÃO DINÂMICA (A LÓGICA PEDIDA)
+    // 3. BUSCA COM FEEDBACK VISUAL APRIMORADO
+    // ============================================================
+
+    /**
+     * Pisca o card inteiro e balança o input quando não encontrado
+     */
+    function dispararAlertaNaoEncontrado(cardId, inputId, mensagem) {
+        const card = document.getElementById(cardId);
+        const input = document.getElementById(inputId);
+
+        // Remove classes anteriores para resetar animação
+        card.classList.remove('flash-error', 'card-not-found', 'card-found');
+        input.classList.remove('shake-input');
+
+        // Força reflow para reiniciar animação
+        void card.offsetWidth;
+        void input.offsetWidth;
+
+        // Aplica animações
+        card.classList.add('flash-error', 'card-not-found');
+        input.classList.add('shake-input');
+
+        // Remove a animação de piscar depois que terminar, mas mantém a borda vermelha
+        setTimeout(() => { card.classList.remove('flash-error'); }, 900);
+        setTimeout(() => { input.classList.remove('shake-input'); }, 450);
+    }
+
+    function dispararSucessoEncontrado(cardId, inputId) {
+        const card = document.getElementById(cardId);
+        const input = document.getElementById(inputId);
+        card.classList.remove('flash-error', 'card-not-found');
+        input.classList.remove('shake-input');
+        card.classList.add('card-found');
+        setTimeout(() => { card.classList.remove('card-found'); }, 1200);
+    }
+
+    function buscarVendedorLocal() {
+        const codInput = document.getElementById('codVendedor');
+        const cod = codInput.value.toString().trim();
+        const msg = document.getElementById('msgVendedor');
+        const nomeInput = document.getElementById('nomeVendedor');
+        const equipeInput = document.getElementById('equipeVendedor');
+        const badge = document.getElementById('badgeManualVendedor');
+        const card = document.getElementById('cardVendedor');
+
+        if (!cod) {
+            msg.innerHTML = '';
+            nomeInput.value = '';
+            equipeInput.value = '';
+            nomeInput.classList.remove('input-manual');
+            equipeInput.classList.remove('input-manual');
+            badge.classList.add('hidden');
+            card.classList.remove('card-not-found', 'card-found');
+            localStorage.removeItem('vendedorCodigo');
+            statusVendedor = 'vazio';
+            return;
+        }
+
+        const f = dbVendedores.find(v => v.codigo === cod);
+
+        if (f) {
+            // ENCONTRADO
+            nomeInput.value = f.nome;
+            equipeInput.value = f.equipe;
+            nomeInput.classList.remove('input-manual');
+            equipeInput.classList.remove('input-manual');
+            badge.classList.add('hidden');
+            msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Vendedor encontrado</span>';
+            localStorage.setItem('vendedorCodigo', cod);
+            statusVendedor = 'encontrado';
+            dispararSucessoEncontrado('cardVendedor', 'codVendedor');
+
+        } else if (dbVendedores.length > 0) {
+            // NÃO ENCONTRADO (banco já carregou)
+            nomeInput.value = '';
+            equipeInput.value = '';
+            // Habilita edição manual com estilo
+            nomeInput.classList.add('input-manual');
+            equipeInput.classList.add('input-manual');
+            nomeInput.placeholder = 'Digite o nome manualmente...';
+            equipeInput.placeholder = 'Digite a equipe...';
+            badge.classList.remove('hidden');
+            msg.innerHTML = `
+              <div class="nao-encontrado-aviso">
+                <i class="ph ph-warning-circle"></i>
+                Código <strong>${cod}</strong> não encontrado — preencha o nome e equipe manualmente.
+              </div>`;
+            statusVendedor = 'manual';
+            dispararAlertaNaoEncontrado('cardVendedor', 'codVendedor', '');
+            nomeInput.focus();
+
+        } else {
+            // Banco ainda carregando — permite digitação manual
+            nomeInput.classList.add('input-manual');
+            equipeInput.classList.add('input-manual');
+            badge.classList.remove('hidden');
+            msg.innerHTML = '<span class="text-yellow-600 text-[10px] font-bold">⚠ Banco carregando — modo manual</span>';
+            statusVendedor = 'manual';
+        }
+    }
+
+    function buscarClienteLocal() {
+        const codInput = document.getElementById('codCliente');
+        const cod = codInput.value.toString().trim();
+        const msg = document.getElementById('msgCliente');
+        const badge = document.getElementById('badgeManualCliente');
+        const card = document.getElementById('cardCliente');
+
+        if (!cod) {
+            msg.innerHTML = '';
+            card.classList.remove('card-not-found', 'card-found');
+            badge.classList.add('hidden');
+            statusCliente = 'vazio';
+            return;
+        }
+
+        const f = dbClientes.find(c => c.codigo === cod);
+
+        if (f) {
+            // ENCONTRADO
+            document.getElementById('nomeFantasia').value = f.fantasia;
+            document.getElementById('razaoSocial').value = f.razao;
+            document.getElementById('cidade').value = f.cidade;
+            badge.classList.add('hidden');
+            msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Cliente encontrado</span>';
+            statusCliente = 'encontrado';
+            dispararSucessoEncontrado('cardCliente', 'codCliente');
+
+        } else if (dbClientes.length > 0) {
+            // NÃO ENCONTRADO
+            // Limpa mas mantém campos editáveis para digitação manual
+            document.getElementById('nomeFantasia').value = '';
+            document.getElementById('razaoSocial').value = '';
+            document.getElementById('cidade').value = '';
+            badge.classList.remove('hidden');
+            msg.innerHTML = `
+              <div class="nao-encontrado-aviso">
+                <i class="ph ph-warning-circle"></i>
+                Código <strong>${cod}</strong> não encontrado — preencha os dados manualmente abaixo.
+              </div>`;
+            statusCliente = 'manual';
+            dispararAlertaNaoEncontrado('cardCliente', 'codCliente', '');
+            document.getElementById('razaoSocial').focus();
+
+        } else {
+            // Banco ainda carregando
+            badge.classList.remove('hidden');
+            msg.innerHTML = '<span class="text-yellow-600 text-[10px] font-bold">⚠ Banco carregando — modo manual</span>';
+            statusCliente = 'manual';
+        }
+    }
+
+    // ============================================================
+    // 4. VALIDAÇÃO DINÂMICA
     // ============================================================
     function validarCamposDinamicos() {
         let erros = [];
 
         for (const [nomePlanilha, isRequired] of Object.entries(regrasObrigatoriedade)) {
-            if (!isRequired) continue; // Se não tá marcado com X na planilha, pula
-
+            if (!isRequired) continue;
             const config = mapaCampos[nomePlanilha];
-            if (!config) continue; // Se não mapeamos no HTML, pula
+            if (!config) continue;
 
-            // Validação por Tipo
             if (config.tipo === 'input') {
                 const el = document.getElementById(config.id);
                 if (!el || !el.value.trim()) erros.push(nomePlanilha);
-            
             } else if (config.tipo === 'ordem') {
-                // Verifica input manual OU radio button
                 const manual = document.getElementById('ordemManual').value;
                 const radio = document.querySelector('input[name="ordemVisita"]:checked');
                 if (!manual && !radio) erros.push(nomePlanilha);
-
             } else if (config.tipo === 'frequencia') {
                 const toda = document.getElementById('sem_todas').checked;
                 const part = document.querySelector('input[name="semanaEspecifica"]:checked');
                 if (!toda && !part) erros.push(nomePlanilha);
-
             } else if (config.tipo === 'dia') {
                 if (!document.querySelector('input[name="diaPrincipal"]:checked')) erros.push(nomePlanilha);
-            
             } else if (config.tipo === 'outros_dias') {
-                // Geralmente não é obrigatório, mas se for marcado na planilha:
                 if (!document.querySelector('input[name="diasSecundarios"]:checked')) erros.push(nomePlanilha);
             }
         }
 
         if (erros.length > 0) {
-            alert("Os seguintes campos são obrigatórios (marcados na planilha):\n\n- " + erros.join("\n- "));
+            alert("Os seguintes campos são obrigatórios:\n\n- " + erros.join("\n- "));
             return false;
         }
         return true;
     }
 
     // ============================================================
-    // 4. FUNÇÕES DE ENVIO (UPDATED COM VALIDAÇÃO)
+    // 5. OBTER DADOS DO FORMULÁRIO
     // ============================================================
     function obterDadosDoFormulario() {
-      // CHAMA A VALIDAÇÃO DINÂMICA AQUI
-      if (!validarCamposDinamicos()) return null;
+        if (!validarCamposDinamicos()) return null;
 
-      // (Resto da função igual, pois a validação já passou)
-      const codV = document.getElementById('codVendedor').value;
-      const nomeV = document.getElementById('nomeVendedor').value;
-      const equipeV = document.getElementById('equipeVendedor').value;
-      const codC = document.getElementById('codCliente').value;
-      const nomeC = document.getElementById('nomeFantasia').value;
-      
-      // Backup de segurança minimo (sempre deve ter vend/cliente)
-      if(!nomeV || !nomeC) { alert("Erro crítico: Identifique o cliente e vendedor."); return null; }
-      
-      let ordem = document.getElementById('ordemManual').value;
-      if(!ordem) { const r = document.querySelector('input[name="ordemVisita"]:checked'); if(r) ordem = r.value; }
+        const codV = document.getElementById('codVendedor').value.trim();
+        const nomeV = document.getElementById('nomeVendedor').value.trim();
+        const equipeV = document.getElementById('equipeVendedor').value.trim();
+        const codC = document.getElementById('codCliente').value.trim();
+        const nomeFantasia = document.getElementById('nomeFantasia').value.trim();
+        const razaoSocial = document.getElementById('razaoSocial').value.trim();
 
-      const diaP = document.querySelector('input[name="diaPrincipal"]:checked');
-      const diaVal = diaP ? diaP.value : ''; // Pode ser vazio se não for obrigatório
+        // Validação mínima: precisa ter ao menos nome do vendedor e fantasia/razão do cliente
+        if (!nomeV) {
+            alert("Informe o nome do vendedor (campo Nome ao lado do código).");
+            document.getElementById('nomeVendedor').focus();
+            return null;
+        }
+        if (!nomeFantasia && !razaoSocial) {
+            alert("Informe ao menos a Razão Social ou Fantasia do cliente.");
+            document.getElementById('razaoSocial').focus();
+            return null;
+        }
 
-      let frequencia = "";
-      if (document.getElementById('sem_todas').checked) {
-          frequencia = "Toda Semana";
-      } else {
-          const sems = [];
-          document.querySelectorAll('input[name="semanaEspecifica"]:checked').forEach(c => sems.push(c.value));
-          if (sems.length > 0) frequencia = sems;
-      }
+        let ordem = document.getElementById('ordemManual').value;
+        if (!ordem) { const r = document.querySelector('input[name="ordemVisita"]:checked'); if (r) ordem = r.value; }
 
-      const diasS = [];
-      document.querySelectorAll('input[name="diasSecundarios"]:checked').forEach(c => diasS.push(c.value));
+        const diaP = document.querySelector('input[name="diaPrincipal"]:checked');
+        const diaVal = diaP ? diaP.value : '';
 
-      return {
-        id: Date.now(),
-        codVendedor: codV || 'MANUAL', nomeVendedor: nomeV, equipeVendedor: equipeV,
-        codCliente: codC || 'MANUAL', nomeFantasia: nomeC,
-        razaoSocial: document.getElementById('razaoSocial').value, cidade: document.getElementById('cidade').value,
-        ordemVisita: ordem, semanas: frequencia,
-        diaPrincipal: diaVal, diasSecundarios: diasS,
-        comprador: document.getElementById('comprador').value, whatsapp: document.getElementById('whatsapp').value, obs: document.getElementById('obs').value
-      };
+        let frequencia = "";
+        if (document.getElementById('sem_todas').checked) {
+            frequencia = "Toda Semana";
+        } else {
+            const sems = [];
+            document.querySelectorAll('input[name="semanaEspecifica"]:checked').forEach(c => sems.push(c.value));
+            if (sems.length > 0) frequencia = sems;
+        }
+
+        const diasS = [];
+        document.querySelectorAll('input[name="diasSecundarios"]:checked').forEach(c => diasS.push(c.value));
+
+        return {
+            id: Date.now(),
+            codVendedor: codV || 'MANUAL',
+            nomeVendedor: nomeV,
+            equipeVendedor: equipeV,
+            codCliente: codC || 'MANUAL',
+            nomeFantasia: nomeFantasia || razaoSocial,
+            razaoSocial: razaoSocial,
+            cidade: document.getElementById('cidade').value,
+            ordemVisita: ordem,
+            semanas: frequencia,
+            diaPrincipal: diaVal,
+            diasSecundarios: diasS,
+            comprador: document.getElementById('comprador').value,
+            whatsapp: document.getElementById('whatsapp').value,
+            obs: document.getElementById('obs').value
+        };
     }
 
     // ============================================================
-    // RESTO DAS FUNÇÕES (Mantidas para funcionamento)
+    // 6. RESTO DAS FUNÇÕES
     // ============================================================
     function toggleSemana(tipo) {
         const chkTodas = document.getElementById('sem_todas');
@@ -352,10 +606,13 @@
         else { let alguma = false; chkEspecificas.forEach(c => { if(c.checked) alguma = true; }); if (alguma) chkTodas.checked = false; }
         salvarEstadoFormulario();
     }
+
     function salvarEstadoFormulario() {
         const estado = {
             ordemManual: document.getElementById('ordemManual').value,
-            comprador: document.getElementById('comprador').value, whatsapp: document.getElementById('whatsapp').value, obs: document.getElementById('obs').value,
+            comprador: document.getElementById('comprador').value,
+            whatsapp: document.getElementById('whatsapp').value,
+            obs: document.getElementById('obs').value,
             semanaTodas: document.getElementById('sem_todas').checked,
             semanasEsp: Array.from(document.querySelectorAll('input[name="semanaEspecifica"]:checked')).map(c => c.id),
             diaPrincipal: document.querySelector('input[name="diaPrincipal"]:checked')?.value || null,
@@ -363,80 +620,131 @@
         };
         localStorage.setItem('formEstadoTemp', JSON.stringify(estado));
     }
+
     function restaurarEstadoFormulario() {
         const s = localStorage.getItem('formEstadoTemp'); if (!s) return; const e = JSON.parse(s);
         if(e.ordemManual) { document.getElementById('ordemManual').value = e.ordemManual; sincronizarOrdem(e.ordemManual); }
-        document.getElementById('comprador').value = e.comprador||''; document.getElementById('whatsapp').value = e.whatsapp||''; document.getElementById('obs').value = e.obs||'';
+        document.getElementById('comprador').value = e.comprador||'';
+        document.getElementById('whatsapp').value = e.whatsapp||'';
+        document.getElementById('obs').value = e.obs||'';
         if (e.semanaTodas) document.getElementById('sem_todas').checked = true;
         if (e.semanasEsp) e.semanasEsp.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
         if (e.diaPrincipal) { const r = document.querySelector(`input[name="diaPrincipal"][value="${e.diaPrincipal}"]`); if(r) r.checked = true; }
         if (e.diasSec) e.diasSec.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
     }
+
     function sincronizarOrdem(v) { 
         const r = document.querySelector(`input[name="ordemVisita"][value="${v}"]`); 
         if(r) r.checked = true; else document.querySelectorAll('input[name="ordemVisita"]').forEach(el => el.checked = false);
         salvarEstadoFormulario(); 
     }
-    function restaurarVendedor() { const cod = localStorage.getItem('vendedorCodigo'); if (cod) { document.getElementById('codVendedor').value = cod; buscarVendedorLocal(); } }
-    function buscarVendedorLocal() {
-        const cod = document.getElementById('codVendedor').value.toString().trim(); const msg = document.getElementById('msgVendedor');
-        if (!cod) { msg.innerHTML = ''; document.getElementById('nomeVendedor').value=''; localStorage.removeItem('vendedorCodigo'); return; }
-        const f = dbVendedores.find(v => v.codigo === cod);
-        if (f) { document.getElementById('nomeVendedor').value = f.nome; document.getElementById('equipeVendedor').value = f.equipe; msg.innerHTML = '<span class="text-green-600 font-bold">✓ OK</span>'; localStorage.setItem('vendedorCodigo', cod); } 
-        else { document.getElementById('nomeVendedor').value = ''; msg.innerHTML = '<span class="text-red-500 text-[10px]">Não achou</span>'; }
+
+    function restaurarVendedor() {
+        const cod = localStorage.getItem('vendedorCodigo');
+        if (cod) { document.getElementById('codVendedor').value = cod; buscarVendedorLocal(); }
     }
-    function buscarClienteLocal() {
-        const cod = document.getElementById('codCliente').value.toString().trim(); const msg = document.getElementById('msgCliente');
-        if (!cod) { msg.innerHTML = ''; return; }
-        const f = dbClientes.find(c => c.codigo === cod);
-        if (f) { document.getElementById('nomeFantasia').value = f.fantasia; document.getElementById('razaoSocial').value = f.razao; document.getElementById('cidade').value = f.cidade; msg.innerHTML = '<span class="text-green-600 font-bold">✓ OK</span>'; } 
-        else { msg.innerHTML = '<span class="text-red-500 font-bold">Novo?</span>'; }
-    }
+
     async function chamarBackendScript(payload) {
-      try { const r = await fetch(GAS_API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) }); return await r.json(); } 
-      catch (error) { return { erro: "Falha conexão." }; }
+        try {
+            const r = await fetch(GAS_API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+            return await r.json();
+        } catch (error) { return { erro: "Falha na conexão com o servidor." }; }
     }
+
     async function salvarLote() {
-      if(listaDeRotas.length === 0) return;
-      mostrarModal('loading', 'Enviando...');
-      const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: listaDeRotas });
-      if(res.sucesso) { listaDeRotas=[]; salvarLocal(); renderizarLista(); mostrarModal('sucesso', res.mensagem); } else mostrarModal('erro', res.erro);
+        if(listaDeRotas.length === 0) return;
+        mostrarModal('loading', 'Enviando...');
+        const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: listaDeRotas });
+        if(res.sucesso) { listaDeRotas=[]; salvarLocal(); renderizarLista(); mostrarModal('sucesso', res.mensagem); }
+        else mostrarModal('erro', res.erro);
     }
+
     async function salvarDireto() {
-      const btn = document.querySelector("button[onclick='salvarDireto()']"); if(btn.disabled) return;
-      const item = obterDadosDoFormulario(); if(!item) return; // Validação já ocorre aqui dentro
-      btn.disabled = true; mostrarModal('loading', 'Salvando...');
-      try { const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: [item] }); if(res.sucesso) { limparFormulario(); mostrarModal('sucesso', res.mensagem); } else mostrarModal('erro', res.erro); } finally { btn.disabled = false; }
+        const btn = document.querySelector("button[onclick='salvarDireto()']");
+        if(btn.disabled) return;
+        const item = obterDadosDoFormulario();
+        if(!item) return;
+        btn.disabled = true;
+        mostrarModal('loading', 'Salvando...');
+        try {
+            const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: [item] });
+            if(res.sucesso) { limparFormulario(); mostrarModal('sucesso', res.mensagem); }
+            else mostrarModal('erro', res.erro);
+        } finally { btn.disabled = false; }
     }
-    function incluirNaLista() { const item = obterDadosDoFormulario(); if(item) { listaDeRotas.push(item); salvarLocal(); renderizarLista(); limparFormulario(); } }
+
+    function incluirNaLista() {
+        const item = obterDadosDoFormulario();
+        if(item) { listaDeRotas.push(item); salvarLocal(); renderizarLista(); limparFormulario(); }
+    }
+
     function renderizarLista() {
-       const c = document.getElementById('listaClientesContainer'); c.innerHTML = '';
-       const area = document.getElementById('areaLista'); const btn = document.getElementById('barraSalvar');
-       if(listaDeRotas.length===0) { area.classList.add('hidden'); btn.classList.add('hidden'); return; }
-       area.classList.remove('hidden'); btn.classList.remove('hidden');
-       document.getElementById('contadorLista').innerText = listaDeRotas.length;
-       document.getElementById('btnCount').innerText = listaDeRotas.length;
-       listaDeRotas.slice().reverse().forEach(item => {
-         const freqDisplay = Array.isArray(item.semanas) ? item.semanas.join(',') : item.semanas;
-         c.innerHTML += `<div class="p-2 hover:bg-gray-50 transition-colors border-b border-gray-100"><div class="flex justify-between items-start"><div><p class="font-bold text-xs text-gray-800">${item.nomeFantasia}</p><p class="text-[10px] text-gray-500">${item.cidade} • Ord: ${item.ordemVisita} • ${freqDisplay}</p></div><button onclick="excluirItem(${item.id})" class="text-red-400 hover:text-red-600"><i class="ph ph-trash text-lg"></i></button></div></div>`;
-       });
+        const c = document.getElementById('listaClientesContainer'); c.innerHTML = '';
+        const area = document.getElementById('areaLista'); const btn = document.getElementById('barraSalvar');
+        if(listaDeRotas.length===0) { area.classList.add('hidden'); btn.classList.add('hidden'); return; }
+        area.classList.remove('hidden'); btn.classList.remove('hidden');
+        document.getElementById('contadorLista').innerText = listaDeRotas.length;
+        document.getElementById('btnCount').innerText = listaDeRotas.length;
+        listaDeRotas.slice().reverse().forEach(item => {
+            const freqDisplay = Array.isArray(item.semanas) ? item.semanas.join(',') : item.semanas;
+            const isManual = item.codVendedor === 'MANUAL' || item.codCliente === 'MANUAL';
+            c.innerHTML += `<div class="p-2 hover:bg-gray-50 transition-colors border-b border-gray-100">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="font-bold text-xs text-gray-800">${item.nomeFantasia}${isManual ? ' <span class="badge-manual">manual</span>' : ''}</p>
+                  <p class="text-[10px] text-gray-500">${item.cidade} • Ord: ${item.ordemVisita} • ${freqDisplay}</p>
+                  <p class="text-[10px] text-gray-400">Vend: ${item.nomeVendedor}</p>
+                </div>
+                <button onclick="excluirItem(${item.id})" class="text-red-400 hover:text-red-600"><i class="ph ph-trash text-lg"></i></button>
+              </div>
+            </div>`;
+        });
     }
-    function excluirItem(id) { if(confirm('Remover?')) { listaDeRotas = listaDeRotas.filter(i => i.id !== id); salvarLocal(); renderizarLista(); } }
+
+    function excluirItem(id) { if(confirm('Remover este item da lista?')) { listaDeRotas = listaDeRotas.filter(i => i.id !== id); salvarLocal(); renderizarLista(); } }
     function salvarLocal() { localStorage.setItem('rotasTemp', JSON.stringify(listaDeRotas)); }
+
     function limparFormulario() {
-      document.getElementById('codCliente').value=''; document.getElementById('nomeFantasia').value=''; document.getElementById('razaoSocial').value=''; document.getElementById('cidade').value='';
-      localStorage.removeItem('formEstadoTemp'); 
-      document.getElementById('comprador').value=''; document.getElementById('whatsapp').value=''; document.getElementById('obs').value=''; document.getElementById('ordemManual').value='';
-      document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(e => e.checked = false);
-      document.getElementById('msgCliente').innerHTML = ''; document.getElementById('codCliente').focus();
+        document.getElementById('codCliente').value='';
+        document.getElementById('nomeFantasia').value='';
+        document.getElementById('razaoSocial').value='';
+        document.getElementById('cidade').value='';
+        localStorage.removeItem('formEstadoTemp'); 
+        document.getElementById('comprador').value='';
+        document.getElementById('whatsapp').value='';
+        document.getElementById('obs').value='';
+        document.getElementById('ordemManual').value='';
+        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(e => e.checked = false);
+        document.getElementById('msgCliente').innerHTML = '';
+        document.getElementById('badgeManualCliente').classList.add('hidden');
+        document.getElementById('cardCliente').classList.remove('card-not-found', 'card-found', 'flash-error');
+        statusCliente = 'vazio';
+        document.getElementById('codCliente').focus();
     }
+
     function limparCliente() { limparFormulario(); }
+
     function mostrarModal(tipo, msg) {
-      const o = document.getElementById('overlay'); const c = document.getElementById('modalContent'); o.classList.remove('hidden');
-      if(tipo==='loading') c.innerHTML = `<div class="loader"></div><h3 class="font-bold mt-2 text-sm text-gray-700">${msg}</h3>`;
-      else c.innerHTML = `<h3 class="font-bold text-base mb-2 text-gray-800">${tipo==='sucesso'?'Sucesso!':'Erro'}</h3><p class="mb-3 text-xs text-gray-600">${msg}</p><button onclick="document.getElementById('overlay').classList.add('hidden')" class="bg-gray-200 px-4 py-1.5 rounded text-sm font-bold">Fechar</button>`;
+        const o = document.getElementById('overlay'); const c = document.getElementById('modalContent'); o.classList.remove('hidden');
+        if(tipo==='loading') {
+            c.innerHTML = `<div style="border:3px solid #e5e7eb; border-top-color:#2563eb; border-radius:50%; width:32px; height:32px; animation:spin 0.8s linear infinite; margin:0 auto;"></div><h3 class="font-bold mt-2 text-sm text-gray-700">${msg}</h3>`;
+        } else {
+            const cor = tipo==='sucesso' ? '#16a34a' : '#dc2626';
+            const icon = tipo==='sucesso' ? 'ph-check-circle' : 'ph-x-circle';
+            c.innerHTML = `<i class="ph ${icon}" style="font-size:2.5rem; color:${cor};"></i><h3 class="font-bold text-base mb-2 text-gray-800" style="color:${cor}">${tipo==='sucesso'?'Sucesso!':'Erro'}</h3><p class="mb-3 text-xs text-gray-600">${msg}</p><button onclick="document.getElementById('overlay').classList.add('hidden')" class="bg-gray-200 px-4 py-1.5 rounded text-sm font-bold">Fechar</button>`;
+        }
     }
-    document.getElementById('whatsapp').addEventListener('input', function (e) { let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/); e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : ''); });
+
+    // Máscara WhatsApp
+    document.getElementById('whatsapp').addEventListener('input', function (e) {
+        let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+        e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+    });
+
+    // Spinner CSS
+    const spinStyle = document.createElement('style');
+    spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(spinStyle);
   </script>
 </body>
 </html>
