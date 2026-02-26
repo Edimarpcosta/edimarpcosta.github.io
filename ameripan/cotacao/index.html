@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
-  <title>Ameripan | Cotação v20</title>
+  <title>Ameripan | Cotação v21</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -539,12 +539,47 @@ async function resolveImg(sku) {
 
 async function url2b64(url) {
   if (!url) return null;
+
+  // 1️⃣ Tenta fetch normal (funciona para GitHub raw e outros CORS-ok)
   try {
-    const r = await fetch(url, {signal:AbortSignal.timeout(8000)});
-    if (!r.ok) return null;
-    const b = await r.blob();
-    return await new Promise(res => { const fr=new FileReader(); fr.onloadend=()=>res(fr.result); fr.readAsDataURL(b); });
-  } catch { return null; }
+    const r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if (r.ok) {
+      const b = await r.blob();
+      return await new Promise(res => { const fr = new FileReader(); fr.onloadend = () => res(fr.result); fr.readAsDataURL(b); });
+    }
+  } catch {}
+
+  // 2️⃣ Fallback via <img> + <canvas> — contorna CORS para leitura de pixel
+  // (funciona quando a imagem já estava carregada no browser / cache)
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';   // solicita CORS; se o servidor permitir, ótimo
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      } catch { resolve(null); }     // tainted canvas (servidor não permite CORS)
+    };
+    img.onerror = () => {
+      // 3️⃣ Última tentativa: canvas sem crossOrigin
+      // O browser já tem a imagem em cache (estava no <img> da tabela)
+      // Cria novo img SEM crossOrigin para forçar uso do cache
+      const img2 = new Image();
+      img2.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img2.naturalWidth; c.height = img2.naturalHeight;
+          c.getContext('2d').drawImage(img2, 0, 0);
+          resolve(c.toDataURL('image/jpeg', 0.85));
+        } catch { resolve(null); }
+      };
+      img2.onerror = () => resolve(null);
+      img2.src = url;
+    };
+    img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+  });
 }
 
 /* ══════════════════════════════════════════
@@ -1164,34 +1199,51 @@ async function genPDF() {
   const fy = doc.lastAutoTable.finalY;
   const tv = q.items.reduce((a,i)=>a+i.qty*i.price,0);
 
-  /* ── FOOTER ── */
-  let eY = 0;
-  if (q.notes) {
-    eY=6;
-    doc.setFontSize(7); doc.setTextColor(...P.gy); doc.setFont('helvetica','italic');
-    doc.text('Obs.: '+q.notes, 10, fy+5);
+  // Área disponível abaixo da tabela (antes do rodapé de 7mm)
+  const PAGE_BOTTOM = H - 9;   // 7mm rodapé + 2mm margem
+  const FOOTER_H    = 36;      // espaço necessário: obs(6) + total(13) + assinatura+WA(17)
+
+  // Se tabela transbordar perto do rodapé, abre nova página
+  let baseY;
+  if (fy + FOOTER_H > PAGE_BOTTOM) {
+    doc.addPage();
+    baseY = 14;
+  } else {
+    baseY = fy + 2;
   }
 
-  const bw=68,bh=13,bx=W-bw-8,by=fy+2;
-  doc.setFillColor(...P.or); doc.roundedRect(bx,by,bw,bh,2,2,'F');
+  /* ── OBS ── */
+  if (q.notes) {
+    doc.setFontSize(7); doc.setTextColor(...P.gy); doc.setFont('helvetica','italic');
+    doc.text('Obs.: ' + q.notes, 10, baseY + 4);
+    baseY += 7;
+  }
+
+  /* ── BOX TOTAL ── */
+  const bw=68, bh=13, bx=W-bw-8, by=baseY;
+  doc.setFillColor(...P.or); doc.roundedRect(bx, by, bw, bh, 2, 2, 'F');
   doc.setFontSize(6); doc.setTextColor(...P.wh); doc.setFont('helvetica','normal');
-  doc.text('TOTAL DA COTAÇÃO',bx+3,by+4.5);
+  doc.text('TOTAL DA COTAÇÃO', bx+3, by+4.5);
   doc.setFontSize(11); doc.setFont('helvetica','bold');
-  doc.text(fmt(tv),bx+bw-3,by+11,{align:'right'});
+  doc.text(fmt(tv), bx+bw-3, by+11, {align:'right'});
 
-  const sigY = fy + eY + 16;
+  /* ── ASSINATURA ── */
+  const sigY = baseY + 16;
   doc.setDrawColor(...P.bo); doc.setLineWidth(0.4);
-  doc.line(10,sigY,88,sigY);
+  doc.line(10, sigY, 88, sigY);
   doc.setFontSize(6.5); doc.setTextColor(...P.gy); doc.setFont('helvetica','normal');
-  doc.text('Assinatura do Cliente',10,sigY+4);
+  doc.text('Assinatura do Cliente', 10, sigY + 4);
 
-  const waL = 'CLIQUE AQUI PARA FALAR SOBRE ESTA COTAÇÃO NO WHATSAPP';
+  /* ── BOTÃO WHATSAPP ── */
+  const waL   = '✉  CLIQUE AQUI PARA FALAR SOBRE ESTA COTAÇÃO NO WHATSAPP';
   const waLnk = waUrl();
-  const bW=162,bHb=10,bX=(W-bW)/2,bY=sigY-1;
-  doc.setFillColor(...P.gn); doc.roundedRect(bX,bY,bW,bHb,2.5,2.5,'F');
-  doc.setDrawColor(20,155,65); doc.setLineWidth(0.2); doc.roundedRect(bX,bY,bW,bHb,2.5,2.5,'S');
-  doc.setFontSize(8); doc.setTextColor(...P.wh); doc.setFont('helvetica','bold');
-  doc.textWithLink(waL, bX+bW/2, bY+6.8, {align:'center', url:waLnk});
+  const bW=170, bHb=11, bX=(W-bW)/2, bY=sigY - 1;
+  doc.setFillColor(...P.gn);
+  doc.roundedRect(bX, bY, bW, bHb, 2.5, 2.5, 'F');
+  doc.setDrawColor(20,155,65); doc.setLineWidth(0.2);
+  doc.roundedRect(bX, bY, bW, bHb, 2.5, 2.5, 'S');
+  doc.setFontSize(8.5); doc.setTextColor(...P.wh); doc.setFont('helvetica','bold');
+  doc.textWithLink(waL, bX + bW/2, bY + 7.2, {align:'center', url: waLnk});
 
   doc.setFillColor(...P.bld); doc.rect(0,H-7,W,7,'F');
   doc.setFillColor(...P.or);  doc.rect(0,H-7,5,7,'F');
