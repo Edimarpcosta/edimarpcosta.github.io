@@ -365,6 +365,75 @@
     .modal-inputs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
     .modal-input-wrap label { font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 3px; }
 
+    /* ===== VIEW TOGGLE (Gerente) ===== */
+    .view-toggle {
+      display: flex; gap: 0; background: #132133;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--panel-border);
+    }
+    .toggle-btn {
+      padding: 7px 16px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: none; background: transparent;
+      color: #4a7fa5; transition: all 0.15s; font-family: var(--font);
+      white-space: nowrap;
+    }
+    .toggle-btn.active { background: var(--primary); color: white; }
+
+    /* ===== TEAM CARDS (visão por equipe) ===== */
+    .team-cards-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px; margin-bottom: 20px;
+    }
+    .team-card {
+      background: var(--panel-surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .team-card-header {
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #132133 0%, #0d1b2a 100%);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .team-card-name { font-weight: 700; color: #e8f4fd; font-size: 15px; }
+    .team-card-count { font-size: 11px; color: #4a7fa5; background: #0d1b2a; padding: 3px 8px; border-radius: 20px; }
+    .team-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    .team-kpi {
+      padding: 14px 18px;
+      border-right: 1px solid var(--panel-border);
+      border-bottom: 1px solid var(--panel-border);
+    }
+    .team-kpi:nth-child(even) { border-right: none; }
+    .team-kpi:nth-child(3), .team-kpi:nth-child(4) { border-bottom: none; }
+    .team-kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #4a7fa5; margin-bottom: 6px; }
+    .team-kpi-real { font-size: 18px; font-weight: 800; font-family: var(--mono); margin-bottom: 4px; }
+    .team-kpi-real.fat { color: #60a5fa; }
+    .team-kpi-real.pos { color: #34d399; }
+    .team-kpi-real.cad { color: #a78bfa; }
+    .team-kpi-real.sku { color: #fbbf24; }
+    .team-kpi-footer { display: flex; justify-content: space-between; align-items: center; }
+    .team-kpi-meta { font-size: 11px; color: #4a7fa5; font-family: var(--mono); }
+    .team-progress-bar {
+      height: 4px; border-radius: 2px; margin-top: 6px;
+      background: rgba(255,255,255,0.08); overflow: hidden;
+    }
+    .team-progress-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+    .fill-fat { background: #3b82f6; }
+    .fill-pos { background: #10b981; }
+    .fill-cad { background: #8b5cf6; }
+    .fill-sku { background: #f59e0b; }
+
+    /* Tabela comparativa de equipes */
+    .team-compare-wrap {
+      background: var(--panel-bg); border-radius: 14px;
+      overflow: hidden; box-shadow: var(--shadow-lg);
+    }
+    .team-compare-header {
+      padding: 14px 20px; background: var(--panel-surface);
+      border-bottom: 1px solid var(--panel-border);
+    }
+    .team-compare-title { color: var(--panel-text); font-weight: 700; font-size: 14px; }
+
     /* ===== TOASTS ===== */
     .toast-container { position: fixed; top: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
     .toast {
@@ -473,14 +542,20 @@
       <div class="panel-wrap">
         <div class="panel-header">
           <div class="panel-title" id="panelTitleText">Performance da Equipe</div>
-          <div class="indicator-dots">
-            <div class="dot-item"><div class="dot dot-fat"></div>Faturamento</div>
-            <div class="dot-item"><div class="dot dot-pos"></div>Positivação</div>
-            <div class="dot-item"><div class="dot dot-cad"></div>Cadastros</div>
-            <div class="dot-item"><div class="dot dot-sku"></div>SKU</div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div id="dashViewToggle" class="view-toggle hidden">
+              <button class="toggle-btn active" onclick="UI.setDashView('vendedor')" id="btnViewVendedor">👤 Por Vendedor</button>
+              <button class="toggle-btn" onclick="UI.setDashView('equipe')" id="btnViewEquipe">🏢 Por Equipe</button>
+            </div>
+            <div class="indicator-dots">
+              <div class="dot-item"><div class="dot dot-fat"></div>Faturamento</div>
+              <div class="dot-item"><div class="dot dot-pos"></div>Positivação</div>
+              <div class="dot-item"><div class="dot dot-cad"></div>Cadastros</div>
+              <div class="dot-item"><div class="dot dot-sku"></div>SKU</div>
+            </div>
           </div>
         </div>
-        <div style="overflow-x: auto;">
+        <div style="overflow-x: auto;" id="dashVendedorView">
           <table class="panel-table">
             <thead>
               <tr>
@@ -500,6 +575,35 @@
             </tbody>
             <tfoot id="rankingFoot"></tfoot>
           </table>
+        </div>
+        <!-- Visão por equipe (apenas gerente) -->
+        <div id="dashEquipeView" class="hidden" style="padding: 16px;">
+          <div class="team-cards-grid" id="teamCardsGrid"></div>
+          <div class="team-compare-wrap">
+            <div class="team-compare-header">
+              <div class="team-compare-title">📊 Comparativo Consolidado por Equipe</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="panel-table">
+                <thead>
+                  <tr>
+                    <th>Equipe</th>
+                    <th>Vendedores</th>
+                    <th>Faturamento Real</th>
+                    <th class="center">% Fat</th>
+                    <th>Positivação Real</th>
+                    <th class="center">% Pos</th>
+                    <th>Cadastros Real</th>
+                    <th class="center">% Cad</th>
+                    <th>SKU Real</th>
+                    <th class="center">% SKU</th>
+                  </tr>
+                </thead>
+                <tbody id="teamTableBody"></tbody>
+                <tfoot id="teamTableFoot"></tfoot>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -636,8 +740,8 @@ const fInt    = v => Math.round(Number(v)||0);
 const pct     = (real, meta) => meta > 0 ? ((real/meta)*100) : 0;
 const fPct    = (real, meta) => pct(real, meta).toFixed(1) + '%';
 
-function badgePct(real, meta) {
-  const p = pct(real, meta);
+function badgePct(real, meta, directPct) {
+  const p = directPct !== undefined ? directPct : pct(real, meta);
   const cls = p >= 100 ? 'badge-up' : p >= 70 ? 'badge-neutral' : 'badge-down';
   const seta = p >= 100 ? '↑' : p >= 70 ? '→' : '↓';
   return `<span class="badge-pct ${cls}">${seta} ${p.toFixed(1)}%</span>`;
@@ -650,7 +754,8 @@ const State = {
   dataMetasVendedores: [],
   dataVendasDiarias: [],
   selectedDateISO: null,
-  currentPage: 'dashboard'
+  currentPage: 'dashboard',
+  dashView: 'vendedor'  // 'vendedor' | 'equipe'
 };
 
 /* ========== API ========== */
@@ -724,6 +829,10 @@ const App = {
     // Esconde rateio para vendedor
     if (u.role === 'VENDEDOR') {
       document.getElementById('navRateio').classList.add('hidden');
+    }
+    // Mostra toggle de visão para gerente/diretor
+    if (u.role === 'GERENTE') {
+      document.getElementById('dashViewToggle').classList.remove('hidden');
     }
 
     App.loadData();
@@ -850,6 +959,15 @@ const App = {
 const UI = {
 
   /* === DASHBOARD === */
+  setDashView(view) {
+    State.dashView = view;
+    document.getElementById('btnViewVendedor').classList.toggle('active', view === 'vendedor');
+    document.getElementById('btnViewEquipe').classList.toggle('active', view === 'equipe');
+    document.getElementById('dashVendedorView').classList.toggle('hidden', view !== 'vendedor');
+    document.getElementById('dashEquipeView').classList.toggle('hidden', view !== 'equipe');
+    if (view === 'equipe') UI.renderTeamView();
+  },
+
   renderDashboard() {
     const tbody = document.getElementById('rankingBody');
     tbody.innerHTML = '';
@@ -924,6 +1042,145 @@ const UI = {
         <td style="text-align:center;">${badgePct(tots.cad, tots.mCad)}</td>
         <td class="data-cell"><span class="data-val">${fInt(tots.sku)}</span></td>
         <td style="text-align:center;">${badgePct(tots.sku, tots.mSku)}</td>
+      </tr>
+    `;
+
+    // Se estava na visão equipe, re-renderiza
+    if (State.dashView === 'equipe') UI.renderTeamView();
+  },
+
+  /* === VISÃO POR EQUIPE (Gerente/Diretor) === */
+  renderTeamView() {
+    // Agrupa vendedores por equipe
+    const equipes = {};
+    State.user.vendors.forEach(v => {
+      const team = v.team || 'GERAL';
+      if (!equipes[team]) equipes[team] = [];
+      equipes[team].push(v);
+    });
+
+    // Agrega realizados por vendedor
+    const realMap = {};
+    State.dataVendasDiarias.forEach(v => {
+      if (!realMap[v.vendorId]) realMap[v.vendorId] = { fat:0, pos:0, cad:0, sku:0 };
+      realMap[v.vendorId].fat += fNum(v.realFat);
+      realMap[v.vendorId].pos += fNum(v.realPos);
+      realMap[v.vendorId].cad += fNum(v.realCad);
+      realMap[v.vendorId].sku += fNum(v.realSku);
+    });
+
+    // Consolida por equipe
+    const teamData = Object.entries(equipes).map(([teamName, vendors]) => {
+      let r = { fat:0, pos:0, cad:0, sku:0 };
+      let m = { fat:0, pos:0, cad:0, sku:0 };
+
+      vendors.forEach(v => {
+        const vr = realMap[v.code] || {};
+        r.fat += fNum(vr.fat); r.pos += fNum(vr.pos); r.cad += fNum(vr.cad); r.sku += fNum(vr.sku);
+        const vm = State.dataMetasVendedores.find(x => String(x.vendorId) === String(v.code)) || {};
+        m.fat += fNum(vm.metaFat); m.pos += fNum(vm.metaPos); m.cad += fNum(vm.metaCad); m.sku += fNum(vm.metaSku);
+      });
+
+      // Tenta pegar meta global da equipe como fallback
+      const mg = State.dataMetasGlobais.find(g => String(g.equipe) === String(teamName));
+      if (mg) {
+        if (!m.fat && mg.metaFat) m.fat = fNum(mg.metaFat);
+        if (!m.pos && mg.metaPos) m.pos = fNum(mg.metaPos);
+        if (!m.cad && mg.metaCad) m.cad = fNum(mg.metaCad);
+        if (!m.sku && mg.metaSku) m.sku = fNum(mg.metaSku);
+      }
+
+      return { teamName, vendors, r, m };
+    });
+
+    // === CARDS por equipe ===
+    const cardsGrid = document.getElementById('teamCardsGrid');
+    cardsGrid.innerHTML = '';
+
+    teamData.forEach(({ teamName, vendors, r, m }) => {
+      const kpis = [
+        { key:'fat', label:'💰 Faturamento', real: fMoney(r.fat), meta: fMoney(m.fat), pctVal: pct(r.fat, m.fat), fill:'fill-fat', cls:'fat' },
+        { key:'pos', label:'👥 Positivação',  real: fInt(r.pos),   meta: fInt(m.pos),   pctVal: pct(r.pos, m.pos),   fill:'fill-pos', cls:'pos' },
+        { key:'cad', label:'🆕 Cadastros',    real: fInt(r.cad),   meta: fInt(m.cad),   pctVal: pct(r.cad, m.cad),   fill:'fill-cad', cls:'cad' },
+        { key:'sku', label:'📦 SKU',          real: fInt(r.sku),   meta: fInt(m.sku),   pctVal: pct(r.sku, m.sku),   fill:'fill-sku', cls:'sku' },
+      ];
+
+      cardsGrid.innerHTML += `
+        <div class="team-card">
+          <div class="team-card-header">
+            <div class="team-card-name">🏢 ${teamName}</div>
+            <div class="team-card-count">${vendors.length} vendedor${vendors.length>1?'es':''}</div>
+          </div>
+          <div class="team-kpis">
+            ${kpis.map(k => `
+              <div class="team-kpi">
+                <div class="team-kpi-label">${k.label}</div>
+                <div class="team-kpi-real ${k.cls}">${k.real}</div>
+                <div class="team-kpi-footer">
+                  <div class="team-kpi-meta">Meta: ${k.meta}</div>
+                  ${badgePct(0, 0, k.pctVal)}
+                </div>
+                <div class="team-progress-bar">
+                  <div class="team-progress-fill ${k.fill}" style="width:${Math.min(k.pctVal, 100)}%"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    });
+
+    // === TABELA COMPARATIVA ===
+    const tbody = document.getElementById('teamTableBody');
+    tbody.innerHTML = '';
+    let grand = { fat:0, pos:0, cad:0, sku:0, mFat:0, mPos:0, mCad:0, mSku:0, vend:0 };
+
+    teamData.forEach(({ teamName, vendors, r, m }) => {
+      grand.fat += r.fat; grand.pos += r.pos; grand.cad += r.cad; grand.sku += r.sku;
+      grand.mFat += m.fat; grand.mPos += m.pos; grand.mCad += m.cad; grand.mSku += m.sku;
+      grand.vend += vendors.length;
+
+      const wFat = Math.min(pct(r.fat, m.fat), 100);
+      tbody.innerHTML += `
+        <tr>
+          <td><div class="vendor-name">${teamName}</div></td>
+          <td style="text-align:center; font-family:var(--mono);">${vendors.length}</td>
+          <td class="data-cell">
+            <div class="data-bar data-bar-fat" style="width:${wFat}%"></div>
+            <span class="data-val">${fMoney(r.fat)}</span>
+          </td>
+          <td style="text-align:center;">${badgePct(r.fat, m.fat)}</td>
+          <td class="data-cell">
+            <div class="data-bar data-bar-pos" style="width:${Math.min(pct(r.pos,m.pos),100)}%"></div>
+            <span class="data-val">${fInt(r.pos)}</span>
+          </td>
+          <td style="text-align:center;">${badgePct(r.pos, m.pos)}</td>
+          <td class="data-cell">
+            <div class="data-bar data-bar-cad" style="width:${Math.min(pct(r.cad,m.cad),100)}%"></div>
+            <span class="data-val">${fInt(r.cad)}</span>
+          </td>
+          <td style="text-align:center;">${badgePct(r.cad, m.cad)}</td>
+          <td class="data-cell">
+            <div class="data-bar data-bar-sku" style="width:${Math.min(pct(r.sku,m.sku),100)}%"></div>
+            <span class="data-val">${fInt(r.sku)}</span>
+          </td>
+          <td style="text-align:center;">${badgePct(r.sku, m.sku)}</td>
+        </tr>
+      `;
+    });
+
+    document.getElementById('teamTableFoot').innerHTML = `
+      <tr>
+        <td style="color:#7ac3e8;">TOTAL GERAL</td>
+        <td style="text-align:center; font-family:var(--mono); color:#7ac3e8;">${grand.vend}</td>
+        <td class="data-cell"><span class="data-val">${fMoney(grand.fat)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.fat, grand.mFat)}</td>
+        <td class="data-cell"><span class="data-val">${fInt(grand.pos)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.pos, grand.mPos)}</td>
+        <td class="data-cell"><span class="data-val">${fInt(grand.cad)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.cad, grand.mCad)}</td>
+        <td class="data-cell"><span class="data-val">${fInt(grand.sku)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.sku, grand.mSku)}</td>
       </tr>
     `;
   },
