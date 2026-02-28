@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ameripan Gestão Estratégica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Ameripan Gestão Estratégica v6</title>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -37,10 +37,21 @@
       --shadow-lg: 0 10px 30px rgba(0,0,0,0.15);
       --font: 'Sora', sans-serif;
       --mono: 'JetBrains Mono', monospace;
+      --sidebar-w: 240px;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text-main); height: 100vh; display: flex; overflow: hidden; font-size: 14px; }
+
+    /* === LAYOUT FUNDAÇÃO: toda a cadeia precisa de altura explícita para overflow funcionar === */
+    html, body {
+      height: 100%;
+      overflow: hidden; /* body NÃO rola — o scroll fica no .content */
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text-main);
+      font-size: 14px;
+      -webkit-text-size-adjust: 100%;
+    }
+    body { display: flex; }
 
     .hidden { display: none !important; }
     .text-success { color: var(--success); }
@@ -48,188 +59,132 @@
     .text-muted { color: var(--text-muted); }
     .text-mono { font-family: var(--mono); }
 
-    /* ===== SIDEBAR ===== */
+    /* ===== HAMBURGER / MOBILE NAV ===== */
+    .hamburger {
+      display: none;
+      position: fixed; top: 12px; left: 12px; z-index: 200;
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--panel-bg); border: 1px solid var(--panel-border);
+      align-items: center; justify-content: center; cursor: pointer;
+      flex-direction: column; gap: 5px;
+    }
+    .hamburger span { display: block; width: 20px; height: 2px; background: #7aaec8; border-radius: 2px; transition: all 0.3s; }
+    .hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 149; }
+
+    /* ===== SIDEBAR — altura 100% para não colapsar ===== */
     .sidebar {
-      width: 240px; flex-shrink: 0;
+      width: var(--sidebar-w);
+      height: 100%;           /* ESSENCIAL: altura total para o flex interno funcionar */
+      flex-shrink: 0;
       background: var(--panel-bg);
-      display: flex; flex-direction: column;
+      display: flex;
+      flex-direction: column;
       border-right: 1px solid var(--panel-border);
+      transition: transform 0.3s;
+      z-index: 150;
+      overflow: hidden;       /* a .nav interna rola, não a sidebar inteira */
     }
-    .brand {
-      padding: 22px 20px;
-      border-bottom: 1px solid var(--panel-border);
-    }
-    .brand-logo {
-      display: flex; align-items: center; gap: 10px;
-    }
-    .brand-icon {
-      width: 34px; height: 34px; border-radius: 8px;
-      background: var(--primary); display: grid; place-items: center;
-      font-weight: 800; color: white; font-size: 16px;
-    }
+    .brand { padding: 22px 20px; border-bottom: 1px solid var(--panel-border); flex-shrink: 0; }
+    .brand-logo { display: flex; align-items: center; gap: 10px; }
+    .brand-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--primary); display: grid; place-items: center; font-weight: 800; color: white; font-size: 16px; }
     .brand-name { color: #fff; font-weight: 700; font-size: 17px; }
     .brand-sub { color: #4a7fa5; font-size: 11px; margin-top: 2px; }
 
-    .nav { flex: 1; padding: 16px 0; }
+    .nav { flex: 1; padding: 16px 0; overflow-y: auto; min-height: 0; } /* min-height:0 permite encolher */
     .nav-section { padding: 6px 16px 4px; color: #3a6180; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
-    .nav-item {
-      padding: 10px 18px; cursor: pointer;
-      display: flex; align-items: center; gap: 10px;
-      font-weight: 500; font-size: 13px;
-      color: #7aaec8;
-      border-left: 3px solid transparent;
-      transition: all 0.15s;
-    }
+    .nav-item { padding: 10px 18px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 13px; color: #7aaec8; border-left: 3px solid transparent; transition: all 0.15s; }
     .nav-item:hover { background: #132133; color: #e0f0fb; }
     .nav-item.active { background: #132133; color: #fff; border-left-color: var(--primary); }
     .nav-item .nav-icon { font-size: 15px; width: 20px; text-align: center; }
 
-    .user-area {
-      padding: 16px;
-      border-top: 1px solid var(--panel-border);
-    }
-    .user-chip {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px; background: #132133;
-      border-radius: 8px; margin-bottom: 10px;
-    }
-    .user-avatar {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: var(--primary); display: grid; place-items: center;
-      color: white; font-weight: 700; font-size: 13px;
-    }
+    .user-area { padding: 16px; border-top: 1px solid var(--panel-border); flex-shrink: 0; }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #132133; border-radius: 8px; margin-bottom: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); display: grid; place-items: center; color: white; font-weight: 700; font-size: 13px; flex-shrink: 0; }
     .user-info-name { font-weight: 600; color: #e8f4fd; font-size: 13px; }
     .user-info-role { color: #4a7fa5; font-size: 11px; }
 
-    /* ===== MAIN ===== */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
-
-    .header {
-      background: var(--surface);
-      padding: 14px 24px;
-      border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-      box-shadow: var(--shadow-sm);
+    /* ===== MAIN — ocupa altura total restante ===== */
+    .main {
+      flex: 1;
+      height: 100%;           /* ESSENCIAL */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;       /* o .content interno é que rola */
+      background: var(--bg);
+      min-width: 0;
     }
-    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
-    .header-filters { display: flex; gap: 8px; align-items: center; }
 
-    .content { flex: 1; padding: 22px; overflow-y: auto; }
+    .header { background: var(--surface); padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-sm); gap: 12px; flex-wrap: wrap; flex-shrink: 0; }
+    .page-title { font-size: 17px; font-weight: 700; color: var(--text-main); white-space: nowrap; }
+    .header-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* O ÚNICO lugar que rola: .content */
+    .content {
+      flex: 1;
+      min-height: 0;          /* ESSENCIAL: sem isso flex ignora overflow */
+      padding: 16px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
 
     /* ===== COMPONENTES BASE ===== */
-    .btn {
-      padding: 8px 16px; border: none; border-radius: 7px;
-      font-weight: 600; cursor: pointer; transition: all 0.15s;
-      display: inline-flex; align-items: center; gap: 7px;
-      font-size: 13px; font-family: var(--font);
-    }
+    .btn { padding: 8px 16px; border: none; border-radius: 7px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-family: var(--font); }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-primary:hover { background: var(--primary-hover); }
     .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text-main); }
     .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
     .btn-sm { padding: 5px 11px; font-size: 12px; }
     .btn-success { background: var(--success); color: white; }
     .btn-success:hover { background: #047857; }
+    .btn-danger { background: var(--danger); color: white; }
 
-    .input {
-      padding: 8px 12px; border: 1.5px solid var(--border);
-      border-radius: 7px; font-size: 13px; outline: none;
-      width: 100%; font-family: var(--font);
-      background: var(--surface);
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
+    .input { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; width: 100%; font-family: var(--font); background: var(--surface); transition: border-color 0.15s, box-shadow 0.15s; }
     .input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.12); }
 
-    .card {
-      background: var(--surface); border-radius: var(--radius);
-      box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 18px;
-      border: 1px solid var(--border);
-    }
-    .card-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--text-main); }
+    .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+    .card-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--text-main); }
 
     /* ===== LOGIN ===== */
-    .login-wrapper {
-      position: fixed; inset: 0;
-      background: linear-gradient(135deg, #0d1b2a 0%, #1a3a55 50%, #0d2640 100%);
-      display: flex; justify-content: center; align-items: center; z-index: 50;
-    }
-    .login-bg-pattern {
-      position: absolute; inset: 0; opacity: 0.04;
-      background-image: repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 50%);
-      background-size: 20px 20px;
-    }
-    .login-box {
-      background: white; padding: 40px 36px;
-      border-radius: 16px; box-shadow: 0 25px 60px rgba(0,0,0,0.4);
-      width: 100%; max-width: 380px; position: relative; z-index: 1;
-    }
-    .login-header { text-align: center; margin-bottom: 32px; }
-    .login-logo {
-      width: 54px; height: 54px; border-radius: 14px;
-      background: var(--primary); display: grid; place-items: center;
-      font-size: 24px; font-weight: 800; color: white;
-      margin: 0 auto 14px;
-    }
+    .login-wrapper { position: fixed; inset: 0; background: linear-gradient(135deg, #0d1b2a 0%, #1a3a55 50%, #0d2640 100%); display: flex; justify-content: center; align-items: center; z-index: 50; padding: 16px; }
+    .login-bg-pattern { position: absolute; inset: 0; opacity: 0.04; background-image: repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 50%); background-size: 20px 20px; }
+    .login-box { background: white; padding: 36px 32px; border-radius: 16px; box-shadow: 0 25px 60px rgba(0,0,0,0.4); width: 100%; max-width: 380px; position: relative; z-index: 1; }
+    .login-header { text-align: center; margin-bottom: 28px; }
+    .login-logo { width: 54px; height: 54px; border-radius: 14px; background: var(--primary); display: grid; place-items: center; font-size: 24px; font-weight: 800; color: white; margin: 0 auto 14px; }
     .login-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
     .login-sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
     .form-group { margin-bottom: 16px; }
     .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+    .login-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; text-align: center; }
 
     /* ===== DASHBOARD / PAINEL ===== */
-    .panel-wrap {
-      background: var(--panel-bg); border-radius: 14px;
-      overflow: hidden; box-shadow: var(--shadow-lg);
-    }
-    .panel-header {
-      padding: 16px 20px; background: var(--panel-surface);
-      border-bottom: 1px solid var(--panel-border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .panel-title { color: var(--panel-text); font-weight: 700; font-size: 15px; }
+    .panel-wrap { background: var(--panel-bg); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .panel-header { padding: 14px 16px; background: var(--panel-surface); border-bottom: 1px solid var(--panel-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .panel-title { color: var(--panel-text); font-weight: 700; font-size: 14px; }
     .panel-meta { color: #4a7fa5; font-size: 12px; }
 
-    .panel-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-    .panel-table th {
-      text-align: left; padding: 10px 16px;
-      color: #4a7fa5; font-weight: 600; font-size: 11px;
-      text-transform: uppercase; letter-spacing: 0.7px;
-      border-bottom: 1px solid var(--panel-border);
-      white-space: nowrap;
-    }
+    .panel-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+    .panel-table th { text-align: left; padding: 9px 12px; color: #4a7fa5; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; border-bottom: 1px solid var(--panel-border); white-space: nowrap; }
     .panel-table th.right { text-align: right; }
     .panel-table th.center { text-align: center; }
-    .panel-table td {
-      padding: 12px 16px; color: var(--panel-text);
-      border-bottom: 1px solid rgba(30,58,82,0.4);
-      position: relative;
-      white-space: nowrap;
-    }
+    .panel-table td { padding: 10px 12px; color: var(--panel-text); border-bottom: 1px solid rgba(30,58,82,0.4); position: relative; white-space: nowrap; }
     .panel-table tr:last-child td { border-bottom: none; }
     .panel-table tr:hover td { background: rgba(26,86,219,0.06); }
+    .panel-table tfoot td { background: var(--panel-surface); border-top: 2px solid var(--panel-border); font-weight: 700; color: #7ac3e8; border-bottom: none; }
 
-    .panel-table tfoot td {
-      background: var(--panel-surface);
-      border-top: 2px solid var(--panel-border);
-      font-weight: 700; color: #7ac3e8;
-      border-bottom: none;
-    }
-
-    .data-cell { position: relative; overflow: hidden; display: flex; align-items: center; min-width: 130px; }
-    .data-bar {
-      position: absolute; left: 0; top: 0; bottom: 0;
-      opacity: 0.18; transition: width 0.6s ease;
-    }
+    .data-cell { position: relative; overflow: hidden; display: flex; align-items: center; min-width: 110px; }
+    .data-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.18; transition: width 0.6s ease; }
     .data-bar-fat { background: var(--bar-fat); }
     .data-bar-pos { background: var(--bar-pos); }
     .data-bar-cad { background: var(--bar-cad); }
     .data-bar-sku { background: var(--bar-sku); }
-    .data-val { position: relative; z-index: 1; font-weight: 600; font-family: var(--mono); font-size: 13px; }
+    .data-val { position: relative; z-index: 1; font-weight: 600; font-family: var(--mono); font-size: 12px; }
 
-    .badge-pct {
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
-      font-family: var(--mono);
-    }
+    .badge-pct { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; font-family: var(--mono); }
     .badge-up { background: rgba(5,150,105,0.2); color: #34d399; }
     .badge-down { background: rgba(220,38,38,0.2); color: #f87171; }
     .badge-neutral { background: rgba(74,127,165,0.2); color: #7ac3e8; }
@@ -237,44 +192,53 @@
     .vendor-name { font-weight: 600; font-size: 13px; }
     .vendor-team { color: #4a7fa5; font-size: 11px; font-family: var(--mono); }
 
-    /* Legenda indicadores */
-    .indicator-dots { display: flex; gap: 14px; flex-wrap: wrap; }
-    .dot-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4a7fa5; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .indicator-dots { display: flex; gap: 10px; flex-wrap: wrap; }
+    .dot-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #4a7fa5; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
     .dot-fat { background: var(--bar-fat); }
     .dot-pos { background: var(--bar-pos); }
     .dot-cad { background: var(--bar-cad); }
     .dot-sku { background: var(--bar-sku); }
 
+    /* ===== KPI SUMMARY BAR ===== */
+    .kpi-summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .kpi-sum-card { background: var(--panel-surface); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; position: relative; overflow: hidden; }
+    .kpi-sum-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:12px 12px 0 0; }
+    .kpi-sum-card.fat::before { background: var(--bar-fat); }
+    .kpi-sum-card.pos::before { background: var(--bar-pos); }
+    .kpi-sum-card.cad::before { background: #7c3aed; }
+    .kpi-sum-card.sku::before { background: var(--bar-sku); }
+    .kpi-sum-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #4a7fa5; }
+    .kpi-sum-value { font-size: 18px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+    .kpi-sum-value.fat { color: #60a5fa; }
+    .kpi-sum-value.pos { color: #34d399; }
+    .kpi-sum-value.cad { color: #a78bfa; }
+    .kpi-sum-value.sku { color: #fbbf24; }
+    .kpi-sum-footer { display: flex; justify-content: space-between; align-items: center; }
+    .kpi-sum-meta { font-size: 10px; color: #4a7fa5; font-family: var(--mono); }
+    .kpi-sum-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-top: 2px; overflow: hidden; }
+    .kpi-sum-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+    .proj-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-family: var(--mono); color: #60a5fa; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); padding: 1px 6px; border-radius: 4px; margin-top: 2px; }
+    .health-dot { font-size: 10px; }
+    .money-input { text-align: right; font-family: var(--mono); }
+
     /* ===== RATEIO ===== */
-    .rateio-top {
-      background: linear-gradient(135deg, #0d1b2a 0%, #132133 100%);
-      border-radius: 12px; padding: 22px 24px; margin-bottom: 18px;
-      border: 1px solid var(--panel-border);
-    }
-    .rateio-top-title { color: #4a7fa5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
-    .global-inputs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+    .rateio-top { background: linear-gradient(135deg, #0d1b2a 0%, #132133 100%); border-radius: 12px; padding: 18px; margin-bottom: 14px; border: 1px solid var(--panel-border); }
+    .rateio-top-title { color: #4a7fa5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    .global-inputs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
     .global-input-wrap label { color: #7aaec8; font-size: 11px; font-weight: 600; display: block; margin-bottom: 5px; }
-    .global-input-wrap .input {
-      background: #1e3a52; border-color: #2a5070; color: white;
-    }
+    .global-input-wrap .input { background: #1e3a52; border-color: #2a5070; color: white; }
     .global-input-wrap .input::placeholder { color: #3a6180; }
     .global-input-wrap .input:focus { border-color: var(--primary); }
 
-    .restante-banner {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 12px; margin-bottom: 18px;
-    }
-    .restante-card {
-      border-radius: 10px; padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 4px;
-    }
+    .restante-banner { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .restante-card { border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
     .restante-card.fat { background: rgba(26,86,219,0.1); border: 1px solid rgba(26,86,219,0.25); }
     .restante-card.pos { background: rgba(5,150,105,0.1); border: 1px solid rgba(5,150,105,0.25); }
     .restante-card.cad { background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.25); }
     .restante-card.sku { background: rgba(217,119,6,0.1); border: 1px solid rgba(217,119,6,0.25); }
-    .restante-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; }
-    .restante-val { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+    .restante-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; }
+    .restante-val { font-size: 18px; font-weight: 800; font-family: var(--mono); }
     .restante-val.fat { color: var(--primary); }
     .restante-val.pos { color: var(--success); }
     .restante-val.cad { color: #7c3aed; }
@@ -282,175 +246,248 @@
     .restante-val.over { color: var(--danger) !important; }
     .restante-sub { font-size: 11px; color: var(--text-muted); }
 
-    .rateio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 16px; }
-    .rateio-card {
-      border: 1.5px solid var(--border); padding: 16px;
-      border-radius: 10px; background: var(--surface);
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .rateio-card:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.08); }
-    .rateio-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .rateio-card-name { font-weight: 700; font-size: 14px; }
+    .rateio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; margin-top: 14px; }
+    .rateio-card { border: 1.5px solid var(--border); padding: 14px; border-radius: 10px; background: var(--surface); transition: border-color 0.15s; }
+    .rateio-card:hover { border-color: var(--primary); }
+    .rateio-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .rateio-card-name { font-weight: 700; font-size: 13px; }
     .rateio-card-code { font-family: var(--mono); font-size: 11px; color: var(--text-muted); background: var(--surface2); padding: 2px 7px; border-radius: 4px; }
-    .rateio-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .rateio-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .rateio-input-wrap label { font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; }
-    .input-fat:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,86,219,0.12); }
-    .input-pos:focus { border-color: var(--success); box-shadow: 0 0 0 2px rgba(5,150,105,0.12); }
-    .input-cad:focus { border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.12); }
-    .input-sku:focus { border-color: var(--warning); box-shadow: 0 0 0 2px rgba(217,119,6,0.12); }
+
+    /* ===== MÊS SELETOR - RATEIO ===== */
+    .mes-selector-wrap { margin-bottom: 14px; }
+    .mes-selector-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 8px; }
+    .mes-selector-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+    .mes-btn {
+      padding: 8px 4px; text-align: center; border-radius: 6px; cursor: pointer;
+      font-size: 11px; font-weight: 600; border: 1.5px solid var(--border);
+      background: var(--surface); color: var(--text-muted); transition: all 0.15s;
+      position: relative;
+    }
+    .mes-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .mes-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+    .mes-btn.distribuido { border-color: var(--success); color: var(--success); }
+    .mes-btn.distribuido.active { background: var(--success); color: white; }
+    .mes-btn.parcial { border-color: var(--warning); color: var(--warning); }
+    .mes-btn.parcial.active { background: var(--warning); color: white; }
+    .mes-dot { position: absolute; top: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; }
+    .mes-dot.ok { background: var(--success); }
+    .mes-dot.partial { background: var(--warning); }
+    .mes-dot.empty { background: var(--border); }
 
     /* ===== CALENDÁRIO ===== */
-    .cal-summary-bar {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 12px; margin-bottom: 18px;
-    }
-    .cal-sum-card {
-      padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .cal-sum-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .cal-sum-val { font-size: 20px; font-weight: 800; font-family: var(--mono); margin-top: 4px; }
+    .cal-summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .cal-sum-card { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+    .cal-sum-label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .cal-sum-val { font-size: 18px; font-weight: 800; font-family: var(--mono); margin-top: 4px; }
     .cal-sum-val.fat { color: var(--primary); }
     .cal-sum-val.pos { color: var(--success); }
     .cal-sum-val.cad { color: #7c3aed; }
     .cal-sum-val.sku { color: var(--warning); }
 
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-    .calendar-header-cell {
-      text-align: center; font-weight: 700; font-size: 11px;
-      color: var(--text-muted); padding: 8px; text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .calendar-day {
-      background: var(--surface); border: 1.5px solid var(--border);
-      border-radius: 8px; padding: 8px; min-height: 82px;
-      display: flex; flex-direction: column; cursor: pointer;
-      transition: all 0.15s;
-    }
-    .calendar-day:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.1); transform: translateY(-1px); }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .calendar-header-cell { text-align: center; font-weight: 700; font-size: 10px; color: var(--text-muted); padding: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .calendar-day { background: var(--surface); border: 1.5px solid var(--border); border-radius: 7px; padding: 6px; min-height: 70px; display: flex; flex-direction: column; cursor: pointer; transition: all 0.15s; }
+    .calendar-day:hover { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,86,219,0.1); }
     .calendar-day.empty { background: transparent; border-color: transparent; cursor: default; pointer-events: none; }
     .calendar-day.today { border-color: var(--primary); background: var(--primary-light); }
     .calendar-day.has-data { border-color: rgba(5,150,105,0.4); }
-
-    .day-num { font-weight: 700; font-size: 13px; color: var(--text-main); margin-bottom: 5px; }
+    .day-num { font-weight: 700; font-size: 12px; color: var(--text-main); margin-bottom: 4px; }
     .calendar-day.today .day-num { color: var(--primary); }
-    .day-entries { display: flex; flex-direction: column; gap: 2px; margin-top: auto; }
-    .day-entry { font-size: 10px; font-family: var(--mono); font-weight: 600; padding: 1px 0; }
+    .day-entries { display: flex; flex-direction: column; gap: 1px; margin-top: auto; }
+    .day-entry { font-size: 9px; font-family: var(--mono); font-weight: 600; }
     .day-entry.fat { color: var(--primary); }
     .day-entry.pos { color: var(--success); }
     .day-entry.cad { color: #7c3aed; }
     .day-entry.sku { color: var(--warning); }
 
     /* ===== MODAL ===== */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
-      display: flex; justify-content: center; align-items: center; z-index: 100;
-      backdrop-filter: blur(4px);
-    }
-    .modal {
-      background: var(--surface); border-radius: 14px;
-      padding: 24px; width: 100%; max-width: 580px;
-      max-height: 90vh; overflow-y: auto;
-      box-shadow: 0 30px 60px rgba(0,0,0,0.3);
-    }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-title { font-size: 17px; font-weight: 700; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; justify-content: center; align-items: flex-end; z-index: 300; backdrop-filter: blur(4px); padding: 16px; }
+    .modal { background: var(--surface); border-radius: 14px; padding: 20px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; box-shadow: 0 30px 60px rgba(0,0,0,0.3); margin: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-title { font-size: 16px; font-weight: 700; }
     .close-btn { background: transparent; border: none; cursor: pointer; color: var(--text-muted); font-size: 20px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 6px; transition: 0.15s; }
     .close-btn:hover { background: var(--surface2); color: var(--text-main); }
-
-    .modal-vendor-row {
-      border: 1.5px solid var(--border); border-radius: 10px;
-      padding: 14px; margin-bottom: 12px;
-    }
+    .modal-vendor-row { border: 1.5px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
     .modal-vendor-name { font-weight: 700; margin-bottom: 10px; font-size: 14px; }
     .modal-inputs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
     .modal-input-wrap label { font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 3px; }
 
-    /* ===== VIEW TOGGLE (Gerente) ===== */
-    .view-toggle {
-      display: flex; gap: 0; background: #132133;
-      border-radius: 8px; overflow: hidden;
-      border: 1px solid var(--panel-border);
-    }
-    .toggle-btn {
-      padding: 7px 16px; font-size: 12px; font-weight: 600;
-      cursor: pointer; border: none; background: transparent;
-      color: #4a7fa5; transition: all 0.15s; font-family: var(--font);
-      white-space: nowrap;
-    }
+    /* ===== VIEW TOGGLE ===== */
+    .view-toggle { display: flex; gap: 0; background: #132133; border-radius: 8px; overflow: hidden; border: 1px solid var(--panel-border); }
+    .toggle-btn { padding: 7px 14px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #4a7fa5; transition: all 0.15s; font-family: var(--font); white-space: nowrap; }
     .toggle-btn.active { background: var(--primary); color: white; }
 
-    /* ===== TEAM CARDS (visão por equipe) ===== */
-    .team-cards-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 16px; margin-bottom: 20px;
-    }
-    .team-card {
-      background: var(--panel-surface);
-      border: 1px solid var(--panel-border);
-      border-radius: 12px; overflow: hidden;
-    }
-    .team-card-header {
-      padding: 14px 18px;
-      background: linear-gradient(135deg, #132133 0%, #0d1b2a 100%);
-      border-bottom: 1px solid var(--panel-border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .team-card-name { font-weight: 700; color: #e8f4fd; font-size: 15px; }
+    /* ===== TEAM CARDS ===== */
+    .team-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .team-card { background: var(--panel-surface); border: 1px solid var(--panel-border); border-radius: 12px; overflow: hidden; }
+    .team-card-header { padding: 12px 16px; background: linear-gradient(135deg, #132133 0%, #0d1b2a 100%); border-bottom: 1px solid var(--panel-border); display: flex; justify-content: space-between; align-items: center; }
+    .team-card-name { font-weight: 700; color: #e8f4fd; font-size: 14px; }
     .team-card-count { font-size: 11px; color: #4a7fa5; background: #0d1b2a; padding: 3px 8px; border-radius: 20px; }
     .team-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-    .team-kpi {
-      padding: 14px 18px;
-      border-right: 1px solid var(--panel-border);
-      border-bottom: 1px solid var(--panel-border);
-    }
+    .team-kpi { padding: 12px 14px; border-right: 1px solid var(--panel-border); border-bottom: 1px solid var(--panel-border); }
     .team-kpi:nth-child(even) { border-right: none; }
     .team-kpi:nth-child(3), .team-kpi:nth-child(4) { border-bottom: none; }
     .team-kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #4a7fa5; margin-bottom: 6px; }
-    .team-kpi-real { font-size: 18px; font-weight: 800; font-family: var(--mono); margin-bottom: 4px; }
+    .team-kpi-real { font-size: 16px; font-weight: 800; font-family: var(--mono); margin-bottom: 4px; }
     .team-kpi-real.fat { color: #60a5fa; }
     .team-kpi-real.pos { color: #34d399; }
     .team-kpi-real.cad { color: #a78bfa; }
     .team-kpi-real.sku { color: #fbbf24; }
     .team-kpi-footer { display: flex; justify-content: space-between; align-items: center; }
-    .team-kpi-meta { font-size: 11px; color: #4a7fa5; font-family: var(--mono); }
-    .team-progress-bar {
-      height: 4px; border-radius: 2px; margin-top: 6px;
-      background: rgba(255,255,255,0.08); overflow: hidden;
-    }
+    .team-kpi-meta { font-size: 10px; color: #4a7fa5; font-family: var(--mono); }
+    .team-progress-bar { height: 4px; border-radius: 2px; margin-top: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
     .team-progress-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
     .fill-fat { background: #3b82f6; }
     .fill-pos { background: #10b981; }
     .fill-cad { background: #8b5cf6; }
     .fill-sku { background: #f59e0b; }
 
-    /* Tabela comparativa de equipes */
-    .team-compare-wrap {
-      background: var(--panel-bg); border-radius: 14px;
-      overflow: hidden; box-shadow: var(--shadow-lg);
-    }
-    .team-compare-header {
-      padding: 14px 20px; background: var(--panel-surface);
-      border-bottom: 1px solid var(--panel-border);
-    }
+    .team-compare-wrap { background: var(--panel-bg); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .team-compare-header { padding: 12px 16px; background: var(--panel-surface); border-bottom: 1px solid var(--panel-border); }
     .team-compare-title { color: var(--panel-text); font-weight: 700; font-size: 14px; }
 
     /* ===== TOASTS ===== */
-    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
-    .toast {
-      padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      box-shadow: var(--shadow-lg); animation: slideIn 0.25s ease;
-      display: flex; align-items: center; gap: 8px; min-width: 220px;
-    }
+    .toast-container { position: fixed; top: 16px; right: 16px; z-index: 999; display: flex; flex-direction: column; gap: 6px; }
+    .toast { padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: var(--shadow-lg); animation: slideIn 0.25s ease; display: flex; align-items: center; gap: 8px; min-width: 200px; max-width: 300px; }
     .toast-success { background: var(--success); color: white; }
     .toast-error { background: var(--danger); color: white; }
     .toast-info { background: var(--primary); color: white; }
     @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
+    /* ===== META ANUAL ===== */
+    .anual-hero { background: linear-gradient(135deg, #0d1b2a 0%, #132133 100%); border-radius: 14px; padding: 20px 24px; margin-bottom: 14px; border: 1px solid var(--panel-border); }
+    .anual-hero-title { color: #4a7fa5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px; }
+    .anual-hero-sub { color: #7aaec8; font-size: 12px; margin-bottom: 16px; }
+    .anual-inputs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+    .anual-input-wrap label { color: #7aaec8; font-size: 11px; font-weight: 600; display: block; margin-bottom: 5px; }
+    .anual-input-wrap .input { background: #1e3a52; border-color: #2a5070; color: white; }
+    .anual-input-wrap .input::placeholder { color: #3a6180; }
+    .anual-input-wrap .input:focus { border-color: var(--primary); }
+
+    /* ===== TABELA ANUAL (como no print) ===== */
+    .anual-table-wrap { background: var(--panel-bg); border-radius: 14px; overflow: hidden; margin-bottom: 14px; box-shadow: var(--shadow-lg); }
+    .anual-table-header { padding: 14px 18px; background: var(--panel-surface); border-bottom: 1px solid var(--panel-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .anual-table-title { color: var(--panel-text); font-weight: 700; font-size: 14px; }
+
+    .anual-complete-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; font-family: var(--mono); }
+    .anual-complete-badge.ok { background: rgba(5,150,105,0.2); color: #34d399; border: 1px solid rgba(5,150,105,0.3); }
+    .anual-complete-badge.pending { background: rgba(217,119,6,0.15); color: #fbbf24; border: 1px solid rgba(217,119,6,0.3); }
+    .anual-complete-badge.over { background: rgba(220,38,38,0.15); color: #f87171; border: 1px solid rgba(220,38,38,0.3); }
+
+    /* TABELA estilo planilha */
+    .anual-sheet-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .anual-sheet-table th, .anual-sheet-table td { border-bottom: 1px solid var(--panel-border); padding: 9px 12px; text-align: right; white-space: nowrap; }
+    .anual-sheet-table th { background: var(--panel-surface); color: #4a7fa5; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; font-size: 10px; position: sticky; top: 0; }
+    .anual-sheet-table th:first-child, .anual-sheet-table td:first-child { text-align: left; }
+    .anual-sheet-table tr:last-child td { border-bottom: none; font-weight: 700; background: var(--panel-surface); color: #7ac3e8; }
+    .anual-sheet-table td { color: var(--panel-text); }
+    .anual-sheet-table tr:hover td { background: rgba(26,86,219,0.04); }
+    .anual-sheet-table .mes-cell { font-weight: 700; color: #7aaec8; font-family: var(--mono); }
+    .anual-sheet-table .fat-cell { color: #60a5fa; font-family: var(--mono); font-weight: 700; }
+    .anual-sheet-table .pos-cell { color: #34d399; font-family: var(--mono); }
+    .anual-sheet-table .cad-cell { color: #a78bfa; font-family: var(--mono); }
+    .anual-sheet-table .sku-cell { color: #fbbf24; font-family: var(--mono); }
+    .anual-sheet-table .vazio { color: #1e3a52 !important; }
+    .anual-sheet-table .status-cell { text-align: center; }
+
+    /* Linha de SALDO / DIFERENÇA */
+    .row-diff-ok td { color: #34d399 !important; background: rgba(5,150,105,0.06) !important; }
+    .row-diff-over td { color: #f87171 !important; background: rgba(220,38,38,0.06) !important; }
+
+    /* Botão de ação rápida na tabela */
+    .quick-edit-btn { background: rgba(26,86,219,0.15); border: 1px solid rgba(26,86,219,0.3); color: #60a5fa; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s; font-family: var(--font); }
+    .quick-edit-btn:hover { background: var(--primary); color: white; }
+
+    /* Inputs inline na tabela anual */
+    .anual-inline-input { background: #1e3a52; border: 1.5px solid #2a5070; border-radius: 5px; color: white; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 4px 7px; text-align: right; width: 120px; outline: none; transition: border-color 0.15s; }
+    .anual-inline-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,86,219,0.2); }
+    .anual-inline-input.money { width: 130px; }
+    .anual-inline-input.small { width: 72px; }
+    .anual-save-row-btn { background: rgba(5,150,105,0.2); border: 1px solid rgba(5,150,105,0.4); color: #34d399; padding: 3px 9px; border-radius: 5px; font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s; font-family: var(--font); }
+    .anual-save-row-btn:hover { background: var(--success); color: white; }
+    .anual-save-row-btn.saving { opacity: 0.6; pointer-events: none; }
+    .anual-sheet-table td.edit-cell { padding: 6px 8px; }
+    .anual-row-progress { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+    .anual-row-bar { width: 48px; height: 5px; background: #1e3a52; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .anual-row-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+
+    /* Progresso inline */
+    .inline-bar-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+    .inline-bar { width: 60px; height: 6px; background: #1e3a52; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .inline-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+
+    /* Distribuição por vendedor (anual) */
+    .anual-distrib-table { background: var(--panel-bg); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .anual-distrib-header { padding: 14px 18px; background: var(--panel-surface); border-bottom: 1px solid var(--panel-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .anual-distrib-title { color: var(--panel-text); font-weight: 700; font-size: 14px; }
+
+    /* Vendor anual cards */
+    .anual-vendor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 14px; }
+    .anual-vendor-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.15s; }
+    .anual-vendor-card:hover { border-color: var(--primary); }
+    .anual-vendor-head { padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .anual-vendor-name-txt { font-weight: 700; font-size: 13px; }
+    .anual-vendor-body { padding: 12px 14px; }
+    .anual-vendor-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .anual-vendor-input-wrap label { font-size: 10px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 3px; }
+    .anual-month-mini-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+    .anual-month-mini-fill { height: 100%; border-radius: 3px; transition: width 0.6s; }
+
+    /* Upline visibility bar */
+    .upline-bar { background: linear-gradient(135deg, #0d1b2a, #1a2e42); border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+    .upline-bar-title { font-size: 11px; color: #4a7fa5; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .upline-equipes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .upline-equipe-card { background: #132133; border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px 12px; }
+    .upline-equipe-name { font-weight: 700; color: #7aaec8; font-size: 12px; margin-bottom: 4px; }
+    .upline-equipe-status { font-size: 11px; font-family: var(--mono); }
+
+    /* ===== ANUAL INFO BAR ===== */
+    #rateioAnualInfoBar { margin-bottom: 10px; padding: 10px 14px; background: rgba(26,86,219,0.08); border: 1px solid rgba(26,86,219,0.2); border-radius: 8px; display: none; }
+    #rateioAnualInfo { font-size: 11px; color: #7aaec8; font-family: var(--mono); }
+
     /* ===== RESPONSIVIDADE ===== */
-    @media (max-width: 900px) {
-      .global-inputs-grid { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 768px) {
+      /* No mobile a sidebar fica em overlay fixed, então body/html podem rolar normalmente */
+      html, body { overflow: hidden; } /* mantém hidden — o .content rola */
+      .hamburger { display: flex; }
+      .sidebar {
+        position: fixed; top: 0; left: 0; height: 100%; z-index: 150;
+        transform: translateX(-100%);
+      }
+      .sidebar.open { transform: translateX(0); box-shadow: 10px 0 30px rgba(0,0,0,0.4); }
+      .sidebar-overlay.open { display: block; }
+      .main { width: 100%; }
+      .header { padding: 10px 14px 10px 58px; }
+      .content { padding: 12px; }
+
+      .kpi-summary-bar { grid-template-columns: 1fr 1fr; }
       .restante-banner { grid-template-columns: 1fr 1fr; }
+      .cal-summary-bar { grid-template-columns: 1fr 1fr; }
+      .global-inputs-grid { grid-template-columns: 1fr 1fr; }
+      .anual-inputs-grid { grid-template-columns: 1fr 1fr; }
       .modal-inputs-grid { grid-template-columns: 1fr 1fr; }
+      .mes-selector-grid { grid-template-columns: repeat(6, 1fr); }
+      .anual-vendor-grid { grid-template-columns: 1fr; }
+      .team-cards-grid { grid-template-columns: 1fr; }
+      .header-filters { gap: 6px; }
+      .panel-header { flex-direction: column; align-items: flex-start; }
+      .anual-table-wrap { overflow-x: auto; }
+      .calendar-day { min-height: 56px; }
+    }
+
+    @media (max-width: 480px) {
+      .kpi-summary-bar { grid-template-columns: 1fr 1fr; }
+      .restante-banner { grid-template-columns: 1fr 1fr; }
+      .rateio-grid { grid-template-columns: 1fr; }
+      .mes-selector-grid { grid-template-columns: repeat(4, 1fr); }
+      .calendar-grid { gap: 2px; }
+      .calendar-day { min-height: 46px; padding: 4px; }
+      .day-num { font-size: 11px; }
+      .modal { border-radius: 14px 14px 0 0; max-height: 85vh; margin: 0; }
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .btn { font-size: 12px; padding: 7px 12px; }
     }
   </style>
 </head>
@@ -458,6 +495,12 @@
 
 <!-- TOASTS -->
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- HAMBURGER -->
+<button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">
+  <span></span><span></span><span></span>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
 <!-- LOGIN -->
 <div id="loginView" class="login-wrapper">
@@ -469,17 +512,18 @@
       <div class="login-sub">Sistema Estratégico de Metas e Vendas</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Usuário ou Código</label>
-      <input type="text" id="loginUser" class="input" placeholder="Ex: CARLOS ou 1234" autocomplete="off">
+      <label class="form-label">Usuário, Código ou Nome</label>
+      <input type="text" id="loginUser" class="input" placeholder="Ex: CARLOS, 1234 ou carlos.silva" autocomplete="off" autocorrect="off" autocapitalize="off">
     </div>
-    <div class="form-group" style="margin-bottom: 24px;">
+    <div class="form-group" style="margin-bottom: 20px;">
       <label class="form-label">Senha</label>
-      <input type="password" id="loginPass" class="input" placeholder="Senha" onkeydown="if(event.key==='Enter') App.login()">
+      <input type="password" id="loginPass" class="input" placeholder="Senha (vendedor: código ou senha)" onkeydown="if(event.key==='Enter') App.login()">
     </div>
     <button onclick="App.login()" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 11px;">
       Acessar Sistema
     </button>
     <div id="loginMsg" style="text-align: center; margin-top: 12px; font-size: 13px; color: var(--danger); min-height: 20px;"></div>
+    <div class="login-hint">Vendedores: login com código + senha ou nome + senha</div>
   </div>
 </div>
 
@@ -490,28 +534,31 @@
       <div class="brand-icon">A</div>
       <div>
         <div class="brand-name">Ameripan</div>
-        <div class="brand-sub">Gestão Estratégica</div>
+        <div class="brand-sub">Gestão Estratégica v4</div>
       </div>
     </div>
   </div>
   <div class="nav">
     <div class="nav-section">Visão</div>
-    <div class="nav-item active" onclick="App.navigate('dashboard')">
+    <div class="nav-item active" onclick="App.navigate('dashboard'); closeSidebarOnMobile()">
       <span class="nav-icon">📊</span> Painel de Performance
     </div>
-    <div class="nav-item" onclick="App.navigate('calendario')">
+    <div class="nav-item" onclick="App.navigate('calendario'); closeSidebarOnMobile()">
       <span class="nav-icon">📅</span> Calendário Diário
     </div>
     <div class="nav-section" style="margin-top: 8px;">Gestão</div>
-    <div class="nav-item" id="navRateio" onclick="App.navigate('rateio')">
-      <span class="nav-icon">🎯</span> Rateio de Metas
+    <div class="nav-item" id="navMetaAnual" onclick="App.navigate('metaanual'); closeSidebarOnMobile()">
+      <span class="nav-icon">📆</span> Meta Anual
+    </div>
+    <div class="nav-item" id="navRateio" onclick="App.navigate('rateio'); closeSidebarOnMobile()">
+      <span class="nav-icon">🎯</span> Rateio Mensal
     </div>
   </div>
   <div class="user-area">
     <div class="user-chip">
       <div class="user-avatar" id="uiUserAvatar">?</div>
-      <div>
-        <div class="user-info-name" id="uiUserName">Nome</div>
+      <div style="min-width:0">
+        <div class="user-info-name" id="uiUserName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Nome</div>
         <div class="user-info-role" id="uiUserRole">Cargo</div>
       </div>
     </div>
@@ -525,13 +572,13 @@
   <header class="header">
     <div class="page-title" id="pageTitle">Painel de Performance</div>
     <div class="header-filters">
-      <select id="fltMes" class="input" style="width: auto; padding: 7px 12px;" onchange="App.loadData()"></select>
-      <select id="fltAno" class="input" style="width: auto; padding: 7px 12px;" onchange="App.loadData()">
+      <select id="fltMes" class="input" style="width: auto; padding: 6px 10px; font-size: 12px;" onchange="App.loadData()"></select>
+      <select id="fltAno" class="input" style="width: auto; padding: 6px 10px; font-size: 12px;" onchange="App.loadData()">
         <option value="2025">2025</option>
         <option value="2026" selected>2026</option>
         <option value="2027">2027</option>
       </select>
-      <button class="btn btn-primary btn-sm" onclick="App.loadData()">↻ Atualizar</button>
+      <button class="btn btn-primary btn-sm" onclick="App.loadData()">↻</button>
     </div>
   </header>
 
@@ -539,18 +586,59 @@
 
     <!-- VIEW: DASHBOARD -->
     <div id="view-dashboard" class="page">
+      <!-- KPI SUMMARY BAR -->
+      <div class="kpi-summary-bar">
+        <div class="kpi-sum-card fat">
+          <div class="kpi-sum-label">💰 Faturamento Mês</div>
+          <div class="kpi-sum-value fat text-mono" id="sumFatReal">R$0,00</div>
+          <div class="kpi-sum-footer">
+            <span class="kpi-sum-meta" id="sumFatMeta">Meta: R$0,00</span>
+            <span id="sumFatBadge"></span>
+          </div>
+          <div class="kpi-sum-bar"><div class="kpi-sum-fill" id="sumFatBar" style="background:var(--bar-fat);width:0%"></div></div>
+          <div class="proj-badge" id="sumFatProj" style="display:none">📈 Proj: —</div>
+        </div>
+        <div class="kpi-sum-card pos">
+          <div class="kpi-sum-label">👥 Positivação</div>
+          <div class="kpi-sum-value pos text-mono" id="sumPosReal">0</div>
+          <div class="kpi-sum-footer">
+            <span class="kpi-sum-meta" id="sumPosMeta">Meta: 0</span>
+            <span id="sumPosBadge"></span>
+          </div>
+          <div class="kpi-sum-bar"><div class="kpi-sum-fill" id="sumPosBar" style="background:var(--bar-pos);width:0%"></div></div>
+        </div>
+        <div class="kpi-sum-card cad">
+          <div class="kpi-sum-label">🆕 Cadastros</div>
+          <div class="kpi-sum-value cad text-mono" id="sumCadReal">0</div>
+          <div class="kpi-sum-footer">
+            <span class="kpi-sum-meta" id="sumCadMeta">Meta: 0</span>
+            <span id="sumCadBadge"></span>
+          </div>
+          <div class="kpi-sum-bar"><div class="kpi-sum-fill" id="sumCadBar" style="background:#7c3aed;width:0%"></div></div>
+        </div>
+        <div class="kpi-sum-card sku">
+          <div class="kpi-sum-label">📦 SKU</div>
+          <div class="kpi-sum-value sku text-mono" id="sumSkuReal">0</div>
+          <div class="kpi-sum-footer">
+            <span class="kpi-sum-meta" id="sumSkuMeta">Meta: 0</span>
+            <span id="sumSkuBadge"></span>
+          </div>
+          <div class="kpi-sum-bar"><div class="kpi-sum-fill" id="sumSkuBar" style="background:var(--bar-sku);width:0%"></div></div>
+        </div>
+      </div>
+
       <div class="panel-wrap">
         <div class="panel-header">
           <div class="panel-title" id="panelTitleText">Performance da Equipe</div>
-          <div style="display:flex; align-items:center; gap:14px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             <div id="dashViewToggle" class="view-toggle hidden">
-              <button class="toggle-btn active" onclick="UI.setDashView('vendedor')" id="btnViewVendedor">👤 Por Vendedor</button>
-              <button class="toggle-btn" onclick="UI.setDashView('equipe')" id="btnViewEquipe">🏢 Por Equipe</button>
+              <button class="toggle-btn active" onclick="UI.setDashView('vendedor')" id="btnViewVendedor">👤 Vendedor</button>
+              <button class="toggle-btn" onclick="UI.setDashView('equipe')" id="btnViewEquipe">🏢 Equipe</button>
             </div>
             <div class="indicator-dots">
-              <div class="dot-item"><div class="dot dot-fat"></div>Faturamento</div>
-              <div class="dot-item"><div class="dot dot-pos"></div>Positivação</div>
-              <div class="dot-item"><div class="dot dot-cad"></div>Cadastros</div>
+              <div class="dot-item"><div class="dot dot-fat"></div>Fat.</div>
+              <div class="dot-item"><div class="dot dot-pos"></div>Pos.</div>
+              <div class="dot-item"><div class="dot dot-cad"></div>Cad.</div>
               <div class="dot-item"><div class="dot dot-sku"></div>SKU</div>
             </div>
           </div>
@@ -571,32 +659,26 @@
               </tr>
             </thead>
             <tbody id="rankingBody">
-              <tr><td colspan="9" style="text-align: center; padding: 40px; color: #4a7fa5;">Carregando dados...</td></tr>
+              <tr><td colspan="9" style="text-align: center; padding: 30px; color: #4a7fa5;">Carregando...</td></tr>
             </tbody>
             <tfoot id="rankingFoot"></tfoot>
           </table>
         </div>
-        <!-- Visão por equipe (apenas gerente) -->
-        <div id="dashEquipeView" class="hidden" style="padding: 16px;">
+        <div id="dashEquipeView" class="hidden" style="padding: 14px;">
           <div class="team-cards-grid" id="teamCardsGrid"></div>
           <div class="team-compare-wrap">
             <div class="team-compare-header">
-              <div class="team-compare-title">📊 Comparativo Consolidado por Equipe</div>
+              <div class="team-compare-title">📊 Comparativo por Equipe</div>
             </div>
             <div style="overflow-x:auto;">
               <table class="panel-table">
                 <thead>
                   <tr>
-                    <th>Equipe</th>
-                    <th>Vendedores</th>
-                    <th>Faturamento Real</th>
-                    <th class="center">% Fat</th>
-                    <th>Positivação Real</th>
-                    <th class="center">% Pos</th>
-                    <th>Cadastros Real</th>
-                    <th class="center">% Cad</th>
-                    <th>SKU Real</th>
-                    <th class="center">% SKU</th>
+                    <th>Equipe</th><th>Vend.</th>
+                    <th>Fat. Real</th><th class="center">% Fat</th>
+                    <th>Pos. Real</th><th class="center">% Pos</th>
+                    <th>Cad. Real</th><th class="center">% Cad</th>
+                    <th>SKU Real</th><th class="center">% SKU</th>
                   </tr>
                 </thead>
                 <tbody id="teamTableBody"></tbody>
@@ -628,9 +710,8 @@
           <div class="cal-sum-val sku text-mono" id="calSumSku">0</div>
         </div>
       </div>
-
-      <div class="card" style="padding: 16px;">
-        <div class="calendar-grid" style="margin-bottom: 6px;">
+      <div class="card" style="padding: 12px;">
+        <div class="calendar-grid" style="margin-bottom: 4px;">
           <div class="calendar-header-cell">Dom</div>
           <div class="calendar-header-cell">Seg</div>
           <div class="calendar-header-cell">Ter</div>
@@ -643,19 +724,29 @@
       </div>
     </div>
 
-    <!-- VIEW: RATEIO -->
+    <!-- VIEW: RATEIO MENSAL -->
     <div id="view-rateio" class="page hidden">
-      <!-- METAS GLOBAIS DA EQUIPE -->
+      <!-- SELETOR DE MÊS -->
+      <div class="mes-selector-wrap card" style="padding:14px;">
+        <div class="mes-selector-title">📅 Selecione o mês para rateio — clique no mês para carregar e editar</div>
+        <div class="mes-selector-grid" id="mesSelectorGrid"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <span style="font-size:10px;color:var(--success);display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--success);border-radius:2px;display:inline-block"></span>100% distribuído</span>
+          <span style="font-size:10px;color:var(--warning);display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--warning);border-radius:2px;display:inline-block"></span>Parcialmente distribuído</span>
+          <span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--border);border-radius:2px;display:inline-block"></span>Não distribuído</span>
+        </div>
+      </div>
+
+      <!-- METAS GLOBAIS MENSAIS -->
       <div class="rateio-top">
-        <div class="rateio-top-title">⚙️ Meta Global da Equipe — Defina o "Bolo Inteiro" antes de distribuir</div>
+        <div class="rateio-top-title" id="rateioMesTitulo">⚙️ Meta Mensal Global — selecione um mês acima</div>
+        <div id="rateioAnualInfoBar">
+          <span id="rateioAnualInfo">—</span>
+        </div>
         <div class="global-inputs-grid">
           <div class="global-input-wrap">
-            <label>💰 Fat. Anual (R$)</label>
-            <input type="number" id="inpMetaFatAnual" class="input" placeholder="0" oninput="UI.calculateRestante()">
-          </div>
-          <div class="global-input-wrap">
             <label>📅 Fat. Mensal (R$)</label>
-            <input type="number" id="inpMetaFatMensal" class="input" placeholder="0" oninput="UI.calculateRestante()">
+            <input type="text" id="inpMetaFatMensal" class="input money-input" placeholder="0,00" oninput="maskMoney(this); UI.calculateRestante()">
           </div>
           <div class="global-input-wrap">
             <label>👥 Positivação (un)</label>
@@ -670,7 +761,7 @@
             <input type="number" id="inpMetaSku" class="input" placeholder="0" oninput="UI.calculateRestante()">
           </div>
           <div style="align-self: end;">
-            <button class="btn btn-success" onclick="App.saveMetaGlobal()" style="width: 100%;">💾 Salvar Global</button>
+            <button class="btn btn-success" onclick="App.saveMetaGlobal()" style="width: 100%;">💾 Salvar</button>
           </div>
         </div>
       </div>
@@ -678,24 +769,24 @@
       <!-- BANNER RESTANTE -->
       <div class="restante-banner">
         <div class="restante-card fat">
-          <div class="restante-label">💰 Restante Fat. Mensal</div>
-          <div class="restante-val fat text-mono" id="restFat">R$ 0,00</div>
-          <div class="restante-sub" id="restFatSub">0 distribuído de 0</div>
+          <div class="restante-label">💰 Restante Fat.</div>
+          <div class="restante-val fat text-mono" id="restFat">R$0,00</div>
+          <div class="restante-sub" id="restFatSub">0 de 0</div>
         </div>
         <div class="restante-card pos">
-          <div class="restante-label">👥 Restante Positivação</div>
+          <div class="restante-label">👥 Restante Pos.</div>
           <div class="restante-val pos text-mono" id="restPos">0</div>
-          <div class="restante-sub" id="restPosSub">0 distribuído de 0</div>
+          <div class="restante-sub" id="restPosSub">0 de 0</div>
         </div>
         <div class="restante-card cad">
-          <div class="restante-label">🆕 Restante Cadastros</div>
+          <div class="restante-label">🆕 Restante Cad.</div>
           <div class="restante-val cad text-mono" id="restCad">0</div>
-          <div class="restante-sub" id="restCadSub">0 distribuído de 0</div>
+          <div class="restante-sub" id="restCadSub">0 de 0</div>
         </div>
         <div class="restante-card sku">
           <div class="restante-label">📦 Restante SKU</div>
           <div class="restante-val sku text-mono" id="restSku">0</div>
-          <div class="restante-sub" id="restSkuSub">0 distribuído de 0</div>
+          <div class="restante-sub" id="restSkuSub">0 de 0</div>
         </div>
       </div>
 
@@ -703,9 +794,86 @@
       <div class="card">
         <div class="card-title">👤 Distribuição por Vendedor</div>
         <div class="rateio-grid" id="rateioGrid"></div>
-        <div style="margin-top: 20px; text-align: right; padding-top: 16px; border-top: 1px solid var(--border);">
+        <div style="margin-top: 16px; text-align: right; padding-top: 14px; border-top: 1px solid var(--border);">
           <button class="btn btn-primary" onclick="App.saveMetasVendedores()">💾 Salvar Rateio da Equipe</button>
         </div>
+      </div>
+    </div>
+
+    <!-- VIEW: META ANUAL -->
+    <div id="view-metaanual" class="page hidden">
+      <!-- META ANUAL GLOBAL -->
+      <div class="anual-hero">
+        <div class="anual-hero-title">📆 Meta Anual da Equipe</div>
+        <div class="anual-hero-sub">Defina o total anual. A tabela abaixo mostra a distribuição mês a mês e o saldo restante.</div>
+        <div class="anual-inputs-grid">
+          <div class="anual-input-wrap">
+            <label>💰 Fat. Anual (R$)</label>
+            <input type="text" id="anualInpFat" class="input money-input" placeholder="0,00" oninput="maskMoney(this); UI.renderAnualTable()">
+          </div>
+          <div class="anual-input-wrap">
+            <label>👥 Positivação (un)</label>
+            <input type="number" id="anualInpPos" class="input" placeholder="0" oninput="UI.renderAnualTable()">
+          </div>
+          <div class="anual-input-wrap">
+            <label>🆕 Cadastros (un)</label>
+            <input type="number" id="anualInpCad" class="input" placeholder="0" oninput="UI.renderAnualTable()">
+          </div>
+          <div class="anual-input-wrap">
+            <label>📦 SKU (un)</label>
+            <input type="number" id="anualInpSku" class="input" placeholder="0" oninput="UI.renderAnualTable()">
+          </div>
+          <div style="align-self:end;">
+            <button class="btn btn-success" onclick="App.saveMetaAnual()" style="width:100%;">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABELA ANUAL (como no print) -->
+      <div class="anual-table-wrap">
+        <div class="anual-table-header">
+          <div class="anual-table-title">📊 Distribuição Anual por Mês</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div id="anualDistribBadge" class="anual-complete-badge pending">⏳ Aguardando dados</div>
+            <button class="btn btn-success btn-sm" onclick="App.saveAllMetasMensais()">💾 Salvar Todos os Meses</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="anual-sheet-table" id="anualSheetTable">
+            <thead>
+              <tr>
+                <th style="width:58px">Mês</th>
+                <th>💰 Faturamento</th>
+                <th style="width:48px">%</th>
+                <th>👥 Pos.</th>
+                <th style="width:48px">%</th>
+                <th>🆕 Cad.</th>
+                <th style="width:48px">%</th>
+                <th>📦 SKU</th>
+                <th style="width:48px">%</th>
+                <th style="text-align:center;width:70px">Status</th>
+                <th style="text-align:center;width:72px">Salvar</th>
+              </tr>
+            </thead>
+            <tbody id="anualSheetBody"></tbody>
+            <tfoot id="anualSheetFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- VISIBILIDADE UPLINE (Gerente/Diretor) -->
+      <div id="uplineVisWrap" class="upline-bar hidden">
+        <div class="upline-bar-title">🏢 Visão das Equipes — Status de Distribuição</div>
+        <div class="upline-equipes-grid" id="uplineEquipesGrid"></div>
+      </div>
+
+      <!-- DISTRIBUIÇÃO POR VENDEDOR -->
+      <div class="anual-distrib-table">
+        <div class="anual-distrib-header">
+          <div class="anual-distrib-title">👤 Meta Anual por Vendedor</div>
+          <button class="btn btn-primary btn-sm" onclick="App.saveMetaAnualVendedores()">💾 Salvar Todos</button>
+        </div>
+        <div class="anual-vendor-grid" id="anualVendorGrid"></div>
       </div>
     </div>
 
@@ -720,25 +888,75 @@
       <button class="close-btn" onclick="UI.closeModal()">✕</button>
     </div>
     <div id="modalFormContainer"></div>
-    <div style="margin-top: 20px; text-align: right; border-top: 1px solid var(--border); padding-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+    <div style="margin-top: 16px; text-align: right; border-top: 1px solid var(--border); padding-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
       <button class="btn btn-outline" onclick="UI.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="App.saveVendasDoDia()">💾 Salvar Lançamentos</button>
+      <button class="btn btn-primary" onclick="App.saveVendasDoDia()">💾 Salvar</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ==============================================
-   CONFIG — coloque sua URL do Apps Script aqui
-=============================================== */
+/* ===== CONFIG ===== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyS7l_Cbt3Uw7KwB6CniqUJIpkfKBdVW1NnOJYj0VK16CYmV6i1bgCCvmUsn4K9xkc/exec";
 
-/* ========== UTILITÁRIOS ========== */
-const fMoney  = v => (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const fNum    = v => Number(v) || 0;
-const fInt    = v => Math.round(Number(v)||0);
+const MESES_NOME = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const MESES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+/* ===== UTILITÁRIOS ===== */
+const fMoney = v => 'R$' + (Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fMoneyCompact = v => {
+  const n = Number(v)||0;
+  if (n >= 1_000_000) return 'R$'+(n/1_000_000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+  if (n >= 1_000) return 'R$'+(n/1_000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k';
+  return fMoney(n);
+};
+const parseMoney = s => Number(String(s).replace(/[^0-9,]/g,'').replace(',','.')) || 0;
+const fNum = v => {
+  if (typeof v === 'string' && v.includes(',')) return parseMoney(v);
+  return Number(v) || 0;
+};
+const fInt    = v => Math.round(Number(v)||0).toLocaleString('pt-BR');
+const fIntRaw = v => Math.round(Number(v)||0);
 const pct     = (real, meta) => meta > 0 ? ((real/meta)*100) : 0;
 const fPct    = (real, meta) => pct(real, meta).toFixed(1) + '%';
+
+function calcProjecao(realAcum, mes, ano) {
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear(), mesAtual = hoje.getMonth() + 1;
+  const diaAtual = (parseInt(ano) === anoAtual && parseInt(mes) === mesAtual) ? hoje.getDate() : new Date(ano, mes, 0).getDate();
+  const totalDias = new Date(ano, mes, 0).getDate();
+  if (diaAtual === 0) return realAcum;
+  return (realAcum / diaAtual) * totalDias;
+}
+
+function maskMoney(input) {
+  let v = input.value.replace(/\D/g,'');
+  if (!v) { input.value = ''; return; }
+  let n = parseInt(v, 10) / 100;
+  input.value = n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function readMoneyInput(el) {
+  if (!el) return 0;
+  return parseFloat(el.value.replace(/\./g,'').replace(',','.')) || 0;
+}
+function fillMoneyInput(el, v) {
+  if (!el) return;
+  const n = Number(v) || 0;
+  el.value = n > 0 ? n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+}
+
+function healthColor(p) {
+  if (p >= 100) return '#10b981';
+  if (p >= 80)  return '#3b82f6';
+  if (p >= 60)  return '#f59e0b';
+  return '#ef4444';
+}
+function healthEmoji(p) {
+  if (p >= 100) return '🟢';
+  if (p >= 80)  return '🔵';
+  if (p >= 60)  return '🟡';
+  return '🔴';
+}
 
 function badgePct(real, meta, directPct) {
   const p = directPct !== undefined ? directPct : pct(real, meta);
@@ -747,31 +965,45 @@ function badgePct(real, meta, directPct) {
   return `<span class="badge-pct ${cls}">${seta} ${p.toFixed(1)}%</span>`;
 }
 
-/* ========== ESTADO GLOBAL ========== */
+/* ===== SIDEBAR MOBILE ===== */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('hamburgerBtn').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebarOnMobile() {
+  if (window.innerWidth < 768) {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+  }
+}
+
+/* ===== ESTADO GLOBAL ===== */
 const State = {
   user: null,
   dataMetasGlobais: [],
   dataMetasVendedores: [],
   dataVendasDiarias: [],
+  dataMetaAnual: [],
+  dataMetaAnualVend: [],
   selectedDateISO: null,
   currentPage: 'dashboard',
-  dashView: 'vendedor'  // 'vendedor' | 'equipe'
+  dashView: 'vendedor',
+  rateioMes: null,          // mês selecionado no rateio
 };
 
-/* ========== API ========== */
+/* ===== API ===== */
 const API = {
   async post(action, payload = {}) {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action, ...payload })
-    });
+    const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
     const data = await res.json();
     if (data.error) throw new Error(data.msg);
     return data;
   }
 };
 
-/* ========== TOASTS ========== */
+/* ===== TOASTS ===== */
 const Toast = {
   show(msg, type = 'info') {
     const tc = document.getElementById('toastContainer');
@@ -783,19 +1015,19 @@ const Toast = {
   }
 };
 
-/* ========== APP ========== */
+/* ===== APP ===== */
 const App = {
   init() {
-    const meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
     const sel = document.getElementById('fltMes');
-    meses.forEach((m, i) => {
+    MESES_CURTO.forEach((m, i) => {
       const o = document.createElement('option');
       o.value = i + 1; o.text = m;
       sel.appendChild(o);
     });
     sel.value = new Date().getMonth() + 1;
+    State.rateioMes = new Date().getMonth() + 1;
 
-    const saved = localStorage.getItem('ameripan_user_v3');
+    const saved = localStorage.getItem('ameripan_user_v4');
     if (saved) { State.user = JSON.parse(saved); App.showApp(); }
   },
 
@@ -806,13 +1038,13 @@ const App = {
     msg.textContent = "Autenticando...";
     try {
       State.user = await API.post('login', { user, pass });
-      localStorage.setItem('ameripan_user_v3', JSON.stringify(State.user));
+      localStorage.setItem('ameripan_user_v4', JSON.stringify(State.user));
       App.showApp();
     } catch(e) { msg.textContent = e.message; }
   },
 
   logout() {
-    localStorage.removeItem('ameripan_user_v3');
+    localStorage.removeItem('ameripan_user_v4');
     location.reload();
   },
 
@@ -823,14 +1055,13 @@ const App = {
 
     const u = State.user;
     document.getElementById('uiUserName').textContent = u.name || u.login;
-    document.getElementById('uiUserRole').textContent = u.role;
+    document.getElementById('uiUserRole').textContent = u.role + (u.team ? ` — ${u.team}` : '');
     document.getElementById('uiUserAvatar').textContent = (u.name || u.login).charAt(0).toUpperCase();
 
-    // Esconde rateio para vendedor
     if (u.role === 'VENDEDOR') {
       document.getElementById('navRateio').classList.add('hidden');
+      document.getElementById('navMetaAnual').classList.add('hidden');
     }
-    // Mostra toggle de visão para gerente/diretor
     if (u.role === 'GERENTE') {
       document.getElementById('dashViewToggle').classList.remove('hidden');
     }
@@ -844,17 +1075,17 @@ const App = {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
     document.getElementById('view-' + page).classList.remove('hidden');
-    const titles = { dashboard: 'Painel de Performance', calendario: 'Calendário Diário', rateio: 'Rateio de Metas' };
+    const titles = { dashboard: 'Painel de Performance', calendario: 'Calendário Diário', rateio: 'Rateio Mensal', metaanual: 'Meta Anual' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
 
-    // Ativa nav item correto
-    const navMap = { dashboard: 0, calendario: 1, rateio: 2 };
-    const items = document.querySelectorAll('.nav-item');
-    if (items[navMap[page]]) items[navMap[page]].classList.add('active');
+    const navItems = document.querySelectorAll('.nav-item');
+    const navMap   = { dashboard: 0, calendario: 1, rateio: 3, metaanual: 2 };
+    if (navItems[navMap[page]]) navItems[navMap[page]].classList.add('active');
 
-    if (page === 'rateio') UI.renderRateio();
+    if (page === 'rateio')     { UI.buildMesSelector(); UI.renderRateio(); }
     if (page === 'calendario') UI.renderCalendar();
-    if (page === 'dashboard') UI.renderDashboard();
+    if (page === 'dashboard')  UI.renderDashboard();
+    if (page === 'metaanual')  UI.renderMetaAnual();
   },
 
   async loadData() {
@@ -862,37 +1093,48 @@ const App = {
     const mes   = document.getElementById('fltMes').value;
     const equipe = State.user.role === 'GERENTE' ? 'TODOS' : State.user.team;
 
-    Toast.show('Carregando dados...', 'info');
+    Toast.show('Carregando...', 'info');
     try {
-      const [mg, mv, vd] = await Promise.all([
-        API.post('getMetasGlobais',    { ano, equipe }),
-        API.post('getMetasVendedores', { ano, mes, equipe }),
-        API.post('getVendasDiarias',   { ano, mes, equipe })
+      const [mg, mv, vd, ma, mav] = await Promise.all([
+        API.post('getMetasGlobais',       { ano, equipe }),
+        API.post('getMetasVendedores',    { ano, mes, equipe }),
+        API.post('getVendasDiarias',      { ano, mes, equipe }),
+        API.post('getMetaAnual',          { ano, equipe }),
+        API.post('getMetaAnualVendedores',{ ano, equipe }),
       ]);
-      State.dataMetasGlobais    = mg.data || [];
-      State.dataMetasVendedores = mv.data || [];
-      State.dataVendasDiarias   = vd.data || [];
+      State.dataMetasGlobais    = mg.data  || [];
+      State.dataMetasVendedores = mv.data  || [];
+      State.dataVendasDiarias   = vd.data  || [];
+      State.dataMetaAnual       = ma.data  || [];
+      State.dataMetaAnualVend   = mav.data || [];
 
       UI.renderDashboard();
-      if (State.currentPage === 'rateio')    UI.renderRateio();
+      if (State.currentPage === 'rateio')     { UI.buildMesSelector(); UI.renderRateio(); }
       if (State.currentPage === 'calendario') UI.renderCalendar();
+      if (State.currentPage === 'metaanual')  UI.renderMetaAnual();
       Toast.show('Dados carregados!', 'success');
     } catch(e) {
-      Toast.show('Erro ao carregar: ' + e.message, 'error');
+      Toast.show('Erro: ' + e.message, 'error');
     }
   },
 
+  async loadMetasVendedoresMes(mes) {
+    const ano   = document.getElementById('fltAno').value;
+    const equipe = State.user.role === 'GERENTE' ? 'TODOS' : State.user.team;
+    const mv = await API.post('getMetasVendedores', { ano, mes, equipe });
+    State.dataMetasVendedores = mv.data || [];
+  },
+
   async saveMetaGlobal() {
-    const ano = document.getElementById('fltAno').value;
-    const mes = document.getElementById('fltMes').value;
+    const ano    = document.getElementById('fltAno').value;
+    const mes    = State.rateioMes;
     const equipe = State.user.team;
     const payload = {
       ano, mes, equipe,
-      metaFatAnual:  fNum(document.getElementById('inpMetaFatAnual').value),
-      metaFat:       fNum(document.getElementById('inpMetaFatMensal').value),
-      metaPos:       fNum(document.getElementById('inpMetaPos').value),
-      metaCad:       fNum(document.getElementById('inpMetaCad').value),
-      metaSku:       fNum(document.getElementById('inpMetaSku').value),
+      metaFat: readMoneyInput(document.getElementById('inpMetaFatMensal')),
+      metaPos: fNum(document.getElementById('inpMetaPos').value),
+      metaCad: fNum(document.getElementById('inpMetaCad').value),
+      metaSku: fNum(document.getElementById('inpMetaSku').value),
     };
     try {
       await API.post('saveMetaGlobal', { payload });
@@ -902,18 +1144,17 @@ const App = {
   },
 
   async saveMetasVendedores() {
-    const ano = document.getElementById('fltAno').value;
-    const mes = document.getElementById('fltMes').value;
+    const ano    = document.getElementById('fltAno').value;
+    const mes    = State.rateioMes;
     const promises = [];
-
     document.querySelectorAll('.rateio-card[data-vid]').forEach(card => {
       const vid   = card.dataset.vid;
       const vname = card.dataset.vname;
       const equipe = card.dataset.vteam;
       promises.push(API.post('saveMetaVendedor', { payload: {
         ano, mes, equipe, vendorId: vid, vendorName: vname,
-        metaFatAnual: fNum(card.querySelector('.inp-fat-anual')?.value),
-        metaFat:      fNum(card.querySelector('.inp-fat').value),
+        metaFatAnual: readMoneyInput(card.querySelector('.inp-fat-anual')),
+        metaFat:      readMoneyInput(card.querySelector('.inp-fat')),
         metaPos:      fNum(card.querySelector('.inp-pos').value),
         metaCad:      fNum(card.querySelector('.inp-cad').value),
         metaSku:      fNum(card.querySelector('.inp-sku').value),
@@ -921,9 +1162,48 @@ const App = {
     });
     try {
       await Promise.all(promises);
-      Toast.show('Rateio salvo com sucesso!', 'success');
+      Toast.show('Rateio salvo!', 'success');
       App.loadData();
-    } catch(e) { Toast.show('Erro ao salvar rateio: ' + e.message, 'error'); }
+    } catch(e) { Toast.show('Erro ao salvar: ' + e.message, 'error'); }
+  },
+
+  async saveMetaAnual() {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.team;
+    const payload = {
+      ano, equipe,
+      metaFatAnual: readMoneyInput(document.getElementById('anualInpFat')),
+      metaPosAnual: fNum(document.getElementById('anualInpPos').value),
+      metaCadAnual: fNum(document.getElementById('anualInpCad').value),
+      metaSkuAnual: fNum(document.getElementById('anualInpSku').value),
+    };
+    try {
+      await API.post('saveMetaAnual', { payload });
+      Toast.show('Meta anual salva!', 'success');
+      App.loadData();
+    } catch(e) { Toast.show('Erro: ' + e.message, 'error'); }
+  },
+
+  async saveMetaAnualVendedores() {
+    const ano = document.getElementById('fltAno').value;
+    const promises = [];
+    document.querySelectorAll('.anual-vendor-card[data-vid]').forEach(card => {
+      const vid   = card.dataset.vid;
+      const vname = card.dataset.vname;
+      const equipe = card.dataset.vteam;
+      promises.push(API.post('saveMetaAnualVendedor', { payload: {
+        ano, equipe, vendorId: vid, vendorName: vname,
+        metaFatAnual: readMoneyInput(card.querySelector('.av-inp-fat')),
+        metaPosAnual: fNum(card.querySelector('.av-inp-pos').value),
+        metaCadAnual: fNum(card.querySelector('.av-inp-cad').value),
+        metaSkuAnual: fNum(card.querySelector('.av-inp-sku').value),
+      }}));
+    });
+    try {
+      await Promise.all(promises);
+      Toast.show('Metas anuais salvas!', 'success');
+      App.loadData();
+    } catch(e) { Toast.show('Erro: ' + e.message, 'error'); }
   },
 
   async saveVendasDoDia() {
@@ -931,31 +1211,92 @@ const App = {
     const ano = dataISO.substring(0,4);
     const mes = parseInt(dataISO.substring(5,7));
     const promises = [];
-
     document.querySelectorAll('.modal-vendor-row[data-vid]').forEach(row => {
       const vid   = row.dataset.vid;
       const vname = row.dataset.vname;
       const equipe = row.dataset.vteam;
       promises.push(API.post('saveVendaDiaria', { payload: {
-        dataISO, ano, mes, equipe,
-        vendorId: vid, vendorName: vname,
-        realFat: fNum(row.querySelector('.inp-dia-fat').value),
+        dataISO, ano, mes, equipe, vendorId: vid, vendorName: vname,
+        realFat: readMoneyInput(row.querySelector('.inp-dia-fat')),
         realPos: fNum(row.querySelector('.inp-dia-pos').value),
         realCad: fNum(row.querySelector('.inp-dia-cad').value),
         realSku: fNum(row.querySelector('.inp-dia-sku').value),
       }}));
     });
-
     try {
       await Promise.all(promises);
       UI.closeModal();
       App.loadData();
       Toast.show('Lançamento salvo!', 'success');
-    } catch(e) { Toast.show('Erro ao salvar dia: ' + e.message, 'error'); }
+    } catch(e) { Toast.show('Erro: ' + e.message, 'error'); }
+  },
+
+  /* Salva a meta mensal de uma linha específica da tabela anual */
+  async saveMetaMensalRow(mes) {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.team;
+    const tr     = document.querySelector(`#anualSheetBody tr[data-mes="${mes}"]`);
+    if (!tr) return;
+
+    const btn = document.getElementById(`rowSaveBtn${mes}`);
+    if (btn) { btn.classList.add('saving'); btn.textContent = '⏳'; }
+
+    const payload = {
+      ano, mes, equipe,
+      metaFat: readMoneyInput(tr.querySelector('.ai-fat')),
+      metaPos: fNum(tr.querySelector('.ai-pos').value),
+      metaCad: fNum(tr.querySelector('.ai-cad').value),
+      metaSku: fNum(tr.querySelector('.ai-sku').value),
+    };
+
+    try {
+      await API.post('saveMetaGlobal', { payload });
+      // Atualiza State localmente para não precisar recarregar tudo
+      const existing = State.dataMetasGlobais.find(g => String(g.ano)===String(ano) && parseInt(g.mes)===mes);
+      if (existing) {
+        existing.metaFat = payload.metaFat;
+        existing.metaPos = payload.metaPos;
+        existing.metaCad = payload.metaCad;
+        existing.metaSku = payload.metaSku;
+      } else {
+        State.dataMetasGlobais.push({ ano, mes, equipe, metaFat: payload.metaFat, metaPos: payload.metaPos, metaCad: payload.metaCad, metaSku: payload.metaSku });
+      }
+      if (btn) { btn.classList.remove('saving'); btn.textContent = '✅'; setTimeout(() => { btn.textContent = '💾'; }, 1500); }
+      Toast.show(`Meta de ${MESES_NOME[mes-1]} salva!`, 'success');
+    } catch(e) {
+      if (btn) { btn.classList.remove('saving'); btn.textContent = '💾'; }
+      Toast.show('Erro: ' + e.message, 'error');
+    }
+  },
+
+  /* Salva todos os 12 meses de uma vez */
+  async saveAllMetasMensais() {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.team;
+    const rows   = document.querySelectorAll('#anualSheetBody tr[data-mes]');
+    if (!rows.length) { Toast.show('Nenhum dado para salvar.', 'info'); return; }
+
+    Toast.show('Salvando todos os meses...', 'info');
+    const promises = [];
+    rows.forEach(tr => {
+      const mes = parseInt(tr.dataset.mes);
+      promises.push(API.post('saveMetaGlobal', { payload: {
+        ano, mes, equipe,
+        metaFat: readMoneyInput(tr.querySelector('.ai-fat')),
+        metaPos: fNum(tr.querySelector('.ai-pos').value),
+        metaCad: fNum(tr.querySelector('.ai-cad').value),
+        metaSku: fNum(tr.querySelector('.ai-sku').value),
+      }}));
+    });
+    try {
+      await Promise.all(promises);
+      Toast.show('Todos os meses salvos!', 'success');
+      App.loadData();
+    } catch(e) { Toast.show('Erro: ' + e.message, 'error'); }
   }
 };
 
-/* ========== UI ========== */
+/* ===== UI ===== */
 const UI = {
 
   /* === DASHBOARD === */
@@ -972,7 +1313,6 @@ const UI = {
     const tbody = document.getElementById('rankingBody');
     tbody.innerHTML = '';
 
-    // Agrega por vendedor
     const realMap = {};
     State.dataVendasDiarias.forEach(v => {
       if (!realMap[v.vendorId]) realMap[v.vendorId] = { fat:0, pos:0, cad:0, sku:0 };
@@ -988,44 +1328,40 @@ const UI = {
 
     let tots = { fat:0, pos:0, cad:0, sku:0, mFat:0, mPos:0, mCad:0, mSku:0 };
 
-    lista.forEach(v => {
+    const listaComMeta = lista.map(v => {
       const m = State.dataMetasVendedores.find(x => String(x.vendorId) === String(v.code)) || {};
       const r = realMap[v.code] || { fat:0, pos:0, cad:0, sku:0 };
-      const mFat = fNum(m.metaFat), mPos = fNum(m.metaPos), mCad = fNum(m.metaCad), mSku = fNum(m.metaSku);
+      return { v, m, r, mFat: fNum(m.metaFat), mPos: fNum(m.metaPos), mCad: fNum(m.metaCad), mSku: fNum(m.metaSku) };
+    });
 
+    listaComMeta.forEach(({ v, m, r, mFat, mPos, mCad, mSku }) => {
       tots.fat += r.fat; tots.pos += r.pos; tots.cad += r.cad; tots.sku += r.sku;
       tots.mFat += mFat; tots.mPos += mPos; tots.mCad += mCad; tots.mSku += mSku;
-
       const wFat = Math.min(pct(r.fat, mFat), 100);
       const wPos = Math.min(pct(r.pos, mPos), 100);
       const wCad = Math.min(pct(r.cad, mCad), 100);
       const wSku = Math.min(pct(r.sku, mSku), 100);
+      const pctFat = pct(r.fat, mFat), pctPos = pct(r.pos, mPos), pctCad = pct(r.cad, mCad), pctSku = pct(r.sku, mSku);
+      const mediaHealth = mFat > 0 || mPos > 0 ? (pctFat*0.5 + pctPos*0.2 + pctCad*0.15 + pctSku*0.15) : 0;
 
       tbody.innerHTML += `
         <tr>
           <td>
-            <div class="vendor-name">${v.name}</div>
-            <div class="vendor-team">${v.team || State.user.team || ''}</div>
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span class="health-dot">${healthEmoji(mediaHealth)}</span>
+              <div>
+                <div class="vendor-name">${v.name}</div>
+                <div class="vendor-team">${v.team || State.user.team || ''}</div>
+              </div>
+            </div>
           </td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-fat" style="width:${wFat}%"></div>
-            <span class="data-val">${fMoney(r.fat)}</span>
-          </td>
+          <td class="data-cell"><div class="data-bar data-bar-fat" style="width:${wFat}%"></div><span class="data-val">${fMoney(r.fat)}</span></td>
           <td style="text-align:center;">${badgePct(r.fat, mFat)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-pos" style="width:${wPos}%"></div>
-            <span class="data-val">${fInt(r.pos)}</span>
-          </td>
+          <td class="data-cell"><div class="data-bar data-bar-pos" style="width:${wPos}%"></div><span class="data-val">${fIntRaw(r.pos)}</span></td>
           <td style="text-align:center;">${badgePct(r.pos, mPos)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-cad" style="width:${wCad}%"></div>
-            <span class="data-val">${fInt(r.cad)}</span>
-          </td>
+          <td class="data-cell"><div class="data-bar data-bar-cad" style="width:${wCad}%"></div><span class="data-val">${fIntRaw(r.cad)}</span></td>
           <td style="text-align:center;">${badgePct(r.cad, mCad)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-sku" style="width:${wSku}%"></div>
-            <span class="data-val">${fInt(r.sku)}</span>
-          </td>
+          <td class="data-cell"><div class="data-bar data-bar-sku" style="width:${wSku}%"></div><span class="data-val">${fIntRaw(r.sku)}</span></td>
           <td style="text-align:center;">${badgePct(r.sku, mSku)}</td>
         </tr>
       `;
@@ -1036,52 +1372,64 @@ const UI = {
         <td style="color:#7ac3e8;">TOTAL EQUIPE</td>
         <td class="data-cell"><span class="data-val">${fMoney(tots.fat)}</span></td>
         <td style="text-align:center;">${badgePct(tots.fat, tots.mFat)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(tots.pos)}</span></td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(tots.pos)}</span></td>
         <td style="text-align:center;">${badgePct(tots.pos, tots.mPos)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(tots.cad)}</span></td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(tots.cad)}</span></td>
         <td style="text-align:center;">${badgePct(tots.cad, tots.mCad)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(tots.sku)}</span></td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(tots.sku)}</span></td>
         <td style="text-align:center;">${badgePct(tots.sku, tots.mSku)}</td>
       </tr>
     `;
 
-    // Se estava na visão equipe, re-renderiza
+    const ano = document.getElementById('fltAno').value;
+    const mes = document.getElementById('fltMes').value;
+    const proj = calcProjecao(tots.fat, mes, ano);
+
+    document.getElementById('sumFatReal').textContent = fMoney(tots.fat);
+    document.getElementById('sumFatMeta').textContent = 'Meta: ' + fMoney(tots.mFat);
+    document.getElementById('sumFatBadge').innerHTML = badgePct(tots.fat, tots.mFat);
+    document.getElementById('sumFatBar').style.width = Math.min(pct(tots.fat, tots.mFat), 100) + '%';
+    const projEl = document.getElementById('sumFatProj');
+    if (tots.fat > 0) { projEl.style.display = 'inline-flex'; projEl.textContent = '📈 Proj: ' + fMoney(proj); }
+    else { projEl.style.display = 'none'; }
+
+    document.getElementById('sumPosReal').textContent = fIntRaw(tots.pos);
+    document.getElementById('sumPosMeta').textContent = 'Meta: ' + fIntRaw(tots.mPos);
+    document.getElementById('sumPosBadge').innerHTML = badgePct(tots.pos, tots.mPos);
+    document.getElementById('sumPosBar').style.width = Math.min(pct(tots.pos, tots.mPos), 100) + '%';
+    document.getElementById('sumCadReal').textContent = fIntRaw(tots.cad);
+    document.getElementById('sumCadMeta').textContent = 'Meta: ' + fIntRaw(tots.mCad);
+    document.getElementById('sumCadBadge').innerHTML = badgePct(tots.cad, tots.mCad);
+    document.getElementById('sumCadBar').style.width = Math.min(pct(tots.cad, tots.mCad), 100) + '%';
+    document.getElementById('sumSkuReal').textContent = fIntRaw(tots.sku);
+    document.getElementById('sumSkuMeta').textContent = 'Meta: ' + fIntRaw(tots.mSku);
+    document.getElementById('sumSkuBadge').innerHTML = badgePct(tots.sku, tots.mSku);
+    document.getElementById('sumSkuBar').style.width = Math.min(pct(tots.sku, tots.mSku), 100) + '%';
+
     if (State.dashView === 'equipe') UI.renderTeamView();
   },
 
-  /* === VISÃO POR EQUIPE (Gerente/Diretor) === */
   renderTeamView() {
-    // Agrupa vendedores por equipe
     const equipes = {};
     State.user.vendors.forEach(v => {
       const team = v.team || 'GERAL';
       if (!equipes[team]) equipes[team] = [];
       equipes[team].push(v);
     });
-
-    // Agrega realizados por vendedor
     const realMap = {};
     State.dataVendasDiarias.forEach(v => {
       if (!realMap[v.vendorId]) realMap[v.vendorId] = { fat:0, pos:0, cad:0, sku:0 };
-      realMap[v.vendorId].fat += fNum(v.realFat);
-      realMap[v.vendorId].pos += fNum(v.realPos);
-      realMap[v.vendorId].cad += fNum(v.realCad);
-      realMap[v.vendorId].sku += fNum(v.realSku);
+      realMap[v.vendorId].fat += fNum(v.realFat); realMap[v.vendorId].pos += fNum(v.realPos);
+      realMap[v.vendorId].cad += fNum(v.realCad); realMap[v.vendorId].sku += fNum(v.realSku);
     });
-
-    // Consolida por equipe
     const teamData = Object.entries(equipes).map(([teamName, vendors]) => {
-      let r = { fat:0, pos:0, cad:0, sku:0 };
-      let m = { fat:0, pos:0, cad:0, sku:0 };
-
+      let r = { fat:0, pos:0, cad:0, sku:0 }, m = { fat:0, pos:0, cad:0, sku:0 };
       vendors.forEach(v => {
         const vr = realMap[v.code] || {};
         r.fat += fNum(vr.fat); r.pos += fNum(vr.pos); r.cad += fNum(vr.cad); r.sku += fNum(vr.sku);
         const vm = State.dataMetasVendedores.find(x => String(x.vendorId) === String(v.code)) || {};
         m.fat += fNum(vm.metaFat); m.pos += fNum(vm.metaPos); m.cad += fNum(vm.metaCad); m.sku += fNum(vm.metaSku);
       });
-
-      // Tenta pegar meta global da equipe como fallback
       const mg = State.dataMetasGlobais.find(g => String(g.equipe) === String(teamName));
       if (mg) {
         if (!m.fat && mg.metaFat) m.fat = fNum(mg.metaFat);
@@ -1089,22 +1437,18 @@ const UI = {
         if (!m.cad && mg.metaCad) m.cad = fNum(mg.metaCad);
         if (!m.sku && mg.metaSku) m.sku = fNum(mg.metaSku);
       }
-
       return { teamName, vendors, r, m };
     });
 
-    // === CARDS por equipe ===
     const cardsGrid = document.getElementById('teamCardsGrid');
     cardsGrid.innerHTML = '';
-
     teamData.forEach(({ teamName, vendors, r, m }) => {
       const kpis = [
-        { key:'fat', label:'💰 Faturamento', real: fMoney(r.fat), meta: fMoney(m.fat), pctVal: pct(r.fat, m.fat), fill:'fill-fat', cls:'fat' },
-        { key:'pos', label:'👥 Positivação',  real: fInt(r.pos),   meta: fInt(m.pos),   pctVal: pct(r.pos, m.pos),   fill:'fill-pos', cls:'pos' },
-        { key:'cad', label:'🆕 Cadastros',    real: fInt(r.cad),   meta: fInt(m.cad),   pctVal: pct(r.cad, m.cad),   fill:'fill-cad', cls:'cad' },
-        { key:'sku', label:'📦 SKU',          real: fInt(r.sku),   meta: fInt(m.sku),   pctVal: pct(r.sku, m.sku),   fill:'fill-sku', cls:'sku' },
+        { label:'💰 Faturamento', real: fMoney(r.fat),   meta: fMoney(m.fat),  pct: pct(r.fat,m.fat),  fill:'fill-fat', cls:'fat' },
+        { label:'👥 Positivação',  real: fIntRaw(r.pos),  meta: fIntRaw(m.pos), pct: pct(r.pos,m.pos),  fill:'fill-pos', cls:'pos' },
+        { label:'🆕 Cadastros',    real: fIntRaw(r.cad),  meta: fIntRaw(m.cad), pct: pct(r.cad,m.cad),  fill:'fill-cad', cls:'cad' },
+        { label:'📦 SKU',          real: fIntRaw(r.sku),  meta: fIntRaw(m.sku), pct: pct(r.sku,m.sku),  fill:'fill-sku', cls:'sku' },
       ];
-
       cardsGrid.innerHTML += `
         <div class="team-card">
           <div class="team-card-header">
@@ -1112,138 +1456,241 @@ const UI = {
             <div class="team-card-count">${vendors.length} vendedor${vendors.length>1?'es':''}</div>
           </div>
           <div class="team-kpis">
-            ${kpis.map(k => `
+            ${kpis.map(k=>`
               <div class="team-kpi">
                 <div class="team-kpi-label">${k.label}</div>
                 <div class="team-kpi-real ${k.cls}">${k.real}</div>
                 <div class="team-kpi-footer">
                   <div class="team-kpi-meta">Meta: ${k.meta}</div>
-                  ${badgePct(0, 0, k.pctVal)}
+                  ${badgePct(0,0,k.pct)}
                 </div>
-                <div class="team-progress-bar">
-                  <div class="team-progress-fill ${k.fill}" style="width:${Math.min(k.pctVal, 100)}%"></div>
-                </div>
-              </div>
-            `).join('')}
+                <div class="team-progress-bar"><div class="team-progress-fill ${k.fill}" style="width:${Math.min(k.pct,100)}%"></div></div>
+              </div>`).join('')}
           </div>
-        </div>
-      `;
+        </div>`;
     });
 
-    // === TABELA COMPARATIVA ===
     const tbody = document.getElementById('teamTableBody');
     tbody.innerHTML = '';
-    let grand = { fat:0, pos:0, cad:0, sku:0, mFat:0, mPos:0, mCad:0, mSku:0, vend:0 };
-
+    let grand = { fat:0,pos:0,cad:0,sku:0,mFat:0,mPos:0,mCad:0,mSku:0,vend:0 };
     teamData.forEach(({ teamName, vendors, r, m }) => {
-      grand.fat += r.fat; grand.pos += r.pos; grand.cad += r.cad; grand.sku += r.sku;
-      grand.mFat += m.fat; grand.mPos += m.pos; grand.mCad += m.cad; grand.mSku += m.sku;
-      grand.vend += vendors.length;
-
-      const wFat = Math.min(pct(r.fat, m.fat), 100);
+      grand.fat+=r.fat; grand.pos+=r.pos; grand.cad+=r.cad; grand.sku+=r.sku;
+      grand.mFat+=m.fat; grand.mPos+=m.pos; grand.mCad+=m.cad; grand.mSku+=m.sku; grand.vend+=vendors.length;
       tbody.innerHTML += `
         <tr>
           <td><div class="vendor-name">${teamName}</div></td>
-          <td style="text-align:center; font-family:var(--mono);">${vendors.length}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-fat" style="width:${wFat}%"></div>
-            <span class="data-val">${fMoney(r.fat)}</span>
-          </td>
-          <td style="text-align:center;">${badgePct(r.fat, m.fat)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-pos" style="width:${Math.min(pct(r.pos,m.pos),100)}%"></div>
-            <span class="data-val">${fInt(r.pos)}</span>
-          </td>
-          <td style="text-align:center;">${badgePct(r.pos, m.pos)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-cad" style="width:${Math.min(pct(r.cad,m.cad),100)}%"></div>
-            <span class="data-val">${fInt(r.cad)}</span>
-          </td>
-          <td style="text-align:center;">${badgePct(r.cad, m.cad)}</td>
-          <td class="data-cell">
-            <div class="data-bar data-bar-sku" style="width:${Math.min(pct(r.sku,m.sku),100)}%"></div>
-            <span class="data-val">${fInt(r.sku)}</span>
-          </td>
-          <td style="text-align:center;">${badgePct(r.sku, m.sku)}</td>
-        </tr>
-      `;
+          <td style="text-align:center;font-family:var(--mono);">${vendors.length}</td>
+          <td class="data-cell"><div class="data-bar data-bar-fat" style="width:${Math.min(pct(r.fat,m.fat),100)}%"></div><span class="data-val">${fMoney(r.fat)}</span></td>
+          <td style="text-align:center;">${badgePct(r.fat,m.fat)}</td>
+          <td class="data-cell"><div class="data-bar data-bar-pos" style="width:${Math.min(pct(r.pos,m.pos),100)}%"></div><span class="data-val">${fIntRaw(r.pos)}</span></td>
+          <td style="text-align:center;">${badgePct(r.pos,m.pos)}</td>
+          <td class="data-cell"><div class="data-bar data-bar-cad" style="width:${Math.min(pct(r.cad,m.cad),100)}%"></div><span class="data-val">${fIntRaw(r.cad)}</span></td>
+          <td style="text-align:center;">${badgePct(r.cad,m.cad)}</td>
+          <td class="data-cell"><div class="data-bar data-bar-sku" style="width:${Math.min(pct(r.sku,m.sku),100)}%"></div><span class="data-val">${fIntRaw(r.sku)}</span></td>
+          <td style="text-align:center;">${badgePct(r.sku,m.sku)}</td>
+        </tr>`;
     });
-
     document.getElementById('teamTableFoot').innerHTML = `
       <tr>
         <td style="color:#7ac3e8;">TOTAL GERAL</td>
-        <td style="text-align:center; font-family:var(--mono); color:#7ac3e8;">${grand.vend}</td>
+        <td style="text-align:center;font-family:var(--mono);color:#7ac3e8;">${grand.vend}</td>
         <td class="data-cell"><span class="data-val">${fMoney(grand.fat)}</span></td>
-        <td style="text-align:center;">${badgePct(grand.fat, grand.mFat)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(grand.pos)}</span></td>
-        <td style="text-align:center;">${badgePct(grand.pos, grand.mPos)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(grand.cad)}</span></td>
-        <td style="text-align:center;">${badgePct(grand.cad, grand.mCad)}</td>
-        <td class="data-cell"><span class="data-val">${fInt(grand.sku)}</span></td>
-        <td style="text-align:center;">${badgePct(grand.sku, grand.mSku)}</td>
-      </tr>
-    `;
+        <td style="text-align:center;">${badgePct(grand.fat,grand.mFat)}</td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(grand.pos)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.pos,grand.mPos)}</td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(grand.cad)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.cad,grand.mCad)}</td>
+        <td class="data-cell"><span class="data-val">${fIntRaw(grand.sku)}</span></td>
+        <td style="text-align:center;">${badgePct(grand.sku,grand.mSku)}</td>
+      </tr>`;
   },
 
-  /* === RATEIO === */
-  renderRateio() {
-    const mes = document.getElementById('fltMes').value;
-    const mg  = State.dataMetasGlobais.find(m => String(m.mes) === String(mes));
+  /* === RATEIO: SELETOR DE MÊS === */
+  buildMesSelector() {
+    const ano   = document.getElementById('fltAno').value;
+    const grid  = document.getElementById('mesSelectorGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
 
-    document.getElementById('inpMetaFatAnual').value  = mg?.metaFatAnual  || '';
-    document.getElementById('inpMetaFatMensal').value = mg?.metaFat       || '';
-    document.getElementById('inpMetaPos').value       = mg?.metaPos       || '';
-    document.getElementById('inpMetaCad').value       = mg?.metaCad       || '';
-    document.getElementById('inpMetaSku').value       = mg?.metaSku       || '';
+    // Calcula status de cada mês baseado nas metas globais
+    const metaAnualFat = UI._getMetaAnualFat();
+
+    MESES_CURTO.forEach((nome, i) => {
+      const m = i + 1;
+      const mg = State.dataMetasGlobais.find(g => parseInt(g.mes) === m);
+      const fatMes = mg ? fNum(mg.metaFat) : 0;
+
+      // Calcula total distribuído para vendedores neste mês
+      // (usamos dataMetasVendedores que pode não ter todos os meses; status é heurístico)
+      let status = 'empty';
+      if (fatMes > 0) {
+        // Se temos meta global, vemos se tem alguma distribuição
+        // Para simplificar: se a meta global está preenchida = parcial; tenta checar melhor
+        status = 'partial';
+        // Se a soma da meta global == metaAnual/12 com tolerância = ok (heurístico)
+        if (metaAnualFat > 0) {
+          const proporcional = metaAnualFat / 12;
+          const tolerancia   = proporcional * 0.01;
+          // Quando soma dos meses == meta anual proporcional considera ok
+          // Aqui verificamos apenas se o mês está salvo
+          status = 'partial';
+        }
+      }
+
+      const isActive = m === State.rateioMes;
+      let cls = 'mes-btn';
+      if (status === 'ok')      cls += ' distribuido';
+      if (status === 'partial') cls += ' parcial';
+      if (isActive)             cls += ' active';
+
+      const btn = document.createElement('button');
+      btn.className = cls;
+      btn.innerHTML = `${nome}${fatMes > 0 ? `<div class="mes-dot ${status}"></div>` : '<div class="mes-dot empty"></div>'}`;
+      btn.title = `${MESES_NOME[i]} — ${fatMes > 0 ? 'Meta: ' + fMoney(fatMes) : 'Sem meta'}`;
+      btn.onclick = () => UI.selectRateioMes(m);
+      grid.appendChild(btn);
+    });
+  },
+
+  _getMetaAnualFat() {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.team;
+    const ma = State.dataMetaAnual.find(x => String(x.ano) === String(ano) && (equipe === 'TODOS' || x.equipe === equipe));
+    return ma ? fNum(ma.metaFatAnual) : 0;
+  },
+
+  async selectRateioMes(mes) {
+    State.rateioMes = mes;
+    // Atualiza fltMes para consistência
+    document.getElementById('fltMes').value = mes;
+    // Recarrega metas do mês selecionado
+    try {
+      Toast.show('Carregando mês...', 'info');
+      await App.loadMetasVendedoresMes(mes);
+      UI.buildMesSelector();
+      UI.renderRateio();
+    } catch(e) { Toast.show('Erro: ' + e.message, 'error'); }
+  },
+
+  renderRateio() {
+    const mes    = State.rateioMes || parseInt(document.getElementById('fltMes').value);
+    const nomeMes = MESES_NOME[mes-1];
+    document.getElementById('rateioMesTitulo').textContent = `⚙️ Meta Mensal Global — ${nomeMes} — Distribua a meta do mês entre os vendedores`;
+
+    const mg = State.dataMetasGlobais.find(m => String(m.mes) === String(mes));
+
+    // Preenche apenas com dados salvos — sem autopreenchimento
+    const savedFat = mg ? fNum(mg.metaFat) : 0;
+    const savedPos = mg ? fNum(mg.metaPos) : 0;
+    const savedCad = mg ? fNum(mg.metaCad) : 0;
+    const savedSku = mg ? fNum(mg.metaSku) : 0;
+
+    fillMoneyInput(document.getElementById('inpMetaFatMensal'), savedFat);
+    document.getElementById('inpMetaPos').value = savedPos > 0 ? Math.round(savedPos) : '';
+    document.getElementById('inpMetaCad').value = savedCad > 0 ? Math.round(savedCad) : '';
+    document.getElementById('inpMetaSku').value = savedSku > 0 ? Math.round(savedSku) : '';
+
+    // Barra de contexto anual
+    UI.renderAnualInfoBar(mes);
 
     const grid = document.getElementById('rateioGrid');
     grid.innerHTML = '';
 
     State.user.vendors.forEach(v => {
       const m = State.dataMetasVendedores.find(x => String(x.vendorId) === String(v.code)) || {};
+      const fatAnualFmt  = m.metaFatAnual > 0 ? Number(m.metaFatAnual).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+      const fatMensalFmt = m.metaFat      > 0 ? Number(m.metaFat).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+
+      const realMap = {};
+      State.dataVendasDiarias.forEach(vd => {
+        if (!realMap[vd.vendorId]) realMap[vd.vendorId] = { fat:0 };
+        realMap[vd.vendorId].fat += fNum(vd.realFat);
+      });
+      const realFat = (realMap[v.code] || {}).fat || 0;
+      const pctFat  = pct(realFat, fNum(m.metaFat));
+      const hColor  = healthColor(pctFat);
+
+      // Progresso de distribuição anual do vendedor
+      let distribAnual = 0;
+      State.dataMetasGlobais.forEach(g => {
+        // soma do que foi configurado em meses (aproximação)
+      });
+      const anualFat = fNum(m.metaFatAnual);
+      const pctAnual = anualFat > 0 ? Math.min((fNum(m.metaFat) / anualFat) * 100 * 12, 100) : 0;
+
       grid.innerHTML += `
         <div class="rateio-card" data-vid="${v.code}" data-vname="${v.name}" data-vteam="${v.team || State.user.team}">
           <div class="rateio-card-header">
-            <div class="rateio-card-name">${v.name}</div>
-            <div class="rateio-card-code">#${v.code}</div>
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span>${healthEmoji(pctFat)}</span>
+              <div class="rateio-card-name">${v.name}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              ${fNum(m.metaFat) > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:${hColor};background:${hColor}22;padding:2px 6px;border-radius:4px;">${pctFat.toFixed(0)}%</span>` : ''}
+              <div class="rateio-card-code">#${v.code}</div>
+            </div>
           </div>
           <div class="rateio-inputs">
             <div class="rateio-input-wrap" style="grid-column: span 2;">
               <label>💰 Fat. Anual (R$)</label>
-              <input type="number" class="input inp-fat-anual input-fat" value="${m.metaFatAnual||''}" placeholder="0" oninput="UI.calculateRestante()">
+              <input type="text" class="input inp-fat-anual money-input" value="${fatAnualFmt}" placeholder="0,00" oninput="maskMoney(this)">
             </div>
-            <div class="rateio-input-wrap">
-              <label>📅 Fat. Mensal (R$)</label>
-              <input type="number" class="input inp-fat input-fat" value="${m.metaFat||''}" placeholder="0" oninput="UI.calculateRestante()">
+            <div class="rateio-input-wrap" style="grid-column: span 2;">
+              <label>📅 Fat. Mensal — ${nomeMes} (R$)</label>
+              <input type="text" class="input inp-fat money-input" value="${fatMensalFmt}" placeholder="0,00" oninput="maskMoney(this); UI.calculateRestante()">
             </div>
             <div class="rateio-input-wrap">
               <label>👥 Positivação</label>
-              <input type="number" class="input inp-pos input-pos" value="${m.metaPos||''}" placeholder="0" oninput="UI.calculateRestante()">
+              <input type="number" class="input inp-pos" value="${m.metaPos||''}" placeholder="0" oninput="UI.calculateRestante()">
             </div>
             <div class="rateio-input-wrap">
               <label>🆕 Cadastros</label>
-              <input type="number" class="input inp-cad input-cad" value="${m.metaCad||''}" placeholder="0" oninput="UI.calculateRestante()">
+              <input type="number" class="input inp-cad" value="${m.metaCad||''}" placeholder="0" oninput="UI.calculateRestante()">
             </div>
-            <div class="rateio-input-wrap">
+            <div class="rateio-input-wrap" style="grid-column: span 2;">
               <label>📦 SKU</label>
-              <input type="number" class="input inp-sku input-sku" value="${m.metaSku||''}" placeholder="0" oninput="UI.calculateRestante()">
+              <input type="number" class="input inp-sku" value="${m.metaSku||''}" placeholder="0" oninput="UI.calculateRestante()">
             </div>
           </div>
         </div>
       `;
     });
+
     UI.calculateRestante();
   },
 
+  renderAnualInfoBar(mesAtual) {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.team;
+    const bar    = document.getElementById('rateioAnualInfoBar');
+    const info   = document.getElementById('rateioAnualInfo');
+    if (!bar || !info) return;
+
+    let distFat = 0;
+    State.dataMetasGlobais.forEach(g => {
+      if (String(g.ano) === String(ano) && parseInt(g.mes) !== mesAtual) distFat += fNum(g.metaFat);
+    });
+    const ma = State.dataMetaAnual.find(x => String(x.ano) === String(ano) && (equipe === 'TODOS' || x.equipe === equipe));
+    if (ma && fNum(ma.metaFatAnual) > 0) {
+      const total    = fNum(ma.metaFatAnual);
+      const restante = total - distFat;
+      const pctDistrib = Math.min((distFat/total)*100, 100);
+      bar.style.display = 'block';
+      info.textContent = `📆 Meta Anual: ${fMoney(total)} | Outros meses: ${fMoney(distFat)} (${pctDistrib.toFixed(0)}%) | Disponível para ${MESES_NOME[(mesAtual||1)-1]}: ${fMoney(Math.max(restante,0))}`;
+    } else {
+      bar.style.display = 'none';
+    }
+  },
+
   calculateRestante() {
-    const globalFat = fNum(document.getElementById('inpMetaFatMensal').value);
+    const globalFat = readMoneyInput(document.getElementById('inpMetaFatMensal'));
     const globalPos = fNum(document.getElementById('inpMetaPos').value);
     const globalCad = fNum(document.getElementById('inpMetaCad').value);
     const globalSku = fNum(document.getElementById('inpMetaSku').value);
 
     let somaFat = 0, somaPos = 0, somaCad = 0, somaSku = 0;
     document.querySelectorAll('.rateio-card[data-vid]').forEach(card => {
-      somaFat += fNum(card.querySelector('.inp-fat')?.value);
+      somaFat += readMoneyInput(card.querySelector('.inp-fat'));
       somaPos += fNum(card.querySelector('.inp-pos')?.value);
       somaCad += fNum(card.querySelector('.inp-cad')?.value);
       somaSku += fNum(card.querySelector('.inp-sku')?.value);
@@ -1257,9 +1704,10 @@ const UI = {
     function applyRest(elId, subId, rest, global, soma, isMoney) {
       const el = document.getElementById(elId);
       const sub = document.getElementById(subId);
-      el.textContent = isMoney ? fMoney(rest) : fInt(rest);
+      if (!el) return;
+      el.textContent = isMoney ? fMoney(rest) : fIntRaw(rest);
       el.className = `restante-val ${elId.replace('rest','').toLowerCase()} text-mono` + (rest < 0 ? ' over' : '');
-      sub.textContent = `${isMoney ? fMoney(soma) : fInt(soma)} distribuído de ${isMoney ? fMoney(global) : fInt(global)}`;
+      sub.textContent = `${isMoney ? fMoney(soma) : fIntRaw(soma)} distribuído de ${isMoney ? fMoney(global) : fIntRaw(global)}`;
     }
 
     applyRest('restFat', 'restFatSub', restFat, globalFat, somaFat, true);
@@ -1272,22 +1720,21 @@ const UI = {
   renderCalendar() {
     const ano = document.getElementById('fltAno').value;
     const mes = document.getElementById('fltMes').value;
-
     let sumFat=0, sumPos=0, sumCad=0, sumSku=0;
     State.dataVendasDiarias.forEach(v => {
       sumFat += fNum(v.realFat); sumPos += fNum(v.realPos);
       sumCad += fNum(v.realCad); sumSku += fNum(v.realSku);
     });
     document.getElementById('calSumFat').textContent = fMoney(sumFat);
-    document.getElementById('calSumPos').textContent = fInt(sumPos);
-    document.getElementById('calSumCad').textContent = fInt(sumCad);
-    document.getElementById('calSumSku').textContent = fInt(sumSku);
+    document.getElementById('calSumPos').textContent = fIntRaw(sumPos);
+    document.getElementById('calSumCad').textContent = fIntRaw(sumCad);
+    document.getElementById('calSumSku').textContent = fIntRaw(sumSku);
 
     const grid = document.getElementById('calendarGrid');
     grid.innerHTML = '';
     const primeiroDia = new Date(ano, mes-1, 1).getDay();
     const totalDias   = new Date(ano, mes, 0).getDate();
-    const hoje = new Date();
+    const hoje        = new Date();
 
     for (let i = 0; i < primeiroDia; i++) grid.innerHTML += `<div class="calendar-day empty"></div>`;
 
@@ -1296,24 +1743,22 @@ const UI = {
       let dFat=0, dPos=0, dCad=0, dSku=0;
       State.dataVendasDiarias.forEach(v => {
         if (v.dataISO && String(v.dataISO).includes(iso)) {
-          dFat += fNum(v.realFat); dPos += fNum(v.realPos);
-          dCad += fNum(v.realCad); dSku += fNum(v.realSku);
+          dFat+=fNum(v.realFat); dPos+=fNum(v.realPos); dCad+=fNum(v.realCad); dSku+=fNum(v.realSku);
         }
       });
-      const hasData = dFat > 0 || dPos > 0 || dCad > 0 || dSku > 0;
-      const isToday = (d === hoje.getDate() && parseInt(mes) === hoje.getMonth()+1 && parseInt(ano) === hoje.getFullYear());
+      const hasData = dFat>0||dPos>0||dCad>0||dSku>0;
+      const isToday = (d===hoje.getDate()&&parseInt(mes)===hoje.getMonth()+1&&parseInt(ano)===hoje.getFullYear());
 
       const div = document.createElement('div');
-      div.className = `calendar-day${isToday ? ' today' : ''}${hasData ? ' has-data' : ''}`;
+      div.className = `calendar-day${isToday?' today':''}${hasData?' has-data':''}`;
       div.innerHTML = `
         <div class="day-num">${d}</div>
         <div class="day-entries">
-          ${dFat  > 0 ? `<div class="day-entry fat">R$ ${(dFat/1000).toFixed(1)}k</div>` : ''}
-          ${dPos  > 0 ? `<div class="day-entry pos">Pos: ${dPos}</div>` : ''}
-          ${dCad  > 0 ? `<div class="day-entry cad">Cad: ${dCad}</div>` : ''}
-          ${dSku  > 0 ? `<div class="day-entry sku">SKU: ${dSku}</div>` : ''}
-        </div>
-      `;
+          ${dFat>0?`<div class="day-entry fat">${fMoneyCompact(dFat)}</div>`:''}
+          ${dPos>0?`<div class="day-entry pos">Pos:${dPos}</div>`:''}
+          ${dCad>0?`<div class="day-entry cad">Cad:${dCad}</div>`:''}
+          ${dSku>0?`<div class="day-entry sku">SKU:${dSku}</div>`:''}
+        </div>`;
       div.onclick = () => UI.openModal(iso, d);
       grid.appendChild(div);
     }
@@ -1322,7 +1767,6 @@ const UI = {
   openModal(dataISO, diaDisplay) {
     State.selectedDateISO = dataISO;
     document.getElementById('modalDateTitle').textContent = `📅 Lançamentos — ${String(diaDisplay).padStart(2,'0')}/${dataISO.substring(5,7)}/${dataISO.substring(0,4)}`;
-
     const container = document.getElementById('modalFormContainer');
     container.innerHTML = '';
 
@@ -1331,22 +1775,21 @@ const UI = {
       : State.user.vendors;
 
     lista.forEach(v => {
-      const vd = State.dataVendasDiarias.find(x => String(x.vendorId) === String(v.code) && x.dataISO && String(x.dataISO).includes(dataISO));
-
+      const vd = State.dataVendasDiarias.find(x => String(x.vendorId)===String(v.code) && x.dataISO && String(x.dataISO).includes(dataISO));
       container.innerHTML += `
-        <div class="modal-vendor-row" data-vid="${v.code}" data-vname="${v.name}" data-vteam="${v.team || State.user.team}">
-          <div class="modal-vendor-name">${v.name} <span style="font-weight:400; color:var(--text-muted); font-size:12px;">#${v.code}</span></div>
+        <div class="modal-vendor-row" data-vid="${v.code}" data-vname="${v.name}" data-vteam="${v.team||State.user.team}">
+          <div class="modal-vendor-name">${v.name} <span style="font-weight:400;color:var(--text-muted);font-size:11px;">#${v.code}</span></div>
           <div class="modal-inputs-grid">
             <div class="modal-input-wrap">
-              <label>💰 Faturamento (R$)</label>
-              <input type="number" class="input inp-dia-fat" value="${vd?.realFat||''}" placeholder="0">
+              <label>💰 Fat. (R$)</label>
+              <input type="text" class="input inp-dia-fat money-input" value="${vd?.realFat>0?Number(vd.realFat).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0,00" oninput="maskMoney(this)">
             </div>
             <div class="modal-input-wrap">
-              <label>👥 Positivação</label>
+              <label>👥 Positiv.</label>
               <input type="number" class="input inp-dia-pos" value="${vd?.realPos||''}" placeholder="0">
             </div>
             <div class="modal-input-wrap">
-              <label>🆕 Cadastros</label>
+              <label>🆕 Cad.</label>
               <input type="number" class="input inp-dia-cad" value="${vd?.realCad||''}" placeholder="0">
             </div>
             <div class="modal-input-wrap">
@@ -1354,16 +1797,337 @@ const UI = {
               <input type="number" class="input inp-dia-sku" value="${vd?.realSku||''}" placeholder="0">
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
     });
-
     document.getElementById('modalDiario').classList.remove('hidden');
   },
 
   closeModal() {
     document.getElementById('modalDiario').classList.add('hidden');
     State.selectedDateISO = null;
+  },
+
+  /* ===== META ANUAL ===== */
+  renderMetaAnual() {
+    const ano    = document.getElementById('fltAno').value;
+    const equipe = State.user.role === 'GERENTE' ? null : State.user.team;
+
+    const ma = equipe
+      ? State.dataMetaAnual.find(x => String(x.ano)===String(ano) && x.equipe===equipe)
+      : State.dataMetaAnual.find(x => String(x.ano)===String(ano));
+
+    fillMoneyInput(document.getElementById('anualInpFat'), ma?.metaFatAnual || 0);
+    document.getElementById('anualInpPos').value = ma?.metaPosAnual || '';
+    document.getElementById('anualInpCad').value = ma?.metaCadAnual || '';
+    document.getElementById('anualInpSku').value = ma?.metaSkuAnual || '';
+
+    UI.renderAnualTable();
+    UI.renderUplineVisibility();
+    UI.renderAnualVendorCards();
+  },
+
+  /* TABELA ANUAL como no print — com inputs inline editáveis */
+  renderAnualTable() {
+    const ano       = document.getElementById('fltAno').value;
+    const totalFat  = readMoneyInput(document.getElementById('anualInpFat'));
+    const totalPos  = fNum(document.getElementById('anualInpPos').value);
+    const totalCad  = fNum(document.getElementById('anualInpCad').value);
+    const totalSku  = fNum(document.getElementById('anualInpSku').value);
+
+    // Constrói mapa de metas por mês
+    const byMonth = {};
+    State.dataMetasGlobais.forEach(g => {
+      if (String(g.ano) === String(ano)) byMonth[parseInt(g.mes)] = g;
+    });
+
+    const tbody = document.getElementById('anualSheetBody');
+    const tfoot = document.getElementById('anualSheetFoot');
+    tbody.innerHTML = '';
+
+    let sumFat=0, sumPos=0, sumCad=0, sumSku=0;
+
+    for (let m = 1; m <= 12; m++) {
+      const mg   = byMonth[m];
+      const mFat = mg ? fNum(mg.metaFat) : 0;
+      const mPos = mg ? fNum(mg.metaPos) : 0;
+      const mCad = mg ? fNum(mg.metaCad) : 0;
+      const mSku = mg ? fNum(mg.metaSku) : 0;
+
+      sumFat += mFat; sumPos += mPos; sumCad += mCad; sumSku += mSku;
+
+      const pFat = totalFat > 0 ? pct(mFat, totalFat/12) : 0;
+      const pPos = totalPos > 0 ? pct(mPos, totalPos/12) : 0;
+      const pCad = totalCad > 0 ? pct(mCad, totalCad/12) : 0;
+      const pSku = totalSku > 0 ? pct(mSku, totalSku/12) : 0;
+
+      const hasAll  = mFat > 0 && mPos > 0 && mCad > 0 && mSku > 0;
+      const hasSome = mFat > 0 || mPos > 0 || mCad > 0 || mSku > 0;
+      const statusIcon  = !hasSome ? '⬜' : (hasAll ? '✅' : '🟡');
+      const statusColor = !hasSome ? 'var(--text-muted)' : (hasAll ? 'var(--success)' : 'var(--warning)');
+
+      // Barra de progresso de faturamento vs meta anual/12
+      const barPct   = totalFat > 0 ? Math.min((mFat / (totalFat/12)) * 100, 100) : 0;
+      const barColor = healthColor(barPct);
+
+      const fatFmt = mFat > 0 ? mFat.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+
+      const tr = document.createElement('tr');
+      tr.dataset.mes = m;
+      tr.innerHTML = `
+        <td class="mes-cell">${MESES_NOME[m-1]}</td>
+        <td class="edit-cell">
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <input type="text" class="anual-inline-input money ai-fat" data-mes="${m}"
+              value="${fatFmt}" placeholder="0,00"
+              oninput="maskMoney(this);UI.updateAnualRowProgress(${m})"
+              title="Faturamento mensal — ${MESES_NOME[m-1]}">
+            <div class="anual-row-progress">
+              <div class="anual-row-bar">
+                <div class="anual-row-bar-fill" id="rowBar${m}" style="width:${barPct}%;background:${barColor}"></div>
+              </div>
+              <span id="rowPctFat${m}" style="font-size:9px;color:${barColor};font-family:var(--mono);">${totalFat>0?barPct.toFixed(0)+'%':'—'}</span>
+            </div>
+          </div>
+        </td>
+        <td style="font-size:10px;color:${healthColor(pFat)};font-family:var(--mono);text-align:center;" id="rowPctFatCell${m}">${totalFat>0?pFat.toFixed(0)+'%':'—'}</td>
+        <td class="edit-cell">
+          <input type="number" class="anual-inline-input small ai-pos" data-mes="${m}"
+            value="${mPos > 0 ? mPos : ''}" placeholder="0"
+            oninput="UI.updateAnualRowProgress(${m})"
+            title="Positivação — ${MESES_NOME[m-1]}">
+        </td>
+        <td style="font-size:10px;color:${healthColor(pPos)};font-family:var(--mono);text-align:center;" id="rowPctPos${m}">${totalPos>0?pPos.toFixed(0)+'%':'—'}</td>
+        <td class="edit-cell">
+          <input type="number" class="anual-inline-input small ai-cad" data-mes="${m}"
+            value="${mCad > 0 ? mCad : ''}" placeholder="0"
+            oninput="UI.updateAnualRowProgress(${m})"
+            title="Cadastros — ${MESES_NOME[m-1]}">
+        </td>
+        <td style="font-size:10px;color:${healthColor(pCad)};font-family:var(--mono);text-align:center;" id="rowPctCad${m}">${totalCad>0?pCad.toFixed(0)+'%':'—'}</td>
+        <td class="edit-cell">
+          <input type="number" class="anual-inline-input small ai-sku" data-mes="${m}"
+            value="${mSku > 0 ? mSku : ''}" placeholder="0"
+            oninput="UI.updateAnualRowProgress(${m})"
+            title="SKU — ${MESES_NOME[m-1]}">
+        </td>
+        <td style="font-size:10px;color:${healthColor(pSku)};font-family:var(--mono);text-align:center;" id="rowPctSku${m}">${totalSku>0?pSku.toFixed(0)+'%':'—'}</td>
+        <td class="status-cell" id="rowStatus${m}" style="color:${statusColor};font-size:13px;">${statusIcon}</td>
+        <td class="status-cell">
+          <button class="anual-save-row-btn" id="rowSaveBtn${m}" onclick="App.saveMetaMensalRow(${m})">💾</button>
+        </td>`;
+      tbody.appendChild(tr);
+    }
+
+    UI._updateAnualFooter(sumFat, sumPos, sumCad, sumSku, totalFat, totalPos, totalCad, totalSku);
+  },
+
+  updateAnualRowProgress(mes) {
+    const ano      = document.getElementById('fltAno').value;
+    const totalFat = readMoneyInput(document.getElementById('anualInpFat'));
+    const totalPos = fNum(document.getElementById('anualInpPos').value);
+    const totalCad = fNum(document.getElementById('anualInpCad').value);
+    const totalSku = fNum(document.getElementById('anualInpSku').value);
+
+    const tr   = document.querySelector(`tr[data-mes="${mes}"]`);
+    if (!tr) return;
+
+    const mFat = readMoneyInput(tr.querySelector('.ai-fat'));
+    const mPos = fNum(tr.querySelector('.ai-pos').value);
+    const mCad = fNum(tr.querySelector('.ai-cad').value);
+    const mSku = fNum(tr.querySelector('.ai-sku').value);
+
+    const barPct = totalFat > 0 ? Math.min((mFat / (totalFat/12)) * 100, 100) : 0;
+    const barColor = healthColor(barPct);
+
+    const barEl = document.getElementById(`rowBar${mes}`);
+    const pctEl = document.getElementById(`rowPctFat${mes}`);
+    if (barEl) { barEl.style.width = barPct + '%'; barEl.style.background = barColor; }
+    if (pctEl) { pctEl.textContent = totalFat > 0 ? barPct.toFixed(0) + '%' : '—'; pctEl.style.color = barColor; }
+
+    // Update % cells
+    const setCell = (id, real, total) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const p = total > 0 ? pct(real, total/12) : 0;
+      el.textContent = total > 0 ? p.toFixed(0) + '%' : '—';
+      el.style.color = healthColor(p);
+    };
+    setCell(`rowPctFatCell${mes}`, mFat, totalFat);
+    setCell(`rowPctPos${mes}`, mPos, totalPos);
+    setCell(`rowPctCad${mes}`, mCad, totalCad);
+    setCell(`rowPctSku${mes}`, mSku, totalSku);
+
+    // Update status icon
+    const hasAll  = mFat > 0 && mPos > 0 && mCad > 0 && mSku > 0;
+    const hasSome = mFat > 0 || mPos > 0 || mCad > 0 || mSku > 0;
+    const stEl = document.getElementById(`rowStatus${mes}`);
+    if (stEl) {
+      stEl.textContent = !hasSome ? '⬜' : (hasAll ? '✅' : '🟡');
+      stEl.style.color  = !hasSome ? 'var(--text-muted)' : (hasAll ? 'var(--success)' : 'var(--warning)');
+    }
+
+    // Recalculate badge/footer live
+    let sF=0,sP=0,sC=0,sS=0;
+    document.querySelectorAll('#anualSheetBody tr[data-mes]').forEach(r => {
+      sF += readMoneyInput(r.querySelector('.ai-fat'));
+      sP += fNum(r.querySelector('.ai-pos')?.value);
+      sC += fNum(r.querySelector('.ai-cad')?.value);
+      sS += fNum(r.querySelector('.ai-sku')?.value);
+    });
+    UI._updateAnualFooter(sF, sP, sC, sS, totalFat, totalPos, totalCad, totalSku);
+  },
+
+  _updateAnualFooter(sumFat, sumPos, sumCad, sumSku, totalFat, totalPos, totalCad, totalSku) {
+    const tfoot = document.getElementById('anualSheetFoot');
+    if (!tfoot) return;
+
+    const difFat = sumFat - totalFat;
+    const difPos = sumPos - totalPos;
+    const difCad = sumCad - totalCad;
+    const difSku = sumSku - totalSku;
+
+    const difColor = (d) => Math.abs(d) < 0.01 ? 'var(--success)' : (d > 0 ? 'var(--danger)' : 'var(--warning)');
+    const difFmt   = (d, isMoney) => {
+      if (Math.abs(d) < 0.01) return '✅ OK';
+      return (d > 0 ? '⚠️ +' : '⏳ ') + (isMoney ? fMoney(Math.abs(d)) : fIntRaw(Math.abs(d))) + (d > 0 ? ' acima' : ' abaixo');
+    };
+
+    tfoot.innerHTML = `
+      <tr>
+        <td class="mes-cell">SOMA</td>
+        <td class="fat-cell" colspan="2">${fMoney(sumFat)}</td>
+        <td class="pos-cell" colspan="2">${fIntRaw(sumPos)}</td>
+        <td class="cad-cell" colspan="2">${fIntRaw(sumCad)}</td>
+        <td class="sku-cell" colspan="2">${fIntRaw(sumSku)}</td>
+        <td colspan="2"></td>
+      </tr>
+      <tr class="${Math.abs(difFat)<0.01?'row-diff-ok':'row-diff-over'}">
+        <td class="mes-cell">SALDO</td>
+        <td colspan="2" style="color:${difColor(difFat)};font-family:var(--mono);font-size:11px;">${totalFat>0?difFmt(difFat,true):'—'}</td>
+        <td colspan="2" style="color:${difColor(difPos)};font-family:var(--mono);font-size:11px;">${totalPos>0?difFmt(difPos,false):'—'}</td>
+        <td colspan="2" style="color:${difColor(difCad)};font-family:var(--mono);font-size:11px;">${totalCad>0?difFmt(difCad,false):'—'}</td>
+        <td colspan="2" style="color:${difColor(difSku)};font-family:var(--mono);font-size:11px;">${totalSku>0?difFmt(difSku,false):'—'}</td>
+        <td style="font-size:11px;font-weight:700;text-align:center;">${Math.abs(difFat)<0.01&&totalFat>0?'✅ Balanceado':'⏳ Pendente'}</td>
+      </tr>`;
+
+    // Badge geral
+    const badgeEl = document.getElementById('anualDistribBadge');
+    if (!badgeEl) return;
+    const pctTotal = totalFat > 0 ? (sumFat/totalFat)*100 : 0;
+    if (totalFat === 0) {
+      badgeEl.className = 'anual-complete-badge pending'; badgeEl.textContent = '⏳ Meta anual não definida';
+    } else if (pctTotal > 100.01) {
+      badgeEl.className = 'anual-complete-badge over'; badgeEl.textContent = `⚠️ Acima da meta (${pctTotal.toFixed(0)}%)`;
+    } else if (Math.abs(difFat) < 0.01) {
+      badgeEl.className = 'anual-complete-badge ok'; badgeEl.textContent = '✅ Distribuição anual concluída!';
+    } else {
+      badgeEl.className = 'anual-complete-badge pending';
+      badgeEl.textContent = `⏳ ${pctTotal.toFixed(0)}% distribuído — Restam ${fMoney(totalFat - sumFat)}`;
+    }
+  },
+
+  /* VISÃO UPLINE (Gerente/Diretor vê todas equipes) */
+  renderUplineVisibility() {
+    const wrap = document.getElementById('uplineVisWrap');
+    if (State.user.role !== 'GERENTE') { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+
+    const ano = document.getElementById('fltAno').value;
+    const grid = document.getElementById('uplineEquipesGrid');
+    grid.innerHTML = '';
+
+    // Agrupa por equipe
+    const equipes = {};
+    State.user.vendors.forEach(v => {
+      const t = v.team || 'GERAL';
+      if (!equipes[t]) equipes[t] = [];
+      equipes[t].push(v);
+    });
+
+    Object.entries(equipes).forEach(([teamName]) => {
+      // Pega metas globais da equipe para o ano
+      let distribFat = 0;
+      State.dataMetasGlobais.forEach(g => {
+        if (String(g.ano)===String(ano) && g.equipe===teamName) distribFat += fNum(g.metaFat);
+      });
+      const ma = State.dataMetaAnual.find(x => String(x.ano)===String(ano) && x.equipe===teamName);
+      const anualFat = ma ? fNum(ma.metaFatAnual) : 0;
+      const pctDist  = anualFat > 0 ? Math.min((distribFat/anualFat)*100, 100) : 0;
+      const restante = anualFat - distribFat;
+      const hColor   = healthColor(pctDist);
+
+      const statusTxt = anualFat === 0 ? 'Meta anual não definida'
+        : Math.abs(restante) < 0.01 ? '✅ 100% distribuído'
+        : restante > 0 ? `⏳ Faltam ${fMoney(restante)}`
+        : `⚠️ Acima da meta em ${fMoney(-restante)}`;
+
+      grid.innerHTML += `
+        <div class="upline-equipe-card">
+          <div class="upline-equipe-name">🏢 ${teamName}</div>
+          <div class="upline-equipe-status" style="color:${hColor}">${statusTxt}</div>
+          ${anualFat>0?`<div style="margin-top:6px;height:4px;background:#1e3a52;border-radius:2px;overflow:hidden"><div style="height:100%;width:${pctDist}%;background:${hColor};border-radius:2px;transition:width 0.5s"></div></div>`:''}
+          ${anualFat>0?`<div style="font-size:10px;color:#4a7fa5;margin-top:3px;font-family:var(--mono)">${fMoney(distribFat)} / ${fMoney(anualFat)}</div>`:''}
+        </div>`;
+    });
+  },
+
+  renderAnualVendorCards() {
+    const ano  = document.getElementById('fltAno').value;
+    const grid = document.getElementById('anualVendorGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const vendors = State.user.vendors || [];
+    vendors.forEach(v => {
+      const m = State.dataMetaAnualVend.find(x => String(x.vendorId)===String(v.code)) || {};
+      const fatFmt = m.metaFatAnual > 0 ? Number(m.metaFatAnual).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+
+      let distribFat = 0;
+      State.dataMetasVendedores.forEach(mv => {
+        if (String(mv.vendorId)===String(v.code) && String(mv.ano)===String(ano)) distribFat += fNum(mv.metaFat);
+      });
+      const anualFat = fNum(m.metaFatAnual);
+      const pctDist  = anualFat > 0 ? Math.min((distribFat/anualFat)*100, 100) : 0;
+      const hColor   = healthColor(pctDist);
+
+      grid.innerHTML += `
+        <div class="anual-vendor-card" data-vid="${v.code}" data-vname="${v.name}" data-vteam="${v.team||State.user.team}">
+          <div class="anual-vendor-head">
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span>${healthEmoji(pctDist)}</span>
+              <span class="anual-vendor-name-txt">${v.name}</span>
+            </div>
+            <span style="font-size:10px;font-family:var(--mono);color:#4a7fa5;">#${v.code}</span>
+          </div>
+          <div class="anual-vendor-body">
+            <div class="anual-vendor-inputs">
+              <div class="anual-vendor-input-wrap" style="grid-column:span 2;">
+                <label>💰 Fat. Anual (R$)</label>
+                <input type="text" class="input av-inp-fat money-input" value="${fatFmt}" placeholder="0,00" oninput="maskMoney(this)">
+              </div>
+              <div class="anual-vendor-input-wrap">
+                <label>👥 Positivação</label>
+                <input type="number" class="input av-inp-pos" value="${m.metaPosAnual||''}" placeholder="0">
+              </div>
+              <div class="anual-vendor-input-wrap">
+                <label>🆕 Cadastros</label>
+                <input type="number" class="input av-inp-cad" value="${m.metaCadAnual||''}" placeholder="0">
+              </div>
+              <div class="anual-vendor-input-wrap">
+                <label>📦 SKU</label>
+                <input type="number" class="input av-inp-sku" value="${m.metaSkuAnual||''}" placeholder="0">
+              </div>
+            </div>
+            ${anualFat > 0 ? `
+              <div style="font-size:10px;color:var(--text-muted);font-family:var(--mono);margin-top:4px;">
+                Distribuído: ${fMoney(distribFat)} / ${fMoney(anualFat)}
+                <span style="color:${hColor};margin-left:4px;">(${pctDist.toFixed(0)}%)</span>
+              </div>
+              <div class="anual-month-mini-bar"><div class="anual-month-mini-fill" style="width:${pctDist}%;background:${hColor}"></div></div>
+            ` : ''}
+          </div>
+        </div>`;
+    });
   }
 };
 
