@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"
     />
-    <title>Ameripan | Cotação v21</title>
+    <title>Ameripan | Cotação v24</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -227,6 +227,8 @@
           box-shadow 0.3s var(--ease),
           transform 0.25s var(--ease);
         animation: fadeInUp 0.4s var(--ease) both;
+        position: relative;
+        z-index: 100;
       }
       .card:hover {
         box-shadow: var(--sh-hover);
@@ -344,9 +346,9 @@
         border: 1.5px solid var(--or);
         border-top: none;
         border-radius: 0 0 10px 10px;
-        max-height: 220px;
+        max-height: 320px;
         overflow-y: auto;
-        z-index: 200;
+        z-index: 9999;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
         display: none;
       }
@@ -367,6 +369,22 @@
         background: var(--orl);
         color: var(--ord);
         padding-left: 18px;
+      }
+      .si-addall {
+        background: linear-gradient(90deg, var(--bll), #fff);
+        color: var(--bl);
+        font-weight: 700;
+        font-size: 0.82rem;
+        border-bottom: 2px solid var(--or);
+        padding: 9px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .si-addall:hover {
+        background: var(--orl);
+        color: var(--ord);
       }
 
       /* BUTTONS */
@@ -590,6 +608,14 @@
         border-radius: 10px;
         margin-top: 0.8rem;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+        position: relative;
+        z-index: 101;
+      }
+      #items-section.search-behind {
+        z-index: 1 !important;
+      }
+      #items-section.search-behind .tw {
+        z-index: 1 !important;
       }
       table {
         width: 100%;
@@ -719,7 +745,44 @@
         text-align: center;
         width: 66px;
       }
+/* DRAG & DROP */
+tr.vr[draggable="true"] {
+  cursor: grab;
+}
+tr.vr.dragging {
+  opacity: 0.5;
+  transform: rotate(5deg);
+}
+tr.vr.drag-over {
+  border-top: 4px solid var(--or);
+  background: var(--orl) !important;
+}
 
+      /* IMG CONTEXT MENU */
+      .img-ctx {
+        position: fixed;
+        background: #fff;
+        border: 1.5px solid var(--bo);
+        border-radius: 10px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+        z-index: 9000;
+        min-width: 200px;
+        overflow: hidden;
+        animation: fadeInUp 0.15s var(--ease);
+      }
+      .img-ctx-item {
+        padding: 10px 16px;
+        font-size: 0.86rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.12s;
+        border-bottom: 1px solid #f0f4f9;
+      }
+      .img-ctx-item:last-child { border-bottom: none; }
+      .img-ctx-item:hover { background: var(--orl); color: var(--ord); }
+      .img-ctx-item i { color: var(--or); width: 16px; text-align: center; }
       /* lápis de edição */
       .pen {
         color: var(--or);
@@ -1046,6 +1109,7 @@
           <select id="cfg_isrc">
             <option value="git">GitHub (Rápido/Estável)</option>
             <option value="site">Site Ameripan (Scraper)</option>
+            <option value="sheet">Planilha (Col. C)</option>
           </select>
         </div>
 
@@ -1071,6 +1135,29 @@
         >
         <input id="cfg_gcx" placeholder="cx=..." />
 
+        <label style="margin-top: 0.7rem">
+          Apps Script Web App URL
+          <span style="font-weight:400;color:var(--mu)">(para gravar imagens/itens)</span>
+        </label>
+        <input id="cfg_gasurl" placeholder="https://script.google.com/macros/s/.../exec" />
+
+        <hr
+          style="border: none; border-top: 1px solid var(--bo); margin: 1rem 0"
+        />
+        <div class="mrow">
+          <label>Máx. sugestões no filtro</label>
+          <input
+            type="number"
+            id="cfg_maxsug"
+            min="10"
+            max="500"
+            step="10"
+            value="100"
+            style="width:90px;text-align:center"
+          />
+          <span style="font-size:0.78rem;color:var(--mu)">itens exibidos no dropdown</span>
+        </div>
+
         <hr
           style="border: none; border-top: 1px solid var(--bo); margin: 1rem 0"
         />
@@ -1094,6 +1181,20 @@
           <span style="font-size: 0.8rem; color: var(--mu)">40mm</span>
           <span class="mval" id="cfg_rowh_v">14mm</span>
         </div>
+
+        <details style="margin-top:0.8rem;border:1.5px dashed var(--bo);border-radius:8px;padding:0.6rem 0.8rem">
+          <summary style="font-size:0.8rem;font-weight:700;color:var(--mu);cursor:pointer">
+            <i class="fa fa-wand-magic-sparkles" style="color:var(--or)"></i>
+            Auto-Enriquecimento de Imagens (avançado)
+          </summary>
+          <p style="font-size:0.76rem;color:var(--mu);margin:0.5rem 0 0.4rem">
+            Varre o catálogo inteiro, busca imagens no GitHub/Site para produtos sem imagem na planilha e grava os links encontrados automaticamente na Col. C.
+          </p>
+          <div id="enrichStatus" style="font-size:0.76rem;color:var(--bl);min-height:1.2rem;margin-bottom:0.4rem"></div>
+          <button class="btn se sm" id="btnEnrich" style="width:100%;justify-content:center">
+            <i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento
+          </button>
+        </details>
 
         <div class="ma">
           <button class="btn se" id="cfgCl">Cancelar</button>
@@ -1211,6 +1312,7 @@
               id="ef_desc"
               placeholder="Busca por nome..."
               autocomplete="off"
+              tabindex="-1"
             />
             <div class="sl" id="sug"></div>
           </div>
@@ -1239,14 +1341,19 @@
           <span id="ef_feed_txt">...</span>
         </div>
 
-        <div class="ef-hint">
-          <i class="fa fa-pencil" style="color: var(--or)"></i>
-          Navegue com <kbd>Enter</kbd>: Código → Qtd → Preço →
-          <kbd>Enter</kbd> grava e volta ao Código
+        <div class="ef-hint" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.4rem">
+          <span>
+            <i class="fa fa-pencil" style="color: var(--or)"></i>
+            Navegue com <kbd>Enter</kbd>: Código → Qtd → Preço →
+            <kbd>Enter</kbd> grava e volta ao Código
+          </span>
+          <button class="btn se sm" onclick="$('ni_cod').value='';$('ni_desc').value='';$('ni_img').value='';$('newItemM').classList.add('on')" title="Cadastrar produto novo na planilha">
+            <i class="fa fa-plus"></i> Novo produto
+          </button>
         </div>
       </section>
 
-      <section class="card" style="padding-bottom: 0">
+      <section class="card" id="items-section" style="padding-bottom: 0">
         <div class="stit"><i class="fa fa-list"></i> Itens da Cotação</div>
         <div class="tw">
           <table id="tbl">
@@ -1300,7 +1407,7 @@
           "
         >
           <button class="btn da" id="clearAll">
-            <i class="fa fa-trash"></i> Limpar
+            <i class="fa fa-trash"></i> Limpar todos
           </button>
           <div style="display: flex; gap: 0.45rem; flex-wrap: wrap">
             <button class="btn se" id="cpyBtn">
@@ -1339,6 +1446,59 @@
       </div>
     </div>
 
+
+    <!-- MODAL: Editar Imagem via GAS -->
+    <div class="mbg" id="imgEditM">
+      <div class="mbox" style="max-width:480px">
+        <h3><i class="fa fa-image" style="color:var(--or)"></i> Editar Imagem</h3>
+        <p style="font-size:0.82rem;color:var(--mu);margin:0 0 0.8rem">
+          Código: <strong id="imgEditCode">—</strong>
+        </p>
+        <div style="text-align:center;margin-bottom:0.8rem">
+          <img id="imgEditPreview" src="" alt="" style="max-height:100px;max-width:100%;border-radius:8px;border:1px solid var(--bo);display:none"/>
+          <div id="imgEditPh" style="height:80px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2rem"><i class="fa fa-image"></i></div>
+        </div>
+        <label>URL da imagem</label>
+        <input id="imgEditUrl" placeholder="https://..." autocomplete="off" />
+        <p style="font-size:0.75rem;color:var(--mu);margin:0.4rem 0 0">
+          <i class="fa fa-info-circle" style="color:var(--or)"></i>
+          Suporta qualquer URL (jpg, png, webp, etc). Será gravada na Col. C da planilha via Apps Script.
+        </p>
+        <div class="ma">
+          <button class="btn se" id="imgEditCl">Cancelar</button>
+          <button class="btn se" id="imgEditTest" style="gap:6px"><i class="fa fa-eye"></i> Testar</button>
+          <button class="btn pr" id="imgEditSv"><i class="fa fa-save"></i> Gravar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Cadastrar Novo Item na Planilha -->
+    <div class="mbg" id="newItemM">
+      <div class="mbox" style="max-width:500px">
+        <h3><i class="fa fa-plus-circle" style="color:var(--or)"></i> Cadastrar Novo Item</h3>
+        <div class="g c2" style="margin-bottom:0.8rem">
+          <div><label>Código</label><input id="ni_cod" placeholder="Ex: 1234" /></div>
+          <div><label>Un</label><input id="ni_un" placeholder="UN / CX / KG" value="UN"/></div>
+        </div>
+        <div style="margin-bottom:0.8rem"><label>Descrição</label><input id="ni_desc" placeholder="Nome completo do produto" /></div>
+        <div style="margin-bottom:0.8rem"><label>URL da Imagem <span style="font-weight:400;color:var(--mu)">(opcional)</span></label><input id="ni_img" placeholder="https://..." /></div>
+        <p style="font-size:0.75rem;color:var(--mu);margin:0 0 0.4rem">
+          <i class="fa fa-info-circle" style="color:var(--or)"></i>
+          Requer Apps Script configurado nas <strong>Configurações</strong>.
+        </p>
+        <div class="ma">
+          <button class="btn se" id="newItemCl">Cancelar</button>
+          <button class="btn pr" id="newItemSv"><i class="fa fa-save"></i> Cadastrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTEXT MENU de imagem -->
+    <div class="img-ctx" id="imgCtx" style="display:none">
+      <div class="img-ctx-item" id="ctxEditImg"><i class="fa fa-link"></i> Definir URL da imagem</div>
+      <div class="img-ctx-item" id="ctxOpenImg"><i class="fa fa-external-link-alt"></i> Abrir imagem</div>
+      <div class="img-ctx-item" id="ctxNewItem"><i class="fa fa-plus"></i> Cadastrar novo item</div>
+    </div>
     <div id="toast"></div>
 
     <script>
@@ -1359,6 +1519,8 @@
         gCx: "",
         rowH: 14,
         imgSrc: "git",
+        maxSug: 100,
+        gasUrl: "https://script.google.com/macros/s/AKfycbwYlSQpYiD4-VJpHKI_IiTBXvtWyx9indGwluDfWYJLJrzipnBCmznoSjtwuxkL1zGM/exec",
       };
 
       // Cache do logo para não re-baixar a cada PDF
@@ -1458,6 +1620,7 @@
         mc: $("mc"),
         gtot: $("gtot"),
         catSt: $("catSt"),
+        itemsSection: $("items-section"),
       };
 
       /* ══════════════════════════════════════════
@@ -1516,7 +1679,8 @@
       /* ══════════════════════════════════════════
    IMAGE RESOLVER & SCRAPER
 ══════════════════════════════════════════ */
-      const imgCache = new Map();
+      const imgCache     = new Map();  // resultados finais
+      const imgPending   = new Map();  // promises em andamento (anti-race-condition)
 
       function gitUrl(sku) {
         return `${CFG.imgBase}${sku}.jpg`;
@@ -1589,24 +1753,45 @@
       }
 
       async function resolveImg(sku) {
-        if (imgCache.has(sku)) return imgCache.get(sku);
+        if (imgCache.has(sku))   return imgCache.get(sku);
+        if (imgPending.has(sku)) return imgPending.get(sku); // aguarda a chamada já em andamento
+        const promise = _doResolveImg(sku);
+        imgPending.set(sku, promise);
+        const result = await promise;
+        imgPending.delete(sku);
+        return result;
+      }
+      async function _doResolveImg(sku) {
+
+        // Ordem de fontes com base na preferência
+        const order = {
+          git:   ["git",   "site",  "sheet"],
+          site:  ["site",  "git",   "sheet"],
+          sheet: ["sheet", "git",   "site"],
+        }[CFG.imgSrc] || ["git", "site", "sheet"];
+
         let res = null;
 
-        // Busca Principal (Scraper ou Git)
-        if (CFG.imgSrc === "site") {
-          res = await imgFromScrape(sku);
-          if (!res?.url) {
-            const u = await checkUrl(gitUrl(sku));
-            if (u) res = { url: u, name: null };
-          }
-        } else {
-          // Git
-          let u = await checkUrl(gitUrl(sku));
-          if (!u) u = await checkUrl(gitUrlPng(sku));
-          if (u) {
-            res = { url: u, name: null };
-          } else {
-            res = await imgFromScrape(sku);
+        for (const src of order) {
+          if (src === "git") {
+            let u = await checkUrl(gitUrl(sku));
+            if (!u) u = await checkUrl(gitUrlPng(sku));
+            if (u) { res = { url: u, name: null }; break; }
+          } else if (src === "site") {
+            const r = await imgFromScrape(sku);
+            if (r?.url) { res = r; break; }
+          } else if (src === "sheet") {
+            const catItem = S.cmap.get(sku);
+            // URL da planilha: qualquer extensão, qualquer domínio — não usa checkUrl (CORS)
+            if (catItem?.imgUrl) {
+              const ok = await new Promise(resolve => {
+                const t = new Image();
+                t.onload = () => resolve(true);
+                t.onerror = () => resolve(false);
+                t.src = catItem.imgUrl;
+              });
+              if (ok) { res = { url: catItem.imgUrl, name: catItem.desc }; break; }
+            }
           }
         }
 
@@ -1617,7 +1802,7 @@
         return finalRes;
       }
 
-      async function url2b64(url) {
+            async function url2b64(url) {
         if (!url) return null;
 
         // 1️⃣ Tenta fetch normal (funciona para GitHub raw e outros CORS-ok)
@@ -1684,11 +1869,15 @@
           CFG.gCx = c.gCx || "";
           CFG.rowH = c.rowH || 14;
           CFG.imgSrc = c.imgSrc || "git";
+          CFG.maxSug = c.maxSug || 100;
+          CFG.gasUrl = c.gasUrl || "";
         }
         $("cfg_base").value = CFG.imgBase;
         $("cfg_gkey").value = CFG.gKey;
         $("cfg_gcx").value = CFG.gCx;
         $("cfg_isrc").value = CFG.imgSrc;
+        $("cfg_maxsug").value = CFG.maxSug;
+        $("cfg_gasurl").value = CFG.gasUrl;
         $("cfg_rowh").value = CFG.rowH;
         $("cfg_rowh_v").textContent = CFG.rowH + "mm";
       }
@@ -1698,6 +1887,8 @@
         CFG.gCx = $("cfg_gcx").value;
         CFG.rowH = parseInt($("cfg_rowh").value) || 14;
         CFG.imgSrc = $("cfg_isrc").value;
+        CFG.maxSug = parseInt($("cfg_maxsug").value) || 100;
+        CFG.gasUrl = $("cfg_gasurl").value.trim();
         localStorage.setItem(
           "a_cfg",
           JSON.stringify({
@@ -1706,11 +1897,15 @@
             gCx: CFG.gCx,
             rowH: CFG.rowH,
             imgSrc: CFG.imgSrc,
+            maxSug: CFG.maxSug,
+            gasUrl: CFG.gasUrl,
           }),
         );
         imgCache.clear();
+        localStorage.removeItem("a_cat16");
         $("cfgM").classList.remove("on");
-        toast("Configurações salvas!");
+        toast("Configurações salvas! Catálogo e imagens serão recarregados.");
+        loadCatalog();
         render();
       }
       $("btnCfg").onclick = () => {
@@ -1723,12 +1918,195 @@
       /* ══════════════════════════════════════════
    INIT
 ══════════════════════════════════════════ */
+
+      /* ══════════════════════════════════════════
+         CONTEXT MENU DE IMAGEM + GAS
+      ══════════════════════════════════════════ */
+      const imgCtx = $("imgCtx");
+      let _ctxSku = null, _ctxImgUrl = null;
+
+      function showImgCtx(e, sku, currentUrl) {
+        e.preventDefault();
+        _ctxSku = sku;
+        _ctxImgUrl = currentUrl;
+        imgCtx.style.display = "block";
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let x = e.clientX ?? (e.touches?.[0]?.clientX ?? 0);
+        let y = e.clientY ?? (e.touches?.[0]?.clientY ?? 0);
+        imgCtx.style.left = Math.min(x, vw - 210) + "px";
+        imgCtx.style.top  = Math.min(y, vh - 120) + "px";
+      }
+      document.addEventListener("click",   () => imgCtx.style.display = "none");
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") imgCtx.style.display = "none"; });
+
+      $("ctxEditImg").onclick = () => {
+        imgCtx.style.display = "none";
+        openImgEdit(_ctxSku, _ctxImgUrl);
+      };
+      $("ctxOpenImg").onclick = () => {
+        imgCtx.style.display = "none";
+        if (_ctxImgUrl) window.open(_ctxImgUrl, "_blank");
+      };
+      $("ctxNewItem").onclick = () => {
+        imgCtx.style.display = "none";
+        $("ni_cod").value = _ctxSku || "";
+        $("ni_desc").value = "";
+        $("ni_img").value = "";
+        $("newItemM").classList.add("on");
+      };
+
+      /* ── Modal Editar Imagem ── */
+      function openImgEdit(sku, currentUrl) {
+        $("imgEditCode").textContent = sku;
+        $("imgEditUrl").value = currentUrl || "";
+        const prev = $("imgEditPreview"), ph = $("imgEditPh");
+        if (currentUrl) {
+          prev.src = currentUrl; prev.style.display = "block"; ph.style.display = "none";
+        } else {
+          prev.style.display = "none"; ph.style.display = "flex";
+        }
+        $("imgEditM").classList.add("on");
+      }
+      $("imgEditCl").onclick = () => $("imgEditM").classList.remove("on");
+      $("imgEditTest").onclick = () => {
+        const url = $("imgEditUrl").value.trim();
+        const prev = $("imgEditPreview"), ph = $("imgEditPh");
+        if (!url) return toast("Informe uma URL");
+        prev.onerror = () => { prev.style.display="none"; ph.style.display="flex"; toast("URL inválida ou sem CORS ⚠️"); };
+        prev.onload  = () => { ph.style.display="none"; toast("✅ Imagem carregada!"); };
+        prev.src = url; prev.style.display = "block";
+      };
+      $("imgEditSv").onclick = async () => {
+        const sku = $("imgEditCode").textContent;
+        const url = $("imgEditUrl").value.trim();
+        if (!url) return toast("Informe uma URL");
+        if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
+        try {
+          toast("Gravando na planilha…", 8000);
+          const params = new URLSearchParams({ action: "setImg", codigo: sku, img: url });
+          const r = await fetch(CFG.gasUrl + "?" + params.toString());
+          const j = await r.json();
+          if (j.status === "success") {
+            // Atualizar cache local
+            const ci = S.cmap.get(sku);
+            if (ci) ci.imgUrl = url;
+            imgCache.delete(sku);
+            $("imgEditM").classList.remove("on");
+            render();
+            toast("✅ Imagem gravada com sucesso!");
+          } else throw new Error(j.error);
+        } catch(err) { toast("Erro: " + err.message); }
+      };
+
+      /* ── Modal Novo Item ── */
+      $("newItemCl").onclick = () => $("newItemM").classList.remove("on");
+      $("newItemSv").onclick = async () => {
+        const cod  = $("ni_cod").value.trim();
+        const desc = $("ni_desc").value.trim();
+        const un   = $("ni_un").value.trim() || "UN";
+        const img  = $("ni_img").value.trim();
+        if (!cod || !desc) return toast("Preencha Código e Descrição");
+        if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
+        try {
+          toast("Cadastrando…", 8000);
+          const params = new URLSearchParams({ action: "addItem", codigo: cod, nome: desc, un, img });
+          const r = await fetch(CFG.gasUrl + "?" + params.toString());
+          const j = await r.json();
+          if (j.status === "success") {
+            const ni = { code: cod, desc, un, imgUrl: img };
+            S.cat.push(ni);
+            S.cmap.set(cod, ni);
+            $("newItemM").classList.remove("on");
+            toast(`✅ Item ${cod} cadastrado! Adicione-o à cotação normalmente.`);
+          } else throw new Error(j.error);
+        } catch(err) { toast("Erro: " + err.message); }
+      };
+
+
+      /* ══════════════════════════════════════════
+         AUTO-ENRIQUECIMENTO DE IMAGENS
+      ══════════════════════════════════════════ */
+      $("btnEnrich").onclick = async () => {
+        if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
+        const st = $("enrichStatus");
+        const btn = $("btnEnrich");
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Varrendo…';
+
+        // Pega todos os itens do catálogo sem imgUrl
+        const missing = S.cat.filter(it => !it.imgUrl);
+        if (!missing.length) {
+          st.innerHTML = '<i class="fa fa-check" style="color:green"></i> Todos os itens já têm imagem na planilha!';
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+          return;
+        }
+
+        st.textContent = `Varrendo ${missing.length} itens sem imagem…`;
+        const found = [];
+
+        // Busca em lotes de 5 para não sobrecarregar
+        const BATCH = 5;
+        for (let i = 0; i < missing.length; i += BATCH) {
+          const batch = missing.slice(i, i + BATCH);
+          await Promise.all(batch.map(async (it) => {
+            // Tenta git (jpg + png) depois site — ignora sheet (não tem)
+            let url = await checkUrl(gitUrl(it.code));
+            if (!url) url = await checkUrl(gitUrlPng(it.code));
+            if (!url) {
+              const r = await imgFromScrape(it.code);
+              if (r?.url) url = r.url;
+            }
+            if (url) found.push({ code: it.code, url });
+          }));
+          st.textContent = `Varrendo… ${Math.min(i + BATCH, missing.length)}/${missing.length} — ${found.length} imagens encontradas até agora`;
+        }
+
+        if (!found.length) {
+          st.innerHTML = '<i class="fa fa-times" style="color:var(--or)"></i> Nenhuma imagem nova encontrada nas fontes disponíveis.';
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+          return;
+        }
+
+        st.textContent = `Gravando ${found.length} imagens na planilha…`;
+
+        // Envia em lotes de 10 para o GAS
+        let saved = 0, errors = 0;
+        const GAS_BATCH = 10;
+        for (let i = 0; i < found.length; i += GAS_BATCH) {
+          const batch = found.slice(i, i + GAS_BATCH);
+          await Promise.all(batch.map(async ({ code, url }) => {
+            try {
+              const params = new URLSearchParams({ action: "setImg", codigo: code, img: url });
+              const r = await fetch(CFG.gasUrl + "?" + params.toString());
+              const j = await r.json();
+              if (j.status === "success") {
+                // Atualiza cache local
+                const ci = S.cmap.get(code);
+                if (ci) ci.imgUrl = url;
+                imgCache.delete(code);
+                saved++;
+              } else { errors++; }
+            } catch { errors++; }
+          }));
+          st.textContent = `Gravando… ${Math.min(i + GAS_BATCH, found.length)}/${found.length}`;
+        }
+
+        st.innerHTML = `<i class="fa fa-check" style="color:green"></i> Concluído! <strong>${saved}</strong> imagens gravadas na planilha${errors ? ` (${errors} erros)` : ""}.`;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+        if (saved > 0) { render(); toast(`✅ ${saved} imagens enriquecidas na planilha!`); }
+      };
+
       function init() {
         loadCfg();
         loadCatalog();
+        const today = new Date().toISOString().split("T")[0];
         const sv = localStorage.getItem("a_v16");
         if (sv) S.q = JSON.parse(sv);
         else S.q.id = nextId();
+        S.q.dt = today; // data é SEMPRE hoje, independente do que está salvo
         syncToForm();
         render();
         renderHist();
@@ -1778,6 +2156,7 @@
         S.editingIndex = idx;
         if (mode === "edit") {
           const item = S.q.items[idx];
+          imgCache.delete(item.code); // força re-scan da imagem ao editar
           E.ef.classList.add("editing-mode");
           E.efTitle.innerHTML =
             '<i class="fa fa-pencil"></i> Editando Item #' + (idx + 1);
@@ -1867,7 +2246,8 @@
       function updateFeedback() {
         const nc = E.cod.value.trim();
         if (S.cmap.has(nc)) {
-          const desc = S.cmap.get(nc);
+          const _it = S.cmap.get(nc);
+          const desc = _it?.desc ?? _it;
           E.desc.value = desc;
           E.feedTxt.innerHTML = `Produto: <strong>${desc}</strong>`;
           E.feed.classList.add("on");
@@ -1913,6 +2293,14 @@
           E.price.focus();
         }
       });
+      E.desc.addEventListener("blur", () => {
+        setTimeout(() => {
+          if (!E.sug.contains(document.activeElement)) {
+            E.sug.classList.remove("on");
+            E.itemsSection?.classList.remove("search-behind");
+          }
+        }, 150);
+      });
       E.price.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -1941,6 +2329,8 @@
         }
         updateGrandTotal();
         renderHist();
+        enableDragDrop();
+      
       }
 
       /* ── VIEW ROW (DESKTOP) ── */
@@ -1977,7 +2367,12 @@
         iTd.appendChild(ph);
         resolveImg(item.code).then((r) => {
           if (!r?.url) {
-            ph.innerHTML = '<i class="fa fa-image" style="color:#ccc"></i>';
+            ph.innerHTML = '<i class="fa fa-image" style="color:#ccc;cursor:pointer" title="Clique direito para definir imagem"></i>';
+            ph.oncontextmenu = (e) => showImgCtx(e, item.code, null);
+            let _lp2;
+            ph.addEventListener("touchstart",  (e) => { _lp2 = setTimeout(() => showImgCtx(e, item.code, null), 600); }, {passive:true});
+            ph.addEventListener("touchend",     ()  => clearTimeout(_lp2));
+            ph.addEventListener("touchmove",    ()  => clearTimeout(_lp2));
             return;
           }
           const img = document.createElement("img");
@@ -1989,6 +2384,12 @@
             img.style.display = "none";
             ph.innerHTML = '<i class="fa fa-image" style="color:#ccc"></i>';
           };
+          // Context menu: botão direito (desktop) + long-press (mobile)
+          img.oncontextmenu = (e) => showImgCtx(e, item.code, r.url);
+          let _lp;
+          img.addEventListener("touchstart",  (e) => { _lp = setTimeout(() => showImgCtx(e, item.code, r.url), 600); }, {passive:true});
+          img.addEventListener("touchend",     ()  => clearTimeout(_lp));
+          img.addEventListener("touchmove",    ()  => clearTimeout(_lp));
           iTd.replaceChild(img, ph);
         });
 
@@ -2248,7 +2649,46 @@
         if (h.length > 20) h.pop();
         localStorage.setItem("a_v16h", JSON.stringify(h));
       }
-      function renderHist() {
+      
+/* DRAG & DROP ITENS */
+function enableDragDrop() {
+  E.tb.querySelectorAll("tr.vr").forEach((row, idx) => {
+    row.draggable = true;
+    row.dataset.index = idx;
+    row.addEventListener("dragstart", (e) => {
+      e.target.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", idx);
+    });
+    row.addEventListener("dragend", (e) => {
+      e.target.classList.remove("dragging");
+      document.querySelectorAll("tr.drag-over").forEach(r => r.classList.remove("drag-over"));
+    });
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.target.classList.add("drag-over");
+    });
+    row.addEventListener("dragleave", (e) => {
+      e.target.classList.remove("drag-over");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
+      const toIdx = parseInt(e.target.closest("tr").dataset.index);
+      if (fromIdx !== toIdx) {
+        const [moved] = S.q.items.splice(fromIdx, 1);
+        S.q.items.splice(toIdx, 0, moved);
+        persist();
+        render();
+        toast("Itens reorganizados!");
+      }
+      document.querySelectorAll("tr.drag-over").forEach(r => r.classList.remove("drag-over"));
+    });
+  });
+}
+// Chamar após render das linhas
+// Em render(), após E.tb.innerHTML = "", no final: enableDragDrop();
+
+function renderHist() {
         const h = JSON.parse(localStorage.getItem("a_v16h") || "[]"),
           c = $("histL");
         c.innerHTML = "";
@@ -2402,7 +2842,7 @@
         doc.setFillColor(...P.wh); doc.rect(blX1, y + 4, bW1, 2, "F");
 
         doc.setFontSize(6.5); doc.setTextColor(...P.wh); doc.setFont("helvetica", "bold");
-        doc.text("CLIENTE / ENTREGA", blX1 + 5, y + 4.2);
+        doc.text("CLIENTE / ENTREGA", blX1 + 5, y + 4.2, { maxWidth: bW1 - 8 });
 
         doc.setFontSize(6); doc.setTextColor(...P.gy); doc.setFont("helvetica", "normal");
         doc.text("Razão Social / Nome:", blX1 + 4, y + 10);
@@ -2424,7 +2864,7 @@
         doc.setFillColor(...P.wh); doc.rect(blX2, y + 4, bW1, 2, "F");
 
         doc.setFontSize(6.5); doc.setTextColor(...P.wh); doc.setFont("helvetica", "bold");
-        doc.text("DADOS COMERCIAIS", blX2 + 5, y + 4.2);
+        doc.text("DADOS COMERCIAIS", blX2 + 5, y + 4.2, { maxWidth: bW1 - 8 });
 
         doc.setFontSize(6); doc.setTextColor(...P.gy); doc.setFont("helvetica", "normal");
         doc.text("Vendedor:", blX2 + 4, y + 10);
@@ -2475,6 +2915,7 @@
         doc.autoTable({
           startY: y, columns: cols, body: rows,
           theme: "grid",
+          rowPageBreak: "avoid",
           margin: { left: M, right: M, bottom: 20 },
           headStyles: {
             fillColor: P.bl, textColor: 255, fontStyle: "bold", halign: "center",
@@ -2608,20 +3049,21 @@
           const sv = localStorage.getItem(k);
           if (sv) {
             const d = JSON.parse(sv);
-            if (Date.now() - d.ts < 86400000) {
+            if (Date.now() - d.ts < 86400000 && d.it[0]?.imgUrl !== undefined) {
               proc(d.it);
               E.catSt.textContent = `✓ ${d.it.length}`;
               return;
             }
           }
           const res = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${CFG.sheetId}/values/produtos!A2:B?key=${CFG.apiKey}`,
+            `https://sheets.googleapis.com/v4/spreadsheets/${CFG.sheetId}/values/produtos!A2:C?key=${CFG.apiKey}`,
           );
           const j = await res.json();
           const it = (j.values || [])
             .map((r) => ({
               code: (r[0] || "").trim(),
               desc: (r[1] || "").trim(),
+              imgUrl: (r[2] || "").trim(),
             }))
             .filter((i) => i.code);
           localStorage.setItem(k, JSON.stringify({ ts: Date.now(), it }));
@@ -2635,7 +3077,7 @@
       }
       function proc(it) {
         S.cat = it;
-        S.cmap = new Map(it.map((i) => [i.code, i.desc]));
+        S.cmap = new Map(it.map((i) => [i.code, i]));
       }
 
       E.desc.addEventListener("input", (e) => {
@@ -2647,7 +3089,6 @@
         const terms = v.split(/[\s*]+/).filter((t) => t),
           m = [];
         for (const it of S.cat) {
-          if (m.length >= 10) break;
           if (terms.every((t) => it.desc.toUpperCase().includes(t))) m.push(it);
         }
         renderSug(m);
@@ -2658,7 +3099,35 @@
           E.sug.classList.remove("on");
           return;
         }
-        list.forEach((it) => {
+        const limited = list.slice(0, CFG.maxSug);
+
+        // Botão "Adicionar Todos"
+        const btnAll = document.createElement("div");
+        btnAll.className = "si si-addall";
+        btnAll.innerHTML = `<i class="fa fa-layer-group"></i> Adicionar todos os <strong style="margin:0 4px">${list.length}</strong> item(s) do filtro`;
+        btnAll.onclick = () => {
+          let added = 0;
+          list.forEach((it) => {
+            S.q.items.push({
+              code: it.code,
+              desc: it.desc,
+              bar: it.bar || "",
+              un: it.un || "UN",
+              qty: 1,
+              price: it.price || 0,
+            });
+            added++;
+          });
+          E.sug.classList.remove("on");
+          E.desc.value = "";
+          persist();
+          render();
+          toast(`${added} item(s) adicionado(s) à cotação!`);
+        };
+        E.sug.appendChild(btnAll);
+
+        // Itens individuais (máx 50)
+        limited.forEach((it) => {
           const d = document.createElement("div");
           d.className = "si";
           d.innerHTML = `<strong style="color:var(--or)">${it.code}</strong> — ${it.desc}`;
@@ -2670,11 +3139,23 @@
           };
           E.sug.appendChild(d);
         });
+
+        if (list.length > CFG.maxSug) {
+          const more = document.createElement("div");
+          more.className = "si";
+          more.style.cssText = "color:var(--mu);font-size:0.8rem;text-align:center;cursor:default;padding:8px";
+          more.textContent = `… e mais ${list.length - CFG.maxSug} resultados. Refine a busca.`;
+          E.sug.appendChild(more);
+        }
+
         E.sug.classList.add("on");
+        E.itemsSection?.classList.add("search-behind");
       }
       document.addEventListener("click", (e) => {
-        if (!E.sug.contains(e.target) && e.target !== E.desc)
+        if (!E.sug.contains(e.target) && e.target !== E.desc) {
           E.sug.classList.remove("on");
+          E.itemsSection?.classList.remove("search-behind");
+        }
       });
 
       E.swa.addEventListener("input", function () {
@@ -2758,4 +3239,4 @@
       init();
     </script>
   </body>
-            </html>
+</html>
