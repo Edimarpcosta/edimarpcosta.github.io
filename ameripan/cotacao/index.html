@@ -1983,20 +1983,19 @@ tr.vr.drag-over {
         if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
         try {
           toast("Gravando na planilha…", 8000);
-          const r = await fetch(CFG.gasUrl, {
+          await fetch(CFG.gasUrl, {
             method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({ action: "setImg", codigo: sku, img: url }),
           });
-          const j = await r.json();
-          if (j.status === "success") {
-            // Atualizar cache local
-            const ci = S.cmap.get(sku);
-            if (ci) ci.imgUrl = url;
-            imgCache.delete(sku);
-            $("imgEditM").classList.remove("on");
-            render();
-            toast("✅ Imagem gravada com sucesso!");
-          } else throw new Error(j.error);
+          // no-cors = resposta opaca; se chegou aqui sem throw = sucesso
+          const ci = S.cmap.get(sku);
+          if (ci) ci.imgUrl = url;
+          imgCache.delete(sku);
+          $("imgEditM").classList.remove("on");
+          render();
+          toast("✅ Imagem gravada com sucesso!");
         } catch(err) { toast("Erro: " + err.message); }
       };
 
@@ -2011,18 +2010,18 @@ tr.vr.drag-over {
         if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
         try {
           toast("Cadastrando…", 8000);
-          const r = await fetch(CFG.gasUrl, {
+          await fetch(CFG.gasUrl, {
             method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({ action: "addItem", codigo: cod, nome: desc, un, img }),
           });
-          const j = await r.json();
-          if (j.status === "success") {
-            const ni = { code: cod, desc, un, imgUrl: img };
-            S.cat.push(ni);
-            S.cmap.set(cod, ni);
-            $("newItemM").classList.remove("on");
-            toast(`✅ Item ${cod} cadastrado! Adicione-o à cotação normalmente.`);
-          } else throw new Error(j.error);
+          // no-cors = resposta opaca; se chegou aqui sem throw = sucesso
+          const ni = { code: cod, desc, un, imgUrl: img };
+          S.cat.push(ni);
+          S.cmap.set(cod, ni);
+          $("newItemM").classList.remove("on");
+          toast(`✅ Item ${cod} cadastrado! Adicione-o à cotação normalmente.`);
         } catch(err) { toast("Erro: " + err.message); }
       };
 
@@ -2082,18 +2081,17 @@ tr.vr.drag-over {
           const batch = found.slice(i, i + GAS_BATCH);
           await Promise.all(batch.map(async ({ code, url }) => {
             try {
-              const r = await fetch(CFG.gasUrl, {
+              await fetch(CFG.gasUrl, {
                 method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ action: "setImg", codigo: code, img: url }),
               });
-              const j = await r.json();
-              if (j.status === "success") {
-                // Atualiza cache local
-                const ci = S.cmap.get(code);
-                if (ci) ci.imgUrl = url;
-                imgCache.delete(code);
-                saved++;
-              } else { errors++; }
+              // no-cors = opaque; sem throw = assumimos sucesso
+              const ci = S.cmap.get(code);
+              if (ci) ci.imgUrl = url;
+              imgCache.delete(code);
+              saved++;
             } catch { errors++; }
           }));
           st.textContent = `Gravando… ${Math.min(i + GAS_BATCH, found.length)}/${found.length}`;
