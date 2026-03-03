@@ -1802,8 +1802,16 @@ tr.vr.drag-over {
         return finalRes;
       }
 
-            async function url2b64(url) {
+            function _isPngUrl(url) {
+          return /\.png(\?|$)/i.test(url);
+        }
+        function _canvasMime(url) {
+          return _isPngUrl(url) ? "image/png" : "image/jpeg";
+        }
+
+        async function url2b64(url) {
         if (!url) return null;
+        const mime = _canvasMime(url);
 
         // 1️⃣ Tenta fetch normal (funciona para GitHub raw e outros CORS-ok)
         try {
@@ -1829,7 +1837,7 @@ tr.vr.drag-over {
               c.width = img.naturalWidth;
               c.height = img.naturalHeight;
               c.getContext("2d").drawImage(img, 0, 0);
-              resolve(c.toDataURL("image/jpeg", 0.85));
+              resolve(mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85));
             } catch {
               resolve(null);
             } // tainted canvas (servidor não permite CORS)
@@ -1845,7 +1853,7 @@ tr.vr.drag-over {
                 c.width = img2.naturalWidth;
                 c.height = img2.naturalHeight;
                 c.getContext("2d").drawImage(img2, 0, 0);
-                resolve(c.toDataURL("image/jpeg", 0.85));
+                resolve(mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85));
               } catch {
                 resolve(null);
               }
@@ -2751,15 +2759,20 @@ function renderHist() {
 
         toast("Aguarde… gerando PDF profissional…", 15000);
 
-        const imgB64 = {};
+        const imgB64 = {}; // { sku: { data, fmt } }
         const imgUrl = {};
+        function _detectFmt(b64) {
+          if (b64 && b64.startsWith("data:image/png")) return "PNG";
+          if (b64 && b64.startsWith("data:image/webp")) return "WEBP";
+          return "JPEG";
+        }
         await Promise.allSettled(
           q.items.map(async (item) => {
             const r = await resolveImg(item.code);
             if (r?.url) {
               imgUrl[item.code] = r.url;
               const b64 = await url2b64(r.url);
-              if (b64) imgB64[item.code] = b64;
+              if (b64) imgB64[item.code] = { data: b64, fmt: _detectFmt(b64) };
             }
           }),
         );
@@ -2951,16 +2964,16 @@ function renderHist() {
           didDrawCell(data) {
             if (data.column.dataKey === "img" && data.cell.section === "body") {
               const sku = data.row.raw._sku;
-              const b64 = imgB64[sku];
+              const entry = imgB64[sku];
               const pub = imgUrl[sku];
-              if (!b64) return;
+              if (!entry) return;
               const pad = 0.8;
               const x = data.cell.x + pad;
               const cy = data.cell.y + pad;
               const w = data.cell.width - pad * 2;
               const h = data.cell.height - pad * 2;
               try {
-                doc.addImage(b64, "JPEG", x, cy, w, h, undefined, "FAST");
+                doc.addImage(entry.data, entry.fmt, x, cy, w, h, undefined, "FAST");
                 if (pub) doc.link(x, cy, w, h, { url: pub });
               } catch (e) {}
             }
