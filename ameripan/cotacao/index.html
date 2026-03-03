@@ -1813,39 +1813,55 @@ tr.vr.drag-over {
         if (!url) return null;
         const mime = _canvasMime(url);
 
-        // 1️⃣ Tenta fetch normal (funciona para GitHub raw e outros CORS-ok)
+        // 1️⃣ Tenta fetch direto (funciona para GitHub raw, CDNs com CORS)
         try {
           const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
           if (r.ok) {
             const b = await r.blob();
-            return await new Promise((res) => {
+            const result = await new Promise((res) => {
               const fr = new FileReader();
               fr.onloadend = () => res(fr.result);
               fr.readAsDataURL(b);
             });
+            if (result) { console.log('[PDF IMG] ✅ fetch direto OK:', url.slice(-40)); return result; }
           }
-        } catch {}
+        } catch (e) { console.warn('[PDF IMG] fetch direto falhou:', url.slice(-40), e.message); }
 
-        // 2️⃣ Fallback via <img> + <canvas> — contorna CORS para leitura de pixel
-        // (funciona quando a imagem já estava carregada no browser / cache)
-        return new Promise((resolve) => {
+        // 2️⃣ Tenta via proxy CORS (wsrv.nl) — resolve imagens bloqueadas por CORS
+        try {
+          const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&default=404`;
+          const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+          if (r.ok) {
+            const b = await r.blob();
+            const result = await new Promise((res) => {
+              const fr = new FileReader();
+              fr.onloadend = () => res(fr.result);
+              fr.readAsDataURL(b);
+            });
+            if (result) { console.log('[PDF IMG] ✅ proxy wsrv.nl OK:', url.slice(-40)); return result; }
+          }
+        } catch (e) { console.warn('[PDF IMG] proxy wsrv.nl falhou:', url.slice(-40), e.message); }
+
+        // 3️⃣ Fallback via <img> + <canvas> com crossOrigin
+        const canvasResult = await new Promise((resolve) => {
           const img = new Image();
-          img.crossOrigin = "anonymous"; // solicita CORS; se o servidor permitir, ótimo
+          img.crossOrigin = "anonymous";
           img.onload = () => {
             try {
               const c = document.createElement("canvas");
               c.width = img.naturalWidth;
               c.height = img.naturalHeight;
               c.getContext("2d").drawImage(img, 0, 0);
-              resolve(mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85));
-            } catch {
+              const d = mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85);
+              console.log('[PDF IMG] ✅ canvas+CORS OK:', url.slice(-40));
+              resolve(d);
+            } catch (e) {
+              console.warn('[PDF IMG] canvas+CORS tainted:', url.slice(-40), e.message);
               resolve(null);
-            } // tainted canvas (servidor não permite CORS)
+            }
           };
           img.onerror = () => {
-            // 3️⃣ Última tentativa: canvas sem crossOrigin
-            // O browser já tem a imagem em cache (estava no <img> da tabela)
-            // Cria novo img SEM crossOrigin para forçar uso do cache
+            // 4️⃣ Última tentativa: canvas sem crossOrigin (usa cache do browser)
             const img2 = new Image();
             img2.onload = () => {
               try {
@@ -1853,16 +1869,20 @@ tr.vr.drag-over {
                 c.width = img2.naturalWidth;
                 c.height = img2.naturalHeight;
                 c.getContext("2d").drawImage(img2, 0, 0);
-                resolve(mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85));
-              } catch {
+                const d = mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85);
+                console.log('[PDF IMG] ✅ canvas sem CORS OK:', url.slice(-40));
+                resolve(d);
+              } catch (e) {
+                console.warn('[PDF IMG] ❌ canvas sem CORS tainted:', url.slice(-40), e.message);
                 resolve(null);
               }
             };
-            img2.onerror = () => resolve(null);
+            img2.onerror = () => { console.warn('[PDF IMG] ❌ TODAS as tentativas falharam:', url.slice(-40)); resolve(null); };
             img2.src = url;
           };
           img.src = url + (url.includes("?") ? "&" : "?") + "_cb=" + Date.now();
         });
+        return canvasResult;
       }
 
       /* ══════════════════════════════════════════
@@ -2762,20 +2782,36 @@ function renderHist() {
         const imgB64 = {}; // { sku: { data, fmt } }
         const imgUrl = {};
         function _detectFmt(b64) {
-          if (b64 && b64.startsWith("data:image/png")) return "PNG";
-          if (b64 && b64.startsWith("data:image/webp")) return "WEBP";
+          if (!b64) return "JPEG";
+          // Detecta pelo prefixo do data URI
+          if (b64.startsWith("data:image/png")) return "PNG";
+          if (b64.startsWith("data:image/webp")) return "WEBP";
+          // Detecta pela assinatura binária (magic bytes em base64)
+          // PNG magic: \x89PNG = iVBOR em base64
+          const b64Data = b64.split(",")[1] || "";
+          if (b64Data.startsWith("iVBOR")) return "PNG";
           return "JPEG";
         }
+        console.log('[PDF] Pré-carregando imagens para', q.items.length, 'itens…');
         await Promise.allSettled(
           q.items.map(async (item) => {
             const r = await resolveImg(item.code);
             if (r?.url) {
               imgUrl[item.code] = r.url;
               const b64 = await url2b64(r.url);
-              if (b64) imgB64[item.code] = { data: b64, fmt: _detectFmt(b64) };
+              if (b64) {
+                const fmt = _detectFmt(b64);
+                imgB64[item.code] = { data: b64, fmt };
+                console.log(`[PDF] ✅ ${item.code}: formato=${fmt}, url=${r.url.slice(-50)}`);
+              } else {
+                console.warn(`[PDF] ❌ ${item.code}: url2b64 retornou NULL — imagem NÃO vai para o PDF. URL: ${r.url}`);
+              }
+            } else {
+              console.warn(`[PDF] ⚠️ ${item.code}: resolveImg não encontrou URL`);
             }
           }),
         );
+        console.log(`[PDF] Imagens carregadas: ${Object.keys(imgB64).length}/${q.items.length}`);
 
         // ─── Helpers de desenho ───
         function drawPageFooter(pg) {
