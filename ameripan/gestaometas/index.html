@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -468,11 +469,33 @@
     #view-equipe table { overflow-x: auto; overflow-y: visible; }
 
     /* Overflow auto H+V em wrappers principais das páginas solicitadas */
-    #view-dashboard, #view-acompanhamento, #view-metaanual, #view-rateio, #view-calendario, #view-equipe {
+    #view-dashboard, #view-acompanhamento, #view-metaanual, #view-rateio, #view-calendario, #view-equipe, #view-pesos {
       overflow: auto;
     }
 
-</style>
+    /* ===== PESOS PAGE ===== */
+    .pesos-section{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+    .pesos-section-title{font-size:15px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+    .peso-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+    .peso-row:last-child{border-bottom:none;}
+    .peso-name{min-width:140px;font-weight:700;font-size:13px;}
+    .peso-input{width:80px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--mono);font-size:13px;text-align:right;outline:none;background:var(--surface2);}
+    .peso-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.12);}
+    .peso-bar-wrap{flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden;min-width:80px;}
+    .peso-bar-fill{height:100%;border-radius:5px;transition:width .4s;background:var(--primary);}
+    .peso-pct-label{min-width:50px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text-muted);}
+    .peso-total-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:800;font-family:var(--mono);}
+    .peso-total-badge.ok{background:rgba(5,150,105,.15);color:#059669;border:1px solid rgba(5,150,105,.3);}
+    .peso-total-badge.warn{background:rgba(217,119,6,.15);color:#d97706;border:1px solid rgba(217,119,6,.3);}
+    .peso-total-badge.over{background:rgba(220,38,38,.15);color:#dc2626;border:1px solid rgba(220,38,38,.3);}
+    .sim-tree{padding:12px 0;}
+    .sim-node{padding:8px 14px;border-left:3px solid var(--primary);margin-left:16px;margin-bottom:6px;background:var(--surface2);border-radius:0 8px 8px 0;display:flex;justify-content:space-between;align-items:center;}
+    .sim-node.level-0{margin-left:0;border-left-width:4px;font-weight:800;font-size:14px;background:var(--primary-light);}
+    .sim-node.level-1{border-left-color:var(--success);}
+    .sim-node.level-2{border-left-color:var(--warning);margin-left:32px;font-size:12px;}
+    .sim-val{font-family:var(--mono);font-weight:700;}
+
+  </style>
 </head>
 <body>
 
@@ -523,6 +546,7 @@
     <div class="nav-section" style="margin-top:8px;">Pessoas</div>
     <div class="nav-item" id="navEquipe" data-page="equipe" onclick="App.navigate('equipe');closeSidebarOnMobile()" style="display:none"><span class="nav-icon">👥</span> Gestão de Equipe</div>
     <div class="nav-section" style="margin-top:8px;">Sistema</div>
+    <div class="nav-item" id="navPesos" data-page="pesos" onclick="App.navigate('pesos');closeSidebarOnMobile()" style="display:none"><span class="nav-icon">⚖️</span> Config. de Pesos</div>
     <div class="nav-item" id="navConfig" data-page="configuracoes" onclick="App.navigate('configuracoes');closeSidebarOnMobile()"><span class="nav-icon">⚙️</span> Configurações</div>
   </div>
   <div class="user-area">
@@ -908,6 +932,50 @@
       </div>
     </div>
 
+    <!-- ======= VIEW: CONFIGURAÇÃO DE PESOS ======= -->
+    <div id="view-pesos" class="page hidden">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div style="font-weight:700;font-size:15px;color:var(--text-main);">⚖️ Configuração de Pesos</div>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="App.loadData()">🔄 Recarregar</button>
+        </div>
+      </div>
+
+      <!-- SEÇÃO A — Pesos das Equipes -->
+      <div class="pesos-section" id="pesosSecEquipes">
+        <div class="pesos-section-title">🏢 Pesos das Equipes <span id="pesoEqBadge" class="peso-total-badge warn">—</span></div>
+        <div id="pesosEquipesRows"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="UI.autoEqualizarEquipes()">⚡ Auto-equalizar</button>
+          <button class="btn btn-success btn-sm" id="btnSavePesosEq" onclick="App.savePesosEquipes()" style="font-weight:800">💾 Salvar Pesos Equipes</button>
+          <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">Ano: <strong id="pesoEqAno"></strong></span>
+        </div>
+      </div>
+
+      <!-- SEÇÃO B — Pesos dos Vendedores -->
+      <div class="pesos-section" id="pesosSecVendedores">
+        <div class="pesos-section-title">👤 Pesos dos Vendedores por Equipe</div>
+        <div id="pesosVendEquipeSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;"></div>
+        <div id="pesosVendedoresRows"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="UI.autoEqualizarVendedores()">⚡ Auto-equalizar</button>
+          <button class="btn btn-success btn-sm" onclick="App.savePesosVendedores()" style="font-weight:800">💾 Salvar Pesos Vendedores</button>
+          <span id="pesoVendBadge" class="peso-total-badge warn" style="margin-left:auto;">—</span>
+        </div>
+      </div>
+
+      <!-- SEÇÃO C — Simulação -->
+      <div class="pesos-section">
+        <div class="pesos-section-title">🧮 Simulação em Tempo Real</div>
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end;margin-bottom:14px;">
+          <div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">💰 Meta Global (R$)</label><input type="text" id="simMetaGlobal" class="input money-input" placeholder="Ex: 1.000.000,00" oninput="maskMoney(this);UI.renderSimulacao()"></div>
+          <div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">📅 Mês</label><select id="simMes" class="input" style="width:100px" onchange="UI.renderSimulacao()"></select></div>
+          <button class="btn btn-primary" onclick="App.aplicarPesosRateio()" style="height:38px;">🎯 Aplicar ao Rateio</button>
+        </div>
+        <div id="simTreeContainer" class="sim-tree"></div>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -952,7 +1020,7 @@ const currentDayISO=new Date().toISOString().split('T')[0];
 const currentDayNum=new Date().getDate();
 const ROLE_LEVEL={DIRETOR:4,GERENTE:3,SUPERVISOR:2,VENDEDOR:1};
 
-const State={user:null,dataMetasGlobais:[],dataMetasVendedores:[],dataVendasDiarias:[],dataVendasDiariasAno:[],dataMetaAnual:[],dataMetaAnualVend:[],dataMetaEmpresa:[],dataColaboradores:[],selectedDateISO:currentDayISO,currentPage:'dashboard',dashView:'vendedor',rateioEquipesFiltro:[],rateioMesAtivo:parseInt(currentMonth),rateioAno:currentYear,rateioResKpi:'fat',acompModo:'mes',acompSubView:'vendedor',acompMes:currentMonth,acompAno:currentYear,acompEquipesFiltro:[],acompDiaAberto:null,anualKpiAtivo:'fat',showMetas:false,cacheHit:false};
+const State={user:null,dataMetasGlobais:[],dataMetasVendedores:[],dataVendasDiarias:[],dataVendasDiariasAno:[],dataMetaAnual:[],dataMetaAnualVend:[],dataMetaEmpresa:[],dataColaboradores:[],dataPesosEquipes:[],dataPesosVendedores:[],selectedDateISO:currentDayISO,currentPage:'dashboard',dashView:'vendedor',rateioEquipesFiltro:[],rateioMesAtivo:parseInt(currentMonth),rateioAno:currentYear,rateioResKpi:'fat',acompModo:'mes',acompSubView:'vendedor',acompMes:currentMonth,acompAno:currentYear,acompEquipesFiltro:[],acompDiaAberto:null,anualKpiAtivo:'fat',showMetas:false,cacheHit:false,pesosVendEquipeSel:null};
 
 // ===== INDEXEDDB CACHE =====
 const Cache={
@@ -998,17 +1066,17 @@ const App={
 
   setupSession(){document.getElementById('loginView').classList.add('hidden');document.getElementById('sidebar').classList.remove('hidden');document.getElementById('mainApp').classList.remove('hidden');Layout.refresh();document.getElementById('uiUserName').textContent=State.user.name;document.getElementById('uiUserRole').textContent=`${State.user.role} — ${State.user.team}`;document.getElementById('uiUserAvatar').textContent=State.user.name.charAt(0).toUpperCase();const teams=Array.from(new Set(State.user.vendors.map(v=>v.team)));State.rateioEquipesFiltro=[...teams];State.acompEquipesFiltro=[...teams];renderHeaderMonths();App.applyPermissions();App.loadData();App.navigate('dashboard')},
 
-  applyPermissions(){const g=['DIRETOR','GERENTE'].includes(State.user.role);const isSup=ROLE_LEVEL[State.user.role]>=2;document.getElementById('empMetaSec').classList.toggle('hidden',!g);document.getElementById('anualEquipeSel').classList.toggle('hidden',!g);document.getElementById('uplineVisWrap').classList.toggle('hidden',!g);document.getElementById('dashViewToggle').classList.toggle('hidden',!g);document.getElementById('acompViewToggle').classList.toggle('hidden',!g);document.getElementById('navEquipe').style.display=isSup?'':'none';if(g){const teams=Array.from(new Set(State.user.vendors.map(v=>v.team)));document.getElementById('anualEquipeSelGrid').innerHTML=teams.map(t=>`<label class="eq-check-lbl" style="font-size:11px;padding:4px 8px;"><input type="radio" name="anualEqSel" value="${t}" ${t===teams[0]?'checked':''} onchange="UI.renderMetaAnual()"> ${t}</label>`).join('')}if(State.user.role==='VENDEDOR'){document.getElementById('navMetaAnual').style.display='none';document.getElementById('navRateio').style.display='none'}},
+  applyPermissions(){const g=['DIRETOR','GERENTE'].includes(State.user.role);const isSup=ROLE_LEVEL[State.user.role]>=2;document.getElementById('empMetaSec').classList.toggle('hidden',!g);document.getElementById('anualEquipeSel').classList.toggle('hidden',!g);document.getElementById('uplineVisWrap').classList.toggle('hidden',!g);document.getElementById('dashViewToggle').classList.toggle('hidden',!g);document.getElementById('acompViewToggle').classList.toggle('hidden',!g);document.getElementById('navEquipe').style.display=isSup?'':'none';document.getElementById('navPesos').style.display=(State.user.role!=='VENDEDOR')?'':'none';if(!g){document.getElementById('pesosSecEquipes').querySelectorAll('.peso-input').forEach(i=>{i.readOnly=true});document.getElementById('btnSavePesosEq').style.display='none'}if(g){const teams=Array.from(new Set(State.user.vendors.map(v=>v.team)));document.getElementById('anualEquipeSelGrid').innerHTML=teams.map(t=>`<label class="eq-check-lbl" style="font-size:11px;padding:4px 8px;"><input type="radio" name="anualEqSel" value="${t}" ${t===teams[0]?'checked':''} onchange="UI.renderMetaAnual()"> ${t}</label>`).join('')}if(State.user.role==='VENDEDOR'){document.getElementById('navMetaAnual').style.display='none';document.getElementById('navRateio').style.display='none'}},
 
-  navigate(pageId){State.currentPage=pageId;document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));const view=document.getElementById(`view-${pageId}`);if(view)view.classList.remove('hidden');const nav=document.querySelector(`.nav-item[data-page="${pageId}"]`);if(nav)nav.classList.add('active');const titles={dashboard:'Painel de Performance',acompanhamento:'Acompanhamento',metaanual:'Meta Anual',rateio:'Rateio Mensal',calendario:'Calendário Diário',configuracoes:'Configurações',equipe:'Gestão de Equipe'};document.getElementById('pageTitle').textContent=titles[pageId]||'Ameripan';UI.renderAll()},
+  navigate(pageId){State.currentPage=pageId;document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));const view=document.getElementById(`view-${pageId}`);if(view)view.classList.remove('hidden');const nav=document.querySelector(`.nav-item[data-page="${pageId}"]`);if(nav)nav.classList.add('active');const titles={dashboard:'Painel de Performance',acompanhamento:'Acompanhamento',metaanual:'Meta Anual',rateio:'Rateio Mensal',calendario:'Calendário Diário',configuracoes:'Configurações',equipe:'Gestão de Equipe',pesos:'Configuração de Pesos'};document.getElementById('pageTitle').textContent=titles[pageId]||'Ameripan';UI.renderAll()},
 
   async loadData(force=false){const ano=State.acompAno,mes=State.acompMes;const g=['GERENTE','DIRETOR'].includes(State.user.role);const eq=g?'TODOS':State.user.team;const cacheKey=`data_${ano}_${mes}_${eq}`;
     // Try cache first
     if(!force){const cached=await Cache.get(cacheKey);if(cached){Object.assign(State,cached);State.cacheHit=true;UI.updateCacheIndicator();Toast.show('⚡ Dados do cache','info');UI.renderAll();return}}
     State.cacheHit=false;Toast.show('☁️ Carregando dados...','info');
-    try{const[mg,mv,vd,ma,mav,me,vdAno]=await Promise.all([API.post('getMetasGlobais',{ano,equipe:eq}),API.post('getMetasVendedores',{ano,mes,equipe:eq}),API.post('getVendasDiarias',{ano,mes,equipe:eq}),API.post('getMetaAnual',{ano,equipe:eq}),API.post('getMetaAnualVendedores',{ano,equipe:eq}),g?API.post('getMetaAnual',{ano,equipe:'__EMPRESA__'}):Promise.resolve({data:[]}),API.post('getVendasDiariasAno',{ano,equipe:eq})]);State.dataMetasGlobais=mg.data||[];State.dataMetasVendedores=mv.data||[];State.dataVendasDiarias=vd.data||[];State.dataMetaAnual=ma.data||[];State.dataMetaAnualVend=mav.data||[];State.dataMetaEmpresa=me.data||[];State.dataVendasDiariasAno=vdAno.data||[];
+    try{const[mg,mv,vd,ma,mav,me,vdAno,pe,pv]=await Promise.all([API.post('getMetasGlobais',{ano,equipe:eq}),API.post('getMetasVendedores',{ano,mes,equipe:eq}),API.post('getVendasDiarias',{ano,mes,equipe:eq}),API.post('getMetaAnual',{ano,equipe:eq}),API.post('getMetaAnualVendedores',{ano,equipe:eq}),g?API.post('getMetaAnual',{ano,equipe:'__EMPRESA__'}):Promise.resolve({data:[]}),API.post('getVendasDiariasAno',{ano,equipe:eq}),API.post('getPesosEquipes',{ano}),API.post('getPesosVendedores',{ano,equipe:eq})]);State.dataMetasGlobais=mg.data||[];State.dataMetasVendedores=mv.data||[];State.dataVendasDiarias=vd.data||[];State.dataMetaAnual=ma.data||[];State.dataMetaAnualVend=mav.data||[];State.dataMetaEmpresa=me.data||[];State.dataVendasDiariasAno=vdAno.data||[];State.dataPesosEquipes=pe.data||[];State.dataPesosVendedores=pv.data||[];
     // Save to cache
-    await Cache.set(cacheKey,{dataMetasGlobais:State.dataMetasGlobais,dataMetasVendedores:State.dataMetasVendedores,dataVendasDiarias:State.dataVendasDiarias,dataMetaAnual:State.dataMetaAnual,dataMetaAnualVend:State.dataMetaAnualVend,dataMetaEmpresa:State.dataMetaEmpresa,dataVendasDiariasAno:State.dataVendasDiariasAno});
+    await Cache.set(cacheKey,{dataMetasGlobais:State.dataMetasGlobais,dataMetasVendedores:State.dataMetasVendedores,dataVendasDiarias:State.dataVendasDiarias,dataMetaAnual:State.dataMetaAnual,dataMetaAnualVend:State.dataMetaAnualVend,dataMetaEmpresa:State.dataMetaEmpresa,dataVendasDiariasAno:State.dataVendasDiariasAno,dataPesosEquipes:State.dataPesosEquipes,dataPesosVendedores:State.dataPesosVendedores});
     UI.updateCacheIndicator();Toast.show('✅ Dados atualizados','success');UI.renderAll()}catch(e){Toast.show('Erro: '+e.message,'error')}},
 
   syncData(){Cache.clear().then(()=>{State.cacheHit=false;UI.updateCacheIndicator();App.loadData(true)})},
@@ -1044,7 +1112,7 @@ const App={
 };
 // ===== UI =====
 const UI={
-  renderAll(){const p=State.currentPage;if(p==='dashboard')UI.renderDash();else if(p==='acompanhamento')UI.renderAcomp();else if(p==='metaanual')UI.renderMetaAnual();else if(p==='rateio')UI.renderRateioMensal();else if(p==='calendario')UI.renderCalendario();else if(p==='configuracoes')UI.renderConfig();else if(p==='equipe')App.loadColaboradores()},
+  renderAll(){const p=State.currentPage;if(p==='dashboard')UI.renderDash();else if(p==='acompanhamento')UI.renderAcomp();else if(p==='metaanual')UI.renderMetaAnual();else if(p==='rateio')UI.renderRateioMensal();else if(p==='calendario')UI.renderCalendario();else if(p==='configuracoes')UI.renderConfig();else if(p==='equipe')App.loadColaboradores();else if(p==='pesos')UI.renderPesos()},
 
   updateCacheIndicator(){const el=document.getElementById('cacheIndicator');if(el)el.innerHTML=State.cacheHit?'<span style="color:#10b981;font-size:10px;font-weight:700">⚡ Cache</span>':'<span style="color:#3b82f6;font-size:10px;font-weight:700">☁️ Servidor</span>'},
 
@@ -1121,7 +1189,8 @@ Object.assign(UI,{
   renderRateioMensal(){const teams=[...new Set(State.dataMetaAnual.filter(x=>x.equipe!=='__EMPRESA__').map(x=>x.equipe))];const fc=document.getElementById('rateioEquipesFiltro');fc.innerHTML=teams.map(t=>`<label class="eq-check-lbl"><input type="checkbox" class="eq-check-inp" value="${t}" ${State.rateioEquipesFiltro.includes(t)?'checked':''} onchange="UI.updateRateioFilters()"> ${t}</label>`).join('');UI.renderRateioPaineis();UI.renderRateioResumo()},
   updateRateioFilters(){State.rateioEquipesFiltro=[...document.querySelectorAll('#rateioEquipesFiltro .eq-check-inp:checked')].map(c=>c.value);UI.renderRateioPaineis();UI.renderRateioResumo()},
   renderRateioPaineis(){const c=document.getElementById('rateioPaineis');c.innerHTML='';const eqs=State.rateioEquipesFiltro;const mes=State.rateioMesAtivo;const g=['DIRETOR','GERENTE'].includes(State.user.role);eqs.forEach(eq=>{const mg=State.dataMetasGlobais.find(x=>x.equipe===eq&&x.mes==mes)||{metaFat:0,metaPos:0,metaCad:0,metaSku:0};const vs=State.dataMetasVendedores.filter(x=>x.equipe===eq&&x.mes==mes);const evs=State.user.vendors.filter(v=>v.team===eq);let tF=0,tP=0,tC=0,tS=0;let vr='';evs.forEach(v=>{const d=vs.find(x=>x.vendorId===v.code)||{metaFat:0,metaPos:0,metaCad:0,metaSku:0};const mf=fNum(d.metaFat),mp=fNum(d.metaPos),mc=fNum(d.metaCad),ms=fNum(d.metaSku);tF+=mf;tP+=mp;tC+=mc;tS+=ms;vr+=`<tr data-vid="${v.code}" data-vname="${v.name}"><td style="font-weight:600">${v.name} <span style="color:#7aaec8;font-family:var(--mono)">#${v.code}</span></td><td><input type="text" class="vend-inp money" placeholder="0,00" value="${cleanMoney(mf)}" oninput="maskMoney(this);UI.calcRestanteEquipe('${eq}')"></td><td><input type="number" class="vend-inp" value="${mp||''}" oninput="UI.calcRestanteEquipe('${eq}')"></td><td><input type="number" class="vend-inp" value="${mc||''}" oninput="UI.calcRestanteEquipe('${eq}')"></td><td><input type="number" class="vend-inp" value="${ms||''}" oninput="UI.calcRestanteEquipe('${eq}')"></td></tr>`});const mFat=fNum(mg.metaFat),mPos=fNum(mg.metaPos),mCad=fNum(mg.metaCad),mSku=fNum(mg.metaSku);const kpis=['Fat','Pos','Cad','Sku'];const icons=['💰','👥','🆕','📦'];const cols=['#3b82f6','#10b981','#8b5cf6','#f59e0b'];const metas=[mFat,mPos,mCad,mSku];const tots=[tF,tP,tC,tS];const stIcon=(mFat>0&&Math.abs(mFat-tF)<1)?'✅':(tF>0?'⚠️':'⏳');let kH=kpis.map((k,i)=>{const pct=calcPct(tots[i],metas[i]);const rest=metas[i]-tots[i];return`<div class="equipe-kpi-item"><div class="equipe-kpi-label">${icons[i]} ${k}</div><div class="equipe-kpi-inp-wrap"><input type="${k==='Fat'?'text':'number'}" class="input eq-${k.toLowerCase()} ${k==='Fat'?'money-input':''}" value="${k==='Fat'?cleanMoney(metas[i]):(metas[i]||'')}" ${!g?'readonly':`oninput="${k==='Fat'?'maskMoney(this);':''}UI.calcRestanteEquipe('${eq}')"`}></div><div class="eq-distrib-info" id="info-${eq.replace(/ /g,'-')}-${k}">D: ${k==='Fat'?fMoneyShort(tots[i]):tots[i]} / R: ${k==='Fat'?fMoneyShort(rest):rest}</div><div class="eq-mini-bar"><div class="eq-mini-bar-fill" id="bar-${eq.replace(/ /g,'-')}-${k}" style="width:${Math.min(pct,100)}%;background:${cols[i]}"></div></div></div>`}).join('');
-    c.insertAdjacentHTML('beforeend',`<div class="equipe-painel" data-equipe="${eq}" id="painel-${eq.replace(/ /g,'-')}"><div class="equipe-painel-header"><div class="equipe-painel-nome">🏢 ${eq}</div><div class="equipe-painel-status">${stIcon}</div><button class="btn btn-sm btn-success" onclick="App.saveEquipeRateio('${eq}')">💾 Salvar</button></div><div class="equipe-kpis-grid">${kH}</div><div class="equipe-vend-section"><div class="equipe-vend-toggle" onclick="var el=this.nextElementSibling;el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'▶ Vendedores (${evs.length})':'▼ Vendedores (${evs.length})'">▼ Vendedores (${evs.length})</div><div class="vend-table-wrap"><table class="vend-table"><thead><tr><th>Vendedor</th><th>Fat.</th><th>Pos.</th><th>Cad.</th><th>SKU</th></tr></thead><tbody>${vr||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--text-muted)">Nenhum vendedor (faça logout e login novamente)</td></tr>'}</tbody></table></div></div></div>`)})},
+    const hasPesos=State.dataPesosVendedores.filter(p=>p.equipe===eq).length>0;const btnPesos=hasPesos?`<button class="btn btn-sm btn-secondary" onclick="UI.calcularPorPesos('${eq}')" title="Distribuir meta da equipe pelos pesos configurados">⚖️ Calcular por Pesos</button>`:'';
+    c.insertAdjacentHTML('beforeend',`<div class="equipe-painel" data-equipe="${eq}" id="painel-${eq.replace(/ /g,'-')}"><div class="equipe-painel-header"><div class="equipe-painel-nome">🏢 ${eq}</div><div class="equipe-painel-status">${stIcon}</div><div style="display:flex;gap:6px">${btnPesos}<button class="btn btn-sm btn-success" onclick="App.saveEquipeRateio('${eq}')">💾 Salvar</button></div></div><div class="equipe-kpis-grid">${kH}</div><div class="equipe-vend-section"><div class="equipe-vend-toggle" onclick="var el=this.nextElementSibling;el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'▶ Vendedores (${evs.length})':'▼ Vendedores (${evs.length})'">▼ Vendedores (${evs.length})</div><div class="vend-table-wrap"><table class="vend-table"><thead><tr><th>Vendedor</th><th>Fat.</th><th>Pos.</th><th>Cad.</th><th>SKU</th></tr></thead><tbody>${vr||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--text-muted)">Nenhum vendedor (faça logout e login novamente)</td></tr>'}</tbody></table></div></div></div>`)})},
 
   calcRestanteEquipe(eq){const pn=document.getElementById('painel-'+eq.replace(/ /g,'-'));if(!pn)return;const kpis=['Fat','Pos','Cad','Sku'];const mg={Fat:parseMoney(pn.querySelector('.eq-fat')?.value),Pos:parseInt(pn.querySelector('.eq-pos')?.value||0),Cad:parseInt(pn.querySelector('.eq-cad')?.value||0),Sku:parseInt(pn.querySelector('.eq-sku')?.value||0)};const vt={Fat:0,Pos:0,Cad:0,Sku:0};pn.querySelectorAll('.vend-table tbody tr').forEach(tr=>{const inps=tr.querySelectorAll('.vend-inp');vt.Fat+=parseMoney(inps[0].value);vt.Pos+=parseInt(inps[1].value||0);vt.Cad+=parseInt(inps[2].value||0);vt.Sku+=parseInt(inps[3].value||0)});kpis.forEach(k=>{const rest=mg[k]-vt[k];const pct=calcPct(vt[k],mg[k]);const ie=document.getElementById(`info-${eq.replace(/ /g,'-')}-${k}`);if(ie)ie.innerHTML=`D: ${k==='Fat'?fMoneyShort(vt[k]):vt[k]} / <span style="color:${rest<0?'var(--danger)':'var(--success)'}">R: ${k==='Fat'?fMoneyShort(rest):rest}</span>`;const be=document.getElementById(`bar-${eq.replace(/ /g,'-')}-${k}`);if(be)be.style.width=Math.min(pct,100)+'%'})},
 
@@ -1141,6 +1210,240 @@ Object.assign(UI,{
   renderConfig(){if(!State.user)return;document.getElementById('cfgAvatar').textContent=State.user.name.charAt(0).toUpperCase();document.getElementById('cfgName').textContent=State.user.name;document.getElementById('cfgRole').textContent=`${State.user.role} — ${State.user.team}`;document.getElementById('cfgTeam').textContent=State.user.team;document.getElementById('cfgVendCount').textContent=State.user.vendors?State.user.vendors.length+' vendedores':'—'}
 });
 
+// ========== PESOS ==========
+Object.assign(UI,{
+  renderPesos(){
+    UI.renderPesosEquipes();
+    UI.renderPesosVendedores();
+    UI.renderSimulacaoMeses();
+    UI.renderSimulacao();
+    document.getElementById('pesoEqAno').textContent=State.acompAno;
+    // Supervisor readonly for equipes section
+    const g=['DIRETOR','GERENTE'].includes(State.user.role);
+    document.getElementById('pesosSecEquipes').querySelectorAll('.peso-input').forEach(i=>{i.readOnly=!g});
+    if(!g){document.getElementById('btnSavePesosEq').style.display='none'}else{document.getElementById('btnSavePesosEq').style.display=''}
+  },
+
+  renderPesosEquipes(){
+    const teams=[...new Set(State.dataMetaAnual.filter(x=>x.equipe!=='__EMPRESA__').map(x=>x.equipe))];
+    if(!teams.length){const vt=[...new Set(State.user.vendors.map(v=>v.team))];teams.push(...vt)}
+    let html='';let total=0;
+    teams.forEach(t=>{
+      const pe=State.dataPesosEquipes.find(x=>x.equipe===t);
+      const peso=pe?pe.peso:0;
+      total+=peso;
+      html+=`<div class="peso-row"><span class="peso-name">${t}</span><input type="number" class="peso-input peq-inp" data-equipe="${t}" value="${peso||''}" placeholder="0" step="0.1" min="0" max="100" oninput="UI.updatePesoEqTotal()"><span class="peso-pct-label">${peso.toFixed(1)}%</span><div class="peso-bar-wrap"><div class="peso-bar-fill" style="width:${Math.min(peso,100)}%"></div></div></div>`;
+    });
+    document.getElementById('pesosEquipesRows').innerHTML=html||'<div style="color:var(--text-muted);padding:12px">Nenhuma equipe cadastrada</div>';
+    UI.updatePesoEqBadge(total);
+  },
+
+  updatePesoEqTotal(){
+    let total=0;
+    document.querySelectorAll('.peq-inp').forEach(inp=>{
+      const v=parseFloat(inp.value)||0;
+      total+=v;
+      const row=inp.closest('.peso-row');
+      row.querySelector('.peso-pct-label').textContent=v.toFixed(1)+'%';
+      row.querySelector('.peso-bar-fill').style.width=Math.min(v,100)+'%';
+    });
+    UI.updatePesoEqBadge(total);
+    UI.renderSimulacao();
+  },
+
+  updatePesoEqBadge(total){
+    const b=document.getElementById('pesoEqBadge');
+    if(Math.abs(total-100)<0.1){b.className='peso-total-badge ok';b.textContent='✅ 100%'}
+    else if(total<100){b.className='peso-total-badge warn';b.textContent=`⚠ Falta ${(100-total).toFixed(1)}%`}
+    else{b.className='peso-total-badge over';b.textContent=`✗ Excede ${(total-100).toFixed(1)}%`}
+  },
+
+  autoEqualizarEquipes(){
+    const inps=document.querySelectorAll('.peq-inp');
+    if(!inps.length)return;
+    const val=(100/inps.length);
+    inps.forEach(inp=>{inp.value=val.toFixed(1)});
+    UI.updatePesoEqTotal();
+    Toast.show(`${inps.length} equipes × ${val.toFixed(1)}%`,'success');
+  },
+
+  renderPesosVendedores(){
+    const g=['DIRETOR','GERENTE'].includes(State.user.role);
+    const teams=g?[...new Set(State.user.vendors.map(v=>v.team))]:[State.user.team];
+    const selEl=document.getElementById('pesosVendEquipeSel');
+    if(g&&teams.length>1){
+      const cur=State.pesosVendEquipeSel||teams[0];
+      selEl.innerHTML=teams.map(t=>`<label class="eq-check-lbl" style="font-size:11px;padding:4px 8px;"><input type="radio" name="pesosVendEqSel" value="${t}" ${t===cur?'checked':''} onchange="State.pesosVendEquipeSel=this.value;UI.renderPesosVendedoresTable()"> ${t}</label>`).join('');
+      if(!State.pesosVendEquipeSel)State.pesosVendEquipeSel=teams[0];
+    }else{
+      selEl.innerHTML='';
+      State.pesosVendEquipeSel=teams[0];
+    }
+    UI.renderPesosVendedoresTable();
+  },
+
+  renderPesosVendedoresTable(){
+    const eq=State.pesosVendEquipeSel||State.user.team;
+    const vends=State.user.vendors.filter(v=>v.team===eq);
+    let html='';let total=0;
+    vends.forEach(v=>{
+      const pv=State.dataPesosVendedores.find(x=>x.vendorId===v.code);
+      const peso=pv?pv.peso:0;
+      total+=peso;
+      html+=`<div class="peso-row"><span class="peso-name">${v.name} <span style="color:var(--text-muted);font-size:10px">#${v.code}</span></span><input type="number" class="peso-input pvend-inp" data-vid="${v.code}" data-vname="${v.name}" data-team="${eq}" value="${peso||''}" placeholder="0" step="0.1" min="0" max="100" oninput="UI.updatePesoVendTotal()"><span class="peso-pct-label">${peso.toFixed(1)}%</span><div class="peso-bar-wrap"><div class="peso-bar-fill" style="width:${Math.min(peso,100)}%;background:var(--success)"></div></div></div>`;
+    });
+    document.getElementById('pesosVendedoresRows').innerHTML=html||'<div style="color:var(--text-muted);padding:12px">Nenhum vendedor nesta equipe</div>';
+    UI.updatePesoVendBadge(total);
+  },
+
+  updatePesoVendTotal(){
+    let total=0;
+    document.querySelectorAll('.pvend-inp').forEach(inp=>{
+      const v=parseFloat(inp.value)||0;
+      total+=v;
+      const row=inp.closest('.peso-row');
+      row.querySelector('.peso-pct-label').textContent=v.toFixed(1)+'%';
+      row.querySelector('.peso-bar-fill').style.width=Math.min(v,100)+'%';
+    });
+    UI.updatePesoVendBadge(total);
+    UI.renderSimulacao();
+  },
+
+  updatePesoVendBadge(total){
+    const b=document.getElementById('pesoVendBadge');
+    if(Math.abs(total-100)<0.1){b.className='peso-total-badge ok';b.textContent='✅ 100%'}
+    else if(total<100){b.className='peso-total-badge warn';b.textContent=`⚠ Falta ${(100-total).toFixed(1)}%`}
+    else{b.className='peso-total-badge over';b.textContent=`✗ Excede ${(total-100).toFixed(1)}%`}
+  },
+
+  autoEqualizarVendedores(){
+    const inps=document.querySelectorAll('.pvend-inp');
+    if(!inps.length)return;
+    const val=(100/inps.length);
+    inps.forEach(inp=>{inp.value=val.toFixed(1)});
+    UI.updatePesoVendTotal();
+    Toast.show(`${inps.length} vendedores × ${val.toFixed(1)}%`,'success');
+  },
+
+  renderSimulacaoMeses(){
+    const sel=document.getElementById('simMes');
+    if(!sel.options.length){
+      sel.innerHTML=MESES_NOME.map((n,i)=>`<option value="${i+1}" ${i+1==parseInt(State.acompMes)?'selected':''}>${n}</option>`).join('');
+    }
+  },
+
+  renderSimulacao(){
+    const metaGlobal=parseMoney(document.getElementById('simMetaGlobal')?.value);
+    const c=document.getElementById('simTreeContainer');
+    if(!metaGlobal){c.innerHTML='<div style="color:var(--text-muted);font-size:12px;padding:12px">Informe a meta global para visualizar a simulação.</div>';return}
+    // Read equipe weights from inputs (live)
+    const eqPesos=[];
+    document.querySelectorAll('.peq-inp').forEach(inp=>{
+      eqPesos.push({equipe:inp.dataset.equipe,peso:parseFloat(inp.value)||0});
+    });
+    // If no inputs, use State
+    if(!eqPesos.length){
+      State.dataPesosEquipes.forEach(p=>eqPesos.push({equipe:p.equipe,peso:p.peso}));
+    }
+    let html=`<div class="sim-node level-0"><span>🏭 EMPRESA</span><span class="sim-val">${fMoney(metaGlobal)}</span></div>`;
+    eqPesos.forEach(ep=>{
+      const eqVal=metaGlobal*(ep.peso/100);
+      html+=`<div class="sim-node level-1"><span>🏢 ${ep.equipe} <span style="color:var(--text-muted);font-size:11px">(${ep.peso.toFixed(1)}%)</span></span><span class="sim-val" style="color:var(--success)">${fMoney(eqVal)}</span></div>`;
+      // Read vendedor weights from inputs if this equipe is selected
+      const vendPesos=[];
+      if(State.pesosVendEquipeSel===ep.equipe){
+        document.querySelectorAll('.pvend-inp').forEach(inp=>{
+          vendPesos.push({name:inp.dataset.vname,vid:inp.dataset.vid,peso:parseFloat(inp.value)||0});
+        });
+      }else{
+        State.dataPesosVendedores.filter(p=>p.equipe===ep.equipe).forEach(p=>{
+          vendPesos.push({name:p.vendorName,vid:p.vendorId,peso:p.peso});
+        });
+      }
+      vendPesos.forEach(vp=>{
+        const vVal=eqVal*(vp.peso/100);
+        html+=`<div class="sim-node level-2"><span>👤 ${vp.name} <span style="color:var(--text-muted);font-size:10px">(${vp.peso.toFixed(1)}%)</span></span><span class="sim-val" style="color:var(--warning)">${fMoney(vVal)}</span></div>`;
+      });
+    });
+    c.innerHTML=html;
+  },
+
+  calcularPorPesos(eq){
+    const pn=document.getElementById('painel-'+eq.replace(/ /g,'-'));
+    if(!pn)return;
+    const mg={Fat:parseMoney(pn.querySelector('.eq-fat')?.value),Pos:parseInt(pn.querySelector('.eq-pos')?.value||0),Cad:parseInt(pn.querySelector('.eq-cad')?.value||0),Sku:parseInt(pn.querySelector('.eq-sku')?.value||0)};
+    const vendPesos=State.dataPesosVendedores.filter(p=>p.equipe===eq);
+    if(!vendPesos.length){Toast.show('Nenhum peso configurado para vendedores desta equipe.','error');return}
+    const rows=pn.querySelectorAll('.vend-table tbody tr');
+    rows.forEach(tr=>{
+      const vid=tr.dataset.vid;
+      const vp=vendPesos.find(p=>p.vendorId===vid);
+      if(!vp)return;
+      const inps=tr.querySelectorAll('.vend-inp');
+      const pct=vp.peso/100;
+      inps[0].value=cleanMoney(Math.round(mg.Fat*pct*100)/100);
+      if(inps[0].classList.contains('money'))maskMoney(inps[0]);
+      inps[1].value=Math.round(mg.Pos*pct);
+      inps[2].value=Math.round(mg.Cad*pct);
+      inps[3].value=Math.round(mg.Sku*pct);
+    });
+    UI.calcRestanteEquipe(eq);
+    Toast.show(`Metas de ${eq} distribuídas por pesos!`,'success');
+  }
+});
+
+// ========== PESOS SAVE ACTIONS ==========
+Object.assign(App,{
+  async savePesosEquipes(){
+    const inps=document.querySelectorAll('.peq-inp');
+    if(!inps.length){Toast.show('Nenhuma equipe.','error');return}
+    const items=[];inps.forEach(inp=>{items.push({ano:State.acompAno,equipe:inp.dataset.equipe,peso:parseFloat(inp.value)||0})});
+    try{Toast.show('Salvando pesos...','info');await API.post('saveBatchPesosEquipes',{callerRole:State.user.role,items});Toast.show('Pesos das equipes salvos!','success');App.loadData(true)}catch(e){Toast.show('Erro: '+e.message,'error')}
+  },
+
+  async savePesosVendedores(){
+    const inps=document.querySelectorAll('.pvend-inp');
+    if(!inps.length){Toast.show('Nenhum vendedor.','error');return}
+    const items=[];inps.forEach(inp=>{items.push({ano:State.acompAno,equipe:inp.dataset.team,vendorId:inp.dataset.vid,vendorName:inp.dataset.vname,peso:parseFloat(inp.value)||0})});
+    try{Toast.show('Salvando pesos...','info');await API.post('saveBatchPesosVendedores',{callerRole:State.user.role,callerTeam:State.user.team,items});Toast.show('Pesos dos vendedores salvos!','success');App.loadData(true)}catch(e){Toast.show('Erro: '+e.message,'error')}
+  },
+
+  async aplicarPesosRateio(){
+    const metaGlobal=parseMoney(document.getElementById('simMetaGlobal')?.value);
+    const mes=parseInt(document.getElementById('simMes')?.value||State.acompMes);
+    if(!metaGlobal){Toast.show('Informe a meta global.','error');return}
+    // Gather equipe weights
+    const eqPesos=[];
+    document.querySelectorAll('.peq-inp').forEach(inp=>{eqPesos.push({equipe:inp.dataset.equipe,peso:parseFloat(inp.value)||0})});
+    if(!eqPesos.length){State.dataPesosEquipes.forEach(p=>eqPesos.push({equipe:p.equipe,peso:p.peso}))}
+    if(!eqPesos.length){Toast.show('Configure os pesos das equipes primeiro.','error');return}
+    const totalPct=eqPesos.reduce((a,e)=>a+e.peso,0);
+    if(Math.abs(totalPct-100)>1&&!confirm(`Pesos totalizam ${totalPct.toFixed(1)}% (não 100%). Continuar?`))return;
+    if(!confirm(`Aplicar metas do mês ${MESES_NOME[mes-1]} baseado em ${fMoney(metaGlobal)}?`))return;
+    Toast.show('Aplicando metas...','info');
+    try{
+      // Save equipe metas
+      const eqItems=eqPesos.map(ep=>({
+        ano:State.acompAno,mes,equipe:ep.equipe,
+        metaFat:Math.round(metaGlobal*(ep.peso/100)*100)/100,
+        metaPos:0,metaCad:0,metaSku:0
+      }));
+      await API.post('saveBatchMetaGlobal',{items:eqItems});
+      // Save vendor metas per equipe
+      for(const ep of eqPesos){
+        const eqVal=metaGlobal*(ep.peso/100);
+        const vendPesos=State.dataPesosVendedores.filter(p=>p.equipe===ep.equipe);
+        for(const vp of vendPesos){
+          const vVal=Math.round(eqVal*(vp.peso/100)*100)/100;
+          await API.post('saveMetaVendedor',{payload:{ano:State.acompAno,mes,equipe:ep.equipe,vendorId:vp.vendorId,vendorName:vp.vendorName,metaFat:vVal,metaPos:0,metaCad:0,metaSku:0}});
+        }
+      }
+      Toast.show(`Metas do mês ${MESES_NOME[mes-1]} aplicadas!`,'success');
+      App.loadData(true);
+    }catch(e){Toast.show('Erro: '+e.message,'error')}
+  }
+});
+
 // ========== SIDEBAR ==========
 function toggleSidebar(){
   const s=document.getElementById('sidebar'),b=document.getElementById('hamburgerBtn');
@@ -1156,7 +1459,7 @@ window.onload=()=>{App.init()};
 
     // SCROLLBARS: forçar visibilidade em páginas específicas se conteúdo excede
     const forceScrollbars = () => {
-      const pages = ['view-dashboard','view-acompanhamento','view-metaanual','view-rateio','view-calendario','view-equipe'];
+      const pages = ['view-dashboard','view-acompanhamento','view-metaanual','view-rateio','view-calendario','view-equipe','view-pesos'];
       pages.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
