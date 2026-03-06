@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="pt-BR">
   <head>
@@ -6,7 +7,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"
     />
-    <title>Ameripan | Cotação v24</title>
+    <title>Ameripan | Cotação v25</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1095,6 +1096,76 @@ tr.vr.drag-over {
         color: var(--or);
         font-size: 0.9rem;
       }
+
+      /* PROGRESS BAR - Enriquecimento */
+      .enrich-progress {
+        width: 100%;
+        height: 8px;
+        background: var(--bo);
+        border-radius: 99px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+      }
+      .enrich-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--or), #ffb347, var(--or));
+        background-size: 200% 100%;
+        border-radius: 99px;
+        transition: width 0.3s var(--ease);
+        animation: shimmer 2s linear infinite;
+      }
+      .enrich-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 0.45rem;
+        margin: 0.5rem 0;
+      }
+      .enrich-stat {
+        text-align: center;
+        padding: 0.45rem 0.3rem;
+        background: var(--bg);
+        border-radius: 8px;
+        border: 1px solid var(--bo);
+      }
+      .enrich-stat .es-val {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: var(--bl);
+        display: block;
+      }
+      .enrich-stat .es-lab {
+        font-size: 0.65rem;
+        color: var(--mu);
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+      .enrich-log {
+        max-height: 120px;
+        overflow-y: auto;
+        font-size: 0.72rem;
+        color: var(--mu);
+        background: #f8f9fc;
+        border: 1px solid var(--bo);
+        border-radius: 8px;
+        padding: 0.4rem 0.6rem;
+        margin-top: 0.4rem;
+        font-family: 'Nunito', sans-serif;
+      }
+      .enrich-log div {
+        padding: 2px 0;
+        border-bottom: 1px solid #eef1f6;
+      }
+      .enrich-log div:last-child { border-bottom: none; }
+      .enrich-btns {
+        display: flex;
+        gap: 0.45rem;
+        margin-top: 0.5rem;
+      }
+      .enrich-btns .btn {
+        flex: 1;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -1182,18 +1253,33 @@ tr.vr.drag-over {
           <span class="mval" id="cfg_rowh_v">14mm</span>
         </div>
 
-        <details style="margin-top:0.8rem;border:1.5px dashed var(--bo);border-radius:8px;padding:0.6rem 0.8rem">
+        <details style="margin-top:0.8rem;border:1.5px dashed var(--bo);border-radius:8px;padding:0.6rem 0.8rem" open>
           <summary style="font-size:0.8rem;font-weight:700;color:var(--mu);cursor:pointer">
             <i class="fa fa-wand-magic-sparkles" style="color:var(--or)"></i>
-            Auto-Enriquecimento de Imagens (avançado)
+            Auto-Enriquecimento de Imagens
           </summary>
           <p style="font-size:0.76rem;color:var(--mu);margin:0.5rem 0 0.4rem">
-            Varre o catálogo inteiro, busca imagens no GitHub/Site para produtos sem imagem na planilha e grava os links encontrados automaticamente na Col. C.
+            Varre o catálogo inteiro, busca imagens no GitHub e/ou Site Ameripan para produtos sem imagem na planilha, e grava os links encontrados automaticamente na Col. C.
           </p>
           <div id="enrichStatus" style="font-size:0.76rem;color:var(--bl);min-height:1.2rem;margin-bottom:0.4rem"></div>
-          <button class="btn se sm" id="btnEnrich" style="width:100%;justify-content:center">
-            <i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento
-          </button>
+          <div id="enrichProgressWrap" style="display:none">
+            <div class="enrich-progress"><div class="enrich-progress-bar" id="enrichBar" style="width:0%"></div></div>
+            <div class="enrich-stats">
+              <div class="enrich-stat"><span class="es-val" id="esScan">0</span><span class="es-lab">Varridos</span></div>
+              <div class="enrich-stat"><span class="es-val" id="esFound">0</span><span class="es-lab">Encontrados</span></div>
+              <div class="enrich-stat"><span class="es-val" id="esSaved">0</span><span class="es-lab">Salvos</span></div>
+              <div class="enrich-stat"><span class="es-val" id="esErr">0</span><span class="es-lab">Erros</span></div>
+            </div>
+          </div>
+          <div id="enrichLog" class="enrich-log" style="display:none"></div>
+          <div class="enrich-btns">
+            <button class="btn se sm" id="btnEnrich" title="Busca imagens no GitHub (mais rápido)">
+              <i class="fa fa-bolt"></i> GitHub + Site
+            </button>
+            <button class="btn pr sm" id="btnEnrichSite" title="Busca imagens exclusivamente no site ameripan.com.br">
+              <i class="fa fa-globe"></i> Scanear Site Ameripan
+            </button>
+          </div>
         </details>
 
         <div class="ma">
@@ -1701,40 +1787,75 @@ tr.vr.drag-over {
         }
       }
 
-      /* SCRAPER AMERIPAN */
+      /* SCRAPER AMERIPAN (com CORS proxy fallback) */
       async function imgFromScrape(sku) {
+        // Tenta múltiplas vias para contornar CORS
+        const searchUrl = `https://www.ameripan.com.br/buscar?q=${sku}`;
+        const proxies = [
+          (u) => u, // direto (funciona se mesmo domínio ou CORS habilitado)
+          (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+          (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        ];
+
+        for (const mkUrl of proxies) {
+          try {
+            const targetUrl = mkUrl(searchUrl);
+            const response = await fetch(targetUrl, {
+              signal: AbortSignal.timeout(10000),
+            });
+            if (!response.ok) continue;
+
+            const html = await response.text();
+            const result = _parseAmeripanHtml(html, sku);
+            if (result) return result;
+          } catch {
+            continue;
+          }
+        }
+        return null;
+      }
+
+      /* Parser do HTML do site Ameripan — reutilizável */
+      function _parseAmeripanHtml(html, sku) {
         try {
-          const url = `https://www.ameripan.com.br/buscar?q=${sku}`;
-          const response = await fetch(url, {
-            signal: AbortSignal.timeout(8000),
-          });
-          if (!response.ok) return null;
-
-          const html = await response.text();
           const doc = new DOMParser().parseFromString(html, "text/html");
-          const productDiv = doc.querySelector(
-            `.listagem-item .produto-sku.hide`,
-          );
-          if (!productDiv) return null;
+          // Tenta localizar produto pelo SKU exato
+          const skuEls = doc.querySelectorAll('.listagem-item .produto-sku');
+          let parentDiv = null;
+          for (const el of skuEls) {
+            const txt = el.textContent.trim();
+            if (txt === String(sku)) {
+              parentDiv = el.closest('.listagem-item');
+              break;
+            }
+          }
+          // Fallback: tenta seletor direto com hide
+          if (!parentDiv) {
+            const hiddenSku = doc.querySelector('.listagem-item .produto-sku.hide');
+            if (hiddenSku && hiddenSku.textContent.trim() === String(sku)) {
+              parentDiv = hiddenSku.closest('.listagem-item');
+            }
+          }
+          if (!parentDiv) return null;
 
-          const skuText = productDiv.textContent.trim();
-          if (skuText !== String(sku)) return null;
-
-          const parentDiv = productDiv.closest(".listagem-item");
-          const imgEl = parentDiv?.querySelector(".imagem-produto img");
+          const imgEl = parentDiv.querySelector('.imagem-produto img');
           if (!imgEl) return null;
 
-          let src =
-            imgEl.getAttribute("src") || imgEl.getAttribute("data-src") || "";
-          if (src.startsWith("//")) src = "https:" + src;
-          if (src.startsWith("/")) src = "https://www.ameripan.com.br" + src;
+          let src = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+          if (src.startsWith('//')) src = 'https:' + src;
+          if (src.startsWith('/')) src = 'https://www.ameripan.com.br' + src;
+          if (!src || src.length < 10) return null;
 
           // Nome do produto
-          const nameEl = parentDiv.querySelector(".nome-produto");
+          const nameEl = parentDiv.querySelector('.nome-produto');
           const name = nameEl ? nameEl.textContent.trim() : null;
 
-          return { url: src, name: name };
-        } catch (error) {
+          // Preço (bonus: captura se disponível)
+          const priceEl = parentDiv.querySelector('.preco-produto .atual');
+          const price = priceEl ? priceEl.textContent.trim() : null;
+
+          return { url: src, name, price };
+        } catch {
           return null;
         }
       }
@@ -2055,54 +2176,127 @@ tr.vr.drag-over {
 
 
       /* ══════════════════════════════════════════
-         AUTO-ENRIQUECIMENTO DE IMAGENS
+         AUTO-ENRIQUECIMENTO DE IMAGENS (v25)
       ══════════════════════════════════════════ */
-      $("btnEnrich").onclick = async () => {
+
+      /* ── Helpers de UI do enriquecimento ── */
+      function _enrichUI() {
+        return {
+          st:   $("enrichStatus"),
+          pw:   $("enrichProgressWrap"),
+          bar:  $("enrichBar"),
+          log:  $("enrichLog"),
+          scan: $("esScan"),
+          found:$("esFound"),
+          saved:$("esSaved"),
+          err:  $("esErr"),
+        };
+      }
+      function _enrichReset(ui) {
+        ui.pw.style.display = "block";
+        ui.log.style.display = "block";
+        ui.log.innerHTML = "";
+        ui.bar.style.width = "0%";
+        ui.scan.textContent = "0";
+        ui.found.textContent = "0";
+        ui.saved.textContent = "0";
+        ui.err.textContent = "0";
+      }
+      function _enrichLog(ui, icon, msg) {
+        const d = document.createElement("div");
+        d.innerHTML = `<i class="fa ${icon}" style="margin-right:4px;color:var(--or)"></i> ${msg}`;
+        ui.log.prepend(d);
+        // Limita log a 200 entradas
+        while (ui.log.children.length > 200) ui.log.lastChild.remove();
+      }
+
+      /* ── Engine genérico de enriquecimento ── */
+      async function _runEnrich(mode) {
         if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
-        const st = $("enrichStatus");
-        const btn = $("btnEnrich");
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Varrendo…';
+        const ui = _enrichUI();
+        const btnG = $("btnEnrich"), btnS = $("btnEnrichSite");
+        btnG.disabled = true; btnS.disabled = true;
+        const activeBtn = mode === "site" ? btnS : btnG;
+        const origHTML_G = btnG.innerHTML, origHTML_S = btnS.innerHTML;
+        activeBtn.innerHTML = `<i class="fa fa-circle-notch fa-spin"></i> Varrendo…`;
+
+        _enrichReset(ui);
 
         // Pega todos os itens do catálogo sem imgUrl
         const missing = S.cat.filter(it => !it.imgUrl);
         if (!missing.length) {
-          st.innerHTML = '<i class="fa fa-check" style="color:green"></i> Todos os itens já têm imagem na planilha!';
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+          ui.st.innerHTML = '<i class="fa fa-check" style="color:green"></i> Todos os itens já têm imagem na planilha!';
+          ui.pw.style.display = "none";
+          btnG.disabled = false; btnS.disabled = false;
+          btnG.innerHTML = origHTML_G; btnS.innerHTML = origHTML_S;
           return;
         }
 
-        st.textContent = `Varrendo ${missing.length} itens sem imagem…`;
-        const found = [];
+        const modeLabel = mode === "site" ? "Site Ameripan" : "GitHub + Site";
+        ui.st.textContent = `Varrendo ${missing.length} itens sem imagem via ${modeLabel}…`;
+        _enrichLog(ui, "fa-play", `Iniciando varredura de ${missing.length} itens via <strong>${modeLabel}</strong>`);
 
-        // Busca em lotes de 5 para não sobrecarregar
-        const BATCH = 5;
+        const found = [];
+        let scanned = 0;
+
+        // Busca em lotes
+        const BATCH = mode === "site" ? 3 : 5; // site é mais lento, lotes menores
         for (let i = 0; i < missing.length; i += BATCH) {
           const batch = missing.slice(i, i + BATCH);
           await Promise.all(batch.map(async (it) => {
-            // Tenta git (jpg + png) depois site — ignora sheet (não tem)
-            let url = await checkUrl(gitUrl(it.code));
-            if (!url) url = await checkUrl(gitUrlPng(it.code));
-            if (!url) {
+            let url = null;
+
+            if (mode === "site") {
+              // SOMENTE scraper Ameripan
               const r = await imgFromScrape(it.code);
-              if (r?.url) url = r.url;
+              if (r?.url) {
+                url = r.url;
+                _enrichLog(ui, "fa-check", `<strong>${it.code}</strong> — ${r.name || it.desc} ✅`);
+              } else {
+                _enrichLog(ui, "fa-minus", `<strong>${it.code}</strong> — não encontrado no site`);
+              }
+            } else {
+              // GitHub primeiro, depois site
+              url = await checkUrl(gitUrl(it.code));
+              if (!url) url = await checkUrl(gitUrlPng(it.code));
+              if (url) {
+                _enrichLog(ui, "fa-check", `<strong>${it.code}</strong> — GitHub ✅`);
+              } else {
+                const r = await imgFromScrape(it.code);
+                if (r?.url) {
+                  url = r.url;
+                  _enrichLog(ui, "fa-check", `<strong>${it.code}</strong> — Site Ameripan ✅`);
+                } else {
+                  _enrichLog(ui, "fa-minus", `<strong>${it.code}</strong> — nenhuma fonte`);
+                }
+              }
             }
+
+            scanned++;
             if (url) found.push({ code: it.code, url });
           }));
-          st.textContent = `Varrendo… ${Math.min(i + BATCH, missing.length)}/${missing.length} — ${found.length} imagens encontradas até agora`;
+
+          // Atualiza UI
+          const pct = Math.round((Math.min(i + BATCH, missing.length) / missing.length) * 100);
+          ui.bar.style.width = pct + "%";
+          ui.scan.textContent = Math.min(i + BATCH, missing.length);
+          ui.found.textContent = found.length;
+          ui.st.textContent = `Varrendo… ${Math.min(i + BATCH, missing.length)}/${missing.length} — ${found.length} encontradas`;
         }
 
         if (!found.length) {
-          st.innerHTML = '<i class="fa fa-times" style="color:var(--or)"></i> Nenhuma imagem nova encontrada nas fontes disponíveis.';
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+          ui.st.innerHTML = `<i class="fa fa-times" style="color:var(--or)"></i> Nenhuma imagem nova encontrada via ${modeLabel}.`;
+          _enrichLog(ui, "fa-circle-xmark", `Varredura concluída — 0 imagens encontradas.`);
+          ui.bar.style.width = "100%";
+          btnG.disabled = false; btnS.disabled = false;
+          btnG.innerHTML = origHTML_G; btnS.innerHTML = origHTML_S;
           return;
         }
 
-        st.textContent = `Gravando ${found.length} imagens na planilha…`;
+        // ── Fase 2: Gravar na planilha ──
+        ui.st.textContent = `Gravando ${found.length} imagens na planilha…`;
+        _enrichLog(ui, "fa-upload", `Gravando <strong>${found.length}</strong> imagens na planilha…`);
 
-        // Envia em lotes de 10 para o GAS
         let saved = 0, errors = 0;
         const GAS_BATCH = 10;
         for (let i = 0; i < found.length; i += GAS_BATCH) {
@@ -2115,21 +2309,35 @@ tr.vr.drag-over {
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ action: "setImg", codigo: code, img: url }),
               });
-              // no-cors = opaque; sem throw = assumimos sucesso
               const ci = S.cmap.get(code);
               if (ci) ci.imgUrl = url;
               imgCache.delete(code);
               saved++;
             } catch { errors++; }
           }));
-          st.textContent = `Gravando… ${Math.min(i + GAS_BATCH, found.length)}/${found.length}`;
+          ui.saved.textContent = saved;
+          ui.err.textContent = errors;
         }
 
-        st.innerHTML = `<i class="fa fa-check" style="color:green"></i> Concluído! <strong>${saved}</strong> imagens gravadas na planilha${errors ? ` (${errors} erros)` : ""}.`;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa fa-bolt"></i> Iniciar varredura e enriquecimento';
+        ui.bar.style.width = "100%";
+        ui.scan.textContent = missing.length;
+        ui.found.textContent = found.length;
+        ui.saved.textContent = saved;
+        ui.err.textContent = errors;
+
+        const statusIcon = errors ? "fa-exclamation-triangle" : "fa-check";
+        const statusColor = errors ? "var(--or)" : "green";
+        ui.st.innerHTML = `<i class="fa ${statusIcon}" style="color:${statusColor}"></i> Concluído! <strong>${saved}</strong> imagens gravadas na planilha${errors ? ` (${errors} erros)` : ""}.`;
+        _enrichLog(ui, "fa-flag-checkered", `✅ Concluído: ${saved} salvas, ${errors} erros, ${missing.length} varridos.`);
+
+        btnG.disabled = false; btnS.disabled = false;
+        btnG.innerHTML = origHTML_G; btnS.innerHTML = origHTML_S;
         if (saved > 0) { render(); toast(`✅ ${saved} imagens enriquecidas na planilha!`); }
-      };
+      }
+
+      /* ── Botões ── */
+      $("btnEnrich").onclick = () => _runEnrich("all");
+      $("btnEnrichSite").onclick = () => _runEnrich("site");
 
       function init() {
         loadCfg();
