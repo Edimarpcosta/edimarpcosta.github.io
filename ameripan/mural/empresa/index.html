@@ -843,7 +843,10 @@
             CATEGORIAS.forEach(cat => {
                 let count;
                 if (cat === 'Todos') count = allItems.length;
-                else if (cat === 'Últimos Lançamentos') count = launchProducts.length;
+                else if (cat === 'Últimos Lançamentos') {
+                    const topN = parseInt(document.getElementById('launch-count').value, 10);
+                    count = Math.min(topN, launchProducts.length);
+                }
                 else count = allItems.filter(i => i.categoria === cat).length;
                 
                 if (cat !== 'Todos' && cat !== 'Últimos Lançamentos' && count === 0) return;
@@ -1072,11 +1075,23 @@
                 // Sort by SKU numeric descending (highest = newest)
                 launchProducts.sort((a, b) => b.skuNum - a.skuNum);
                 
-                // Update tab count
-                renderTabs();
+                // Update tab count badge without rebuilding tabs (avoids flash)
+                updateLaunchTabCount();
             } catch (e) {
                 console.error('Erro ao carregar lançamentos:', e);
             }
+        }
+
+        function updateLaunchTabCount() {
+            const count = parseInt(document.getElementById('launch-count').value, 10);
+            const displayCount = Math.min(count, launchProducts.length);
+            // Find the launch tab and update its badge
+            document.querySelectorAll('.cat-tab').forEach(tab => {
+                if (tab.textContent.includes('Últimos Lançamentos')) {
+                    const badge = tab.querySelector('.tab-count');
+                    if (badge) badge.textContent = displayCount;
+                }
+            });
         }
 
         function toggleLaunchView(show) {
@@ -1096,6 +1111,9 @@
             const grid = document.getElementById('launch-grid');
             const count = parseInt(document.getElementById('launch-count').value, 10);
             const sliced = launchProducts.slice(0, count);
+            
+            // Update tab badge too
+            updateLaunchTabCount();
             
             if (sliced.length === 0) {
                 grid.innerHTML = '<div class="launch-loader"><i class="fas fa-box-open" style="font-size:2rem;opacity:0.15;margin-bottom:10px;display:block;"></i>Nenhum produto encontrado.</div>';
