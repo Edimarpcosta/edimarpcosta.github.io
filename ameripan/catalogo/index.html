@@ -764,10 +764,68 @@
             color: var(--text-secondary);
         }
 
+        
         .collection-item-actions {
             display: flex;
             gap: 10px;
         }
+
+        /* TABS CSS */
+        .tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+            scrollbar-width: thin;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 50px;
+            background-color: var(--bg-secondary);
+            color: var(--text-color);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: var(--card-shadow);
+        }
+
+        .tab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+        }
+
+        [data-theme="dark"] .tab-btn.active {
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+        }
+        
+        /* Ajuste do botão de link */
+        .buy-link-btn {
+            display: block;
+            text-align: center;
+            background-color: var(--primary-color);
+            color: white !important;
+            text-decoration: none;
+            padding: 8px 0;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .buy-link-btn:hover {
+            background-color: var(--secondary-color);
+        }
+
 
         .collection-action-btn {
             padding: 5px 10px;
@@ -1236,11 +1294,26 @@
             }
             
             .products {
-                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+                gap: 10px;
             }
             
             .product-img-container {
-                height: 130px;
+                height: 100px;
+            }
+            .product-name {
+                font-size: 0.85rem;
+                margin: 5px 0;
+            }
+            .product-info {
+                padding: 10px;
+            }
+            .qty-btn {
+                width: 25px;
+                height: 25px;
+            }
+            .qty-input {
+                width: 35px;
             }
             
             .collection-item {
@@ -1766,6 +1839,11 @@ categorySwipeStyles.textContent = `
             </div>
         </div>
 
+        
+        <div class="tabs-container" id="main-tabs" style="display: none;">
+            <!-- Tabs will be populated here -->
+        </div>
+        
         <div class="filters">
             <div class="filters-main">
                 <div class="search-container">
@@ -2044,8 +2122,8 @@ const GOOGLE_SHEETS_CONFIG = {
 // Variáveis para controle de carregamento
 let productData = [];
 let allProducts = [];
-let visibleProducts = 40;  // Aumento do valor inicial para mais produtos na primeira carga
-const incrementAmount = 30; // Aumentado para carregar mais produtos por vez
+let visibleProducts = 99999;  // Carregar TODOS os produtos de uma vez
+const incrementAmount = 99999; // Carregar todos
 let isLoading = false;
 let scrollThreshold = 200; // Distância em pixels do final da página para começar a carregar mais
 
@@ -2053,9 +2131,11 @@ let scrollThreshold = 200; // Distância em pixels do final da página para come
 
 let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
-// Coleções
+// Coleções e Favoritos
 let collections = JSON.parse(localStorage.getItem('collections')) || [];
 let selectedProducts = JSON.parse(localStorage.getItem('selectedProducts')) || [];
+let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+let showOnlyFavorites = false;
 
 // Configuração do modo vendedor/cliente
 let inVendorMode = localStorage.getItem('vendorMode') === 'true' || false;
@@ -2180,50 +2260,352 @@ function toggleAdvancedFilters() {
 }
 
 // Função para buscar dados do Google Sheets
+// Multi-tab storage
+let tabsData = {};
+let activeTab = 'produtos';
+
+
+// --- Sistema de Cache Local com IndexedDB ---
+const AppDB = {
+    dbName: 'AmeripanCatalogDB',
+    storeName: 'sheetsCache',
+    version: 1,
+    db: null,
+    
+    init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.version);
+            
+            request.onupgradeneeded = (event) => {
+                this.db = event.target.result;
+                if (!this.db.objectStoreNames.contains(this.storeName)) {
+                    this.db.createObjectStore(this.storeName);
+                }
+            };
+            
+            request.onsuccess = (event) => {
+                this.db = event.target.result;
+                resolve();
+            };
+            
+            request.onerror = (event) => {
+                console.error("Erro ao abrir IndexedDB", event);
+                reject(event.target.error);
+            };
+        });
+    },
+    
+    async get(key) {
+        if (!this.db) await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(this.storeName, 'readonly');
+            const store = tx.objectStore(this.storeName);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+    
+    async set(key, value) {
+        if (!this.db) await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(this.storeName, 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            const request = store.put(value, key);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+};
+// ---------------------------------------------
+
 async function fetchGoogleSheetsData() {
     try {
-        // Mostrar loader inicial
         document.getElementById('initial-loader').style.display = 'flex';
+        const { spreadsheetId, apiKey } = GOOGLE_SHEETS_CONFIG;
         
-        const { spreadsheetId, apiKey, range } = GOOGLE_SHEETS_CONFIG;
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+        let existingSheets = [];
+        try {
+            const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?key=${apiKey}`);
+            if (metaRes.ok) {
+                const metaData = await metaRes.json();
+                existingSheets = metaData.sheets.map(s => s.properties.title.toLowerCase().trim());
+                console.log("Abas encontradas na planilha:", existingSheets);
+            }
+        } catch (e) {
+            console.warn("Não foi possível carregar os metadados da planilha.");
+        }
+
+        // Função auxiliar para buscar uma aba específica
+        async function fetchSheet(sheetName) {
+            if (existingSheets.length > 0 && !existingSheets.includes(sheetName.toLowerCase().trim())) {
+                console.log(`Aba '${sheetName}' não existe na planilha. Ignorando erro 400.`);
+                return null;
+            }
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}?key=${apiKey}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return null;
+                const data = await response.json();
+                return data.values;
+            } catch (e) {
+                console.warn(`Erro na requisição da aba ${sheetName}.`);
+                return null;
+            }
+        }
+
+        // Tentar carregar configurações do cache
+        let settingsValues = null;
+        let cachedData = null;
         
-        console.log("Buscando dados do Google Sheets:", url);
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Erro ao buscar dados do Google Sheets: ${response.status} ${response.statusText}`);
+        try {
+            cachedData = await AppDB.get('catalogData');
+            if (cachedData && cachedData.timestamp && (Date.now() - cachedData.timestamp < 1000 * 60 * 30)) {
+                // Cache válido (< 30 min)
+                console.log("Recuperando dados do IndexedDB Local...");
+                tabsData = cachedData.tabsData;
+                activeTab = cachedData.activeTab;
+                tabOrder = cachedData.tabOrder;
+                
+                renderTabsUI(tabOrder);
+                switchTab(activeTab);
+                document.getElementById('initial-loader').style.display = 'none';
+                
+                // Atualizar em background sem bloquear
+                fetchDataFromGoogleAndSave(existingSheets, spreadsheetId, apiKey, true);
+                return; // Usamos o cache
+            }
+        } catch (err) {
+            console.warn("Erro ao acessar cache local", err);
         }
         
-        const data = await response.json();
-        console.log("Dados recebidos do Google Sheets:", data);
-        
-        // Processar os dados da planilha
-        processGoogleSheetsData(data.values);
+        // Se não tem cache ou expirou, buscar configs
+        await fetchDataFromGoogleAndSave(existingSheets, spreadsheetId, apiKey, false);
     } catch (error) {
-        console.error("Erro ao carregar dados do Google Sheets:", error);
+        console.error("Erro central ao carregar:", error);
+        fallbackLoad(error);
+    }
+}
+
+async function fetchDataFromGoogleAndSave(existingSheets, spreadsheetId, apiKey, isBackground = false) {
+    if (!isBackground) document.getElementById('initial-loader').style.display = 'flex';
+    
+    async function fetchSheet(sheetName) {
+        if (existingSheets.length > 0 && !existingSheets.includes(sheetName.toLowerCase().trim())) return null;
+        try {
+            const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}?key=${apiKey}`);
+            if (!response.ok) return null;
+            return (await response.json()).values;
+        } catch (e) { return null; }
+    }
+    
+    try {
+        let settingsValues = await fetchSheet('settings');
+        let tabOrder = ['lançamentos', 'ofertas', 'destaques', 'produtos'];
         
-        // Tentar carregar dados de exemplo como fallback
+        if (settingsValues && settingsValues.length > 1) {
+            const stHeaders = settingsValues[0].map(h => h.toString().toLowerCase().trim());
+            const chaveIdx = stHeaders.indexOf('chave');
+            const valorIdx = stHeaders.indexOf('valor');
+            if (chaveIdx !== -1 && valorIdx !== -1) {
+                for (let i = 1; i < settingsValues.length; i++) {
+                    const row = settingsValues[i];
+                    if (row[chaveIdx] && row[chaveIdx].toString().toLowerCase() === 'ordem_abas') {
+                        if (row[valorIdx]) {
+                            tabOrder = row[valorIdx].toString().split(',').map(s => s.trim().toLowerCase());
+                            console.log("Ordem de abas atualizada via settings:", tabOrder);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Buscar dados das abas
+        const sheetsToFetch = [...new Set([...tabOrder, 'produtos'])]; // Garantir que produtos sempre tente carregar
+        const results = await Promise.all(sheetsToFetch.map(sheet => fetchSheet(sheet)));
+        
+        let anyDataLoaded = false;
+        
+        sheetsToFetch.forEach((sheet, idx) => {
+            const values = results[idx];
+            if (values && values.length > 1) {
+                tabsData[sheet] = processSheetDataToArray(values);
+                if (tabsData[sheet].length > 0) {
+                    anyDataLoaded = true;
+                }
+            } else {
+                tabsData[sheet] = [];
+            }
+        });
+
+        if (!anyDataLoaded) {
+            throw new Error("Nenhum dado válido encontrado nas abas da planilha.");
+        }
+
+        // Determinar a aba inicial (primeira da ordem que tem dados)
+        activeTab = tabOrder.find(t => tabsData[t] && tabsData[t].length > 0) || 'produtos';
+        
+        // Renderizar abas UI
+        renderTabsUI(tabOrder);
+        
+        // Salvar no IndexedDB
+        try {
+            await AppDB.set('catalogData', {
+                timestamp: Date.now(),
+                tabsData: tabsData,
+                activeTab: activeTab,
+                tabOrder: tabOrder
+            });
+            console.log("Dados salvos no cache local.");
+        } catch (e) { console.warn("Erro salvando cache", e); }
+
+        if (!isBackground) {
+            renderTabsUI(tabOrder);
+            switchTab(activeTab);
+            document.getElementById('initial-loader').style.display = 'none';
+        }
+        
+    } catch (error) {
+        if(!isBackground) throw error;
+    }
+}
+
+function fallbackLoad(error) {
+        console.error("Fallback ativado:", error);
+        // Fallback original
         try {
             console.log("Tentando carregar dados de exemplo");
             const exampleData = generateExampleData();
             parseExampleData(exampleData);
         } catch (fallbackError) {
-            console.error("Erro ao gerar dados de exemplo:", fallbackError);
             document.getElementById('initial-loader').style.display = 'none';
             document.getElementById('product-list').innerHTML = `
                 <div class="no-products">
                     <p>Erro ao carregar os produtos: ${error.message}</p>
-                    <p>Verifique se a planilha do Google Sheets está acessível ou carregue um arquivo manualmente.</p>
-                    <input type="file" id="csv-file-input" accept=".csv" style="margin-top: 20px;" 
-                           onchange="handleFileUpload(event)" />
+                    <p>Verifique se a planilha do Google Sheets está acessível.</p>
                 </div>
             `;
         }
     }
+function renderTabsUI(tabOrder) {
+    const tabsContainer = document.getElementById('main-tabs');
+    tabsContainer.innerHTML = '';
+    
+    let hasVisibleTabs = false;
+    
+    tabOrder.forEach(tabName => {
+        if (tabsData[tabName] && tabsData[tabName].length > 0) {
+            hasVisibleTabs = true;
+            const btn = document.createElement('button');
+            btn.className = `tab-btn ${tabName === activeTab ? 'active' : ''}`;
+            btn.textContent = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+            btn.onclick = () => switchTab(tabName);
+            tabsContainer.appendChild(btn);
+        }
+    });
+
+    if (hasVisibleTabs) {
+        tabsContainer.style.display = 'flex';
+    }
 }
 
-// Função para processar os dados recebidos do Google Sheets - versão completa e atualizada
+function switchTab(tabName) {
+    if (!tabsData[tabName] || tabsData[tabName].length === 0) return;
+    
+    activeTab = tabName;
+    
+    // Atualiza botões
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.textContent.toLowerCase() === tabName) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Atualiza váriavel global
+    allProducts = tabsData[tabName];
+    
+    // Reseta filtros
+    document.getElementById("search").value = "";
+    document.getElementById("category").value = "";
+    document.getElementById("package-size").value = "";
+    
+    // Repreencher categorias e exibir
+    populateCategories();
+    displayProducts();
+}
+
+function processSheetDataToArray(values) {
+    const headers = values[0].map(h => h.toString().toLowerCase().trim());
+    const rowIdIndex = headers.indexOf("rowid");
+    const categoriaIndex = headers.indexOf("categoria");
+    const skuIndex = headers.indexOf("sku");
+    const produtoIndex = headers.indexOf("produto");
+    const imgIndex = headers.indexOf("img");
+    const linkIndex = headers.indexOf("link");
+    
+    // Apenas sku é obrigatório — categoria e produto são opcionais
+    if (skuIndex === -1) {
+        console.warn("Coluna obrigatória (sku) não encontrada.", headers);
+        return [];
+    }
+    
+    const tempProducts = [];
+    const processedSkuCategoryPairs = new Set();
+    
+    for (let i = 1; i < values.length; i++) {
+        try {
+            const row = values[i];
+            if (!row || row.length === 0) continue;
+            const rowid = rowIdIndex !== -1 && row[rowIdIndex] ? row[rowIdIndex].toString() : i.toString();
+            const categoria = (categoriaIndex !== -1 && row[categoriaIndex] && row[categoriaIndex].toString().trim()) ? row[categoriaIndex].toString().trim() : "Sem Categoria";
+            const sku = skuIndex !== -1 && row[skuIndex] ? row[skuIndex].toString().trim() : "";
+            const produto = produtoIndex !== -1 && row[produtoIndex] ? row[produtoIndex].toString().trim() : "";
+            const link = linkIndex !== -1 && row[linkIndex] ? row[linkIndex].toString().trim() : "";
+            
+            let img = "";
+            if (imgIndex !== -1 && row[imgIndex]) {
+                img = row[imgIndex].toString().trim();
+                if (img) img = validateImageUrl(img);
+            }
+            if (!img || img.trim() === '') {
+                img = "";
+            }
+            
+            // Apenas sku é obrigatório
+            if (!sku) continue;
+            
+            const nomeProduto = produto || `Produto ${sku}`;
+            const skuCategoryKey = `${sku}-${categoria}`;
+            if (!processedSkuCategoryPairs.has(skuCategoryKey)) {
+                processedSkuCategoryPairs.add(skuCategoryKey);
+                let packageSize = extractPackageSize(nomeProduto);
+                
+                tempProducts.push({ 
+                    rowid, 
+                    categoria, 
+                    sku,
+                    produto: nomeProduto,
+                    img, 
+                    link,
+                    packageSize,
+                    price: ''
+                });
+            }
+        } catch (e) { console.warn('Erro processando linha', i, e); }
+    }
+    
+    // "Sem Categoria" vai ao final da ordenação
+    tempProducts.sort((a, b) => {
+        if (a.categoria === 'Sem Categoria' && b.categoria !== 'Sem Categoria') return 1;
+        if (b.categoria === 'Sem Categoria' && a.categoria !== 'Sem Categoria') return -1;
+        if (a.categoria !== b.categoria) return a.categoria.localeCompare(b.categoria);
+        return a.produto.localeCompare(b.produto);
+    });
+    
+    return tempProducts;
+}
 function processGoogleSheetsData(values) {
     try {
         if (!values || values.length <= 1) {
@@ -2238,22 +2620,18 @@ function processGoogleSheetsData(values) {
         const headers = values[0];
         console.log("Cabeçalhos encontrados:", headers);
         
-        // Encontrar os índices das colunas necessárias
-        const rowIdIndex = headers.indexOf("rowid");
-        const categoriaIndex = headers.indexOf("categoria");
-        const skuIndex = headers.indexOf("sku");
-        const marcaIndex = headers.indexOf("marca");
-        const imgIndex = headers.indexOf("img");
+        // Encontrar os índices das colunas (case insensitive)
+        const headersLower = headers.map(h => h.toString().toLowerCase().trim());
+        const rowIdIndex = headersLower.indexOf("rowid");
+        const categoriaIndex = headersLower.indexOf("categoria");
+        const skuIndex = headersLower.indexOf("sku");
+        const produtoIndex = headersLower.indexOf("produto");
+        const imgIndex = headersLower.indexOf("img");
         
-        // Verificar se todas as colunas necessárias foram encontradas
-        if (categoriaIndex === -1 || skuIndex === -1 || marcaIndex === -1) {
-            console.error("Colunas necessárias não encontradas na planilha.", {
-                categoria: categoriaIndex !== -1,
-                sku: skuIndex !== -1,
-                marca: marcaIndex !== -1
-            });
-            
-            showNotification("Estrutura da planilha incorreta. Verifique se existem as colunas: categoria, sku, marca", "error");
+        // Apenas sku é obrigatório
+        if (skuIndex === -1) {
+            console.error("Coluna obrigatória (sku) não encontrada na planilha.");
+            showNotification("Estrutura da planilha incorreta. Verifique se existe a coluna: sku", "error");
             return;
         }
         
@@ -2273,30 +2651,26 @@ function processGoogleSheetsData(values) {
                 
                 // Extrair os valores da linha (com validação)
                 const rowid = rowIdIndex !== -1 && row[rowIdIndex] ? row[rowIdIndex].toString() : i.toString();
-                const categoria = categoriaIndex !== -1 && row[categoriaIndex] ? row[categoriaIndex].toString().trim() : "";
+                const categoria = (categoriaIndex !== -1 && row[categoriaIndex] && row[categoriaIndex].toString().trim()) ? row[categoriaIndex].toString().trim() : "Sem Categoria";
                 const sku = skuIndex !== -1 && row[skuIndex] ? row[skuIndex].toString().trim() : "";
-                const marca = marcaIndex !== -1 && row[marcaIndex] ? row[marcaIndex].toString().trim() : "";
+                const produto = produtoIndex !== -1 && row[produtoIndex] ? row[produtoIndex].toString().trim() : "";
                 
                 // Processar URL da imagem com validação
                 let img = "";
                 if (imgIndex !== -1 && row[imgIndex]) {
                     img = row[imgIndex].toString().trim();
-                    // Validar e corrigir URL de imagem
-                    img = validateImageUrl(img);
-                    
-                    // Registrar problema se a URL original estava vazia ou foi substituída por um placeholder
-                    if (!row[imgIndex] || row[imgIndex].toString().trim() === "" || img.includes("placeholder.com")) {
+                    if (img) img = validateImageUrl(img);
+                    if (!img || img.includes("placeholder.com")) {
                         processedRows.imageIssues++;
                     }
                 } else {
-                    // Sem URL de imagem fornecida
-                    img = `https://via.placeholder.com/300x300?text=${encodeURIComponent(`Produto ${sku}`)}`;
+                    img = "";
                     processedRows.imageIssues++;
                 }
                 
-                // Pular linhas sem dados essenciais
-                if (!categoria || !sku || !marca) {
-                    console.warn(`Linha ${i+1} ignorada por falta de dados essenciais:`, { categoria, sku, marca });
+                // Pular linhas sem sku (único campo obrigatório)
+                if (!sku) {
+                    console.warn(`Linha ${i+1} ignorada - sem SKU`);
                     processedRows.invalid++;
                     continue;
                 }
@@ -2309,18 +2683,19 @@ function processGoogleSheetsData(values) {
                     // Marcar esta combinação como processada
                     processedSkuCategoryPairs.add(skuCategoryKey);
                     
-                    // Extrair informação de tamanho da embalagem (se existir)
-                    let packageSize = extractPackageSize(marca);
+                    // Nome do produto vem de 'produto' (coluna D)
+                    const nomeProduto = produto || `Produto ${sku}`;
+                    let packageSize = extractPackageSize(nomeProduto);
                     
                     // Adicionar o produto
                     tempProducts.push({ 
                         rowid, 
                         categoria, 
-                        sku, 
-                        marca, 
+                        sku,
+                        produto: nomeProduto,
                         img, 
                         packageSize,
-                        price: '' // Campo para preço no modo vendedor
+                        price: ''
                     });
                     
                     processedRows.valid++;
@@ -2341,11 +2716,14 @@ function processGoogleSheetsData(values) {
         allProducts = tempProducts;
         
         // Ordenar produtos por categoria e nome
+        // "Sem Categoria" vai ao final da ordenação
         allProducts.sort((a, b) => {
+            if (a.categoria === 'Sem Categoria' && b.categoria !== 'Sem Categoria') return 1;
+            if (b.categoria === 'Sem Categoria' && a.categoria !== 'Sem Categoria') return -1;
             if (a.categoria !== b.categoria) {
                 return a.categoria.localeCompare(b.categoria);
             }
-            return a.marca.localeCompare(b.marca);
+            return (a.produto || '').localeCompare(b.produto || '');
         });
         
         // Ocultar loader inicial
@@ -2438,7 +2816,7 @@ function displayProducts(filter = "", category = "", sort = "", packageSize = ""
     
     // Resetar variáveis de controle quando mudamos os filtros
     if (filter || category || sort || packageSize) {
-        visibleProducts = 40; // Voltar ao valor inicial ao filtrar
+        visibleProducts = 99999; // Carregar todos ao filtrar
         window.preloadedElements = {}; // Limpar cache de elementos
     }
     
@@ -2451,10 +2829,13 @@ function displayProducts(filter = "", category = "", sort = "", packageSize = ""
 
         // Filtro por texto (nome ou SKU) - agora suporta múltiplos termos
         const textMatch = filterTerms.length === 0 || 
-            filterTerms.some(term => 
-                p.marca.toLowerCase().includes(term) || 
-                p.sku.toLowerCase().includes(term)
-            );
+            filterTerms.some(term => {
+                const words = term.split(' ').filter(w => w.trim().length > 0);
+                return words.every(word => 
+                    (p.produto || '').toLowerCase().includes(word) || 
+                    p.sku.toLowerCase().includes(word)
+                );
+            });
         
         // Filtro por categoria
         const categoryMatch = !category || p.categoria === category;
@@ -2466,27 +2847,32 @@ function displayProducts(filter = "", category = "", sort = "", packageSize = ""
         // Filtro de coleção ativa
         const collectionMatch = !activeCollectionFilter || 
             activeCollectionFilter.skus.includes(p.sku);
+            
+        // Filtro de Favoritos
+        const favoriteMatch = !showOnlyFavorites || favorites.includes(p.sku);
         
-        return textMatch && categoryMatch && packageMatch && collectionMatch;
+        return textMatch && categoryMatch && packageMatch && collectionMatch && favoriteMatch;
     });
     
     // Aplicar ordenação
     if (sort) {
         productData.sort((a, b) => {
             if (sort === 'asc') {
-                return a.marca.localeCompare(b.marca);
+                return (a.produto || '').localeCompare(b.produto || '');
             } else if (sort === 'desc') {
-                return b.marca.localeCompare(a.marca);
+                return (b.produto || '').localeCompare(a.produto || '');
             }
             return 0;
         });
     } else {
-        // Ordenação padrão: por categoria depois por nome
+        // Ordenação padrão: por categoria depois por nome (Sem Categoria ao final)
         productData.sort((a, b) => {
+            if (a.categoria === 'Sem Categoria' && b.categoria !== 'Sem Categoria') return 1;
+            if (b.categoria === 'Sem Categoria' && a.categoria !== 'Sem Categoria') return -1;
             if (a.categoria !== b.categoria) {
                 return a.categoria.localeCompare(b.categoria);
             }
-            return a.marca.localeCompare(b.marca);
+            return (a.produto || '').localeCompare(b.produto || '');
         });
     }
     
@@ -2632,7 +3018,7 @@ function createProductElement(p) {
     let imgSrc = p.img || '';
     // Garantir que a URL seja válida (não vazia e tenha um formato de URL)
     if (!imgSrc || imgSrc.trim() === '') {
-        imgSrc = "https://via.placeholder.com/300x300?text=Produto+Indisponível";
+        imgSrc = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Crect width='300' height='300' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23999'%3ESem Imagem%3C/text%3E%3C/svg%3E";
     }
     
     const imgHighRes = imgSrc.includes('300x300') ? imgSrc.replace('300x300', '2500x2500') : imgSrc;
@@ -2641,7 +3027,7 @@ function createProductElement(p) {
     let selectionButton = '';
     if (inVendorMode) {
         selectionButton = `
-            <div class="product-select" onclick="toggleProductSelection('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}', '${imgSrc}')">
+            <div class="product-select" onclick="toggleProductSelection('${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}', '${p.categoria}', '${imgSrc}')">
                 ${isSelected ? '<i class="fas fa-check"></i>' : ''}
             </div>
         `;
@@ -2651,21 +3037,25 @@ function createProductElement(p) {
     // Removido o atributo loading="lazy" para compatibilidade
     let productContent = `
         <div class="product-img-container">
-            <img src="${imgSrc}" alt="${p.marca}" 
-                 onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')"
+            <img src="${imgSrc}" alt="${p.produto || ''}" 
+                 onclick="openImageModal('${imgHighRes}', '${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}')"
                  onerror="handleImageError(this, '${p.sku}')">
             ${selectionButton}
-            <div class="product-actions">
-                <div class="product-action-btn" onclick="openImageModal('${imgHighRes}', '${p.sku}', '${p.marca.replace(/'/g, "\\'")}')">
+            <div class="product-actions" style="flex-direction: column;">
+                <div class="product-action-btn" onclick="openImageModal('${imgHighRes}', '${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}')">
                     <i class="fas fa-search-plus"></i>
+                </div>
+                <div class="product-action-btn" id="fav-btn-${p.sku}" onclick="toggleFavorite('${p.sku}')" style="margin-top:5px;">
+                    ${typeof favorites !== 'undefined' && favorites.includes(p.sku) ? '<i class="fas fa-heart" style="color:red;"></i>' : '<i class="far fa-heart"></i>'}
                 </div>
             </div>
         </div>
         <div class="product-info">
             <span class="product-sku">${p.sku}</span>
-            <h3 class="product-name">${p.marca}</h3>
+            <h3 class="product-name">${p.produto || 'Produto sem nome'}</h3>
             <span class="product-category">${p.categoria}</span>
             ${p.packageSize ? `<span class="product-package">${p.packageSize}</span>` : ''}
+            ${p.link ? `<a href="${p.link}" target="_blank" class="buy-link-btn">Acessar Link</a>` : ''}
     `;
     
     // Adicionar campo de preço no modo vendedor para produtos selecionados
@@ -2692,7 +3082,7 @@ function createProductElement(p) {
                 </div>
                 <button class="add-to-cart ${inCart ? 'in-cart' : ''}" 
                         id="cart-btn-${p.sku}" 
-                        onclick="toggleCart('${p.sku}', '${p.marca.replace(/'/g, "\\'")}', '${p.categoria}')">
+                        onclick="toggleCart('${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}', '${p.categoria}')">
                     ${inCart ? '<i class="fas fa-check"></i>' : '<i class="fas fa-cart-plus"></i>'}
                 </button>
             </div>
@@ -2896,6 +3286,52 @@ function openImageModal(imgSrc, sku, name) {
     openModal('imageModal');
 }
 
+
+// Novas Funções (Favoritos e Visualização)
+function toggleListView() {
+    const productList = document.getElementById('product-list');
+    productList.classList.toggle('list-view');
+    const isList = productList.classList.contains('list-view');
+    document.getElementById('list-view-text').innerText = isList ? 'Grid' : 'Lista';
+    document.querySelector('button[onclick="toggleListView()"] i').className = isList ? 'fas fa-th' : 'fas fa-list';
+}
+
+function toggleFavorite(sku) {
+    const index = favorites.indexOf(sku);
+    if (index === -1) {
+        favorites.push(sku);
+    } else {
+        favorites.splice(index, 1);
+    }
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    
+    // Atualizar icone
+    const btn = document.getElementById(`fav-btn-${sku}`);
+    if (btn) {
+        btn.innerHTML = index === -1 ? '<i class="fas fa-heart" style="color:red;"></i>' : '<i class="far fa-heart"></i>';
+    }
+    
+    // Se estiver filtrando apenas favoritos, atualizar a tela
+    if (showOnlyFavorites) {
+        debouncedApplyFilters();
+    }
+}
+
+function toggleFavoritesFilter() {
+    showOnlyFavorites = !showOnlyFavorites;
+    const btn = document.getElementById('fav-filter-btn');
+    if (showOnlyFavorites) {
+        btn.classList.add('active');
+        btn.style.backgroundColor = 'var(--primary-color)';
+        btn.style.color = 'white';
+    } else {
+        btn.classList.remove('active');
+        btn.style.backgroundColor = 'var(--bg-secondary)';
+        btn.style.color = 'var(--primary-color)';
+    }
+    debouncedApplyFilters();
+}
+
 // Funções para controle de carrinho
 function incrementQuantity(sku) {
     const inputElement = document.getElementById(`qty-${sku}`);
@@ -3082,6 +3518,21 @@ function openCartModal() {
     openModal('cartModal');
 }
 
+// Função auxiliar para resolver o nome do produto pelo SKU
+function resolveProductName(sku, fallbackName) {
+    if (fallbackName && fallbackName !== 'undefined') return fallbackName;
+    // Buscar em allProducts (aba ativa) e em tabsData (todas as abas)
+    const fromAll = allProducts.find(p => p.sku === sku);
+    if (fromAll) return fromAll.produto || `Produto ${sku}`;
+    if (typeof tabsData !== 'undefined') {
+        for (const tabName in tabsData) {
+            const found = tabsData[tabName].find(p => p.sku === sku);
+            if (found) return found.produto || `Produto ${sku}`;
+        }
+    }
+    return `Produto ${sku}`;
+}
+
 function renderCartItems() {
     const cartItemsContainer = document.getElementById('cart-items');
     
@@ -3093,15 +3544,21 @@ function renderCartItems() {
     let html = '';
     
     cart.forEach(item => {
+        const displayName = resolveProductName(item.sku, item.name);
+        // Atualizar o nome no cart se estava undefined
+        if (!item.name || item.name === 'undefined') {
+            item.name = displayName;
+            saveCart();
+        }
         html += `
             <div class="cart-item" data-sku="${item.sku}">
                 <div class="cart-item-info">
-                    <div class="cart-item-name">${item.name}</div>
+                    <div class="cart-item-name">${displayName}</div>
                     <div class="cart-item-sku">Código: ${item.sku}</div>
                 </div>
                 <div class="cart-item-qty">
                     <button class="qty-btn" onclick="decrementCartItem('${item.sku}')">-</button>
-                    <input type="number" class="qty-input" value="${item.quantity}" min="1" max="999" readonly>
+                    <input type="number" class="qty-input" value="${item.quantity}" min="1" max="999" onchange="updateCartItemQuantity('${item.sku}', parseInt(this.value) || 1); renderCartItems();">
                     <button class="qty-btn" onclick="incrementCartItem('${item.sku}')">+</button>
                     <button class="qty-btn" onclick="removeFromCart('${item.sku}')" style="margin-left:5px">
                         <i class="fas fa-trash"></i>
@@ -3167,7 +3624,8 @@ function sendToWhatsApp() {
     let message = "Olá! Gostaria de fazer um pedido:\n\n";
     
     cart.forEach(item => {
-        message += `cod ${item.sku} ${item.quantity}und ${item.name}\n`;
+        const displayName = resolveProductName(item.sku, item.name);
+        message += `cod ${item.sku} ${item.quantity}und ${displayName}\n`;
         message += "-------------\n";
     });
     
@@ -3279,7 +3737,7 @@ function toggleCategorySelection(category) {
         productsInCategory.forEach(p => {
             const isSelected = selectedProducts.some(item => item.sku === p.sku);
             if (isSelected) {
-                toggleProductSelection(p.sku, p.marca, p.categoria, p.img);
+                toggleProductSelection(p.sku, p.produto || '', p.categoria, p.img);
             }
         });
     } else {
@@ -3287,7 +3745,7 @@ function toggleCategorySelection(category) {
         productsInCategory.forEach(p => {
             const isSelected = selectedProducts.some(item => item.sku === p.sku);
             if (!isSelected) {
-                toggleProductSelection(p.sku, p.marca, p.categoria, p.img);
+                toggleProductSelection(p.sku, p.produto || '', p.categoria, p.img);
             }
         });
     }
@@ -5283,22 +5741,22 @@ function scrollToTop() {
 
 // Configurar eventos de filtros
 document.getElementById("search").addEventListener("input", (e) => {
-    visibleProducts = 20; // Resetar ao filtrar
+    visibleProducts = 99999; // Carregar todos
     displayProducts(e.target.value);
 });
 
 document.getElementById("category").addEventListener("change", (e) => {
-    visibleProducts = 20; // Resetar ao filtrar
+    visibleProducts = 99999; // Carregar todos
     displayProducts(null, e.target.value);
 });
 
 document.getElementById("sort").addEventListener("change", (e) => {
-    visibleProducts = 20; // Resetar ao filtrar
+    visibleProducts = 99999; // Carregar todos
     displayProducts(null, null, e.target.value);
 });
 
 document.getElementById("package-size").addEventListener("change", (e) => {
-    visibleProducts = 20; // Resetar ao filtrar
+    visibleProducts = 99999; // Carregar todos
     displayProducts(null, null, null, e.target.value);
 });
 
@@ -5398,7 +5856,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Adicione-o no final da tag </body>, como um script separado
 
 // Função para aguardar a definição de variáveis importantes
-function waitForAppInit(callback, maxAttempts = 20) {
+function waitForAppInit(callback, maxAttempts = 60) {
     let attempts = 0;
     const checkInterval = setInterval(() => {
         attempts++;
@@ -5666,7 +6124,7 @@ function setupMultiTermSearch() {
                     // Filtro por texto (nome ou SKU) - agora suporta múltiplos termos
                     const textMatch = filterTerms.length === 0 || 
                         filterTerms.some(term => 
-                            (p.marca && p.marca.toLowerCase().includes(term)) || 
+                            (p.produto && p.produto.toLowerCase().includes(term)) || 
                             (p.sku && p.sku.toLowerCase().includes(term))
                         );
                     
