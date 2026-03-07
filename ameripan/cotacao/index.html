@@ -1039,6 +1039,8 @@ tr.vr.drag-over {
         border-radius: var(--r);
         padding: 1.5rem;
         width: min(460px, 96vw);
+        max-height: 90vh;
+        overflow-y: auto;
         box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
         animation: fadeInUp 0.25s var(--ease);
       }
@@ -1282,6 +1284,24 @@ tr.vr.drag-over {
           </div>
         </details>
 
+        <details style="margin-top:0.8rem;border:1.5px dashed var(--bo);border-radius:8px;padding:0.6rem 0.8rem">
+          <summary style="font-size:0.8rem;font-weight:700;color:var(--mu);cursor:pointer">
+            <i class="fa fa-file-csv" style="color:var(--or)"></i>
+            Upload CSV em Massa
+          </summary>
+          <p style="font-size:0.76rem;color:var(--mu);margin:0.5rem 0 0.4rem">
+            Envie um arquivo <strong>.csv</strong> para atualizar imagens e/ou produtos em massa na planilha.<br>
+            <strong>2 colunas</strong> (<code>cod, linkimg</code>): atualiza apenas a imagem.<br>
+            <strong>3 colunas</strong> (<code>cod, produto, linkimg</code>): atualiza nome+imagem se existir, insere novo se não existir.
+          </p>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+            <input type="file" id="csvFileInput" accept=".csv,.txt" style="flex:1;min-width:150px;font-size:0.8rem" />
+            <button class="btn pr sm" id="btnCsvUpload"><i class="fa fa-upload"></i> Processar CSV</button>
+          </div>
+          <div id="csvStatus" style="font-size:0.76rem;color:var(--bl);min-height:1.2rem;margin-top:0.5rem"></div>
+          <div id="csvReport" class="enrich-log" style="display:none;margin-top:0.4rem"></div>
+        </details>
+
         <div class="ma">
           <button class="btn se" id="cfgCl">Cancelar</button>
           <button class="btn pr" id="cfgSv">Salvar</button>
@@ -1302,6 +1322,9 @@ tr.vr.drag-over {
           <span class="cbadge" id="catSt"
             ><i class="fa fa-circle-notch fa-spin"></i
           ></span>
+          <a href="https://edimarpcosta.github.io/ameripan/cotacao/ajudacotacao" target="_blank" class="btn se sm" title="Ajuda" style="text-decoration:none">
+            <i class="fa fa-circle-question"></i>
+          </a>
           <button class="btn se sm" id="btnCfg" title="Configurações">
             <i class="fa fa-gear"></i>
           </button>
@@ -2130,6 +2153,11 @@ tr.vr.drag-over {
         const url = $("imgEditUrl").value.trim();
         if (!url) return toast("Informe uma URL");
         if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
+        // Verifica se a imagem já existe
+        const ci = S.cmap.get(sku);
+        if (ci && ci.imgUrl && ci.imgUrl.trim()) {
+          if (!confirm(`Imagem do produto "${sku}" já existe, deseja substituir?`)) return;
+        }
         try {
           toast("Gravando na planilha…", 8000);
           await fetch(CFG.gasUrl, {
@@ -2139,7 +2167,6 @@ tr.vr.drag-over {
             body: JSON.stringify({ action: "setImg", codigo: sku, img: url }),
           });
           // no-cors = resposta opaca; se chegou aqui sem throw = sucesso
-          const ci = S.cmap.get(sku);
           if (ci) ci.imgUrl = url;
           imgCache.delete(sku);
           $("imgEditM").classList.remove("on");
@@ -2338,6 +2365,158 @@ tr.vr.drag-over {
       /* ── Botões ── */
       $("btnEnrich").onclick = () => _runEnrich("all");
       $("btnEnrichSite").onclick = () => _runEnrich("site");
+
+      /* ══════════════════════════════════════════
+         CSV UPLOAD EM MASSA
+      ══════════════════════════════════════════ */
+      $("btnCsvUpload").onclick = async () => {
+        const fileInput = $("csvFileInput");
+        const statusEl = $("csvStatus");
+        const reportEl = $("csvReport");
+        const btn = $("btnCsvUpload");
+        const file = fileInput.files[0];
+        if (!file) return toast("Selecione um arquivo CSV");
+        if (!CFG.gasUrl) return toast("Configure o Apps Script URL nas Configurações");
+
+        btn.disabled = true;
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Processando…';
+        reportEl.style.display = "block";
+        reportEl.innerHTML = "";
+        statusEl.textContent = "Lendo arquivo…";
+
+        try {
+          const text = await file.text();
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+          if (!lines.length) { statusEl.textContent = "Arquivo vazio."; btn.disabled = false; btn.innerHTML = origHTML; return; }
+
+          // Detecta separador e colunas
+          const sep = lines[0].includes(';') ? ';' : ',';
+          const rows = lines.map(l => l.split(sep).map(c => c.trim().replace(/^["']|["']$/g, '')));
+
+          // Detecta se é cabeçalho
+          const first = rows[0];
+          const isHeader = first[0].toLowerCase() === 'cod' || first[0].toLowerCase() === 'codigo' || first[0].toLowerCase() === 'código';
+          const dataRows = isHeader ? rows.slice(1) : rows;
+
+          if (!dataRows.length) { statusEl.textContent = "Nenhuma linha de dados encontrada."; btn.disabled = false; btn.innerHTML = origHTML; return; }
+
+          const colCount = dataRows[0].length;
+          const mode = colCount >= 3 ? '3col' : '2col';
+
+          statusEl.textContent = `Processando ${dataRows.length} linhas (modo ${mode === '3col' ? 'cod+produto+img' : 'cod+img'})…`;
+          _csvLog(reportEl, "fa-play", `Iniciando: ${dataRows.length} linhas, formato <strong>${mode === '3col' ? 'cod, produto, linkimg' : 'cod, linkimg'}</strong>`);
+
+          let successCount = 0;
+          const errorCodes = [];
+
+          // Processa em lotes
+          const BATCH = 10;
+          for (let i = 0; i < dataRows.length; i += BATCH) {
+            const batch = dataRows.slice(i, i + BATCH);
+            await Promise.all(batch.map(async (row) => {
+              const cod = row[0];
+              if (!cod) { errorCodes.push({ cod: '(vazio)', reason: 'Código vazio' }); return; }
+
+              try {
+                if (mode === '2col') {
+                  // cod, linkimg → setImg
+                  const linkimg = row[1] || '';
+                  if (!linkimg) { errorCodes.push({ cod, reason: 'URL vazia' }); return; }
+                  await fetch(CFG.gasUrl, {
+                    method: "POST", mode: "no-cors",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: "setImg", codigo: cod, img: linkimg }),
+                  });
+                  const ci = S.cmap.get(cod);
+                  if (ci) ci.imgUrl = linkimg;
+                  imgCache.delete(cod);
+                  successCount++;
+                  _csvLog(reportEl, "fa-check", `<strong>${cod}</strong> — imagem atualizada ✅`);
+                } else {
+                  // cod, produto, linkimg
+                  const produto = row[1] || '';
+                  const linkimg = row[2] || '';
+                  const exists = S.cmap.has(cod);
+
+                  if (exists) {
+                    // Atualiza nome + imagem
+                    if (produto) {
+                      await fetch(CFG.gasUrl, {
+                        method: "POST", mode: "no-cors",
+                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                        body: JSON.stringify({ action: "addItem", codigo: cod, nome: produto, un: "UN", img: linkimg }),
+                      });
+                    } else if (linkimg) {
+                      await fetch(CFG.gasUrl, {
+                        method: "POST", mode: "no-cors",
+                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                        body: JSON.stringify({ action: "setImg", codigo: cod, img: linkimg }),
+                      });
+                    }
+                    const ci = S.cmap.get(cod);
+                    if (ci) {
+                      if (produto) ci.desc = produto;
+                      if (linkimg) ci.imgUrl = linkimg;
+                    }
+                    imgCache.delete(cod);
+                    successCount++;
+                    _csvLog(reportEl, "fa-check", `<strong>${cod}</strong> — atualizado ✅${produto ? ' (nome+img)' : ' (img)'}`);
+                  } else {
+                    // Inserir novo produto
+                    if (!produto) { errorCodes.push({ cod, reason: 'Descrição vazia para novo produto' }); return; }
+                    await fetch(CFG.gasUrl, {
+                      method: "POST", mode: "no-cors",
+                      headers: { "Content-Type": "text/plain;charset=utf-8" },
+                      body: JSON.stringify({ action: "addItem", codigo: cod, nome: produto, un: "UN", img: linkimg }),
+                    });
+                    const ni = { code: cod, desc: produto, imgUrl: linkimg };
+                    S.cat.push(ni);
+                    S.cmap.set(cod, ni);
+                    successCount++;
+                    _csvLog(reportEl, "fa-plus", `<strong>${cod}</strong> — novo item inserido ✅`);
+                  }
+                }
+              } catch (err) {
+                errorCodes.push({ cod, reason: err.message });
+                _csvLog(reportEl, "fa-times", `<strong>${cod}</strong> — erro: ${err.message} ❌`);
+              }
+            }));
+
+            statusEl.textContent = `Processando… ${Math.min(i + BATCH, dataRows.length)}/${dataRows.length}`;
+          }
+
+          // Relatório final
+          const hasErrors = errorCodes.length > 0;
+          statusEl.innerHTML = `<i class="fa ${hasErrors ? 'fa-exclamation-triangle' : 'fa-check'}" style="color:${hasErrors ? 'var(--or)' : 'green'}"></i> ` +
+            `Concluído! <strong>${successCount}</strong> com sucesso${hasErrors ? `, <strong>${errorCodes.length}</strong> erro(s)` : ''}.`;
+
+          if (hasErrors) {
+            _csvLog(reportEl, "fa-exclamation-triangle", `<strong>Erros (${errorCodes.length}):</strong> ${errorCodes.map(e => `${e.cod} (${e.reason})`).join(', ')}`);
+          }
+          _csvLog(reportEl, "fa-flag-checkered", `✅ Relatório: ${successCount} sucesso, ${errorCodes.length} erros, ${dataRows.length} total.`);
+
+          // Limpa cache local e recarrega
+          localStorage.removeItem("a_cat16");
+          render();
+          if (successCount > 0) toast(`✅ CSV processado: ${successCount} atualizações!`);
+
+        } catch (e) {
+          statusEl.textContent = "Erro ao ler arquivo: " + e.message;
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        fileInput.value = "";
+      };
+
+      function _csvLog(container, icon, msg) {
+        const d = document.createElement("div");
+        d.innerHTML = `<i class="fa ${icon}" style="margin-right:4px;color:var(--or)"></i> ${msg}`;
+        container.prepend(d);
+        while (container.children.length > 200) container.lastChild.remove();
+      }
+
 
       function init() {
         loadCfg();
@@ -2573,6 +2752,67 @@ tr.vr.drag-over {
       
       }
 
+      /* ── DOUBLE-CLICK INLINE EDIT (single cell) ── */
+      function inlineCellEdit(td, idx, field, isPrice) {
+        if (td.querySelector('input')) return; // já está editando
+        const item = S.q.items[idx];
+        const origVal = item[field];
+        const origHTML = td.innerHTML;
+
+        const inp = document.createElement('input');
+        inp.className = 'ti' + (isPrice ? ' ti-pr' : ' ti-sm');
+        inp.type = isPrice ? 'text' : 'number';
+        if (isPrice) {
+          inp.value = origVal.toFixed(2).replace('.', ',');
+          inp.addEventListener('input', () => msk(inp));
+        } else {
+          inp.value = origVal;
+          inp.min = '0.01';
+          inp.step = 'any';
+        }
+        inp.style.width = '100%';
+        td.innerHTML = '';
+        td.appendChild(inp);
+        inp.focus();
+        inp.select();
+
+        let saved = false;
+        function save() {
+          if (saved) return;
+          saved = true;
+          const newVal = isPrice ? pmny(inp.value) : (parseFloat(inp.value) || origVal);
+          item[field] = newVal;
+          persist();
+          // Atualiza célula sem re-render completo
+          td.innerHTML = '';
+          const span = document.createElement('span');
+          span.textContent = isPrice ? fmt(newVal) : newVal;
+          td.appendChild(span);
+          const pen = document.createElement('i');
+          pen.className = 'fa fa-pencil pen';
+          pen.title = 'Editar linha';
+          pen.onclick = () => activateER(idx);
+          td.appendChild(document.createTextNode(' '));
+          td.appendChild(pen);
+          // Atualiza subtotal e total
+          const sub = item.qty * item.price;
+          const subEl = document.getElementById(`sub${idx}`);
+          if (subEl) subEl.textContent = fmt(sub);
+          updateGrandTotal();
+        }
+        function cancel() {
+          if (saved) return;
+          saved = true;
+          td.innerHTML = origHTML;
+          td.querySelector('.pen').onclick = () => activateER(idx);
+        }
+        inp.addEventListener('blur', () => setTimeout(save, 80));
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); save(); }
+          if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+      }
+
       /* ── VIEW ROW (DESKTOP) ── */
       function buildVR(idx, item, sb) {
         const sub = item.qty * item.price;
@@ -2639,7 +2879,13 @@ tr.vr.drag-over {
         bTd.className = "col-bar";
         bTd.style.display = sb ? "table-cell" : "none";
         const qTd = tdPen(item.qty, "center", "68px");
+        qTd.style.cursor = 'pointer';
+        qTd.title = 'Duplo clique para editar quantidade';
+        qTd.addEventListener('dblclick', (e) => { e.stopPropagation(); inlineCellEdit(qTd, idx, 'qty', false); });
         const pTd = tdPen(fmt(item.price), "right", "100px");
+        pTd.style.cursor = 'pointer';
+        pTd.title = 'Duplo clique para editar preço';
+        pTd.addEventListener('dblclick', (e) => { e.stopPropagation(); inlineCellEdit(pTd, idx, 'price', true); });
         const tTd = document.createElement("td");
         tTd.className = "td-tot";
         tTd.id = `sub${idx}`;
