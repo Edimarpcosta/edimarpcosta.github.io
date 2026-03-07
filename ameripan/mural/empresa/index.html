@@ -572,10 +572,111 @@
 
         /* ===== PRINT / PDF ===== */
         @media print {
-            .hero, .toolbar, .site-footer, .tool-btn, .hero-btn, .card-actions { display: none !important; }
+            .hero, .toolbar, .site-footer, .tool-btn, .hero-btn, .card-actions, .launch-section { display: none !important; }
             .grid { grid-template-columns: 1fr 1fr; gap: 12px; }
             .card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
             body { background: white; }
+        }
+
+        /* ===== LAUNCH PRODUCTS ===== */
+        .launch-section {
+            display: none;
+            padding: 0 30px;
+            max-width: 1400px;
+            margin: 0 auto 40px;
+        }
+        .launch-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            background: white;
+            border-radius: 0 16px 16px 16px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 30px;
+            border: 1px solid rgba(0,0,0,0.04);
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .launch-header h2 {
+            font-size: 1.1rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .launch-header h2 i { color: var(--secondary); }
+        .launch-select {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+        .launch-select select {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: white;
+            color: var(--text);
+        }
+        .launch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 18px;
+        }
+        .launch-card {
+            background: white;
+            border-radius: 14px;
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: 1px solid rgba(0,0,0,0.04);
+            cursor: pointer;
+        }
+        .launch-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+        .launch-card-img {
+            width: 100%;
+            height: 160px;
+            object-fit: contain;
+            background: #f8fafc;
+            padding: 12px;
+        }
+        .launch-card-body {
+            padding: 12px 14px 16px;
+        }
+        .launch-card-body h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--primary);
+            line-height: 1.3;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .launch-card-body .sku {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .launch-loader {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-light);
+            grid-column: 1 / -1;
+        }
+        @media (max-width: 768px) {
+            .launch-section { padding: 0 16px; }
+            .launch-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+            .launch-card-img { height: 120px; }
         }
     </style>
 </head>
@@ -620,6 +721,24 @@
         <div id="content-grid" class="grid" style="display: none;"></div>
     </div>
 
+    <!-- ===== ÚLTIMOS LANÇAMENTOS ===== -->
+    <div class="launch-section" id="launch-section">
+        <div class="launch-header">
+            <h2><i class="fas fa-rocket"></i> Últimos Lançamentos</h2>
+            <div class="launch-select">
+                <label>Exibindo:</label>
+                <select id="launch-count" onchange="renderLaunchProducts()">
+                    <option value="30" selected>Top 30</option>
+                    <option value="50">Top 50</option>
+                    <option value="80">Top 80</option>
+                    <option value="100">Top 100</option>
+                    <option value="150">Top 150</option>
+                </select>
+            </div>
+        </div>
+        <div class="launch-grid" id="launch-grid"></div>
+    </div>
+
     <footer class="site-footer">
         <p>© 2026 <a href="#">Ameripan Distribuidora</a> — Mural Corporativo v3.0 | Gerado dinamicamente via Google Sheets</p>
     </footer>
@@ -633,8 +752,8 @@
         let isLoading = true;
         let activeCategory = 'Todos';
 
-        const CATEGORIAS = ['Todos','Ações da Semana','Projetos em Destaque','Campanhas em Destaque','Produtos em Destaque','Mural Geral','Ações Anteriores (Sem Validade)'];
-        const CAT_ICONS = {'Todos':'fa-th-large','Ações da Semana':'fa-calendar-check','Projetos em Destaque':'fa-project-diagram','Campanhas em Destaque':'fa-bullhorn','Produtos em Destaque':'fa-box-open','Mural Geral':'fa-clipboard-list','Ações Anteriores (Sem Validade)':'fa-archive'};
+        const CATEGORIAS = ['Todos','Ações da Semana','Projetos em Destaque','Campanhas em Destaque','Ofertas e Combos','Mural Geral','Últimos Lançamentos','Ações Anteriores (Sem Validade)'];
+        const CAT_ICONS = {'Todos':'fa-th-large','Ações da Semana':'fa-calendar-check','Projetos em Destaque':'fa-project-diagram','Campanhas em Destaque':'fa-bullhorn','Ofertas e Combos':'fa-tags','Mural Geral':'fa-clipboard-list','Últimos Lançamentos':'fa-rocket','Ações Anteriores (Sem Validade)':'fa-archive'};
 
         const contentGrid = document.getElementById('content-grid');
         const loader = document.getElementById('loader');
@@ -666,7 +785,7 @@
             }
             fetch(API_URL)
                 .then(r => { if(!r.ok) throw new Error("Erro na requisição"); return r.json(); })
-                .then(data => { processData(data); isLoading = false; hideLoader(); renderTabs(); renderStats(); applyFilter(); })
+                .then(data => { processData(data); isLoading = false; hideLoader(); loadLaunchProducts(); renderTabs(); renderStats(); applyFilter(); })
                 .catch(err => { showError("Não foi possível carregar: " + err.message); isLoading = false; hideLoader(); });
         }
 
@@ -722,8 +841,12 @@
             const container = document.getElementById('category-tabs');
             container.innerHTML = '';
             CATEGORIAS.forEach(cat => {
-                const count = cat === 'Todos' ? allItems.length : allItems.filter(i => i.categoria === cat).length;
-                if (cat !== 'Todos' && count === 0) return;
+                let count;
+                if (cat === 'Todos') count = allItems.length;
+                else if (cat === 'Últimos Lançamentos') count = launchProducts.length;
+                else count = allItems.filter(i => i.categoria === cat).length;
+                
+                if (cat !== 'Todos' && cat !== 'Últimos Lançamentos' && count === 0) return;
                 const tab = document.createElement('div');
                 tab.className = 'cat-tab' + (activeCategory === cat ? ' active' : '');
                 tab.innerHTML = `<i class="fas ${CAT_ICONS[cat] || 'fa-tag'}"></i> ${cat} <span class="tab-count">${count}</span>`;
@@ -731,7 +854,8 @@
                     activeCategory = cat;
                     document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
                     tab.classList.add('active');
-                    applyFilter();
+                    toggleLaunchView(cat === 'Últimos Lançamentos');
+                    if (cat !== 'Últimos Lançamentos') applyFilter();
                 });
                 container.appendChild(tab);
             });
@@ -818,22 +942,57 @@
 
             html += `<div class="card-body">`;
             if (isPromo && promoData) {
-                html += `<div class="promo-box">
-                    <h4><i class="fas fa-gift"></i> ${promoData.tipo}</h4>
-                    <div class="promo-product">
-                        <div class="label">Produto</div>
-                        <div class="name">${promoData.produtoPrincipalNome}</div>
-                        <div class="sku">SKU: ${promoData.produtoPrincipalSku}</div>
-                        <div class="price" style="color:var(--secondary);">${promoData.quantidadePrincipal}x <small>R$ ${promoData.precoPrincipal}</small></div>
-                    </div>
-                    <div class="promo-divider" style="color:var(--success);"><i class="fas fa-plus-circle"></i> LEVA / GANHA</div>
-                    <div class="promo-product promo-bonus">
-                        <div class="label">Bônus</div>
-                        <div class="name">${promoData.produtoBonusNome}</div>
-                        <div class="sku">SKU: ${promoData.produtoBonusSku}</div>
-                        <div class="price" style="color:var(--success);">${promoData.quantidadeBonus}x <small>R$ ${promoData.precoBonus}</small></div>
-                    </div>
-                </div>`;
+                // New array-based format (comprar/ganhar arrays)
+                if (Array.isArray(promoData.comprar)) {
+                    html += `<div class="promo-box">
+                        <h4><i class="fas fa-tags"></i> ${promoData.tipo}</h4>`;
+                    
+                    // COMPRAR list
+                    if (promoData.comprar.length > 0) {
+                        html += `<div style="margin-bottom:10px;">`;
+                        promoData.comprar.forEach(p => {
+                            html += `<div class="promo-product" style="margin-bottom:6px;">
+                                <div class="label">COMPRAR</div>
+                                <div class="name">${p.nome}</div>
+                                <div class="sku">SKU: ${p.sku}</div>
+                                <div class="price" style="color:var(--secondary);">${p.qtd}x <small>R$ ${parseFloat(p.preco||0).toFixed(2)}</small></div>
+                            </div>`;
+                        });
+                        html += `</div>`;
+                    }
+                    
+                    // Divider
+                    if (promoData.ganhar && promoData.ganhar.length > 0) {
+                        html += `<div class="promo-divider" style="color:var(--success);"><i class="fas fa-plus-circle"></i> LEVA / GANHA</div>`;
+                        promoData.ganhar.forEach(p => {
+                            html += `<div class="promo-product promo-bonus" style="margin-bottom:6px;">
+                                <div class="label">BÔNUS</div>
+                                <div class="name">${p.nome}</div>
+                                <div class="sku">SKU: ${p.sku}</div>
+                                <div class="price" style="color:var(--success);">${p.qtd}x <small>R$ ${parseFloat(p.preco||0).toFixed(2)}</small></div>
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`;
+                } else {
+                    // Legacy single-product format (backward compat)
+                    html += `<div class="promo-box">
+                        <h4><i class="fas fa-gift"></i> ${promoData.tipo}</h4>
+                        <div class="promo-product">
+                            <div class="label">Produto</div>
+                            <div class="name">${promoData.produtoPrincipalNome}</div>
+                            <div class="sku">SKU: ${promoData.produtoPrincipalSku}</div>
+                            <div class="price" style="color:var(--secondary);">${promoData.quantidadePrincipal}x <small>R$ ${promoData.precoPrincipal}</small></div>
+                        </div>
+                        <div class="promo-divider" style="color:var(--success);"><i class="fas fa-plus-circle"></i> LEVA / GANHA</div>
+                        <div class="promo-product promo-bonus">
+                            <div class="label">Bônus</div>
+                            <div class="name">${promoData.produtoBonusNome}</div>
+                            <div class="sku">SKU: ${promoData.produtoBonusSku}</div>
+                            <div class="price" style="color:var(--success);">${promoData.quantidadeBonus}x <small>R$ ${promoData.precoBonus}</small></div>
+                        </div>
+                    </div>`;
+                }
             } else {
                 html += `<div class="card-info">${processedInfo}</div>`;
             }
@@ -867,6 +1026,91 @@
         function debounce(func, wait) {
             let t;
             return function(...args) { clearTimeout(t); t = setTimeout(() => func(...args), wait); };
+        }
+
+        // ===== ÚLTIMOS LANÇAMENTOS =====
+        let launchProducts = [];
+
+        function parseCSV(str) {
+            const arr = [];
+            let quote = false, row = 0, col = 0;
+            for (let c = 0; c < str.length; c++) {
+                let cc = str[c], nc = str[c+1];
+                arr[row] = arr[row] || [];
+                arr[row][col] = arr[row][col] || '';
+                if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
+                if (cc == '"') { quote = !quote; continue; }
+                if (cc == ',' && !quote) { ++col; continue; }
+                if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
+                if (cc == '\n' && !quote) { ++row; col = 0; continue; }
+                if (cc == '\r' && !quote) { ++row; col = 0; continue; }
+                arr[row][col] += cc;
+            }
+            return arr;
+        }
+
+        async function loadLaunchProducts() {
+            try {
+                const url = 'https://docs.google.com/spreadsheets/d/1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q/export?format=csv&gid=1799149644';
+                const res = await fetch(url);
+                const text = await res.text();
+                const data = parseCSV(text);
+                
+                launchProducts = [];
+                for (let i = 1; i < data.length; i++) {
+                    if (!data[i] || data[i].length < 2) continue;
+                    const sku = data[i][0] || '';
+                    const skuNum = parseInt(sku.replace(/\D/g, ''), 10);
+                    launchProducts.push({
+                        sku: sku,
+                        skuNum: isNaN(skuNum) ? 0 : skuNum,
+                        nome: data[i][1] || '',
+                        img: data[i][2] || '',
+                        ramo: data[i][3] || ''
+                    });
+                }
+                // Sort by SKU numeric descending (highest = newest)
+                launchProducts.sort((a, b) => b.skuNum - a.skuNum);
+                
+                // Update tab count
+                renderTabs();
+            } catch (e) {
+                console.error('Erro ao carregar lançamentos:', e);
+            }
+        }
+
+        function toggleLaunchView(show) {
+            const launchSection = document.getElementById('launch-section');
+            const mainContainer = document.querySelector('.container');
+            if (show) {
+                launchSection.style.display = 'block';
+                mainContainer.style.display = 'none';
+                renderLaunchProducts();
+            } else {
+                launchSection.style.display = 'none';
+                mainContainer.style.display = 'block';
+            }
+        }
+
+        function renderLaunchProducts() {
+            const grid = document.getElementById('launch-grid');
+            const count = parseInt(document.getElementById('launch-count').value, 10);
+            const sliced = launchProducts.slice(0, count);
+            
+            if (sliced.length === 0) {
+                grid.innerHTML = '<div class="launch-loader"><i class="fas fa-box-open" style="font-size:2rem;opacity:0.15;margin-bottom:10px;display:block;"></i>Nenhum produto encontrado.</div>';
+                return;
+            }
+            
+            grid.innerHTML = sliced.map((p, idx) => `
+                <div class="launch-card fade-in" style="animation-delay:${Math.min(idx * 30, 500)}ms;">
+                    <img class="launch-card-img" src="${p.img || 'https://via.placeholder.com/220x160?text=Sem+Imagem'}" onerror="this.src='https://via.placeholder.com/220x160?text=Sem+Imagem'" alt="${p.nome}" loading="lazy">
+                    <div class="launch-card-body">
+                        <h4>${p.nome}</h4>
+                        <span class="sku">SKU: ${p.sku}</span>
+                    </div>
+                </div>
+            `).join('');
         }
 
         // ===== PDF EXPORT =====
