@@ -221,6 +221,7 @@
     margin-bottom: 15px;
     overflow: visible; /* Alterado de 'hidden' para 'visible' */
     -webkit-line-clamp: unset; /* Remover a limitação de linhas */
+    line-clamp: unset;
     -webkit-box-orient: vertical;
     flex: 1;
     white-space: pre-line; /* Mantido para preservar quebras de linha */
@@ -229,6 +230,7 @@
         
         .card.no-image .card-info {
             -webkit-line-clamp: unset;
+            line-clamp: unset;
             white-space: normal;
         }
         
@@ -595,6 +597,7 @@
             
             .card-info {
                 -webkit-line-clamp: 8;
+                line-clamp: 8;
             }
         }
     </style>
@@ -602,8 +605,15 @@
 <body>
     <header class="header">
         <div class="container">
-            <h1>MURAL DE TAREFAS/AVISOS E EVENTOS - EQUIPE SORVETERIA</h1>
-            <p>Fique de olho nas informações mais importantes da equipe: Eventos, mudanças, rotas de entregas, solicitações urgentes. Desfrute de informações visuais e bem organizadas para mamter o foco nas vendas!</p>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
+                <div>
+                    <h1>MURAL DE TAREFAS/AVISOS E EVENTOS - EQUIPE SORVETERIA</h1>
+                    <p style="margin-top: 10px;">Fique de olho nas informações mais importantes da equipe: Eventos, mudanças, rotas de entregas, solicitações urgentes. Desfrute de informações visuais e bem organizadas para manter o foco nas vendas!</p>
+                </div>
+                <a href="manager.html" target="_blank" style="background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 0.95rem; font-weight: 600; white-space: nowrap; transition: background 0.2s; border: 1px solid rgba(255,255,255,0.4);">
+                    <i class="fas fa-hammer"></i> Manager
+                </a>
+            </div>
         </div>
     </header>
     
@@ -680,7 +690,7 @@
             
             filterBtn.addEventListener('click', () => {
                 // Simples filtro por categoria (Aba)
-                const categorias = ['Todos', 'Ações da Semana', 'Projetos em Destaque', 'Campanhas em Destaque', 'Produtos em Destaque', 'Mural Geral'];
+                const categorias = ['Todos', 'Ações da Semana', 'Projetos em Destaque', 'Campanhas em Destaque', 'Produtos em Destaque', 'Mural Geral', 'Ações Anteriores (Sem Validade)'];
                 
                 // Pegar a próxima categoria do array usando o texto atual do botão
                 let currentText = filterBtn.textContent.trim().replace(' Filtrar', '');
@@ -735,19 +745,62 @@
         function processData(data) {
             allItems = [];
             
+            const hoje = new Date();
+            hoje.setHours(0,0,0,0);
+            
             // O Web App nos envia um objeto com as chaves sendo os nomes das abas
             Object.keys(data).forEach(aba => {
                 const itemsAba = data[aba];
                 if(Array.isArray(itemsAba)) {
                     itemsAba.forEach((row) => {
+                        let categoriaFinal = aba;
+                        let rawData = row['Prazo'] ? String(row['Prazo']).trim() : "";
+                        
+                        // Checar validade se houver data
+                        let dataExibicaoFormato = rawData;
+                        
+                        if(rawData) {
+                            let dataPrazo;
+                            // Se for data americana ISO (ex: 2026-03-12T03:00:00.000Z)
+                            if (rawData.includes('T')) {
+                                dataPrazo = new Date(rawData);
+                            } else {
+                                // Se for data brasileira (DD/MM/YYYY)
+                                const partes = rawData.split('/');
+                                if(partes.length === 3) {
+                                    let dia = parseInt(partes[0], 10);
+                                    let mes = parseInt(partes[1], 10) - 1;
+                                    let ano = parseInt(partes[2], 10);
+                                    if(ano < 100) ano += 2000;
+                                    dataPrazo = new Date(ano, mes, dia);
+                                }
+                            }
+                            
+                            // Se for uma data válida
+                            if(dataPrazo && !isNaN(dataPrazo)) {
+                                if(dataPrazo < hoje) {
+                                    categoriaFinal = "Ações Anteriores (Sem Validade)";
+                                }
+                                
+                                // Formatar para exibição "Quinta 12/03/2026"
+                                const diasSemana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+                                const diaSemNome = diasSemana[dataPrazo.getDay()];
+                                const d = String(dataPrazo.getDate()).padStart(2, '0');
+                                const m = String(dataPrazo.getMonth() + 1).padStart(2, '0');
+                                const y = dataPrazo.getFullYear();
+                                
+                                dataExibicaoFormato = `${diaSemNome} ${d}/${m}/${y}`;
+                            }
+                        }
+                        
                         // Converter o objeto que vem do Web App para o formato que os cards usam
                         const item = {
                             titulo: row['Título'] || "Sem título",
                             informacao: row['Informação'] || "Sem descrição",
                             linkAcesso: row['Link de Acesso'] || "",
                             linkImagem: row['Link da Imagem'] || "",
-                            data: row['Prazo'] || "",
-                            categoria: aba, // Usar o nome da aba como categoria
+                            data: dataExibicaoFormato,
+                            categoria: categoriaFinal, // Usa a categoria original ou a de Vencidos
                             autor: row['Autor/Responsável'] || "",
                             prioridade: row['Prioridade'] || "Normal",
                             id: row['ID'] || Math.random().toString(36).substr(2, 9)
@@ -876,8 +929,22 @@ function makeLinksClickable(text) {
         }
     }
     
-    // Processar o texto para transformar URLs em links clicáveis
-    const processedInfo = makeLinksClickable(item.informacao);
+    // Processar o texto e verificar se é um objeto PROMO JSON
+    let isPromo = false;
+    let promoData = null;
+    let processedInfo = "";
+    
+    try {
+        if(item.informacao.trim().startsWith('PROMOJSON:')) {
+            const jsonStr = item.informacao.replace('PROMOJSON:', '').trim();
+            promoData = JSON.parse(jsonStr);
+            isPromo = true;
+        } else {
+            processedInfo = makeLinksClickable(item.informacao);
+        }
+    } catch(e) {
+        processedInfo = makeLinksClickable(item.informacao);
+    }
     
     let cardHtml = `
         <div class="card-header">
@@ -891,8 +958,49 @@ function makeLinksClickable(text) {
     }
     
     cardHtml += `
-        <div class="card-body">
-            <p class="card-info">${processedInfo}</p>
+        <div class="card-body">`;
+        
+    if (isPromo && promoData) {
+        cardHtml += `
+            <div style="background: rgba(52, 152, 219, 0.05); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px dashed var(--secondary);">
+                <h4 style="color: var(--secondary); text-align: center; margin-bottom: 15px; text-transform: uppercase;">
+                    <i class="fas fa-bullhorn"></i> ${promoData.tipo}
+                </h4>
+                
+                <div style="display: flex; gap: 10px; align-items: stretch; margin-bottom: 10px;">
+                    <!-- Produto Principal -->
+                    <div style="flex: 1; min-width: 0; background: white; padding: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center;">
+                        <span style="display: block; font-size: 0.7rem; color: #777; font-weight: bold; margin-bottom: 5px;">PRODUTO:</span>
+                        <div style="font-weight: 600; font-size: 0.85rem; line-height: 1.2; word-break: break-word; color: var(--dark);">${promoData.produtoPrincipalNome}</div>
+                        <div style="color: #777; font-size: 0.75rem; margin-top: 5px;">SKU: ${promoData.produtoPrincipalSku}</div>
+                        <div style="margin-top: 8px; font-weight: bold; color: var(--secondary); font-size: 1.1rem;">
+                            ${promoData.quantidadePrincipal}x <span style="font-size:0.8rem">R$ ${promoData.precoPrincipal}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; color: var(--success); font-weight: bold; margin: 5px 0;">
+                    <i class="fas fa-plus-circle fa-lg"></i> LEVA / GANHA
+                </div>
+                
+                <div style="display: flex; gap: 10px; align-items: stretch;">
+                    <!-- Produto Secundário (Bônus) -->
+                    <div style="flex: 1; min-width: 0; background: white; padding: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; border-bottom: 3px solid var(--success);">
+                        <span style="display: block; font-size: 0.7rem; color: #777; font-weight: bold; margin-bottom: 5px;">BÔNUS:</span>
+                        <div style="font-weight: 600; font-size: 0.85rem; line-height: 1.2; word-break: break-word; color: var(--dark);">${promoData.produtoBonusNome}</div>
+                        <div style="color: #777; font-size: 0.75rem; margin-top: 5px;">SKU: ${promoData.produtoBonusSku}</div>
+                        <div style="margin-top: 8px; font-weight: bold; color: var(--success); font-size: 1.1rem;">
+                            ${promoData.quantidadeBonus}x <span style="font-size:0.8rem">por R$ ${promoData.precoBonus}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    } else {
+        cardHtml += `
+            <p class="card-info">${processedInfo}</p>`;
+    }
+        
+    cardHtml += `
         </div>
         <div class="card-footer">
             <div class="card-meta">`;
