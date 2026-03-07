@@ -1696,89 +1696,6 @@ header:not(.hide) {
 }
 
 
-// Função para implementar navegação entre categorias com gestos de deslize
-
-// Adicionar CSS necessário
-const categorySwipeStyles = document.createElement('style');
-categorySwipeStyles.textContent = `
-  /* Indicador de navegação */
-  .category-navigation-indicator {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    background-color: rgba(52, 152, 219, 0.15);
-    color: var(--primary-color);
-    width: 40px;
-    height: 80px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.3s, background-color 0.3s;
-    pointer-events: none;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-  }
-  
-  .category-navigation-indicator.active {
-    opacity: 1;
-    background-color: rgba(52, 152, 219, 0.7);
-    color: white;
-  }
-  
-  .category-navigation-indicator.left {
-    left: 15px;
-  }
-  
-  .category-navigation-indicator.right {
-    right: 15px;
-  }
-  
-  /* Estilo para destacar a categoria atual */
-  .category-title.active-category {
-    border-bottom: 3px solid var(--primary-color);
-    animation: categoryHighlight 0.8s ease;
-  }
-  
-  @keyframes categoryHighlight {
-    0% { background-color: rgba(52, 152, 219, 0); }
-    50% { background-color: rgba(52, 152, 219, 0.2); }
-    100% { background-color: rgba(52, 152, 219, 0); }
-  }
-  
-  /* Dica visual que aparece na primeira vez */
-  .swipe-hint {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(52, 152, 219, 0.9);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 30px;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    pointer-events: none;
-    animation: swipeHintPulse 2s infinite;
-  }
-  
-  .swipe-hint i {
-    font-size: 18px;
-  }
-  
-  @keyframes swipeHintPulse {
-    0% { transform: translateX(-50%) scale(1); }
-    50% { transform: translateX(-50%) scale(1.05); }
-    100% { transform: translateX(-50%) scale(1); }
-  }
-
-
-
     </style>
 </head>
 <body>
@@ -2837,8 +2754,9 @@ function displayProducts(filter = "", category = "", sort = "", packageSize = ""
                 );
             });
         
-        // Filtro por categoria
-        const categoryMatch = !category || p.categoria === category;
+        // Filtro por categoria (Trata Favoritos como categoria especial)
+        const isFavCategory = category === 'favoritos';
+        const categoryMatch = isFavCategory || !category || p.categoria === category;
         
         // Filtro por tamanho da embalagem
         const packageMatch = !packageSize || 
@@ -2848,8 +2766,8 @@ function displayProducts(filter = "", category = "", sort = "", packageSize = ""
         const collectionMatch = !activeCollectionFilter || 
             activeCollectionFilter.skus.includes(p.sku);
             
-        // Filtro de Favoritos
-        const favoriteMatch = !showOnlyFavorites || favorites.includes(p.sku);
+        // Filtro de Favoritos associado à escolha da categoria ou botão
+        const favoriteMatch = (isFavCategory || showOnlyFavorites) ? favorites.includes(p.sku) : true;
         
         return textMatch && categoryMatch && packageMatch && collectionMatch && favoriteMatch;
     });
@@ -3038,8 +2956,7 @@ function createProductElement(p) {
     let productContent = `
         <div class="product-img-container">
             <img src="${imgSrc}" alt="${p.produto || ''}" 
-                 onclick="openImageModal('${imgHighRes}', '${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}')"
-                 onerror="handleImageError(this, '${p.sku}')">
+                 onclick="openImageModal('${imgHighRes}', '${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}')">
             ${selectionButton}
             <div class="product-actions" style="flex-direction: column;">
                 <div class="product-action-btn" onclick="openImageModal('${imgHighRes}', '${p.sku}', '${(p.produto || '').replace(/'/g, "\\'")}')">
@@ -3247,6 +3164,13 @@ function populateCategories() {
     let categorySelect = document.getElementById("category");
     categorySelect.innerHTML = '<option value="">Todas as Categorias</option>';
     
+    // Adicionar opção de Favoritos (em destaque na UI)
+    let favOption = document.createElement("option");
+    favOption.value = "favoritos";
+    favOption.innerHTML = "❤️ Meus Favoritos";
+    favOption.style.fontWeight = "bold";
+    categorySelect.appendChild(favOption);
+    
     categories.forEach(cat => {
         let option = document.createElement("option");
         option.value = cat;
@@ -3255,19 +3179,7 @@ function populateCategories() {
     });
 }
 
-// Versão melhorada da função handleImageError
-function handleImageError(img, sku) {
-    console.warn(`Erro ao carregar imagem para SKU ${sku}. Substituindo por placeholder.`);
-    
-    // Verificar se a URL já é um placeholder para evitar loop
-    if (img.src.includes('placeholder.com')) return;
-    
-    // Usar uma imagem de placeholder
-    img.src = `https://via.placeholder.com/300x300?text=${encodeURIComponent(`Produto ${sku}`)}`;
-    
-    // Adicionar classe para estilo específico
-    img.classList.add('placeholder-img');
-}
+// Função removida para evitar o uso de placeholders visuais.
 
 // Abrir modal de imagem
 function openImageModal(imgSrc, sku, name) {
