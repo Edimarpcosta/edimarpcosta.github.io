@@ -214,6 +214,32 @@ table.lista-t td input:focus{outline:none;border-color:#2e7d32;background:#f1f8e
 .eanetq-config input[type=number],.eanetq-config input[type=color],.eanetq-config select{flex:1;min-width:50px;padding:2px 4px;border:1px solid #c8e6c9;border-radius:4px;font-size:11px}
 .eanetq-preview{flex:1;min-width:300px}
 
+
+/* ── Kit meta bar ── */
+.kit-meta-bar{display:flex;align-items:center;gap:5px;padding:5px 10px;background:#f1f8e9;border-bottom:1px solid #c8e6c9;flex-wrap:wrap}
+.kit-meta-icon{font-size:11px;color:#888;flex-shrink:0}
+.kit-meta-inp{flex:1;min-width:80px;max-width:240px;padding:3px 6px;border:1px solid #c8e6c9;border-radius:4px;font-size:11px;background:#fff}
+.kit-link-inp{min-width:160px;color:#1565c0}
+
+/* ── Central ── */
+#tab-central{padding:16px 20px}
+.central-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1060px;margin:0 auto}
+@media(max-width:720px){.central-grid{grid-template-columns:1fr}}
+.central-card{background:#fff;border:1px solid #c8e6c9;border-radius:10px;padding:18px 20px;box-shadow:0 2px 8px rgba(46,125,50,.07)}
+.central-card h3{color:#1b5e20;font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;border-bottom:2px solid #e8f5e9;padding-bottom:8px}
+.central-btn-col{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.central-btn-col button,.central-btn-col label.cbtn{font-size:12px;padding:8px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:7px;font-weight:600}
+.cbtn{background:#e8f5e9;border:1px solid #c8e6c9;color:#1b5e20}
+.cbtn:hover{background:#c8e6c9}
+.status-bar{font-size:11px;color:#555;margin-top:8px;min-height:18px;padding:5px 9px;background:#f9fbe7;border-radius:5px;border:1px solid #e8f5e9}
+.kit-collab-info{font-size:11px;color:#555;background:#f3f8ff;border:1px solid #bbdefb;border-radius:6px;padding:8px 10px;margin-bottom:10px;line-height:1.6}
+.collab-list{max-height:180px;overflow-y:auto;font-size:11px;display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.collab-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:#f9fbe7;border-radius:5px;border:1px solid #e8f5e9}
+.collab-row input[type=checkbox]{flex-shrink:0;width:14px;height:14px}
+.collab-nome{flex:1;font-weight:600;color:#1b5e20;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.collab-meta{color:#888;font-size:10px;white-space:nowrap}
+.central-summary div{padding:2px 0;font-size:12px}
+
 </style>
 </head>
 <body>
@@ -241,6 +267,7 @@ table.lista-t td input:focus{outline:none;border-color:#2e7d32;background:#f1f8e
   <button class="tab-btn" onclick="showTab('etiqueta',this)">🏷️ Etiq. Auto</button>
   <button class="tab-btn" onclick="showTab('etmanual',this)">✏️ Etiq. Manual</button>
   <button class="tab-btn" onclick="showTab('eanetq',this);buildEanEtq()">🏷️ EAN ETQ</button>
+  <button class="tab-btn" onclick="showTab('central',this);buildCentral()">⚙️ Central</button>
   <div class="nav-right">
     <span id="db-badge" class="ld" onclick="loadDB()" title="Clique para recarregar">⏳ BD...</span>
     <button onclick="resetAllData()" title="Apagar todos os dados" style="background:rgba(198,40,40,.7);border:none;color:#fff;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700">🗑️ Reset</button>
@@ -390,7 +417,7 @@ let activeIdx=0;
 let etManualItems=[]; // [{id,nome,preco}]
 let etmRid=0;
 
-function mkKit(id,nome){return{id,nome,items:[],rid:0};}
+function mkKit(id,nome){return{id,nome,items:[],rid:0,link:'',autor:'',obs:''};}
 
 // ============ UTILS ============
 const fmtR=v=>'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
@@ -504,6 +531,7 @@ function showTab(t,btn){
   if(t==='impressao')buildImpressao();
   if(t==='etiqueta'){buildEtiquetas();updatePreview(readCfg());}
   if(t==='etmanual')buildEtManual();
+  if(t==='central')buildCentral();
 }
 
 // ============ LISTA ============
@@ -548,9 +576,18 @@ function renderKitPanels(){
     div.innerHTML=`
 <div class="kp-toolbar">
   <label>🌺</label>
-  <input type="text" value="${esc(kit.nome)}" onchange="kits[${i}].nome=this.value;renderKitTabs();renderSummary();debouncedSave()">
-  <button class="btn bg" onclick="addRowM(${i})">➕</button>
+  <input type="text" value="${esc(kit.nome)}" placeholder="Nome do kit" onchange="kits[${i}].nome=this.value;renderKitTabs();renderSummary();debouncedSave()">
+  <button class="btn bg" onclick="addRowM(${i})">➕ Item</button>
   <button class="btn bo" onclick="clearKit(${i})">🗑️</button>
+</div>
+<div class="kit-meta-bar">
+  <span class="kit-meta-icon">👤</span>
+  <input class="kit-meta-inp" type="text" value="${esc(kit.autor||'')}" placeholder="Autor / Loja" maxlength="60" onchange="kits[${i}].autor=this.value;debouncedSave()">
+  <span class="kit-meta-icon">🔗</span>
+  <input class="kit-meta-inp kit-link-inp" type="url" value="${esc(kit.link||'')}" placeholder="Link foto/vídeo do arranjo (opcional)" onchange="kits[${i}].link=this.value;debouncedSave()">
+  ${kit.link?`<button class="btn bg" style="padding:2px 7px;font-size:10px;flex-shrink:0" onclick="window.open(kits[${i}].link,'_blank')">▶ Ver</button>`:''}
+  <span class="kit-meta-icon">📝</span>
+  <input class="kit-meta-inp" type="text" value="${esc(kit.obs||'')}" placeholder="Observações" maxlength="120" onchange="kits[${i}].obs=this.value;debouncedSave()">
 </div>
 <div class="scan-bar">
   <label>🔍 EAN:</label>
@@ -567,6 +604,7 @@ function renderKitPanels(){
   <th style="width:52px" class="tc">QTD</th>
   <th style="width:88px" class="tr">PREÇO UN</th>
   <th style="width:96px" class="tr">TOTAL</th>
+  <th style="width:28px" class="tc" title="Link mídia do produto">🔗</th>
   <th style="width:30px"></th>
 </tr></thead>
 <tbody id="tb-${i}"></tbody>
@@ -595,6 +633,10 @@ function renderKitTable(ki){
       <td class="tr"><input class="iprice" value="${it.preco>0?it.preco.toFixed(2).replace('.',','):''}" placeholder="0,00"
           oninput="updP(${ki},${it.id},this.value);rcKit(${ki},${it.id})"></td>
       <td class="tr" id="t-${ki}-${it.id}" style="font-weight:700;color:#1b5e20">${tot>0?fmtR(tot):'—'}</td>
+      <td class="tc">${it.media
+        ?`<button class="btn bg" style="padding:1px 4px;font-size:9px" title="${esc(it.media)}" onclick="window.open('${esc(it.media)}','_blank')">▶</button>`
+        :`<button class="btn bgr" style="padding:1px 4px;font-size:9px" title="Adicionar link de mídia" onclick="addMediaLink(${ki},${it.id})">🔗</button>`
+      }</td>
       <td class="tc"><button class="btn br" style="padding:2px 5px;font-size:10px" onclick="rmIt(${ki},${it.id})">✕</button></td>`;
     tb.appendChild(tr);
   });
@@ -1548,6 +1590,266 @@ async function applyRemoteSettingsToAll(){
   setTimeout(()=>msg.textContent='',3000);
 }
 
+
+// ============ MÍDIA DOS ITENS ============
+function addMediaLink(ki,id){
+  const it=kits[ki].items.find(i=>i.id===id);
+  if(!it)return;
+  const cur=it.media||'';
+  const url=prompt('🔗 Link de foto/vídeo do produto\n(YouTube, Google Drive, URL direta):',cur);
+  if(url===null)return;
+  it.media=url.trim();
+  renderKitTable(ki);
+  debouncedSave();
+}
+
+// ============ CENTRAL ============
+function buildCentral(){
+  buildCollabList();
+  buildCentralSummary();
+}
+
+// --- Settings ---
+function settingsStatus(msg,ok){
+  const el=document.getElementById('settings-status');
+  if(!el)return;
+  el.textContent=msg;
+  el.style.color=(ok===false)?'#c62828':'#2e7d32';
+}
+
+function buildCurrentSettings(){
+  let etAuto=null,eanEtq=null,impressao=null;
+  try{etAuto=readCfg();}catch(e){}
+  try{eanEtq=readEqCfg();}catch(e){}
+  try{
+    const impFields=['cfg-kits-row','cfg-rows-page','cfg-row-h','cfg-bc-h','cfg-font-item','cfg-font-ean','cfg-colx','cfg-colqtd'];
+    impressao={};
+    impFields.forEach(id=>{const el=document.getElementById(id);if(el)impressao[id]=el.value;});
+  }catch(e){}
+  return{etAuto,eanEtq,impressao,version:'v13',generated:new Date().toISOString()};
+}
+
+function generateAndDownloadSettings(){
+  const cfg=buildCurrentSettings();
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='settings.json';
+  a.click();URL.revokeObjectURL(a.href);
+  settingsStatus('✅ settings.json baixado! Suba no GitHub para compartilhar com as filiais.');
+}
+
+function applySettings(cfg){
+  if(!cfg){settingsStatus('❌ Arquivo de settings inválido.',false);return;}
+  if(cfg.etAuto){
+    try{setCfgControls(cfg.etAuto);localStorage.setItem(CFG_KEY,JSON.stringify(cfg.etAuto));}catch(e){}
+  }
+  if(cfg.eanEtq){
+    try{setEqCfgControls(cfg.eanEtq);localStorage.setItem(EQCFG_KEY,JSON.stringify(cfg.eanEtq));}catch(e){}
+  }
+  if(cfg.impressao){
+    try{
+      Object.entries(cfg.impressao).forEach(([id,val])=>{const el=document.getElementById(id);if(el)el.value=val;});
+      localStorage.setItem('cobasi_imp_cfg',JSON.stringify(cfg.impressao));
+    }catch(e){}
+  }
+  localStorage.setItem('cobasi_remote_settings',JSON.stringify(cfg));
+  autoSave();
+  const ts=new Date().toLocaleString('pt-BR');
+  settingsStatus(`✅ Settings aplicado a todas as abas! (${ts})`);
+}
+
+function loadSettingsFromFile(e){
+  const f=e.target.files[0];if(!f)return;
+  settingsStatus('⏳ Lendo arquivo...');
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{const cfg=JSON.parse(ev.target.result);applySettings(cfg);}
+    catch(err){settingsStatus('❌ Erro ao ler arquivo: '+err.message,false);}
+  };
+  r.readAsText(f);
+  e.target.value='';
+}
+
+async function loadSettingsFromURL(){
+  settingsStatus('⏳ Conectando ao servidor GitHub...');
+  try{
+    const r=await fetch('https://edimarpcosta.github.io/cobasi/arranjo/settings.json?_='+Date.now());
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const cfg=await r.json();
+    applySettings(cfg);
+  }catch(e){
+    settingsStatus('❌ Não foi possível carregar: '+e.message,false);
+  }
+}
+
+// Sobrescreve versão antiga (compatibilidade)
+async function downloadRemoteSettings(){return loadSettingsFromURL();}
+
+async function applyRemoteSettingsToAll(){
+  let cfg=null;
+  try{const raw=localStorage.getItem('cobasi_remote_settings');if(raw)cfg=JSON.parse(raw);}catch(e){}
+  if(cfg){applySettings(cfg);}
+  else{await loadSettingsFromURL();}
+}
+
+// --- Colaboração de Kits ---
+function buildCollabList(){
+  const el=document.getElementById('collab-list');
+  if(!el)return;
+  if(!kits.length){
+    el.innerHTML='<span style="color:#aaa;font-style:italic;font-size:11px">Nenhum kit criado.</span>';
+    document.getElementById('collab-count').textContent='';
+    return;
+  }
+  el.innerHTML=kits.map((k,i)=>{
+    const total=fmtR(kitTotal(k));
+    const itens=k.items.filter(x=>x.ean||x.desc).length;
+    const linkBtn=k.link
+      ?`<a href="${esc(k.link)}" target="_blank" style="color:#1565c0;font-size:10px;text-decoration:none" title="Ver arranjo">▶</a>`:'';
+    const autor=k.autor?`<span class="collab-meta">👤${esc(k.autor.slice(0,15))}</span>`:'';
+    return `<div class="collab-row">
+      <input type="checkbox" class="collab-chk" data-idx="${i}" onchange="updateCollabCount()">
+      <span class="collab-nome" title="${esc(k.nome)}">${esc(k.nome)}</span>
+      <span class="collab-meta">${itens}it · ${total}</span>
+      ${autor}${linkBtn}
+    </div>`;
+  }).join('');
+  updateCollabCount();
+}
+
+function updateCollabCount(){
+  const total=kits.length;
+  const sel=document.querySelectorAll('.collab-chk:checked').length;
+  const el=document.getElementById('collab-count');
+  if(el)el.textContent=sel?`${sel} de ${total} selecionados`:`${total} kits`;
+}
+
+function selectAllCollab(v){
+  document.querySelectorAll('.collab-chk').forEach(c=>c.checked=v);
+  updateCollabCount();
+}
+
+function exportCollabKits(mode){
+  let toExp=kits;
+  if(mode==='selected'){
+    const idxs=Array.from(document.querySelectorAll('.collab-chk:checked')).map(c=>+c.dataset.idx);
+    if(!idxs.length){alert('Selecione ao menos 1 kit para exportar.');return;}
+    toExp=idxs.map(i=>kits[i]);
+  }
+  const payload={
+    source:'Cobasi - Jardinagem',version:'v13',
+    exportedAt:new Date().toISOString(),
+    exportedBy:toExp.find(k=>k.autor)?.autor||'Cobasi',
+    count:toExp.length,kits:toExp
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`cobasi_kits_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();URL.revokeObjectURL(a.href);
+  const el=document.getElementById('collab-status');
+  if(el)el.textContent=`✅ ${toExp.length} kit(s) exportado(s) com sucesso.`;
+}
+
+function importCollabKits(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const payload=JSON.parse(ev.target.result);
+      const incoming=Array.isArray(payload)?payload:(payload.kits||[]);
+      if(!incoming.length)throw new Error('Nenhum kit encontrado no arquivo.');
+      const exportedAt=payload.exportedAt?new Date(payload.exportedAt).toLocaleString('pt-BR'):'—';
+      const exportedBy=esc(payload.exportedBy||'—');
+      // Modal de confirmação
+      const modal=document.createElement('div');
+      modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+      // Pré-serializa para passar ao doImportKits via dataset
+      const dataId='_imp_'+Date.now();
+      window[dataId]=incoming;
+      modal.innerHTML=`
+        <div style="background:#fff;border-radius:12px;padding:24px 28px;min-width:320px;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,.22)">
+          <h3 style="color:#1b5e20;margin-bottom:6px">📥 Importar ${incoming.length} kit(s)</h3>
+          <div style="font-size:11px;color:#888;margin-bottom:14px">📅 ${exportedAt} &nbsp;·&nbsp; 👤 ${exportedBy}</div>
+          <p style="font-size:12px;color:#444;margin-bottom:16px">Como deseja importar os kits?</p>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn bg" onclick="doImportKits('${dataId}','add');this.closest('[style]').remove()">
+              ➕ Adicionar aos kits existentes
+            </button>
+            <button class="btn bb" onclick="doImportKits('${dataId}','replace');this.closest('[style]').remove()">
+              🔄 Substituir todos os kits
+            </button>
+            <button class="btn bgr" onclick="this.closest('[style]').remove()">✕ Cancelar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.onclick=ev=>{if(ev.target===modal)modal.remove();};
+    }catch(err){
+      const el=document.getElementById('collab-status');
+      if(el)el.textContent='❌ Erro ao ler arquivo: '+err.message;
+    }
+  };
+  r.readAsText(f);e.target.value='';
+}
+
+function doImportKits(dataId,mode){
+  const incoming=window[dataId];
+  delete window[dataId];
+  if(!incoming){return;}
+  try{
+    if(mode==='replace'){
+      kits=incoming;activeIdx=0;
+    }else{
+      const existIds=new Set(kits.map(k=>String(k.id)));
+      const toAdd=incoming.filter(k=>!existIds.has(String(k.id)));
+      const dup=incoming.length-toAdd.length;
+      kits.push(...toAdd);
+      if(dup>0)alert(`ℹ️ ${dup} kit(s) ignorado(s) por já existirem (mesmo ID).`);
+    }
+    renderLista();autoSave();buildCentral();
+    const el=document.getElementById('collab-status');
+    if(el)el.textContent=`✅ ${incoming.length} kit(s) importado(s)!`;
+  }catch(err){
+    const el=document.getElementById('collab-status');
+    if(el)el.textContent='❌ Erro: '+err.message;
+  }
+}
+
+function buildCentralSummary(){
+  const el=document.getElementById('central-summary');
+  if(!el)return;
+  const total=kits.length;
+  const totalItens=kits.reduce((s,k)=>s+k.items.filter(i=>i.ean||i.desc).length,0);
+  const totalVal=kits.reduce((s,k)=>s+kitTotal(k),0);
+  const comLink=kits.filter(k=>k.link).length;
+  const comAutor=kits.filter(k=>k.autor).length;
+  const comMedia=kits.reduce((s,k)=>s+k.items.filter(i=>i.media).length,0);
+  el.innerHTML=`
+    <div>🌺 <b>${total}</b> kit(s) criado(s)</div>
+    <div>📦 <b>${totalItens}</b> itens no total</div>
+    <div>💰 Valor total: <b style="color:#1b5e20">${fmtR(totalVal)}</b></div>
+    <div>🔗 Kits com link do arranjo: <b>${comLink}</b></div>
+    <div>👤 Kits com autor identificado: <b>${comAutor}</b></div>
+    <div>🎬 Itens com mídia vinculada: <b>${comMedia}</b></div>
+    <div style="margin-top:8px;color:#aaa;font-size:10px">🕒 ${new Date().toLocaleString('pt-BR')}</div>`;
+}
+
+function forceFullBackup(){
+  autoSave();
+  const blob=new Blob([JSON.stringify({
+    kits,etManualItems,eanEtqQueue,
+    settings:buildCurrentSettings(),
+    timestamp:new Date().toISOString()
+  },null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`cobasi_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();URL.revokeObjectURL(a.href);
+  settingsStatus('✅ Backup completo baixado!');
+}
+
+
 // ============ INIT ============
 
 document.addEventListener('DOMContentLoaded',async ()=>{
@@ -1661,6 +1963,84 @@ document.addEventListener('DOMContentLoaded',async ()=>{
       <h3>👀 Preview das etiquetas</h3>
       <div id="eanetq-sheet-wrap"></div>
     </div>
+  </div>
+</div>
+
+
+<div id="tab-central" class="tab">
+  <div class="central-grid">
+
+    <!-- CARD Settings -->
+    <div class="central-card">
+      <h3>⚙️ Settings do Sistema</h3>
+      <p style="font-size:11px;color:#666;margin-bottom:10px;line-height:1.5">
+        Configurações de etiquetas, impressão e layout.<br>
+        Exporte o <code>settings.json</code>, suba no GitHub e todas as filiais carregam com 1 clique.
+      </p>
+      <div class="central-btn-col">
+        <button class="btn bg" onclick="generateAndDownloadSettings()">📤 Gerar &amp; Baixar settings.json</button>
+        <label class="cbtn">
+          📥 Carregar settings (arquivo local)
+          <input type="file" accept=".json" style="display:none" onchange="loadSettingsFromFile(event)">
+        </label>
+        <button class="btn bb" onclick="loadSettingsFromURL()">☁️ Carregar do servidor (GitHub)</button>
+        <button class="btn bg" onclick="applyRemoteSettingsToAll()">🔁 Aplicar settings a todas as abas</button>
+      </div>
+      <div id="settings-status" class="status-bar">Pronto.</div>
+      <div style="margin-top:10px;font-size:10px;color:#aaa;word-break:break-all">
+        🌐 <a href="https://edimarpcosta.github.io/cobasi/arranjo/settings.json" target="_blank"
+           style="color:#1565c0">edimarpcosta.github.io/cobasi/arranjo/settings.json</a>
+      </div>
+    </div>
+
+    <!-- CARD Colaboração -->
+    <div class="central-card">
+      <h3>🤝 Colaboração de Kits</h3>
+      <div class="kit-collab-info">
+        Compartilhe kits entre as <strong>520 filiais</strong>.<br>
+        Cada kit pode ter <strong>autor, link de vídeo/foto</strong> e observações.<br>
+        Importe kits de outras lojas sem perder os seus.
+      </div>
+      <div id="collab-list" class="collab-list"></div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn bgr" style="font-size:10px;padding:3px 8px" onclick="selectAllCollab(true)">☑ Todos</button>
+        <button class="btn bgr" style="font-size:10px;padding:3px 8px" onclick="selectAllCollab(false)">☐ Nenhum</button>
+        <span id="collab-count" style="font-size:11px;color:#888;margin-left:4px"></span>
+      </div>
+      <div class="central-btn-col">
+        <button class="btn bg" onclick="exportCollabKits('selected')">📤 Exportar selecionados</button>
+        <button class="btn bb" onclick="exportCollabKits('all')">💾 Exportar todos os kits</button>
+        <label class="cbtn">
+          📥 Importar kits (.json)
+          <input type="file" accept=".json" style="display:none" onchange="importCollabKits(event)">
+        </label>
+      </div>
+      <div id="collab-status" class="status-bar" style="margin-top:8px">Pronto.</div>
+    </div>
+
+    <!-- CARD Resumo -->
+    <div class="central-card">
+      <h3>📊 Resumo dos Kits</h3>
+      <div id="central-summary" class="central-summary"></div>
+    </div>
+
+    <!-- CARD Sobre -->
+    <div class="central-card">
+      <h3>ℹ️ Sobre o Sistema</h3>
+      <div style="font-size:11px;color:#555;line-height:1.9">
+        <b>🌸 Cobasi - Jardinagem v13</b><br>
+        Gerador de kits de arranjos florais<br>
+        <b>Armazenamento:</b> IndexedDB + localStorage<br>
+        <b>Banco:</b> Google Sheets (90k+ produtos)<br>
+        <b>Impressão:</b> A4, layout fiel ao Excel<br>
+        <b>Etiquetas:</b> Pimaco 6183 / Colacril CA4353
+      </div>
+      <div class="central-btn-col" style="margin-top:12px">
+        <button class="btn bg" onclick="forceFullBackup()">💾 Backup completo (JSON)</button>
+        <button class="btn br" onclick="resetAllData()">🗑️ Apagar todos os dados</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
