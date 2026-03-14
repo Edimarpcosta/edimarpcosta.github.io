@@ -6,7 +6,7 @@
 <title>Avaliação DISC Profissional</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
 <style>
 :root{--d:#e63946;--i:#f4a261;--s:#2a9d8f;--c:#264653;--bg:#0f1117;--bg2:#1a1d27;--bg3:#252836;--card:#1e2130;--card2:#282b3d;--text:#e8e8f0;--text2:#9a9bb0;--accent:#6c63ff;--accent2:#00d4aa;--radius:16px;--shadow:0 8px 32px rgba(0,0,0,.3);--glass:rgba(30,33,48,.7)}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -126,7 +126,7 @@ li::marker{color:var(--accent)}
 .famous-item p{font-size:.82rem;color:var(--text2);margin-bottom:.3rem}
 
 /* PDF hidden area */
-#pdf-content{position:absolute;left:-9999px;top:-9999px;width:210mm;background:#fff;color:#000}
+#pdf-content{display:none;background:#fff;color:#000;padding:0;margin:0}
 
 /* Responsive */
 @media(max-width:700px){
@@ -667,78 +667,407 @@ function renderRef(){
 
 // ===== PDF GENERATION =====
 function generatePDF(){
-  const name = document.getElementById('inp-name').value || 'Sem nome';
-  const segment = document.getElementById('inp-segment').value || '';
-  const dateVal = document.getElementById('inp-date').value;
-  const dom = getDominant(scores);
-  const domNames = dom.map(k=>DISC[k].name+' ('+k+')').join(' + ');
-  const now = dateVal ? new Date(dateVal+'T12:00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
-  const modeLabel = currentMode==='colaborador' ? 'Colaborador' : 'Candidato';
-  const pdfEl = document.getElementById('pdf-content');
+  const btn = document.querySelector('.btn-pdf');
+  const originalBtn = btn ? btn.innerHTML : '';
 
-  let h = '<div style="font-family:Arial,sans-serif;padding:20mm;background:#fff;color:#000">';
-  h += '<div style="border-bottom:3px solid #6c63ff;padding-bottom:10px;margin-bottom:20px">';
-  h += '<h1 style="color:#6c63ff;margin:0;font-size:22px">Avaliação DISC Profissional</h1>';
-  h += '<p style="margin:4px 0;font-size:13px"><strong>'+name+'</strong>';
-  if(currentMode==='colaborador'){
-    const code = document.getElementById('inp-code').value;
-    if(code) h+=' | Cód: '+code;
-  } else {
-    const cargo = document.getElementById('inp-cargo').value;
-    if(cargo) h+=' | Cargo: '+cargo;
-    const vaga = document.getElementById('inp-vaga').value;
-    h+=' | Vaga: '+(vaga==='vendas'?'Vendas/Campo':'Supervisão/Liderança');
-  }
-  if(segment) h+=' | '+segment;
-  h+='</p>';
-  h+='<p style="margin:4px 0;font-size:12px;color:#666">'+modeLabel+' | Data: '+now+'</p></div>';
-
-  h+='<h2 style="font-size:16px;color:#333">Pontuações DISC</h2>';
-  h+='<table style="width:100%;border-collapse:collapse;margin-bottom:15px">';
-  ['D','I','S','C'].forEach(k=>{
-    const p=DISC[k];
-    h+='<tr><td style="padding:6px;font-weight:bold;color:'+p.colorHex+'">'+k+' – '+p.name+'</td>';
-    h+='<td style="padding:6px"><div style="background:#eee;border-radius:4px;height:16px"><div style="background:'+p.colorHex+';width:'+scores[k]+'%;height:16px;border-radius:4px"></div></div></td>';
-    h+='<td style="padding:6px;font-weight:bold;width:40px">'+scores[k]+'</td></tr>';
-  });
-  h+='</table>';
-  h+='<p style="background:#f0eeff;padding:8px 12px;border-radius:6px;font-size:13px"><strong>Perfil Dominante:</strong> '+domNames+'</p>';
-
-  // Content sections
-  dom.forEach(k=>{
-    const p=DISC[k];
-    h+='<h2 style="font-size:15px;color:'+p.colorHex+';border-left:4px solid '+p.colorHex+';padding-left:8px;margin-top:20px">Perfil '+p.name+' ('+k+')</h2>';
-    h+='<p style="font-size:12px;color:#555;margin-bottom:10px">'+getProfileDesc(k)+'</p>';
-    h+='<h3 style="font-size:13px">Pontos Fortes</h3><ul style="font-size:12px">'+p.pontosFortes.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
-    h+='<h3 style="font-size:13px">Pontos Fracos</h3><ul style="font-size:12px">'+p.pontosFracos.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
-    if(currentMode==='colaborador'){
-      h+='<h3 style="font-size:13px">Performance em Vendas</h3><ul style="font-size:12px">'+p.performance.vendas.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
-    } else {
-      h+='<h3 style="font-size:13px">Por que Contratar</h3><ul style="font-size:12px">'+p.candidato.contratar.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
-      h+='<h3 style="font-size:13px">Por que NÃO Contratar</h3><ul style="font-size:12px">'+p.candidato.naoContratar.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
+  try {
+    if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined'){
+      alert('A biblioteca jsPDF não carregou. Verifique sua conexão com a internet.');
+      return;
     }
-    h+='<h3 style="font-size:13px">Como Lidar</h3>';
-    h+='<p style="font-size:12px"><strong>Faça:</strong> '+p.comoLidar.fazer.join('; ')+'</p>';
-    h+='<p style="font-size:12px"><strong>Não faça:</strong> '+p.comoLidar.naoFazer.join('; ')+'</p>';
-  });
 
-  h+='<div style="border-top:1px solid #ddd;margin-top:20px;padding-top:8px;font-size:10px;color:#999">Gerado por DISC Profissional – Ameripan Distribuidora | '+now+'</div>';
-  h+='</div>';
+    const { jsPDF } = window.jspdf || jspdf;
 
-  pdfEl.innerHTML = h;
-  pdfEl.style.position = 'absolute';
-  pdfEl.style.left = '-9999px';
+    const name = (document.getElementById('inp-name').value || 'Sem nome').trim();
+    const segment = (document.getElementById('inp-segment').value || '').trim();
+    const dateVal = document.getElementById('inp-date').value;
+    const dom = getDominant(scores);
 
-  const opt = {
-    margin: 0,
-    filename: 'DISC_'+name.replace(/\s/g,'_')+'_'+now.replace(/\//g,'-')+'.pdf',
-    image: {type:'jpeg', quality:0.98},
-    html2canvas: {scale:2, useCORS:true},
-    jsPDF: {unit:'mm', format:'a4', orientation:'portrait'}
-  };
-  html2pdf().set(opt).from(pdfEl).save().then(()=>{
-    pdfEl.innerHTML = '';
-  });
+    if(!currentMode){
+      alert('Selecione o modo e gere a análise antes de exportar o PDF.');
+      return;
+    }
+
+    if(!dom.length){
+      alert('Faça a análise do perfil antes de gerar o PDF.');
+      return;
+    }
+
+    const now = dateVal ? new Date(dateVal+'T12:00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+    const modeLabel = currentMode === 'colaborador' ? 'Colaborador' : 'Candidato';
+    const code = currentMode === 'colaborador' ? ((document.getElementById('inp-code')||{}).value || '').trim() : '';
+    const cargo = currentMode === 'candidato' ? ((document.getElementById('inp-cargo')||{}).value || '').trim() : '';
+    const vaga = currentMode === 'candidato' ? ((document.getElementById('inp-vaga')||{}).value || '') : '';
+    const vagaLabel = vaga === 'vendas' ? 'Vendas / Campo' : 'Supervisão / Liderança';
+    const domNames = dom.map(k => DISC[k].name + ' (' + k + ')').join(' + ');
+
+    if(btn){
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+      btn.style.opacity = '.7';
+      btn.style.cursor = 'wait';
+    }
+
+    setTimeout(() => {
+      try {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageW = 210;
+        const pageH = 297;
+        const margin = 14;
+        const contentW = pageW - 2 * margin;
+        let y = margin;
+
+        // Helper functions
+        function addText(text, size, color, weight, maxWidth, x, align){
+          doc.setFontSize(size);
+          doc.setTextColor(color);
+          if(weight === 'bold') doc.setFont(undefined, 'bold');
+          else doc.setFont(undefined, 'normal');
+          const width = maxWidth || contentW;
+          const posX = x || margin;
+          const lines = doc.splitTextToSize(text, width);
+          const lineHeight = Math.max(4.2, size * 0.42);
+          lines.forEach(line => {
+            if(y + lineHeight > pageH - margin){
+              doc.addPage();
+              y = margin;
+            }
+            doc.text(line, posX, y, align ? { align: align, maxWidth: width } : undefined);
+            y += lineHeight;
+          });
+        }
+
+        function addSpace(h){ y += h; }
+
+        function checkPage(needed){
+          if(y + needed > pageH - margin){
+            doc.addPage();
+            y = margin;
+            return true;
+          }
+          return false;
+        }
+
+        function addList(items, indent){
+          const lineH = 5;
+          const ind = indent || 3;
+          items.forEach(item => {
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            const lines = doc.splitTextToSize(item, contentW - ind - 4);
+            const blockH = lines.length * lineH + 2;
+            checkPage(blockH + 4);
+            doc.setFontSize(10);
+            doc.setTextColor('#333333');
+            doc.setFont(undefined, 'normal');
+            doc.setFillColor('#555555');
+            doc.circle(margin + ind, y - 1.2, 0.8, 'F');
+            lines.forEach((line, idx) => {
+              if(idx > 0){ checkPage(lineH + 2); }
+              doc.text(line, margin + ind + 2, y);
+              y += lineH;
+            });
+            y += 1;
+          });
+        }
+
+        function addBar(label, value, color){
+          checkPage(10);
+          doc.setFontSize(10);
+          doc.setTextColor(color);
+          doc.setFont(undefined, 'bold');
+          doc.text(label, margin, y);
+
+          const barX = margin + 35;
+          const barW = contentW - 45;
+          const barH = 5;
+
+          doc.setFillColor('#edf0f7');
+          doc.rect(barX, y - 3, barW, barH, 'F');
+
+          doc.setFillColor(color);
+          doc.rect(barX, y - 3, (barW * value / 100), barH, 'F');
+
+          doc.setTextColor('#111111');
+          doc.setFont(undefined, 'bold');
+          doc.text(String(value), barX + barW + 2, y);
+
+          y += 8;
+        }
+
+        function addSubHeader(label, bgColor, textColor, neededBefore){
+          // Garante que header + pelo menos 2 linhas de conteudo cabem na pagina
+          checkPage(neededBefore || 28);
+          const hH = 8;  // altura do rect do cabeçalho
+          doc.setFillColor(bgColor);
+          doc.rect(margin, y, contentW, hH, 'F');
+          doc.setFontSize(9);
+          doc.setTextColor(textColor || '#ffffff');
+          doc.setFont(undefined, 'bold');
+          doc.text(label, margin + 3, y + 5.5);
+          y += hH + 3;  // altura do rect + respiro antes da lista
+        }
+
+        function addSection(title, bgColor, items, indent){
+          addSubHeader(title.toUpperCase(), bgColor, '#ffffff', 28);
+          addList(items, indent || 3);
+          addSpace(4);
+        }
+
+        // Header gradient effect (simplified)
+        doc.setFillColor('#6c63ff');
+        doc.rect(0, 0, pageW, 45, 'F');
+
+        doc.setFontSize(9);
+        doc.setTextColor('#ffffff');
+        doc.setFont(undefined, 'normal');
+        doc.text('RELATÓRIO COMPORTAMENTAL', pageW / 2, 12, { align: 'center' });
+
+        doc.setFontSize(22);
+        doc.setFont(undefined, 'bold');
+        doc.text('Avaliação DISC Profissional', pageW / 2, 22, { align: 'center' });
+
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.text('Resumo executivo + análise detalhada', pageW / 2, 30, { align: 'center' });
+
+        y = 50;
+
+        // Info box
+        doc.setFillColor('#f6f8fc');
+        doc.setDrawColor('#e6eaf2');
+        doc.rect(margin, y, contentW, 22, 'FD');
+
+        doc.setFontSize(10);
+        doc.setTextColor('#334155');
+        doc.setFont(undefined, 'bold');
+        doc.text('Nome:', margin + 2, y + 6);
+        doc.setFont(undefined, 'normal');
+        doc.text(name, margin + 16, y + 6);
+
+        doc.setFont(undefined, 'bold');
+        doc.text('Modo:', margin + 2, y + 12);
+        doc.setFont(undefined, 'normal');
+        doc.text(modeLabel, margin + 16, y + 12);
+
+        doc.setFont(undefined, 'bold');
+        doc.text('Data:', margin + 2, y + 18);
+        doc.setFont(undefined, 'normal');
+        doc.text(now, margin + 16, y + 18);
+
+        if(code){
+          doc.setFont(undefined, 'bold');
+          doc.text('Código:', margin + 70, y + 6);
+          doc.setFont(undefined, 'normal');
+          doc.text(code, margin + 88, y + 6);
+        }
+
+        if(cargo){
+          doc.setFont(undefined, 'bold');
+          doc.text('Cargo:', margin + 70, y + 6);
+          doc.setFont(undefined, 'normal');
+          doc.text(cargo, margin + 86, y + 6);
+        }
+
+        if(segment){
+          doc.setFont(undefined, 'bold');
+          doc.text('Empresa:', margin + 70, y + 12);
+          doc.setFont(undefined, 'normal');
+          doc.text(segment, margin + 88, y + 12);
+        }
+
+        if(vaga){
+          doc.setFont(undefined, 'bold');
+          doc.text('Vaga:', margin + 70, y + 18);
+          doc.setFont(undefined, 'normal');
+          doc.text(vagaLabel, margin + 82, y + 18);
+        }
+
+        y += 28;
+
+        // Executive summary
+        addText('Resumo executivo', 14, '#6c63ff', 'bold', contentW, pageW / 2, 'center');
+        addSpace(2);
+
+        doc.setFillColor('#f3f0ff');
+        doc.setDrawColor('#ddd6fe');
+        doc.rect(margin, y, contentW, 14, 'FD');
+
+        doc.setFontSize(9);
+        doc.setTextColor('#6b7280');
+        doc.setFont(undefined, 'normal');
+        doc.text('PERFIL DOMINANTE', margin + 2, y + 5);
+
+        doc.setFontSize(16);
+        doc.setTextColor('#5b4ff5');
+        doc.setFont(undefined, 'bold');
+        doc.text(domNames, margin + 2, y + 11);
+
+        y += 18;
+
+        // Score bars
+        addText('Pontuações DISC', 12, '#333333', 'bold');
+        addSpace(2);
+
+        addBar('D - ' + DISC.D.name, scores.D, DISC.D.colorHex);
+        addBar('I - ' + DISC.I.name, scores.I, DISC.I.colorHex);
+        addBar('S - ' + DISC.S.name, scores.S, DISC.S.colorHex);
+        addBar('C - ' + DISC.C.name, scores.C, DISC.C.colorHex);
+
+        addSpace(5);
+
+        // Profile summaries
+        dom.forEach(k => {
+          const p = DISC[k];
+          checkPage(20);
+
+          doc.setDrawColor('#e8eaf2');
+          doc.rect(margin, y, contentW, 16, 'D');
+
+          doc.setFontSize(11);
+          doc.setTextColor(p.colorHex);
+          doc.setFont(undefined, 'bold');
+          doc.text(p.name + ' (' + k + ')', margin + 2, y + 5);
+
+          doc.setFontSize(9);
+          doc.setTextColor('#4b5563');
+          doc.setFont(undefined, 'normal');
+          const desc = doc.splitTextToSize(getProfileDesc(k), contentW - 4);
+          let dy = y + 10;
+          desc.forEach(line => {
+            doc.text(line, margin + 2, dy);
+            dy += 3.5;
+          });
+
+          y += 18;
+        });
+
+        // Detailed profiles
+        dom.forEach((k, idx) => {
+          const p = DISC[k];
+
+          doc.addPage();
+          y = margin;
+
+          // Profile header — altura dinâmica baseada na descrição
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'normal');
+          const descLines = doc.splitTextToSize(getProfileDesc(k), contentW - 16);
+          const descH = descLines.length * 4.5;
+          const headerH = 12 + descH + 6;  // titulo + desc + padding
+
+          doc.setFillColor(p.colorHex);
+          doc.rect(margin, y, contentW, headerH, 'F');
+
+          doc.setFontSize(18);
+          doc.setTextColor('#ffffff');
+          doc.setFont(undefined, 'bold');
+          doc.text('Perfil ' + p.name + ' (' + k + ')', pageW / 2, y + 9, { align: 'center' });
+
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'normal');
+          let dy = y + 15;
+          descLines.forEach(line => {
+            doc.text(line, pageW / 2, dy, { align: 'center', maxWidth: contentW - 16 });
+            dy += 4.5;
+          });
+          y += headerH + 5;
+
+          addSection('Pontos fortes', '#2a9d8f', p.pontosFortes);
+          addSection('Pontos fracos', '#e63946', p.pontosFracos);
+
+          if(currentMode === 'colaborador'){
+            addSection('Performance em vendas', '#6c63ff', p.performance.vendas);
+            addSection('Produtividade', '#264653', p.performance.produtividade);
+          } else {
+            addSection('Por que contratar', '#2a9d8f', p.candidato.contratar);
+            addSection('Por que não contratar', '#e63946', p.candidato.naoContratar);
+            addSection('Performance em campo', '#f4a261', p.candidato.campo);
+            addSection(
+              vaga === 'supervisao' ? 'Dicas para supervisão' : 'Dicas para vendas',
+              '#6c63ff',
+              vaga === 'supervisao' ? p.liderar : p.performance.vendas
+            );
+          }
+
+          checkPage(30);
+          addText('Como lidar', 11, '#5b4ff5', 'bold', contentW, pageW / 2, 'center');
+          addSpace(2);
+
+          addSubHeader('O QUE FAZER', '#e8f5e9', '#2a9d8f', 22);
+          addList(p.comoLidar.fazer, 3);
+
+          addSubHeader('O QUE NÃO FAZER', '#ffebee', '#e63946', 22);
+          addList(p.comoLidar.naoFazer, 3);
+          addSpace(4);
+
+          checkPage(30);
+          addText('Gestão de conflitos', 11, '#c08400', 'bold', contentW, pageW / 2, 'center');
+          addSpace(2);
+
+          addSubHeader('O QUE GERA RUÍDO', '#fff3cd', '#c08400', 22);
+          addList(p.conflitos.ruido, 3);
+
+          addSubHeader('COMO EVITAR', '#e8f5e9', '#2a9d8f', 22);
+          addList(p.conflitos.evitar, 3);
+
+          addSubHeader('COMO COMBINAR PERFIS', '#e3f2fd', '#5b4ff5', 22);
+          addList(p.conflitos.combinar, 3);
+          addSpace(4);
+
+          checkPage(30);
+          addText('Aplicações práticas', 11, '#0f766e', 'bold', contentW, pageW / 2, 'center');
+          addSpace(2);
+
+          addSubHeader('COMO LIDERAR', '#e0f2f1', '#0f766e', 22);
+          addList(p.liderar, 3);
+
+          addSubHeader('COMO MOTIVAR', '#fff3e0', '#ea580c', 22);
+          addList(p.motivar, 3);
+
+          addSubHeader('COMO DAR FEEDBACK', '#f3e5f5', '#7c3aed', 22);
+          addList(p.feedback, 3);
+
+          // Footer
+          y = pageH - 10;
+          doc.setDrawColor('#e8eaf2');
+          doc.line(margin, y - 2, pageW - margin, y - 2);
+          doc.setFontSize(8);
+          doc.setTextColor('#64748b');
+          doc.setFont(undefined, 'normal');
+          doc.text('DISC Profissional', margin, y);
+          doc.text(now, pageW/2, y, { align: 'center' });
+          doc.text('Uso interno', pageW - margin, y, { align: 'right' });
+        });
+
+        const filename = 'DISC_' + name.replace(/\s+/g, '_') + '_' + now.replace(/\//g, '-') + '.pdf';
+        doc.save(filename);
+
+        alert('PDF gerado com sucesso: ' + filename);
+
+      } catch(pdfErr){
+        console.error('Erro ao gerar PDF com jsPDF:', pdfErr);
+        alert('Erro ao gerar o PDF: ' + (pdfErr.message || pdfErr));
+      } finally {
+        if(btn){
+          btn.disabled = false;
+          btn.innerHTML = originalBtn;
+          btn.style.opacity = '';
+          btn.style.cursor = '';
+        }
+      }
+    }, 200);
+
+  } catch(error) {
+    console.error('Falha na função generatePDF:', error);
+    alert('Falha ao preparar o PDF: ' + (error && error.message ? error.message : error));
+    if(btn){
+      btn.disabled = false;
+      btn.innerHTML = originalBtn;
+      btn.style.opacity = '';
+      btn.style.cursor = '';
+    }
+  }
 }
 </script>
 </body>
