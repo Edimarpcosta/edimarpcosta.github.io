@@ -234,6 +234,93 @@
         .progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.3); margin-top: 8px; border-radius: 2px; }
         .progress-fill { height: 100%; background: white; width: 0%; transition: width 0.1s; border-radius: 2px; }
 
+        /* ========== APP LAYOUT (sidebar + main) ========== */
+        .app-layout { display: flex; flex: 1; overflow: hidden; }
+        .app-layout > main { flex: 1; }
+
+        /* ========== PLAYLIST SIDEBAR ========== */
+        .playlist-sidebar {
+            width: 280px; min-width: 280px; background: #12121a; border-right: 1px solid #2a2a3a;
+            display: flex; flex-direction: column; transition: margin-left 0.3s ease;
+            z-index: 8;
+        }
+        .playlist-sidebar.collapsed { margin-left: -280px; }
+        .playlist-sidebar.empty { display: none; }
+
+        .playlist-header {
+            padding: 14px 16px; border-bottom: 1px solid #2a2a3a; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .playlist-header h3 { font-size: 1em; color: #ccc; margin: 0; }
+        .playlist-count { font-size: 0.8em; color: #666; }
+
+        .playlist-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+        .playlist-list::-webkit-scrollbar { width: 4px; }
+        .playlist-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+        .playlist-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+            cursor: pointer; transition: background 0.15s; border-left: 3px solid transparent;
+            font-size: 0.88em; color: #888;
+        }
+        .playlist-item:hover { background: rgba(255,255,255,0.04); }
+        .playlist-item.active {
+            background: rgba(99,102,241,0.12); border-left-color: var(--primary);
+            color: white; font-weight: 600;
+        }
+        .playlist-item .pl-number { min-width: 22px; text-align: right; font-size: 0.8em; color: #555; }
+        .playlist-item.active .pl-number { color: var(--primary); }
+        .playlist-item .pl-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playlist-item .pl-playing { display: none; color: var(--primary); }
+        .playlist-item.active .pl-playing { display: inline; }
+
+        /* ========== SOURCE BADGES ========== */
+        .badge {
+            padding: 1px 6px; border-radius: 3px; font-size: 0.7em; font-weight: 700;
+            letter-spacing: 0.3px; white-space: nowrap;
+        }
+        .badge-lrc { background: #00b894; color: #fff; }
+        .badge-emb { background: #fdcb6e; color: #333; }
+        .badge-api { background: #a29bfe; color: #fff; }
+        .badge-br  { background: #e17055; color: #fff; }
+        .badge-ovh { background: #3498db; color: #333; }
+        .badge-man { background: #9b59b6; color: #fff; }
+        .badge-pending { background: #444; color: #888; }
+
+        /* ========== PLAYLIST CONTROLS ========== */
+        .playlist-controls {
+            padding: 12px; border-top: 1px solid #2a2a3a; display: flex;
+            justify-content: center; gap: 8px;
+        }
+        .playlist-controls button {
+            background: #222; border: 1px solid #333; color: #888; width: 38px; height: 38px;
+            border-radius: 8px; cursor: pointer; font-size: 1.1em; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .playlist-controls button:hover { background: #333; color: #ddd; }
+        .playlist-controls button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        .btn-toggle-sidebar {
+            background: #222; border: 1px solid #333; color: #aaa; padding: 6px 10px;
+            border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: 0.2s; display: none;
+        }
+        .btn-toggle-sidebar:hover { background: #333; }
+        .has-playlist .btn-toggle-sidebar { display: inline-flex; }
+
+        /* ========== DRAG OVERLAY ========== */
+        .drag-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(99,102,241,0.15); backdrop-filter: blur(4px); z-index: 200;
+            justify-content: center; align-items: center; pointer-events: none;
+        }
+        .drag-overlay.active { display: flex; }
+        .drag-overlay-box {
+            border: 3px dashed var(--primary); border-radius: 16px; padding: 40px 60px;
+            background: rgba(26,26,36,0.9); text-align: center;
+        }
+        .drag-overlay-box .icon { font-size: 3em; margin-bottom: 10px; }
+        .drag-overlay-box .text { font-size: 1.1em; color: #ccc; }
+
         @media (max-width: 1024px) { .lyrics-box { width: 85%; } }
         @media (max-width: 768px) {
             header { flex-wrap: wrap; padding: 10px; }
@@ -246,6 +333,8 @@
             .modal-tabs { overflow-x: auto; }
             .modal-tab { font-size: 0.8em; padding: 10px 8px; }
             .theme-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .playlist-sidebar { position: fixed; left: 0; top: 0; height: 100%; z-index: 15; }
+            .playlist-sidebar.collapsed { margin-left: -280px; }
         }
         @media (max-width: 480px) {
             .track-info { display: none; }
@@ -256,6 +345,13 @@
 </head>
 <body data-bg-type="solid">
 
+<div class="drag-overlay" id="dragOverlay">
+    <div class="drag-overlay-box">
+        <div class="icon">🎵</div>
+        <div class="text">Solte os arquivos aqui<br><small>MP3, FLAC, LRC ou pasta inteira</small></div>
+    </div>
+</div>
+
 <div id="loading">
     <span id="loadingText">Carregando...</span>
     <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
@@ -265,8 +361,8 @@
 
 <header id="mainHeader">
     <button class="btn-file">
-        <span>📂 Abrir Arquivo</span>
-        <input type="file" id="fileInput" accept="audio/*">
+        <span>📂 Abrir Arquivos</span>
+        <input type="file" id="fileInput" accept="audio/*,.lrc" multiple>
     </button>
 
     <div class="track-info">
@@ -275,6 +371,7 @@
     </div>
 
     <div class="controls">
+        <button class="btn-toggle-sidebar" id="btnToggleSidebar" onclick="app.toggleSidebar()" title="Playlist">📋</button>
         <button class="btn btn-presentation" id="btnPresentation" onclick="app.togglePresentationMode()">🖥️ Apresentação</button>
         <button class="btn" id="btnSettings" onclick="app.openSettings()">⚙️ Configurações</button>
         <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
@@ -290,14 +387,29 @@
     </div>
 </header>
 
-<main id="mainArea">
-    <div class="lyrics-box" id="lyricsContainer">
-        <div style="margin-top:20vh; color:#444">
-            Suporta MP3 e FLAC (Conversão Auto).<br>
-            Carregue um arquivo para começar.
+<div class="app-layout" id="appLayout">
+    <aside class="playlist-sidebar empty" id="playlistSidebar">
+        <div class="playlist-header">
+            <h3>🎵 Playlist</h3>
+            <span class="playlist-count" id="playlistCount">0 faixas</span>
         </div>
-    </div>
-</main>
+        <div class="playlist-list" id="playlistList"></div>
+        <div class="playlist-controls">
+            <button id="btnPrev" onclick="app.prevTrack()" title="Anterior">⏮</button>
+            <button id="btnShuffle" onclick="app.toggleShuffle()" title="Aleatório">🔀</button>
+            <button id="btnLoop" onclick="app.toggleLoop()" title="Repetir">🔁</button>
+            <button id="btnNext" onclick="app.nextTrack()" title="Próxima">⏭</button>
+        </div>
+    </aside>
+    <main id="mainArea">
+        <div class="lyrics-box" id="lyricsContainer">
+            <div style="margin-top:20vh; color:#444">
+                Suporta MP3 e FLAC (Conversão Auto).<br>
+                Arraste múltiplos arquivos ou pasta inteira.
+            </div>
+        </div>
+    </main>
+</div>
 
 <footer id="mainFooter">
     <audio id="audioPlayer" controls preload="metadata"></audio>
@@ -664,6 +776,318 @@ class AudioTagger {
         return writer.getBlob();
     }
 }
+
+/**
+ * MÓDULO 5: Gerenciador de Playlist (PlaylistManager)
+ */
+class PlaylistManager {
+    constructor() {
+        this.tracks = [];
+        this.currentIndex = -1;
+        this.shuffleMode = false;
+        this.loopMode = 'none'; // 'none' | 'all' | 'one'
+        this.shuffleOrder = [];
+        this.onTrackChange = null;
+        this.onPlaylistUpdate = null;
+    }
+
+    addFiles(fileList) {
+        const audioFiles = [];
+        const lrcFiles = [];
+        for (const f of fileList) {
+            const name = f.name.toLowerCase();
+            if (name.endsWith('.lrc')) {
+                lrcFiles.push(f);
+            } else if (f.type.startsWith('audio/') || name.match(/\.(mp3|flac|wav|ogg|m4a|aac)$/i)) {
+                audioFiles.push(f);
+            }
+        }
+        // Pair by basename
+        const lrcMap = new Map();
+        for (const lrc of lrcFiles) {
+            const base = lrc.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            lrcMap.set(base, lrc);
+        }
+        for (const audio of audioFiles) {
+            const base = audio.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            const paired = lrcMap.get(base) || null;
+            this.tracks.push({
+                audioFile: audio,
+                lrcFile: paired,
+                baseName: audio.name.replace(/\.[^/.]+$/, ''),
+                meta: { track: '', artist: '', album: '', duration: 0 },
+                lyrics: null,
+                lyricsSource: paired ? 'lrc' : 'pending'
+            });
+        }
+        // Also handle standalone LRC dropped onto existing playing track
+        if (audioFiles.length === 0 && lrcFiles.length > 0 && this.tracks.length > 0) {
+            const curTrack = this.tracks[this.currentIndex];
+            if (curTrack) {
+                curTrack.lrcFile = lrcFiles[0];
+                curTrack.lyricsSource = 'lrc';
+            }
+        }
+        this._rebuildShuffle();
+        if (this.onPlaylistUpdate) this.onPlaylistUpdate();
+    }
+
+    getTrack(index) {
+        return this.tracks[index] || null;
+    }
+
+    getCurrent() {
+        return this.tracks[this.currentIndex] || null;
+    }
+
+    play(index) {
+        if (index < 0 || index >= this.tracks.length) return;
+        this.currentIndex = index;
+        if (this.onTrackChange) this.onTrackChange(index);
+    }
+
+    next() {
+        if (this.tracks.length === 0) return;
+        if (this.loopMode === 'one') { this.play(this.currentIndex); return; }
+        if (this.shuffleMode) {
+            const pos = this.shuffleOrder.indexOf(this.currentIndex);
+            const nextPos = (pos + 1) % this.shuffleOrder.length;
+            if (pos + 1 >= this.shuffleOrder.length && this.loopMode !== 'all') return;
+            this.play(this.shuffleOrder[nextPos]);
+        } else {
+            const next = this.currentIndex + 1;
+            if (next >= this.tracks.length) {
+                if (this.loopMode === 'all') this.play(0);
+                return;
+            }
+            this.play(next);
+        }
+    }
+
+    prev() {
+        if (this.tracks.length === 0) return;
+        if (this.shuffleMode) {
+            const pos = this.shuffleOrder.indexOf(this.currentIndex);
+            const prevPos = pos - 1 < 0 ? this.shuffleOrder.length - 1 : pos - 1;
+            this.play(this.shuffleOrder[prevPos]);
+        } else {
+            const prev = this.currentIndex - 1;
+            this.play(prev < 0 ? this.tracks.length - 1 : prev);
+        }
+    }
+
+    toggleShuffle() {
+        this.shuffleMode = !this.shuffleMode;
+        if (this.shuffleMode) this._rebuildShuffle();
+        return this.shuffleMode;
+    }
+
+    toggleLoop() {
+        const modes = ['none', 'all', 'one'];
+        this.loopMode = modes[(modes.indexOf(this.loopMode) + 1) % modes.length];
+        return this.loopMode;
+    }
+
+    _rebuildShuffle() {
+        this.shuffleOrder = this.tracks.map((_, i) => i);
+        for (let i = this.shuffleOrder.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.shuffleOrder[i], this.shuffleOrder[j]] = [this.shuffleOrder[j], this.shuffleOrder[i]];
+        }
+    }
+
+    get length() { return this.tracks.length; }
+}
+
+/**
+ * MÓDULO 6: UI da Playlist (PlaylistUI)
+ */
+class PlaylistUI {
+    constructor(listEl, countEl, sidebarEl) {
+        this.listEl = listEl;
+        this.countEl = countEl;
+        this.sidebarEl = sidebarEl;
+        this.onItemClick = null;
+    }
+
+    static BADGE_MAP = {
+        lrc: { label: 'LRC', cls: 'badge-lrc' },
+        emb: { label: 'EMB', cls: 'badge-emb' },
+        api: { label: 'API', cls: 'badge-api' },
+        br:  { label: 'BR',  cls: 'badge-br'  },
+        ovh: { label: 'OVH', cls: 'badge-ovh' },
+        man: { label: 'MAN', cls: 'badge-man' },
+        pending: { label: '...', cls: 'badge-pending' }
+    };
+
+    render(tracks, activeIndex) {
+        this.sidebarEl.classList.remove('empty');
+        this.listEl.innerHTML = '';
+        this.countEl.textContent = tracks.length + (tracks.length === 1 ? ' faixa' : ' faixas');
+        tracks.forEach((track, i) => {
+            const div = document.createElement('div');
+            div.className = 'playlist-item' + (i === activeIndex ? ' active' : '');
+            div.dataset.index = i;
+            const badge = PlaylistUI.BADGE_MAP[track.lyricsSource] || PlaylistUI.BADGE_MAP.pending;
+            div.innerHTML = `
+                <span class="pl-number">${i + 1}</span>
+                <span class="pl-playing">▶</span>
+                <span class="pl-title">${this._escHtml(track.baseName)}</span>
+                <span class="badge ${badge.cls}">${badge.label}</span>`;
+            div.onclick = () => { if (this.onItemClick) this.onItemClick(i); };
+            this.listEl.appendChild(div);
+        });
+        document.body.classList.add('has-playlist');
+    }
+
+    setActive(index) {
+        this.listEl.querySelectorAll('.playlist-item').forEach((el, i) => {
+            el.classList.toggle('active', i === index);
+        });
+        const active = this.listEl.children[index];
+        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    updateBadge(index, source) {
+        const item = this.listEl.children[index];
+        if (!item) return;
+        const badge = PlaylistUI.BADGE_MAP[source] || PlaylistUI.BADGE_MAP.pending;
+        const el = item.querySelector('.badge');
+        if (el) { el.className = 'badge ' + badge.cls; el.textContent = badge.label; }
+    }
+
+    _escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+}
+
+/**
+ * MÓDULO 7: letras.mus.br Client (LetrasMusBrClient)
+ */
+class LetrasMusBrClient {
+    static slugify(text) {
+        return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+    }
+
+    async search(artist, track) {
+        if (!artist || !track) return null;
+        const slug = `${LetrasMusBrClient.slugify(artist)}/${LetrasMusBrClient.slugify(track)}`;
+        const url = `https://www.letras.mus.br/${slug}/?ajax`;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+            if (!resp.ok) return null;
+            const html = await resp.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const paragraphs = doc.querySelectorAll('article[class*="cnt-letra"] p');
+            if (paragraphs.length === 0) return null;
+            const lines = [];
+            paragraphs.forEach(p => {
+                const text = p.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+                if (text) { lines.push(text); lines.push(''); }
+            });
+            return { plainLyrics: lines.join('\n').trim() };
+        } catch (e) { return null; }
+    }
+}
+
+/**
+ * MÓDULO 8: Lyrics.ovh Client (LyricsOvhClient)
+ */
+class LyricsOvhClient {
+    async search(artist, track) {
+        if (!artist || !track) return null;
+        const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(track)}`;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (data.lyrics && data.lyrics.trim()) {
+                return { plainLyrics: data.lyrics.trim() };
+            }
+            return null;
+        } catch (e) { return null; }
+    }
+}
+
+/**
+
+/**
+ * MÓDULO 9: Cascata de Letras (LyricsCascade)
+ * Prioridade: LRC local → LRCLIB API → letras.mus.br → Lyrics.ovh → Embedded (fallback) → Manual
+ * SEMPRE prefere letras sincronizadas. Se embedded for só plain, busca APIs antes.
+ */
+class LyricsCascade {
+    constructor(lrcClient, letrasClient, ovhClient) {
+        this.lrcClient = lrcClient;
+        this.letrasClient = letrasClient;
+        this.ovhClient = ovhClient;
+    }
+
+    async resolve(track, onSourceFound) {
+        // 1. LRC local — sempre sincronizado
+        if (track.lrcFile) {
+            try {
+                const text = await track.lrcFile.text();
+                if (text && text.trim()) {
+                    onSourceFound('lrc');
+                    return { syncedLyrics: text, plainLyrics: null };
+                }
+            } catch (e) {}
+        }
+
+        // 2. Tag ID3 embutida — SOMENTE se for sincronizada
+        //    Se for plain-only, guarda para fallback (posição 5)
+        let embeddedPlainFallback = null;
+        if (track.embeddedLyrics) {
+            const isSynced = /^\[\d{2}:\d{2}/.test(track.embeddedLyrics.trim());
+            if (isSynced) {
+                onSourceFound('emb');
+                return { syncedLyrics: track.embeddedLyrics, plainLyrics: null };
+            } else {
+                embeddedPlainFallback = track.embeddedLyrics;
+            }
+        }
+
+        // 3. LRCLIB API — forte em synced
+        if (track.meta.track) {
+            try {
+                const result = await this.lrcClient.findBestMatch(track.meta);
+                if (result && (result.syncedLyrics || result.plainLyrics)) {
+                    onSourceFound('api');
+                    return result;
+                }
+            } catch (e) {}
+        }
+
+        // 4. letras.mus.br — plain only
+        if (track.meta.track && track.meta.artist) {
+            const brResult = await this.letrasClient.search(track.meta.artist, track.meta.track);
+            if (brResult) {
+                onSourceFound('br');
+                return brResult;
+            }
+        }
+
+        // 5. Lyrics.ovh — plain only
+        if (track.meta.track && track.meta.artist) {
+            const ovhResult = await this.ovhClient.search(track.meta.artist, track.meta.track);
+            if (ovhResult) {
+                onSourceFound('ovh');
+                return ovhResult;
+            }
+        }
+
+        // 6. Embedded plain fallback — se nenhuma API retornou
+        if (embeddedPlainFallback) {
+            onSourceFound('emb');
+            return { syncedLyrics: null, plainLyrics: embeddedPlainFallback };
+        }
+
+        // 7. Manual
+        onSourceFound('pending');
+        return null;
+    }
+}
 </script>
 
 <script>
@@ -678,7 +1102,8 @@ const DEFAULT_CONFIG = {
     bgImageUrl: '', bgOpacity: 0.3, bgBlur: 0,
     churchName: 'ADBUS Piracicaba', churchPosition: 'top', churchNameSize: 1.5,
     churchNameColor: '#ffffff', churchNameOpacity: 0.8,
-    presentationMode: false
+    presentationMode: false,
+    geniusToken: ''
 };
 
 const PRESET_THEMES = {
@@ -692,6 +1117,9 @@ const PRESET_THEMES = {
 const app = {
     client: new LrcClient(),
     config: { ...DEFAULT_CONFIG },
+    playlist: new PlaylistManager(),
+    playlistUI: null,
+    cascade: null,
     state: {
         meta: { track: "", artist: "", album: "", duration: 0 },
         lyrics: null, currentMode: 'synced',
@@ -705,16 +1133,37 @@ const app = {
         loadingText: document.getElementById('loadingText'),
         progressBar: document.getElementById('progressBar'),
         progressFill: document.getElementById('progressFill'),
-        churchName: document.getElementById('churchName')
+        churchName: document.getElementById('churchName'),
+        dragOverlay: document.getElementById('dragOverlay')
     },
 
     init() {
         this.loadConfig();
         this.applyConfig();
+
+        // Playlist UI
+        this.playlistUI = new PlaylistUI(
+            document.getElementById('playlistList'),
+            document.getElementById('playlistCount'),
+            document.getElementById('playlistSidebar')
+        );
+        this.playlistUI.onItemClick = (i) => this.playTrack(i);
+
+        // Cascade
+        this.cascade = new LyricsCascade(
+            this.client,
+            new LetrasMusBrClient(),
+            new LyricsOvhClient()
+        );
+
+        // Playlist callbacks
+        this.playlist.onTrackChange = (i) => this._onTrackChange(i);
+        this.playlist.onPlaylistUpdate = () => this._onPlaylistUpdate();
+
         this.initEventListeners();
         this.renderThemes();
         this.setupKeyboardShortcuts();
-        this.setupDragAndDrop(); // NOVO: Drag & Drop Híbrido
+        this.setupDragAndDrop();
         
         window.addEventListener('beforeunload', () => {
             if (this.state.projectorWindow) this.state.projectorWindow.close();
@@ -722,9 +1171,13 @@ const app = {
     },
 
     initEventListeners() {
-        document.getElementById('fileInput').addEventListener('change', e => this.loadFile(e.target.files[0]));
+        document.getElementById('fileInput').addEventListener('change', e => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) this.handleFiles(files);
+        });
         this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
         this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
+        this.ui.audio.addEventListener('ended', () => this.playlist.next());
 
         // Helper para Inputs
         const bindInput = (id, prop, isFloat = false) => {
@@ -766,20 +1219,168 @@ const app = {
     },
 
     setupDragAndDrop() {
+        let dragCounter = 0;
+        document.body.addEventListener('dragenter', e => {
+            e.preventDefault(); dragCounter++;
+            this.ui.dragOverlay.classList.add('active');
+        });
+        document.body.addEventListener('dragleave', e => {
+            e.preventDefault(); dragCounter--;
+            if (dragCounter <= 0) { dragCounter = 0; this.ui.dragOverlay.classList.remove('active'); }
+        });
         document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-        document.body.addEventListener('drop', async e => {
-            e.preventDefault();
-            const files = Array.from(e.dataTransfer.files);
-            const audio = files.find(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|flac|wav|ogg)$/i));
-            const lrc = files.find(f => f.name.toLowerCase().endsWith('.lrc'));
+        document.body.addEventListener('drop', e => {
+            e.preventDefault(); dragCounter = 0;
+            this.ui.dragOverlay.classList.remove('active');
 
-            if (audio) this.loadFile(audio, lrc); // Carrega áudio e letra (se houver)
-            else if (lrc && this.state.originalFile) {
-                // Se só soltar o LRC com música tocando, carrega a letra
-                const text = await lrc.text();
-                this.loadLyrics({ syncedLyrics: text });
+            // CRITICAL: collect entries SYNCHRONOUSLY before any await
+            // DataTransferItemList is cleared after the event handler returns
+            const items = e.dataTransfer.items;
+            const entries = [];
+            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+                for (let i = 0; i < items.length; i++) {
+                    const entry = items[i].webkitGetAsEntry();
+                    if (entry) entries.push(entry);
+                }
+            }
+
+            // Also grab files synchronously as fallback
+            const fallbackFiles = Array.from(e.dataTransfer.files);
+
+            // NOW do async resolution
+            this._processDroppedEntries(entries, fallbackFiles);
+        });
+    },
+
+    async _processDroppedEntries(entries, fallbackFiles) {
+        if (entries.length > 0) {
+            try {
+                const allFiles = [];
+                for (const entry of entries) {
+                    const files = await this._collectEntryFiles(entry);
+                    allFiles.push(...files);
+                }
+                if (allFiles.length > 0) {
+                    this.handleFiles(allFiles);
+                    return;
+                }
+            } catch (err) {
+                console.warn('webkitGetAsEntry failed, using fallback:', err);
+            }
+        }
+        // Fallback: use plain files
+        if (fallbackFiles.length > 0) this.handleFiles(fallbackFiles);
+    },
+
+    async _collectEntryFiles(entry) {
+        if (entry.isFile) {
+            return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            let allEntries = [];
+            // readEntries may not return all files at once — must loop
+            const readBatch = () => new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+            let batch;
+            do {
+                batch = await readBatch();
+                allEntries.push(...batch);
+            } while (batch.length > 0);
+            const files = [];
+            for (const sub of allEntries) {
+                files.push(...await this._collectEntryFiles(sub));
+            }
+            return files;
+        }
+        return [];
+    },
+
+    handleFiles(files) {
+        this.playlist.addFiles(files);
+        if (this.playlist.currentIndex === -1 && this.playlist.length > 0) {
+            this.playlist.play(0);
+        }
+    },
+
+    playTrack(index) { this.playlist.play(index); },
+
+    _onTrackChange(index) {
+        const track = this.playlist.getTrack(index);
+        if (!track) return;
+        this.reset();
+        this.playlistUI.setActive(index);
+        this.state.originalFile = track.audioFile;
+        this.state.fileName = track.baseName;
+        const name = track.audioFile.name.toLowerCase();
+        this.state.fileType = name.endsWith('.mp3') ? 'mp3' : (name.endsWith('.flac') ? 'flac' : 'other');
+
+        // Fix EncodingError: revoke previous objectURL
+        if (this._currentObjectURL) {
+            URL.revokeObjectURL(this._currentObjectURL);
+        }
+        this._currentObjectURL = URL.createObjectURL(track.audioFile);
+        this.ui.audio.src = this._currentObjectURL;
+
+        this.setLoading("Lendo Tags...");
+        jsmediatags.read(track.audioFile, {
+            onSuccess: async (tag) => {
+                const t = tag.tags;
+                track.meta = { track: t.title || track.baseName, artist: t.artist || "", album: t.album || "", duration: 0 };
+                this.state.meta = { ...track.meta };
+                this.updateHeader();
+
+                // Extract embedded lyrics and store on track (for cascade fallback)
+                if (t.lyrics) {
+                    const txt = typeof t.lyrics === 'string' ? t.lyrics : t.lyrics.lyrics;
+                    if (txt && txt.trim()) {
+                        track.embeddedLyrics = txt;
+                    }
+                }
+
+                // Run cascade — handles embedded inside (synced=immediate, plain=fallback)
+                this.setLoading("Buscando Letra...");
+                const result = await this.cascade.resolve(track, (source) => {
+                    track.lyricsSource = source;
+                    this.playlistUI.updateBadge(index, source);
+                });
+                if (result) { this.loadLyrics(result); this.setLoading(null); }
+                else { this.setLoading(null); this.promptManualSearch(); }
+            },
+            onError: () => {
+                track.meta = { track: track.baseName.replace(/^\d+\s*[-_]?\s*/, '').replace(/[-_]/g, ' ').trim(), artist: '', album: '', duration: 0 };
+                this.state.meta = { ...track.meta };
+                this.updateHeader();
+                // Still run cascade (will skip embedded, try APIs)
+                this.setLoading("Buscando Letra...");
+                this.cascade.resolve(track, (source) => {
+                    track.lyricsSource = source;
+                    this.playlistUI.updateBadge(index, source);
+                }).then(result => {
+                    if (result) { this.loadLyrics(result); this.setLoading(null); }
+                    else { this.setLoading(null); this.promptManualSearch(); }
+                });
             }
         });
+    },
+
+    _onPlaylistUpdate() { this.playlistUI.render(this.playlist.tracks, this.playlist.currentIndex); },
+    nextTrack() { this.playlist.next(); },
+    prevTrack() { this.playlist.prev(); },
+
+    toggleShuffle() {
+        const active = this.playlist.toggleShuffle();
+        document.getElementById('btnShuffle').classList.toggle('active', active);
+    },
+
+    toggleLoop() {
+        const mode = this.playlist.toggleLoop();
+        const btn = document.getElementById('btnLoop');
+        btn.classList.toggle('active', mode !== 'none');
+        btn.textContent = mode === 'one' ? '🔂' : '🔁';
+        btn.title = mode === 'none' ? 'Repetir' : mode === 'all' ? 'Repetir Playlist' : 'Repetir Faixa';
+    },
+
+    toggleSidebar() {
+        document.getElementById('playlistSidebar').classList.toggle('collapsed');
     },
 
     setupKeyboardShortcuts() {
@@ -807,7 +1408,7 @@ const app = {
             return;
         }
 
-        this.state.projectorWindow = window.open('', 'ChurchPlayerProjector', 'width=1280,height=720');
+        this.state.projectorWindow = window.open('about:blank', 'ChurchPlayerProjector', 'width=1280,height=720');
         
         if (!this.state.projectorWindow) {
             alert("Bloqueador de pop-ups ativo! Permita pop-ups para usar o projetor.");
@@ -1009,40 +1610,10 @@ const app = {
         } else { this.ui.loading.style.display = 'none'; }
     },
 
-    // LÓGICA PRINCIPAL DE CARREGAMENTO
+    // CARREGAMENTO (legacy - delegates to playlist)
     loadFile(file, companionLrc = null) {
         if (!file) return;
-        this.reset();
-        this.state.originalFile = file;
-        this.state.fileName = file.name.replace(/\.[^/.]+$/, "");
-        const name = file.name.toLowerCase();
-        this.state.fileType = (name.endsWith('.mp3')) ? 'mp3' : (name.endsWith('.flac') ? 'flac' : 'other');
-        this.ui.audio.src = URL.createObjectURL(file);
-        
-        this.setLoading("Lendo Tags...");
-        jsmediatags.read(file, {
-            onSuccess: async (tag) => {
-                const t = tag.tags;
-                this.state.meta = { track: t.title || this.state.fileName, artist: t.artist || "", album: t.album || "", duration: 0 };
-                this.updateHeader();
-                
-                // 1. Arquivo LRC solto
-                if (companionLrc) { 
-                    this.loadLyrics({ syncedLyrics: await companionLrc.text() }); 
-                    this.setLoading(null); return; 
-                }
-                
-                // 2. Tag Embutida (USLT/Lyrics)
-                if (t.lyrics) {
-                    const txt = typeof t.lyrics === 'string' ? t.lyrics : t.lyrics.lyrics;
-                    if (txt) { this.loadLyrics({ syncedLyrics: txt }); this.setLoading(null); return; }
-                }
-                
-                // 3. API
-                t.title ? this.autoFetch() : this.promptManualSearch();
-            },
-            onError: () => this.promptManualSearch()
-        });
+        this.handleFiles(companionLrc ? [file, companionLrc] : [file]);
     },
 
     updateHeader() {
@@ -1058,17 +1629,6 @@ const app = {
         this.openSearch();
     },
 
-    async autoFetch() {
-        this.setLoading("Buscando Letra...");
-        try {
-            const result = await this.client.findBestMatch(this.state.meta);
-            this.loadLyrics(result);
-            this.setLoading(null);
-        } catch (e) {
-            this.setLoading(null);
-            this.promptManualSearch();
-        }
-    },
 
     loadLyrics(data) {
         const parsedSynced = LrcParser.parse(data.syncedLyrics);
