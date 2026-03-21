@@ -411,6 +411,27 @@ loadID3Writer();
         .lrc-editor-footer { display: flex; gap: 8px; padding: 10px 15px; border-top: 1px solid #333; background: #16161c; flex-shrink: 0; }
         .lrc-editor-info { margin-left: auto; font-size: 0.78em; color: #555; align-self: center; }
         .lrc-plain-line { padding: 4px 10px; color: #aaa; font-size: 0.95em; line-height: 1.6; }
+
+        /* ── REMOTE PLAYLIST MODAL ─────────────────────────────────── */
+        .remote-section { padding: 14px 16px; border-bottom: 1px solid #2a2a3a; }
+        .remote-section:last-child { border-bottom: none; }
+        .remote-track-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 9px 12px; border-radius: 6px; cursor: pointer;
+            border: 1px solid #2a2a3a; margin-bottom: 6px;
+            transition: background 0.15s;
+        }
+        .remote-track-item:hover { background: #1e1e2e; border-color: #4f46e5; }
+        .remote-track-icon { font-size: 1.4em; flex-shrink: 0; }
+        .remote-track-info { flex: 1; min-width: 0; }
+        .remote-track-name { font-weight: 600; color: #ddd; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .remote-track-artist { font-size: 0.78em; color: #666; margin-top: 2px; }
+        .remote-load-btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #4f46e5; background: transparent; color: #a29bfe; cursor: pointer; font-size: 0.8em; flex-shrink: 0; transition: all 0.15s; }
+        .remote-load-btn:hover { background: #4f46e5; color: #fff; }
+        .playlist-format-box { background: #0d0d15; border: 1px solid #2a2a3a; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.78em; color: #a29bfe; white-space: pre; overflow-x: auto; line-height: 1.6; margin-top: 8px; }
+        .remote-url-row { display: flex; gap: 8px; margin-top: 8px; }
+        .remote-url-input { flex: 1; padding: 8px 10px; background: #1a1a2e; border: 1px solid #444; border-radius: 4px; color: #ddd; font-size: 0.84em; }
+        .template-btns { display: flex; gap: 8px; margin-top: 8px; }
     </style>
 </head>
 <body data-bg-type="solid">
@@ -446,6 +467,7 @@ loadID3Writer();
         <button class="btn" id="btnSettings" onclick="app.openSettings()">⚙️ Configurações</button>
         <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
         <button class="btn" onclick="app.openSearch()">🔍 Manual / Colar</button>
+        <button class="btn btn-action" onclick="app.openRemotePlaylist()" title="Músicas demo e playlists remotas">🎵 Remotas</button>
         
         <div class="dropdown" id="dropdownSave" style="display:none">
             <button class="btn btn-action">💾 Salvar...</button>
@@ -536,6 +558,86 @@ loadID3Writer();
             <button class="btn btn-action" onclick="app.downloadLrc(); app.closeModal('lrcEditorModal');">💾 Salvar .LRC</button>
             <button class="btn btn-action" id="lrcBtnEmbed" onclick="app.embedInFile()">🎵 Embutir no MP3</button>
         </div>
+    </div>
+</div>
+
+
+<div class="modal" id="remotePlaylistModal">
+    <div class="modal-box" style="max-width:700px; overflow-y:auto;">
+        <div class="modal-header">
+            <h2>🎵 Músicas Remotas / Playlist</h2>
+            <button class="modal-close" onclick="app.closeModal('remotePlaylistModal')">×</button>
+        </div>
+
+        <!-- DEMO -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:10px; display:block;">🎤 Músicas Demo (prontas para testar)</label>
+            <div id="demoTracksList"></div>
+        </div>
+
+        <!-- CARREGAR PLAYLIST — URL -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:8px; display:block;">📡 Carregar Playlist via URL (CSV ou JSON)</label>
+            <button class="btn btn-action" style="width:100%; margin-bottom:8px;"
+                onclick="app.loadRemotePlaylist('https://edimarpcosta.github.io/igreja/playerletras/music/music.csv')">
+                📋 Playlist ADBUS Piracicaba (GitHub)
+            </button>
+            <div class="remote-url-row">
+                <input type="text" id="playlistUrl" class="remote-url-input" placeholder="Cole aqui a URL do seu CSV ou JSON...">
+                <button class="btn btn-action" onclick="app.loadRemotePlaylist(document.getElementById('playlistUrl').value)">📥 Carregar</button>
+            </div>
+        </div>
+
+        <!-- CARREGAR PLAYLIST — ARQUIVO LOCAL -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:8px; display:block;">📂 Carregar Playlist — Arquivo Local (.csv ou .json)</label>
+            <input type="file" class="setting-input" id="localPlaylistFile" accept=".csv,.json"
+                   onchange="app.loadLocalPlaylist(event)" style="margin-top:4px;">
+        </div>
+
+        <!-- LISTA DE MÚSICAS CARREGADAS -->
+        <div class="remote-section" id="remoteTracksSection" style="display:none;">
+            <label class="setting-label" style="margin-bottom:8px; display:block;" id="remoteTracksLabel">🎵 Músicas Carregadas</label>
+            <div id="remoteTracksList"></div>
+        </div>
+
+        <!-- FORMATO DO ARQUIVO -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:6px; display:block;">📄 Formato do Arquivo de Playlist</label>
+            <div class="playlist-format-box">── SIMPLES (padrão) ── metadados lidos do ID3 da música ──
+
+CSV: uma URL por linha (music.csv)
+https://raw.github.../O_Exilado_Hc_36.mp3
+https://raw.github.../Samuel_Miranda.mp3
+
+JSON: chave "music" com array de URLs (music.json)
+{
+  "music": [
+    "https://raw.github.../O_Exilado_Hc_36.mp3",
+    "https://raw.github.../Samuel_Miranda.mp3"
+  ]
+}
+
+── COMPLETO (opcional) ── metadados manuais ──
+
+CSV: nome,artista,url,lrc_url
+O Exilado (Hc 3:6),Harpa Cristã,https://raw.github.../O_Exilado_Hc_36.mp3,
+Primeira Essência,Samuel Miranda,https://raw.github.../Samuel_Miranda.mp3,
+
+JSON: array de objetos
+[
+  { "track":"O Exilado (Hc 3:6)", "artist":"Harpa Cristã",
+    "url":"https://raw.github.../O_Exilado_Hc_36.mp3", "lrcUrl":"" },
+  { "track":"Primeira Essência", "artist":"Samuel Miranda",
+    "url":"https://raw.github.../Samuel_Miranda.mp3",
+    "lrcUrl":"https://raw.github.../Samuel_Miranda.lrc" }
+]</div>
+            <div class="template-btns">
+                <button class="btn" style="flex:1;" onclick="app.downloadPlaylistTemplate('csv')">⬇️ Baixar Modelo CSV</button>
+                <button class="btn" style="flex:1;" onclick="app.downloadPlaylistTemplate('json')">⬇️ Baixar Modelo JSON</button>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -1310,6 +1412,19 @@ const PRESET_THEMES = {
     'minimalist': { name: 'Minimalista', config: { bgType: 'solid', bgColor: '#000000', colorInactive: '#666666', colorActive: '#ffffff', fontSize: 1.3, fontSizeActive: 1.7 }}
 };
 
+const DEMO_TRACKS = [
+    {
+        track: 'O Exilado (Hc 3:6)',
+        artist: 'Harpa Cristã',
+        url: 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/O_Exilado_Hc_36.mp3'
+    },
+    {
+        track: 'Primeira Essência (Ao Vivo)',
+        artist: 'Samuel Miranda',
+        url: 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/Samuel%20Miranda%20-%20Primeira%20Ess%C3%AAncia%20(Ao%20Vivo).mp3'
+    }
+];
+
 const app = {
     client: new LrcClient(),
     config: { ...DEFAULT_CONFIG },
@@ -2063,6 +2178,202 @@ const app = {
         } catch (e) {
             this.setLoading(null);
             alert('❌ Erro ao carregar config remota:\n' + e.message);
+        }
+    },
+
+
+    openRemotePlaylist() {
+        // Renderiza as demos
+        const demoList = document.getElementById('demoTracksList');
+        demoList.innerHTML = '';
+        DEMO_TRACKS.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'remote-track-item';
+            div.innerHTML = `
+                <span class="remote-track-icon">🎵</span>
+                <div class="remote-track-info">
+                    <div class="remote-track-name">${t.track}</div>
+                    <div class="remote-track-artist">${t.artist}</div>
+                </div>
+                <button class="remote-load-btn">▶ Carregar</button>`;
+            div.querySelector('.remote-load-btn').onclick = () => {
+                this.closeModal('remotePlaylistModal');
+                this.loadRemoteAudio(t.url, t.track, t.artist);
+            };
+            demoList.appendChild(div);
+        });
+        document.getElementById('remotePlaylistModal').classList.add('active');
+    },
+
+    async loadRemoteAudio(url, trackName, artist) {
+        const label = trackName || decodeURIComponent(url.split('/').pop().replace(/\.[^.]+$/, ''));
+        this.setLoading(`⬇️ Baixando ${label}...`);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const total = parseInt(resp.headers.get('content-length') || '0');
+            const reader = resp.body.getReader();
+            const chunks = [];
+            let received = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                if (total > 0) {
+                    const pct = Math.round(received / total * 100);
+                    this.setLoading(`⬇️ ${label} — ${pct}%`, pct);
+                }
+            }
+            const blob = new Blob(chunks, { type: 'audio/mpeg' });
+            const filename = decodeURIComponent(url.split('/').pop());
+            const file = new File([blob], filename, { type: 'audio/mpeg' });
+            this.setLoading(null);
+            this.handleFiles([file]);
+        } catch (e) {
+            this.setLoading(null);
+            alert('❌ Erro ao carregar música:\n' + e.message);
+        }
+    },
+
+    async loadRemotePlaylist(url) {
+        if (!url || !url.trim()) return alert('Informe a URL do CSV ou JSON.');
+        try {
+            this.setLoading('Carregando playlist...');
+            const resp = await fetch(url.trim());
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const text = await resp.text();
+            this.setLoading(null);
+            const isJson = url.trim().toLowerCase().endsWith('.json') || text.trimStart().startsWith('[') || text.trimStart().startsWith('{');
+            const tracks = isJson ? this._parsePlaylistJSON(text) : this._parsePlaylistCSV(text);
+            if (!tracks.length) return alert('Nenhuma música encontrada na playlist.');
+            this._renderRemoteTracks(tracks);
+        } catch (e) {
+            this.setLoading(null);
+            alert('❌ Erro ao carregar playlist:\n' + e.message);
+        }
+    },
+
+    loadLocalPlaylist(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target.result;
+            const isJson = file.name.toLowerCase().endsWith('.json') || text.trimStart().startsWith('[') || text.trimStart().startsWith('{');
+            const tracks = isJson ? this._parsePlaylistJSON(text) : this._parsePlaylistCSV(text);
+            if (!tracks.length) return alert('Nenhuma música encontrada no arquivo.');
+            this._renderRemoteTracks(tracks);
+        };
+        reader.readAsText(file, 'utf-8');
+    },
+
+    _parsePlaylistCSV(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        if (!lines.length) return [];
+
+        // Detectar formato simples: linha é só uma URL (sem vírgula ou começa com http)
+        const firstLine = lines[0];
+        const isSimple = firstLine.startsWith('http') && !firstLine.includes(',');
+        if (isSimple) {
+            // Formato simples: uma URL por linha — metadados vêm do ID3
+            return lines
+                .filter(l => l.startsWith('http'))
+                .map(url => ({ track: '', artist: '', url: url.trim(), lrcUrl: '' }));
+        }
+
+        // Formato completo: nome,artista,url,lrc_url
+        const firstLower = firstLine.toLowerCase();
+        const startIdx = (firstLower.startsWith('nome') || firstLower.startsWith('track') || firstLower.startsWith('name')) ? 1 : 0;
+        return lines.slice(startIdx).map(line => {
+            const cols = line.split(',').map(c => c.trim());
+            // Detectar se col[0] é URL direta (sem metadados)
+            if (cols[0].startsWith('http') && cols.length === 1) {
+                return { track: '', artist: '', url: cols[0], lrcUrl: '' };
+            }
+            return { track: cols[0] || '', artist: cols[1] || '', url: cols[2] || '', lrcUrl: cols[3] || '' };
+        }).filter(t => t.url);
+    },
+
+    _parsePlaylistJSON(text) {
+        try {
+            const data = JSON.parse(text);
+            // Suporta: { "music": [...] } | { "tracks": [...] } | [...] | "url string"
+            let arr = data;
+            if (!Array.isArray(data)) {
+                arr = data.music || data.tracks || data.playlist || data.songs || [];
+            }
+            return arr.map(item => {
+                // Formato simples: item é uma string (URL direta)
+                if (typeof item === 'string') {
+                    return { track: '', artist: '', url: item.trim(), lrcUrl: '' };
+                }
+                // Formato completo: item é objeto com metadados
+                return {
+                    track:  item.track  || item.nome  || item.name  || item.title  || '',
+                    artist: item.artist || item.artista || item.autor || '',
+                    url:    item.url    || item.src    || item.file  || item.href   || '',
+                    lrcUrl: item.lrcUrl || item.lrc    || item.lyrics || ''
+                };
+            }).filter(t => t.url);
+        } catch (e) { alert('JSON inválido: ' + e.message); return []; }
+    },
+
+    _renderRemoteTracks(tracks) {
+        const section = document.getElementById('remoteTracksSection');
+        const list    = document.getElementById('remoteTracksList');
+        const label   = document.getElementById('remoteTracksLabel');
+        label.textContent = `🎵 ${tracks.length} música${tracks.length !== 1 ? 's' : ''} carregada${tracks.length !== 1 ? 's' : ''}`;
+        list.innerHTML = '';
+        tracks.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'remote-track-item';
+            div.innerHTML = `
+                <span class="remote-track-icon">🎵</span>
+                <div class="remote-track-info">
+                    <div class="remote-track-name">${t.track || decodeURIComponent(t.url.split('/').pop().replace(/\.[^.]+$/, ''))}</div>
+                    <div class="remote-track-artist">${t.artist || '<em style="opacity:.4">metadados via ID3</em>'}</div>
+                </div>
+                <button class="remote-load-btn">▶ Play</button>`;
+            div.querySelector('.remote-load-btn').onclick = () => {
+                this.closeModal('remotePlaylistModal');
+                this.loadRemoteAudio(t.url, t.track, t.artist);
+            };
+            list.appendChild(div);
+        });
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+
+    downloadPlaylistTemplate(format) {
+        const URL1 = 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/O_Exilado_Hc_36.mp3';
+        const URL2 = 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/Samuel%20Miranda%20-%20Primeira%20Ess%C3%AAncia%20(Ao%20Vivo).mp3';
+
+        if (format === 'csv') {
+            // Padrão simples: só URLs (metadados do ID3)
+            const csvContent =
+`# Formato simples: uma URL por linha (metadados vem do ID3)
+${URL1}
+${URL2}
+
+# Formato completo (opcional): nome,artista,url,lrc_url
+# O Exilado (Hc 3:6),Harpa Cristã,${URL1},
+# Primeira Essência (Ao Vivo),Samuel Miranda,${URL2},`;
+            this.saveFile(csvContent, 'music.csv', 'text/csv');
+
+        } else {
+            // Padrão simples: { "music": ["url1", "url2"] }
+            const jsonSimple = JSON.stringify({ music: [URL1, URL2] }, null, 2);
+            // Completo: array de objetos (comentado como referência)
+            const jsonContent = jsonSimple + `
+
+/* Formato completo (opcional):
+${JSON.stringify([
+  { track: 'O Exilado (Hc 3:6)', artist: 'Harpa Cristã', url: URL1, lrcUrl: '' },
+  { track: 'Primeira Essência', artist: 'Samuel Miranda', url: URL2, lrcUrl: '' }
+], null, 2)}
+*/`;
+            this.saveFile(jsonContent, 'music.json', 'application/json');
         }
     },
 
