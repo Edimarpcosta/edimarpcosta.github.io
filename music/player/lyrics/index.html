@@ -7,7 +7,40 @@
     <link rel="icon" href="data:,">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-    <script src="https://unpkg.com/browser-id3-writer@4.4.0/dist/browser-id3-writer.min.js"></script>
+    <script type="module">
+/**
+ * Carrega ID3Writer com cadeia de 3 fallbacks.
+ * O bundle do unpkg exporta: default export com { ID3Writer } dentro,
+ * ou diretamente como named export — o código abaixo trata ambos.
+ */
+async function loadID3Writer() {
+    const sources = [
+        'https://unpkg.com/browser-id3-writer@latest/dist/browser-id3-writer.mjs',
+        'https://raw.githubusercontent.com/egoroof/browser-id3-writer/master/src/ID3Writer.mjs',
+        'https://edimarpcosta.github.io/igreja/playerletras/ID3/ID3Writer.mjs',
+    ];
+
+    for (const src of sources) {
+        try {
+            const mod = await import(src);
+            const Writer = mod.ID3Writer
+                        ?? mod.default?.ID3Writer
+                        ?? mod.default
+                        ?? null;
+            if (Writer && typeof Writer === 'function') {
+                window._ID3Writer = Writer;
+                console.log('[ID3Writer] OK →', src);
+                return;
+            }
+        } catch (err) {
+            console.warn('[ID3Writer] falhou em:', src, '—', err.message);
+        }
+    }
+    console.error('[ID3Writer] Todos os fallbacks falharam. Embed indisponível.');
+}
+
+loadID3Writer();
+</script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     
     <style>
@@ -445,10 +478,10 @@
         </div>
         
         <div class="modal-tabs">
-            <button class="modal-tab active" onclick="app.switchTab('appearance')">🎨 Aparência</button>
-            <button class="modal-tab" onclick="app.switchTab('background')">🖼️ Fundo</button>
-            <button class="modal-tab" onclick="app.switchTab('church')">⛪ Igreja</button>
-            <button class="modal-tab" onclick="app.switchTab('themes')">💾 Temas</button>
+            <button class="modal-tab active" onclick="app.switchTab(event,'appearance')">🎨 Aparência</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'background')">🖼️ Fundo</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'church')">⛪ Igreja</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'themes')">💾 Temas</button>
         </div>
 
         <div class="modal-content">
@@ -751,27 +784,70 @@ class AudioConverter {
 
 /**
  * MÓDULO 4: Gravador de Tags (AudioTagger)
+ * Depende de window._ID3Writer injetado via <script type="module"> no <head>.
+ * Aguarda até 10s pelo carregamento (cobre os 3 fallbacks em série em conexão lenta).
  */
 class AudioTagger {
+    /**
+     * Polling de 100ms até 10s aguardando window._ID3Writer.
+     * Retorna a classe ou null se timeout.
+     */
+    static _getWriter() {
+        if (window._ID3Writer) return Promise.resolve(window._ID3Writer);
+
+        return new Promise((resolve) => {
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                if (window._ID3Writer) {
+                    clearInterval(timer);
+                    resolve(window._ID3Writer);
+                } else if (elapsed >= 10000) {
+                    clearInterval(timer);
+                    resolve(null);
+                }
+                elapsed += 100;
+            }, 100);
+        });
+    }
+
     static async embedMp3(originalFileBlob, meta, lyricsData) {
-        if (typeof ID3Writer === 'undefined' && typeof window.ID3Writer === 'undefined') {
-            throw new Error("Biblioteca ID3Writer não carregada.");
+        const WriterClass = await AudioTagger._getWriter();
+
+        if (!WriterClass) {
+            throw new Error(
+                'ID3Writer não carregou (todos os fallbacks falharam).\n' +
+                'Verifique sua conexão com a internet e recarregue a página.'
+            );
         }
-        const WriterClass = window.ID3Writer || ID3Writer;
+
         const arrayBuffer = await originalFileBlob.arrayBuffer();
         const writer = new WriterClass(arrayBuffer);
 
-        if (meta.track) writer.setFrame('TIT2', meta.track);
-        if (meta.artist) writer.setFrame('TPE1', [meta.artist]); 
-        if (meta.album) writer.setFrame('TALB', meta.album);
+        if (meta.track)  writer.setFrame('TIT2', meta.track);
+        if (meta.artist) writer.setFrame('TPE1', [meta.artist]);
+        if (meta.album)  writer.setFrame('TALB', meta.album);
 
         if (lyricsData.synced && lyricsData.synced.length > 0) {
-            const syltData = lyricsData.synced.map(line => [line.text, Math.round(line.startTime * 1000)]);
-            writer.setFrame('SYLT', { type: 1, text: syltData, timestampFormat: 2, language: 'por', description: 'Sync Lyrics' });
+            const syltData = lyricsData.synced.map(line =>
+                [line.text, Math.round(line.startTime * 1000)]
+            );
+            writer.setFrame('SYLT', {
+                type: 1,
+                text: syltData,
+                timestampFormat: 2,
+                language: 'por',
+                description: 'Sync Lyrics'
+            });
         }
+
         if (lyricsData.plain) {
-            writer.setFrame('USLT', { description: '', lyrics: lyricsData.plain, language: 'por' });
+            writer.setFrame('USLT', {
+                description: '',
+                lyrics: lyricsData.plain,
+                language: 'por'
+            });
         }
+
         writer.addTag();
         return writer.getBlob();
     }
@@ -1010,8 +1086,6 @@ class LyricsOvhClient {
 }
 
 /**
-
-/**
  * MÓDULO 9: Cascata de Letras (LyricsCascade)
  * Prioridade: LRC local → LRCLIB API → letras.mus.br → Lyrics.ovh → Embedded (fallback) → Manual
  * SEMPRE prefere letras sincronizadas. Se embedded for só plain, busca APIs antes.
@@ -1024,7 +1098,7 @@ class LyricsCascade {
     }
 
     async resolve(track, onSourceFound) {
-        // 1. LRC local — sempre sincronizado
+        // ── 1. LRC local — sempre sincronizado ──────────────────────────────
         if (track.lrcFile) {
             try {
                 const text = await track.lrcFile.text();
@@ -1035,8 +1109,9 @@ class LyricsCascade {
             } catch (e) {}
         }
 
-        // 2. Tag ID3 embutida — SOMENTE se for sincronizada
-        //    Se for plain-only, guarda para fallback (posição 5)
+        // ── 2. Tag ID3 embutida ─────────────────────────────────────────────
+        // Se for sincronizada (começa com timestamp) → usa imediatamente
+        // Se for plain → guarda como fallback de último recurso
         let embeddedPlainFallback = null;
         if (track.embeddedLyrics) {
             const isSynced = /^\[\d{2}:\d{2}/.test(track.embeddedLyrics.trim());
@@ -1048,18 +1123,24 @@ class LyricsCascade {
             }
         }
 
-        // 3. LRCLIB API — forte em synced
+        // ── 3. LRCLIB API ───────────────────────────────────────────────────
+        // syncedLyrics → prioridade máxima, retorna imediatamente
+        // só plainLyrics → guarda como candidato, continua buscando
+        let lrclibPlainCandidate = null;
         if (track.meta.track) {
             try {
                 const result = await this.lrcClient.findBestMatch(track.meta);
-                if (result && (result.syncedLyrics || result.plainLyrics)) {
+                if (result && result.syncedLyrics) {
                     onSourceFound('api');
                     return result;
+                }
+                if (result && result.plainLyrics) {
+                    lrclibPlainCandidate = result;
                 }
             } catch (e) {}
         }
 
-        // 4. letras.mus.br — plain only
+        // ── 4. letras.mus.br — plain only ──────────────────────────────────
         if (track.meta.track && track.meta.artist) {
             const brResult = await this.letrasClient.search(track.meta.artist, track.meta.track);
             if (brResult) {
@@ -1068,7 +1149,7 @@ class LyricsCascade {
             }
         }
 
-        // 5. Lyrics.ovh — plain only
+        // ── 5. Lyrics.ovh — plain only ─────────────────────────────────────
         if (track.meta.track && track.meta.artist) {
             const ovhResult = await this.ovhClient.search(track.meta.artist, track.meta.track);
             if (ovhResult) {
@@ -1077,13 +1158,20 @@ class LyricsCascade {
             }
         }
 
-        // 6. Embedded plain fallback — se nenhuma API retornou
+        // ── 6. LRCLIB plain (candidato guardado) ───────────────────────────
+        // Preferido sobre embutido: metadados mais limpos, sem artefatos do encoder
+        if (lrclibPlainCandidate) {
+            onSourceFound('api');
+            return lrclibPlainCandidate;
+        }
+
+        // ── 7. Embutida plain (último recurso) ─────────────────────────────
         if (embeddedPlainFallback) {
             onSourceFound('emb');
             return { syncedLyrics: null, plainLyrics: embeddedPlainFallback };
         }
 
-        // 7. Manual
+        // ── 8. Manual ───────────────────────────────────────────────────────
         onSourceFound('pending');
         return null;
     }
@@ -1091,7 +1179,7 @@ class LyricsCascade {
 </script>
 
 <script>
-const CONFIG_KEY = 'churchPlayerConfig_Ultimate';
+const CONFIG_KEY = 'churchPlayerConfig_v6';
 
 const DEFAULT_CONFIG = {
     theme: 'classic-dark',
@@ -1102,8 +1190,6 @@ const DEFAULT_CONFIG = {
     bgImageUrl: '', bgOpacity: 0.3, bgBlur: 0,
     churchName: 'ADBUS Piracicaba', churchPosition: 'top', churchNameSize: 1.5,
     churchNameColor: '#ffffff', churchNameOpacity: 0.8,
-    presentationMode: false,
-    geniusToken: ''
 };
 
 const PRESET_THEMES = {
@@ -1523,7 +1609,7 @@ const app = {
         setVal('bgImageUrl', this.config.bgImageUrl);
         setVal('bgOpacity', this.config.bgOpacity); setTxt('bgOpacityValue', Math.round(this.config.bgOpacity*100) + '%');
         setVal('bgBlur', this.config.bgBlur); setTxt('bgBlurValue', this.config.bgBlur + 'px');
-        setVal('churchName', this.config.churchName);
+        setVal('churchNameInp', this.config.churchName);
         const cp = document.querySelector(`input[name="churchPosition"][value="${this.config.churchPosition}"]`); if(cp) cp.checked = true;
         setVal('churchNameSize', this.config.churchNameSize); setTxt('churchNameSizeValue', this.config.churchNameSize + 'em');
         setVal('churchNameColor', this.config.churchNameColor); setVal('churchNameColorText', this.config.churchNameColor);
@@ -1594,10 +1680,10 @@ const app = {
     openSettings() { document.getElementById('settingsModal').classList.add('active'); },
     closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); },
 
-    switchTab(tabName) {
+    switchTab(e, tabName) {
         document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        event.target.classList.add('active');
+        e.target.classList.add('active');
         document.getElementById('tab-' + tabName).classList.add('active');
     },
 
@@ -1731,7 +1817,10 @@ const app = {
             results.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'res-item';
-                div.innerHTML = `<b>${item.trackName}</b><span>${item.artistName}</span>`;
+                const syncTag = item.syncedLyrics
+                    ? '<span class="tag tag-sync">SYNC</span>'
+                    : '<span class="tag tag-txt">TXT</span>';
+                div.innerHTML = `<div class="res-info"><b>${item.trackName}</b><span>${item.artistName} ${syncTag}</span></div>`;
                 div.onclick = () => { this.loadLyrics(item); this.closeModal('searchModal'); };
                 list.appendChild(div);
             });
@@ -1768,7 +1857,12 @@ const app = {
 
     async saveFile(content, filename, mimeType) {
         const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     },
 
     reset() {
