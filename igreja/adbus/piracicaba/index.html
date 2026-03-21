@@ -1819,6 +1819,98 @@
     };
 
     /* =========================================
+       UTILITÁRIO GLOBAL DE DATA
+       Converte QUALQUER formato que o GAS retorne para yyyy-MM-dd
+       Handles: ISO "2026-03-22T00:00:00Z", JS Date string "Sun Mar 22 2026...",
+                "22/03/2026", number (serial Excel), vazio
+    ========================================= */
+    function fmtDate(v) {
+      if (v === null || v === undefined || v === '' || v === false) return '';
+      const s = String(v).trim();
+      if (!s || s === '0' || s.toLowerCase() === 'false') return '';
+
+      // 1. Já no formato yyyy-MM-dd perfeito
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+      // 2. ISO com horário: "2026-03-22T00:00:00Z" ou "2026-03-22 00:00:00"
+      const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})[T ]/);
+      if (isoMatch) return isoMatch[1];
+
+      // 3. Número serial do Excel/Sheets (inteiro ou decimal, ex: 45373 ou 45373.5)
+      if (/^\d+(\.\d+)?$/.test(s)) {
+        const serial = parseFloat(s);
+        if (serial > 40000 && serial < 60000) {
+          const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000);
+          return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+        }
+      }
+
+      // 4. Formato BR dd/mm/yyyy ou dd-mm-yyyy
+      const brMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2,'0')}-${brMatch[1].padStart(2,'0')}`;
+
+      // 5. Formato "yyyy-M-d" ou "yyyy/MM/dd"
+      const ymdMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (ymdMatch) return `${ymdMatch[1]}-${ymdMatch[2].padStart(2,'0')}-${ymdMatch[3].padStart(2,'0')}`;
+
+      // 6. String longa do GAS/JS Date: "Sun Mar 28 1993 00:00:00 GMT-0306..."
+      //    Tenta extrair dia, mês e ANO explícito com regex antes de usar new Date()
+      //    O problema de "Sun Mar 28" SEM ano é que new Date() assume o ano atual
+      const longMatch = s.match(/([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+      if (longMatch) {
+        // Formato "Mon DD YYYY" encontrado — usa esses valores diretamente
+        const rebuilt = `${longMatch[1]} ${longMatch[2]} ${longMatch[3]}`;
+        const d = new Date(rebuilt);
+        if (!isNaN(d.getTime())) {
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+      }
+
+      // 7. Último recurso: tenta new Date() — mas só aceita se o ano for razoável (>= 1900)
+      try {
+        const d = new Date(s);
+        if (!isNaN(d.getTime()) && d.getFullYear() >= 1900 && d.getFullYear() <= 2100) {
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+      } catch(e) {}
+
+      return '';
+    }
+
+    function fmtDateBR(v) {
+      const iso = fmtDate(v);
+      if (!iso) return '—';
+      const parts = iso.split('-');
+      if (parts.length !== 3) return iso; // fallback seguro
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+
+    // Normaliza horário: aceita "08:30", decimal Sheets (0.354...), ou "Sat Dec 30 1899 08:50:00..."
+    function fmtHora(v) {
+      if (!v && v !== 0) return '';
+      const s = String(v).trim();
+      if (!s) return '';
+
+      // Já no formato HH:MM ou HH:MM:SS
+      if (/^\d{1,2}:\d{2}/.test(s)) return s.substring(0, 5);
+
+      // Número decimal (fração do dia — formato interno do Sheets para Time)
+      const num = parseFloat(s);
+      if (!isNaN(num) && num >= 0 && num < 1) {
+        const totalMin = Math.round(num * 1440);
+        const hh = Math.floor(totalMin / 60).toString().padStart(2,'0');
+        const mm = (totalMin % 60).toString().padStart(2,'0');
+        return `${hh}:${mm}`;
+      }
+
+      // String de data falsa "Sat Dec 30 1899 08:50:00..." — extrai o horário
+      const tMatch = s.match(/(\d{1,2}):(\d{2}):\d{2}/);
+      if (tMatch) return `${tMatch[1].padStart(2,'0')}:${tMatch[2]}`;
+
+      return s; // devolve como está
+    }
+
+    /* =========================================
        ROTEAMENTO (Hash Router)
     ========================================= */
     const Router = {
@@ -2184,7 +2276,7 @@
           this._cultosDados = res.data;
           tb.innerHTML = res.data.map((c, idx) => `
             <tr>
-              <td><strong>${c.DATA ? c.DATA.split('T')[0] : '—'}</strong></td>
+              <td><strong>${fmtDateBR(c.DATA)}</strong></td>
               <td>${c.TEMA || '—'}</td>
               <td>${c.PREGADOR || '—'}</td>
               <td>${c.PRESENCA || '0'}</td>
@@ -2199,7 +2291,7 @@
         const c = this._cultosDados[idx];
         if (!c?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Culto', [
-          { label:'Data',         id:'data',    value: c.DATA?.split('T')[0] || c.DATA, type:'date' },
+          { label:'Data',         id:'data',    value: fmtDate(c.DATA), type:'date' },
           { label:'Pregador',     id:'preg',    value: c.PREGADOR },
           { label:'Tema',         id:'tema',    value: c.TEMA, full: true },
           { label:'Versículo',    id:'vers',    value: c.VERSICULO },
@@ -2264,12 +2356,12 @@
 
           tb.innerHTML = sorted.map((e, idx) => {
             const cat = CAT[e.CATEGORIA] || { icon:'📌', label: e.CATEGORIA || '—', color:'brand' };
-            const dataFmt = e.DATA ? String(e.DATA).split('T')[0] : '—';
+            const dataFmt = fmtDateBR(e.DATA);
             const passado = new Date(e.DATA) < now;
             return `<tr style="${passado ? 'opacity:0.65' : ''}">
               <td>
                 <strong>${dataFmt}</strong>
-                ${e.HORARIO ? `<br><small class="muted">${e.HORARIO}</small>` : ''}
+                ${e.HORARIO ? `<br><small class="muted">${fmtHora(e.HORARIO)}</small>` : ''}
               </td>
               <td><span class="badge ${cat.color}" style="white-space:nowrap">${cat.icon} ${cat.label}</span></td>
               <td>
@@ -2310,8 +2402,8 @@
         const e = this._eventosDados[idx];
         if (!e?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Evento', [
-          { label:'Data',        id:'data',   value: e.DATA?.split?.('T')[0]||e.DATA, type:'date' },
-          { label:'Horário',     id:'hora',   value: e.HORARIO },
+          { label:'Data',        id:'data',   value: fmtDate(e.DATA), type:'date' },
+          { label:'Horário',     id:'hora',   value: fmtHora(e.HORARIO) },
           { label:'Título',      id:'nome',   value: e.NOME_EVENTO, full:true },
           { label:'Local',       id:'local',  value: e.LOCAL, full:true },
           { label:'Responsável', id:'resp',   value: e.RESPONSAVEL },
@@ -2525,7 +2617,7 @@
 
           const gcalBtn = (() => {
             const d = new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate());
-            const yyyymmdd = d.toISOString().split('T')[0].replace(/-/g,'');
+            const yyyymmdd = d.toISOString().replace(/-/g,'');
             const title = encodeURIComponent(`🎂 Aniversário: ${m.NOME}`);
             const details = encodeURIComponent(`Aniversário de ${m.NOME} — ${idadeProx} anos\nIgreja ADBUS`);
             return `<a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${yyyymmdd}/${yyyymmdd}&details=${details}&recur=RRULE:FREQ=YEARLY" target="_blank" class="btn ghost" style="font-size:12px;padding:4px 10px;">📅 Agenda</a>`;
@@ -2572,7 +2664,7 @@
         let count = 0;
         comNasc.forEach(m => {
           const nasc = new Date(m.DATA_NASC);
-          const yyyymmdd = new Date(ano, nasc.getMonth(), nasc.getDate()).toISOString().split('T')[0].replace(/-/g,'');
+          const yyyymmdd = new Date(ano, nasc.getMonth(), nasc.getDate()).toISOString().replace(/-/g,'');
           const title = encodeURIComponent(`🎂 Aniversário: ${m.NOME}`);
           const details = encodeURIComponent(`Aniversário de ${m.NOME}\nIgreja ADBUS`);
           const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${yyyymmdd}/${yyyymmdd}&details=${details}&recur=RRULE:FREQ=YEARLY`;
@@ -2596,7 +2688,7 @@
             <tr>
               <td><strong>${o.NOME || '—'}</strong></td>
               <td style="max-width:300px;white-space:pre-wrap;">${o.PEDIDO || '—'}</td>
-              <td>${o.DATA ? String(o.DATA).split('T')[0] : '—'}</td>
+              <td>${fmtDateBR(o.DATA)}</td>
               <td><span class="badge ${o.STATUS==='RESPONDIDO'?'good':'brand'}">${o.STATUS||'ATIVO'}</span></td>
               <td><button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarOracao(${idx})">✏️ Editar</button></td>
             </tr>`).join('');
@@ -2630,7 +2722,7 @@
           "",
           document.getElementById('foNome').value,
           document.getElementById('foPedido').value,
-          new Date().toISOString().split('T')[0],
+          new Date().toISOString(),
           document.getElementById('foStatus').value
         ];
         if (!rowData[1] || !rowData[2]) { UI.toast("Nome e pedido são obrigatórios", "error"); return; }
@@ -2669,7 +2761,7 @@
             const isEntrada = l.TIPO === 'ENTRADA';
             const valFmt = parseFloat(l.VALOR||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
             return `<tr>
-              <td>${l.DATA ? String(l.DATA).split('T')[0] : '—'}</td>
+              <td>${fmtDateBR(l.DATA)}</td>
               <td><span class="badge ${isEntrada?'good':'bad'}">${l.TIPO||'—'}</span></td>
               <td>${l.CATEGORIA||'—'}</td>
               <td>${l.DESCRICAO||'—'}</td>
@@ -2686,7 +2778,7 @@
         const l = this._lancamentosDados[idx];
         if (!l?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Lançamento', [
-          { label:'Data',      id:'data', value: l.DATA?.split?.('T')[0]||l.DATA, type:'date' },
+          { label:'Data',      id:'data', value: fmtDate(l.DATA), type:'date' },
           { label:'Tipo',      id:'tipo', value: l.TIPO,  type:'select',
             options:[{v:'ENTRADA',l:'Entrada'},{v:'SAIDA',l:'Saída'}] },
           { label:'Categoria', id:'cat',  value: l.CATEGORIA, type:'select',
@@ -2761,7 +2853,7 @@
             const idx = res.data.length - 1 - i;
             const valFmt = parseFloat(d.VALOR||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
             return `<tr>
-              <td>${d.DATA ? String(d.DATA).split('T')[0] : '—'}</td>
+              <td>${fmtDateBR(d.DATA)}</td>
               <td><strong>${d.MEMBRO||'—'}</strong></td>
               <td><span class="badge brand">${d.TIPO||'—'}</span></td>
               <td>${d.FORMA_PGTO||'—'}</td>
@@ -2778,7 +2870,7 @@
         const d = this._dizimosDados[idx];
         if (!d?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Dízimo / Doação', [
-          { label:'Data',          id:'data',   value: d.DATA?.split?.('T')[0]||d.DATA, type:'date' },
+          { label:'Data',          id:'data',   value: fmtDate(d.DATA), type:'date' },
           { label:'Membro',        id:'membro', value: d.MEMBRO, full:true },
           { label:'Tipo',          id:'tipo',   value: d.TIPO, type:'select',
             options:[{v:'DIZIMO',l:'Dízimo'},{v:'OFERTA',l:'Oferta'},{v:'DOACAO',l:'Doação'},{v:'MISSOES',l:'Missões'}] },
@@ -2835,7 +2927,7 @@
             const idx = res.data.length - 1 - i;
             const valFmt = parseFloat(m.VALOR||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
             return `<tr>
-              <td>${m.DATA ? String(m.DATA).split('T')[0] : '—'}</td>
+              <td>${fmtDateBR(m.DATA)}</td>
               <td>${m.ORDEM_SERVICO||'—'}</td>
               <td><span class="badge ${m.STATUS==='EXECUTADO'?'good':'warn'}">${m.STATUS||'—'}</span></td>
               <td style="font-weight:700">${valFmt}</td>
@@ -2851,7 +2943,7 @@
         const m = this._manutencaoDados[idx];
         if (!m?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar OS / Manutenção', [
-          { label:'Data',         id:'data',   value: m.DATA?.split?.('T')[0]||m.DATA, type:'date' },
+          { label:'Data',         id:'data',   value: fmtDate(m.DATA), type:'date' },
           { label:'Descrição',    id:'ordem',  value: m.ORDEM_SERVICO, type:'textarea', full:true },
           { label:'Status',       id:'status', value: m.STATUS, type:'select',
             options:[{v:'PENDENTE',l:'Pendente'},{v:'EXECUTADO',l:'Executado'}] },
@@ -2908,7 +3000,7 @@
           tb.innerHTML = invertido.map((h, i) => {
             const idx = res.data.length - 1 - i;
             return `<tr>
-              <td><strong>${h.DATA_CULTO ? String(h.DATA_CULTO).split('T')[0] : '—'}</strong></td>
+              <td><strong>${fmtDateBR(h.DATA_CULTO)}</strong></td>
               <td>${h.MUSICAS || '—'}</td>
               <td><button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarHino(${idx})">✏️ Editar</button></td>
             </tr>`;
@@ -2938,7 +3030,7 @@
         const h = this._hinosDados[idx];
         if (!h?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Hinos do Culto', [
-          { label:'Data do Culto',        id:'data',    value: h.DATA_CULTO?.split?.('T')[0]||h.DATA_CULTO, type:'date' },
+          { label:'Data do Culto',        id:'data',    value: fmtDate(h.DATA_CULTO), type:'date' },
           { label:'Músicas Selecionadas', id:'musicas', value: h.MUSICAS, type:'textarea', full:true }
         ], async (v) => {
           const rowData = [h.ID, v.data, v.musicas];
@@ -3033,8 +3125,8 @@
           tb.innerHTML = invertido.map((e, i) => {
             const idx = res.data.length - 1 - i;
             return `<tr>
-              <td><strong>${e.DATA ? String(e.DATA).split('T')[0] : '—'}</strong></td>
-              <td>${e.HORARIO||'—'}</td>
+              <td><strong>${fmtDateBR(e.DATA)}</strong></td>
+              <td>${fmtHora(e.HORARIO)||'—'}</td>
               <td>${e.PRESENTES||'—'}</td>
               <td>${e.MUSICAS_ENSAIADAS||'—'}</td>
               <td><button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarEnsaio(${idx})">✏️ Editar</button></td>
@@ -3049,8 +3141,8 @@
         const e = this._ensaiosDados[idx];
         if (!e?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Ensaio', [
-          { label:'Data',              id:'data',     value: e.DATA?.split?.('T')[0]||e.DATA, type:'date' },
-          { label:'Horário',           id:'hora',     value: e.HORARIO },
+          { label:'Data',              id:'data',     value: fmtDate(e.DATA), type:'date' },
+          { label:'Horário',           id:'hora',     value: fmtHora(e.HORARIO) },
           { label:'Músicos Presentes', id:'pres',     value: e.PRESENTES, full:true },
           { label:'Músicas Ensaiadas', id:'musicas',  value: e.MUSICAS_ENSAIADAS, type:'textarea', full:true }
         ], async (v) => {
@@ -3107,7 +3199,7 @@
           }
           tb.innerHTML = comMidia.map(e => `
             <tr>
-              <td><strong>${e.DATA ? String(e.DATA).split('T')[0] : '—'}</strong></td>
+              <td><strong>${fmtDateBR(e.DATA)}</strong></td>
               <td>${e.NOME_EVENTO || e.LOCAL || '—'}</td>
               <td>${e.DESCRICAO || e.ENDERECO || '—'}</td>
               <td><span class="badge brand">${e._src}</span></td>
@@ -3133,7 +3225,7 @@
           tb.innerHTML = invertido.map((c, i) => {
             const idx = res.data.length - 1 - i;
             return `<tr>
-              <td>${c.DATA ? String(c.DATA).split('T')[0] : '—'}</td>
+              <td>${fmtDateBR(c.DATA)}</td>
               <td><strong>${c.EVENTO_COBERTO||'—'}</strong></td>
               <td><span class="badge brand">${c.TIPO_COBERTURA||'—'}</span></td>
               <td>${c.RESPONSAVEL||'—'}</td>
@@ -3150,7 +3242,7 @@
         const c = this._coberturaDados[idx];
         if (!c?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Cobertura de Mídia', [
-          { label:'Data',          id:'data',   value: c.DATA?.split?.('T')[0]||c.DATA, type:'date' },
+          { label:'Data',          id:'data',   value: fmtDate(c.DATA), type:'date' },
           { label:'Evento Coberto',id:'evento', value: c.EVENTO_COBERTO, full:true },
           { label:'Tipo',          id:'tipo',   value: c.TIPO_COBERTURA, type:'select',
             options:[{v:'FOTO',l:'Fotos'},{v:'VIDEO',l:'Vídeo'},{v:'LIVE',l:'Live'},{v:'REDES_SOCIAIS',l:'Redes Sociais'}] },
@@ -3207,8 +3299,8 @@
           tb.innerHTML = invertido.map((p, i) => {
             const idx = res.data.length - 1 - i;
             return `<tr>
-              <td><strong>${p.DATA ? String(p.DATA).split('T')[0] : '—'}</strong></td>
-              <td>${p.HORARIO||'—'}</td>
+              <td><strong>${fmtDateBR(p.DATA)}</strong></td>
+              <td>${fmtHora(p.HORARIO)||'—'}</td>
               <td><strong>${p.LOCAL||'—'}</strong><br><small class="muted">${p.ENDERECO||''}</small></td>
               <td><span class="badge brand">${p.TIPO||'—'}</span></td>
               <td><span class="badge ${p.NECESSITA_MIDIA==='SIM'?'warn':''}">${p.NECESSITA_MIDIA||'NÃO'}</span></td>
@@ -3224,8 +3316,8 @@
         const p = this._pregacoesDados[idx];
         if (!p?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Pregação', [
-          { label:'Data',       id:'data',  value: p.DATA?.split?.('T')[0]||p.DATA, type:'date' },
-          { label:'Horário',    id:'hora',  value: p.HORARIO },
+          { label:'Data',       id:'data',  value: fmtDate(p.DATA), type:'date' },
+          { label:'Horário',    id:'hora',  value: fmtHora(p.HORARIO) },
           { label:'Local',      id:'local', value: p.LOCAL, full:true },
           { label:'Endereço',   id:'end',   value: p.ENDERECO, full:true },
           { label:'Tipo',       id:'tipo',  value: p.TIPO, type:'select',
@@ -3353,7 +3445,7 @@
           tb.innerHTML = invertido.map((e, i) => {
             const idx = res.data.length - 1 - i;
             return `<tr>
-              <td><strong>${e.DATA ? String(e.DATA).split('T')[0] : '—'}</strong></td>
+              <td><strong>${fmtDateBR(e.DATA)}</strong></td>
               <td>${e.LOCAL||'—'}</td>
               <td>${e.PARTICIPANTES||'0'}</td>
               <td>${e.VISITANTES||'0'}</td>
@@ -3371,7 +3463,7 @@
         const e = this._celulaEventosDados[idx];
         if (!e?.ID) { UI.toast("Registro sem ID.", "error"); return; }
         UI.openEdit('Editar Evento de Evangelismo', [
-          { label:'Data',          id:'data',  value: e.DATA?.split?.('T')[0]||e.DATA, type:'date' },
+          { label:'Data',          id:'data',  value: fmtDate(e.DATA), type:'date' },
           { label:'Local',         id:'local', value: e.LOCAL, full:true },
           { label:'Participantes', id:'part',  value: e.PARTICIPANTES },
           { label:'Visitantes',    id:'visit', value: e.VISITANTES },
@@ -3494,9 +3586,9 @@
           { label:'Nome Completo', id:'nome',    value: b.NOME,        full: true },
           { label:'CPF',          id:'cpf',     value: b.CPF                    },
           { label:'RG',           id:'rg',      value: b.RG                     },
-          { label:'Data Nasc.',   id:'nasc',    value: b.DATA_NASC,   type:'date' },
+          { label:'Data Nasc.',   id:'nasc',    value: fmtDate(b.DATA_NASC), type:'date' },
           { label:'Telefone',     id:'tel',     value: b.TELEFONE               },
-          { label:'Data Batismo', id:'batismo', value: b.DATA_BATISMO,type:'date' },
+          { label:'Data Batismo', id:'batismo', value: fmtDate(b.DATA_BATISMO), type:'date' },
           { label:'Pastor',       id:'pastor',  value: b.PASTOR                 },
           { label:'Endereço',     id:'end',     value: b.ENDERECO,    full: true },
           { label:'Observações',  id:'obs',     value: b.OBSERVACOES, type:'textarea', full:true }
@@ -3522,8 +3614,8 @@
           { label:'Nome Completo', id:'nome',    value: dados.NOME,        full: true },
           { label:'Telefone',      id:'tel',     value: dados.TELEFONE               },
           { label:'E-mail',        id:'email',   value: dados.EMAIL,       type:'email' },
-          { label:'Data Nasc.',    id:'nasc',    value: dados.DATA_NASC,   type:'date' },
-          { label:'Data Batismo',  id:'batismo', value: dados.DATA_BATISMO,type:'date' },
+          { label:'Data Nasc.',    id:'nasc',    value: fmtDate(dados.DATA_NASC), type:'date' },
+          { label:'Data Batismo',  id:'batismo', value: fmtDate(dados.DATA_BATISMO), type:'date' },
           { label:'Status',        id:'status',  value: dados.STATUS,      type:'select',
             options:[{v:'ATIVO',l:'Ativo'},{v:'VISITANTE',l:'Visitante'},{v:'INATIVO',l:'Inativo'}] },
           { label:'Observações',   id:'obs',     value: dados.OBSERVACOES, type:'textarea', full:true }
