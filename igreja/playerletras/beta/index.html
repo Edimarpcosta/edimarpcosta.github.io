@@ -614,7 +614,7 @@ loadID3Writer();
         .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
         .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 </style>
-    <script>window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || '';</script>
+    <script>window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || 'https://edimarpcosta.github.io/igreja/playerletras/beta/letra/'; window.TINYURL_API_TOKEN = window.TINYURL_API_TOKEN || ''; window.TINYURL_API_DOMAIN = window.TINYURL_API_DOMAIN || 'tinyurl.com';</script>
 </head>
 <body data-bg-type="solid">
 
@@ -1702,6 +1702,7 @@ const app = {
         fileName: "", fileType: "", originalFile: null,
         presentationMode: false, cursorTimeout: null, projectorWindow: null,
             qrUrl: "",
+            qrLongUrl: "",
             qrPayload: null,
             qrStartedAt: 0
     },
@@ -3005,9 +3006,36 @@ ${JSON.stringify([
             const custom = String(window.PUBLIC_LYRICS_URL || '').trim();
             if (custom) return custom.endsWith('/') ? custom : `${custom}/`;
             const { origin, pathname, protocol } = window.location;
-            if (protocol === 'file:') return 'http://localhost:8080/letra/';
+            if (protocol === 'file:') return '';
             const basePath = pathname.replace(/[^/]*$/, '');
             return `${origin}${basePath}letra/`;
+        },
+        getTinyUrlApiToken() {
+            return String(window.TINYURL_API_TOKEN || '').trim();
+        },
+        async shortenUrlWithTinyUrl(longUrl) {
+            const token = this.getTinyUrlApiToken();
+            if (!token) return { url: longUrl, shortened: false, reason: 'missing-token' };
+            const resp = await fetch('https://api.tinyurl.com/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    url: longUrl,
+                    domain: String(window.TINYURL_API_DOMAIN || 'tinyurl.com').trim() || 'tinyurl.com'
+                })
+            });
+            let json = null;
+            try { json = await resp.json(); } catch (_) {}
+            if (!resp.ok) {
+                const msg = json && Array.isArray(json.errors) && json.errors[0] ? json.errors[0] : `TinyURL ${resp.status}`;
+                throw new Error(msg);
+            }
+            const tiny = json?.data?.tiny_url || json?.data?.tinyurl || json?.data?.url || '';
+            if (!tiny) throw new Error('TinyURL não retornou a URL curta.');
+            return { url: tiny, shortened: true, response: json };
         },
         getLyricsSharePayload() {
             if (!this.state.lyrics || (!this.state.lyrics.synced && !this.state.lyrics.plain)) return null;
@@ -3036,37 +3064,65 @@ ${JSON.stringify([
             }
             return { payload, packed, startedAt };
         },
-        generateQrCode() {
+        async generateQrCode() {
             if (typeof LZString === 'undefined' || typeof QRCode === 'undefined') {
                 alert('Bibliotecas do QR/LZString não carregaram ainda. Recarregue a página.');
                 return;
             }
             const data = this.getLyricsSharePayload();
             if (!data || !data.packed) {
-                alert('Carregue uma música com letra antes de gerar o QR Code. Se estiver em file://, rode em servidor local ou publique no GitHub Pages para o link abrir no celular.');
+                alert('Carregue uma música com letra antes de gerar o QR Code.');
                 return;
             }
-            const url = `${this.getPublicLyricsBaseUrl()}#${data.packed}`;
-            this.state.qrUrl = url;
+            const baseUrl = this.getPublicLyricsBaseUrl();
+            if (!baseUrl) {
+                alert('Defina uma URL pública para a página /letra/ antes de gerar QR. Em file:// a página local não pode ser usada no celular. Ajuste window.PUBLIC_LYRICS_URL para a URL publicada no GitHub Pages.');
+                return;
+            }
+            const longUrl = `${baseUrl}#${data.packed}`;
+            this.state.qrLongUrl = longUrl;
             this.state.qrPayload = data.payload;
             this.state.qrStartedAt = data.startedAt;
+
             const wrap = document.getElementById('qrCanvasWrap');
             const subtitle = document.getElementById('qrSubtitle');
             const urlText = document.getElementById('qrUrlText');
+            const overlay = document.getElementById('qrOverlay');
+            wrap.innerHTML = '<div style="color:#666;font-size:.9em">Preparando QR...</div>';
+            subtitle.textContent = 'Preparando link da letra...';
+            urlText.textContent = longUrl;
+            overlay.style.display = 'flex';
+
+            let finalUrl = longUrl;
+            let shortened = false;
+            try {
+                const tiny = await this.shortenUrlWithTinyUrl(longUrl);
+                finalUrl = tiny.url || longUrl;
+                shortened = !!tiny.shortened;
+            } catch (err) {
+                console.warn('TinyURL falhou, usando URL longa:', err);
+            }
+
+            this.state.qrUrl = finalUrl;
             wrap.innerHTML = '';
-            new QRCode(wrap, { text: url, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
-            subtitle.textContent = `${data.payload.ti}${data.payload.ar ? ' — ' + data.payload.ar : ''}`;
-            urlText.textContent = url;
-            document.getElementById('qrOverlay').style.display = 'flex';
+            try {
+                new QRCode(wrap, { text: finalUrl, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
+            } catch (err) {
+                console.error('Falha ao gerar QR:', err);
+                wrap.innerHTML = '<div style="color:#d63031;font-size:.92em;line-height:1.5">Não foi possível montar o QR com esse link.<br>Configure o TinyURL token para encurtar a URL ou reduza o tamanho da letra.</div>';
+            }
+            subtitle.textContent = `${data.payload.ti}${data.payload.ar ? ' — ' + data.payload.ar : ''}${shortened ? ' • TinyURL' : ' • Link direto'}`;
+            urlText.textContent = finalUrl;
         },
         closeQrOverlay() {
             const ov = document.getElementById('qrOverlay');
             if (ov) ov.style.display = 'none';
         },
         async copyQrUrl() {
-            if (!this.state.qrUrl) return;
+            const toCopy = this.state.qrUrl || this.state.qrLongUrl;
+            if (!toCopy) return;
             try {
-                await navigator.clipboard.writeText(this.state.qrUrl);
+                await navigator.clipboard.writeText(toCopy);
                 const el = document.getElementById('qrSubtitle');
                 if (el) {
                     const prev = el.textContent;
