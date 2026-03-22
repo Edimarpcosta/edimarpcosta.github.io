@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Church Player - Apresentação Profissional</title>
+    <title>Church Player - β Word Karaokê</title>
     <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,6 +185,48 @@ loadID3Writer();
             transform: scale(1.05);
             text-shadow: 0 0 24px var(--color-active), 0 0 48px rgba(255,255,255,0.15);
             opacity: 1;
+        }
+        /* ── SLIDER TIMING PALAVRAS ──────────────────────────────────────── */
+        .word-offset-wrap {
+            padding: 8px 12px 10px;
+            border-top: 1px solid #1a1a28;
+            background: #0e0e18;
+        }
+        .word-offset-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.72em; color: #666; margin-bottom: 5px;
+        }
+        #wordOffsetVal {
+            font-size: 0.9em; font-weight: 700;
+            color: #6366f1; font-variant-numeric: tabular-nums;
+        }
+        .word-offset-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 4px; border-radius: 2px;
+            background: linear-gradient(to right, #6366f1 0%, #6366f1 var(--slider-pct, 27%), #2a2a3a var(--slider-pct, 27%), #2a2a3a 100%);
+            outline: none; cursor: pointer;
+        }
+        .word-offset-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px;
+            border-radius: 50%; background: #6366f1;
+            border: 2px solid #fff; box-shadow: 0 0 6px rgba(99,102,241,0.6);
+            transition: transform 0.1s;
+        }
+        .word-offset-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .word-offset-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.62em; color: #3a3a4a; margin-top: 3px;
+        }
+
+        /* ── WORD KARAOKÊ ─────────────────────────────────────────────── */
+        .l-line.active .l-word {
+            color: rgba(255,255,255,0.22);
+            text-shadow: none;
+            transition: color 0.13s ease, text-shadow 0.13s ease;
+        }
+        .l-line.active .l-word.l-word-active {
+            color: var(--color-active);
+            text-shadow: 0 0 18px var(--color-active), 0 0 36px rgba(255,255,255,0.15);
         }
         .plain-text { white-space: pre-wrap; font-size: 1.2em; line-height: 1.6; color: #ccc; padding-top: 50px; }
 
@@ -457,7 +499,7 @@ loadID3Writer();
     </button>
 
     <div class="track-info">
-        <div class="track-title" id="lblTitle">Church Player</div>
+        <div class="track-title" id="lblTitle">Church Player <span style="font-size:0.55em;background:#6366f1;color:#fff;padding:2px 7px;border-radius:20px;font-weight:700;vertical-align:middle;">β WORD</span></div>
         <div class="track-artist" id="lblArtist">Arraste Áudio (+ LRC) aqui</div>
     </div>
 
@@ -492,6 +534,20 @@ loadID3Writer();
             <button id="btnShuffle" onclick="app.toggleShuffle()" title="Aleatório">🔀</button>
             <button id="btnLoop" onclick="app.toggleLoop()" title="Repetir">🔁</button>
             <button id="btnNext" onclick="app.nextTrack()" title="Próxima">⏭</button>
+        </div>
+        <div class="word-offset-wrap">
+            <div class="word-offset-header">
+                <span>⏱ Timing palavras</span>
+                <span id="wordOffsetVal">-0.3s</span>
+            </div>
+            <input type="range" id="wordOffsetSlider"
+                   min="-2.0" max="0.8" step="0.05" value="-0.3"
+                   class="word-offset-slider"
+                   oninput="app.setWordOffset(parseFloat(this.value))">
+            <div class="word-offset-labels">
+                <span>← mais cedo</span>
+                <span>mais tarde →</span>
+            </div>
         </div>
     </aside>
     <main id="mainArea">
@@ -1402,6 +1458,7 @@ const DEFAULT_CONFIG = {
     bgImageUrl: '', bgOpacity: 0.75, bgBlur: 1,
     churchName: 'ADBUS Piracicaba', churchPosition: 'top', churchNameSize: 2.6,
     churchNameColor: '#ffd500', churchNameOpacity: 0.8,
+    wordOffset: -0.3,   // segundos — negativo = antecipa highlight
 };
 
 const PRESET_THEMES = {
@@ -1879,6 +1936,13 @@ const app = {
         setVal('bgImageUrl', this.config.bgImageUrl);
         setVal('bgOpacity', this.config.bgOpacity); setTxt('bgOpacityValue', Math.round(this.config.bgOpacity*100) + '%');
         setVal('bgBlur', this.config.bgBlur); setTxt('bgBlurValue', this.config.bgBlur + 'px');
+        // Slider de timing de palavras
+        const wSlider = document.getElementById('wordOffsetSlider');
+        if (wSlider) {
+            const wVal = this.config.wordOffset ?? -0.3;
+            wSlider.value = wVal;
+            this.setWordOffset(wVal);
+        }
         setVal('churchNameInp', this.config.churchName);
         const cp = document.querySelector(`input[name="churchPosition"][value="${this.config.churchPosition}"]`); if(cp) cp.checked = true;
         setVal('churchNameSize', this.config.churchNameSize); setTxt('churchNameSizeValue', this.config.churchNameSize + 'em');
@@ -2015,9 +2079,10 @@ const app = {
         const renderTo = (container, doc) => {
             if (!container) return;
             container.innerHTML = '';
-            this.state.lyrics.synced.forEach(line => {
+            this.state.lyrics.synced.forEach((line, idx) => {
                 const div = doc.createElement('div');
                 div.className = 'l-line';
+                div.dataset.idx = idx;          // ← necessário para restaurar texto após karaokê
                 div.innerText = line.text;
                 div.onclick = () => { this.ui.audio.currentTime = line.startTime; this.ui.audio.play(); };
                 container.appendChild(div);
@@ -2044,6 +2109,47 @@ const app = {
         this.state.currentMode === 'synced' ? this.renderSynced() : this.renderPlain();
     },
 
+
+    setWordOffset(val) {
+        this.config.wordOffset = val;
+        this.saveConfig();
+        const label = document.getElementById('wordOffsetVal');
+        if (label) label.textContent = (val >= 0 ? '+' : '') + val.toFixed(2) + 's';
+        // Atualiza a barra de progresso do slider via CSS custom property
+        const slider = document.getElementById('wordOffsetSlider');
+        if (slider) {
+            const min = parseFloat(slider.min), max = parseFloat(slider.max);
+            const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+            slider.style.setProperty('--slider-pct', pct);
+        }
+    },
+
+    _splitLineWords(lineEl, idx, lines) {
+        const lineData = lines[idx];
+        const nextData = lines[idx + 1];
+        const lineStart = lineData.startTime;
+        const lineEnd   = nextData ? nextData.startTime : lineStart + 4;
+        const duration  = Math.max(lineEnd - lineStart, 0.5); // mínimo 0.5s
+
+        const words = lineData.text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length <= 1) return; // palavra única — sem split necessário
+
+        const totalChars = words.reduce((a, w) => a + w.length, 0);
+        lineEl.innerHTML = '';
+        let charOffset = 0;
+
+        words.forEach((word, i) => {
+            const span = document.createElement('span');
+            span.className = 'l-word';
+            // Tempo estimado pela proporção de caracteres
+            span.dataset.time = lineStart + (charOffset / totalChars) * duration;
+            span.textContent = word;
+            lineEl.appendChild(span);
+            if (i < words.length - 1) lineEl.appendChild(document.createTextNode(' '));
+            charOffset += word.length;
+        });
+    },
+
     syncLoop() {
         if (this.state.currentMode !== 'synced' || !this.state.lyrics.synced) return;
         const time = this.ui.audio.currentTime;
@@ -2057,12 +2163,28 @@ const app = {
             if (!container || activeIdx === -1) return;
             const currentEl = container.querySelector('.l-line.active');
             const nextEl = container.children[activeIdx];
+
             if (currentEl !== nextEl) {
-                if (currentEl) currentEl.classList.remove('active');
+                // Restaura linha anterior ao texto puro (remove spans de palavras)
+                if (currentEl) {
+                    const prevIdx = parseInt(currentEl.dataset.idx);
+                    if (!isNaN(prevIdx)) currentEl.innerText = lines[prevIdx]?.text || '';
+                    currentEl.classList.remove('active');
+                }
+                // Ativa nova linha e divide em palavras
                 if (nextEl) {
                     nextEl.classList.add('active');
                     nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    this._splitLineWords(nextEl, activeIdx, lines);
                 }
+            }
+
+            // Atualiza highlight de palavras a cada tick (com offset de timing)
+            if (nextEl) {
+                const wOffset = this.config.wordOffset ?? -0.3;
+                nextEl.querySelectorAll('.l-word').forEach(w => {
+                    w.classList.toggle('l-word-active', time >= parseFloat(w.dataset.time) + wOffset);
+                });
             }
         };
 
