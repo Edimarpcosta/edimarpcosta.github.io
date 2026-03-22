@@ -237,7 +237,31 @@ loadID3Writer();
             color: var(--color-active);
             text-shadow: 0 0 18px var(--color-active), 0 0 36px rgba(255,255,255,0.15);
         }
-        .plain-text { white-space: pre-wrap; font-size: 1.2em; line-height: 1.6; color: #ccc; padding-top: 50px; }
+        /* Plain text — same appearance as synced lines */
+        .plain-text {
+            white-space: pre-wrap;
+            font-size: var(--font-size-base);
+            line-height: var(--line-spacing);
+            color: var(--color-inactive);
+            font-family: var(--font-family-lyrics);
+            padding: 10px;
+            opacity: 0.9;
+        }
+        body[data-font="bebas"] .plain-text { letter-spacing: 0.06em; text-transform: uppercase; }
+        /* Highlight the "current" line estimated by plain scroll */
+        .plain-text .plain-line-active {
+            color: var(--color-active);
+            font-size: var(--font-size-active);
+            font-weight: var(--font-weight-active);
+            text-shadow: 0 0 24px var(--color-active), 0 0 48px rgba(255,255,255,0.15);
+            display: block;
+            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        .plain-text .plain-line {
+            display: block;
+            padding: 4px 0;
+            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        }
 
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -2556,7 +2580,12 @@ const app = {
     },
 
     renderPlain() {
-        const html = `<div class="plain-text">${this.state.lyrics.plain || "Sem texto."}</div>`;
+        const rawPlain = this.state.lyrics.plain || 'Sem texto.';
+                const plainLines = rawPlain.split('\n');
+                const spans = plainLines.map((l, i) =>
+                    `<span class="plain-line" data-idx="${i}">${l || '&nbsp;'}</span>`
+                ).join('\n');
+                const html = `<div class="plain-text" id="plainTextBlock">${spans}</div>`;
         this.ui.container.innerHTML = html;
         if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
             const pBox = this.state.projectorWindow.document.getElementById('p-lyricsContainer');
@@ -2611,7 +2640,51 @@ const app = {
     },
 
     syncLoop() {
-        if (this.state.currentMode !== 'synced' || !this.state.lyrics || !this.state.lyrics.synced) return;
+        // Plain text: proportional scroll + active line highlight
+        if (this.state.currentMode !== 'synced') {
+            if (this.state.currentMode === 'plain') {
+                const audio   = this.ui.audio;
+                const dur     = audio.duration;
+                const cur     = audio.currentTime;
+                if (!dur || isNaN(dur) || dur === 0) return;
+                const pct     = cur / dur;
+                const block   = document.getElementById('plainTextBlock');
+                const container = document.getElementById('lyricsContainer');
+                if (block && container) {
+                    // Smooth scroll
+                    const maxScroll = container.scrollHeight - container.clientHeight;
+                    const target    = Math.max(0, pct * maxScroll);
+                    container.scrollTo({ top: target, behavior: 'smooth' });
+                    // Highlight proportional line
+                    const spans = block.querySelectorAll('.plain-line');
+                    if (spans.length) {
+                        const activeIdx = Math.min(
+                            Math.floor(pct * spans.length),
+                            spans.length - 1
+                        );
+                        spans.forEach((s, i) => {
+                            s.classList.toggle('plain-line-active', i === activeIdx);
+                        });
+                    }
+                }
+                // Also sync projector window if open
+                if (this._projWin && !this._projWin.closed) {
+                    const pBlock = this._projWin.document.getElementById('plainTextBlock');
+                    const pCont  = this._projWin.document.getElementById('lyricsContainer');
+                    if (pBlock && pCont) {
+                        const maxS  = pCont.scrollHeight - pCont.clientHeight;
+                        pCont.scrollTo({ top: Math.max(0, pct * maxS), behavior: 'smooth' });
+                        const pSpans = pBlock.querySelectorAll('.plain-line');
+                        if (pSpans.length) {
+                            const ai = Math.min(Math.floor(pct * pSpans.length), pSpans.length - 1);
+                            pSpans.forEach((s, i) => s.classList.toggle('plain-line-active', i === ai));
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        if (!this.state.lyrics || !this.state.lyrics.synced) return;
         const time = this.ui.audio.currentTime;
         const lines = this.state.lyrics.synced;
         let activeIdx = -1;
