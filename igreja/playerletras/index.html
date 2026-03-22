@@ -45,6 +45,8 @@ async function loadID3Writer() {
 loadID3Writer();
 </script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@latest/lame.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     
     <style>
         /* ==========================================================================
@@ -602,7 +604,17 @@ loadID3Writer();
             .ctrl-btn { width: 38px; height: 38px; font-size: 1em; }
             .ctrl-play { width: 48px; height: 48px; font-size: 1.3em; }
         }
-    </style>
+    
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
+        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
+        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
+        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
+        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+</style>
+    <script>window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || 'https://edimarpcosta.github.io/igreja/playerletras/beta/letra/'; window.TINYURL_API_TOKEN = window.TINYURL_API_TOKEN || ''; window.TINYURL_API_DOMAIN = window.TINYURL_API_DOMAIN || 'tinyurl.com';</script>
 </head>
 <body data-bg-type="solid">
 
@@ -639,6 +651,7 @@ loadID3Writer();
         <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
         <button class="btn" onclick="app.openSearch()">🔍 Manual / Colar</button>
         <button class="btn btn-action" onclick="app.openRemotePlaylist()" title="Músicas demo e playlists remotas">🎵 Remotas</button>
+                <button class="btn" id="btnQrLyrics" onclick="app.generateQrCode()" title="Gerar QR Code da letra para o público">📱 QR Letra</button>
 
         <div class="dropdown" id="dropdownSave" style="display:none">
             <button class="btn btn-action">💾 Salvar...</button>
@@ -661,7 +674,9 @@ loadID3Writer();
         <button class="mobile-menu-item" onclick="app.toggleFullscreen()">⛶ Tela Cheia</button>
         <button class="mobile-menu-item" onclick="app.openSettings();app.toggleHamburger()">⚙️ Configurações</button>
         <button class="mobile-menu-item" onclick="app.openSearch();app.toggleHamburger()">🔍 Busca Manual</button>
+        <button class="mobile-menu-item" onclick="document.getElementById('folderInput').click();app.toggleHamburger()">🗂️ Abrir Pasta</button>
         <button class="mobile-menu-item" onclick="app.openRemotePlaylist();app.toggleHamburger()">🎵 Remotas</button>
+        <button class="mobile-menu-item" onclick="app.generateQrCode();app.toggleHamburger()">📱 QR Letra</button>
         <button class="mobile-menu-item" id="mmbToggleType" onclick="app.toggleView();app.toggleHamburger()" style="display:none">↔️ Sync / Texto</button>
         <div id="mmbSaveGroup" style="display:none">
             <button class="mobile-menu-item" onclick="app.downloadLrc();app.toggleHamburger()">📄 Salvar .LRC</button>
@@ -708,6 +723,20 @@ loadID3Writer();
         </div>
     </main>
 </div>
+
+<div id="qrOverlay" class="qr-overlay" style="display:none;">
+        <div class="qr-box">
+            <button class="qr-close" onclick="app.closeQrOverlay()">×</button>
+            <div class="qr-title">Letra no celular</div>
+            <div class="qr-subtitle" id="qrSubtitle">Escaneie para acompanhar</div>
+            <div id="qrCanvasWrap" class="qr-canvas-wrap"></div>
+            <div class="qr-url" id="qrUrlText"></div>
+            <div class="qr-actions">
+                <button class="btn btn-action" onclick="app.copyQrUrl()">Copiar Link</button>
+                <button class="btn" onclick="app.closeQrOverlay()">Fechar</button>
+            </div>
+        </div>
+    </div>
 
 <footer id="mainFooter">
     <audio id="audioPlayer" preload="metadata"></audio>
@@ -1671,7 +1700,11 @@ const app = {
         meta: { track: "", artist: "", album: "", duration: 0 },
         lyrics: null, currentMode: 'synced',
         fileName: "", fileType: "", originalFile: null,
-        presentationMode: false, cursorTimeout: null, projectorWindow: null
+        presentationMode: false, cursorTimeout: null, projectorWindow: null,
+            qrUrl: "",
+            qrLongUrl: "",
+            qrPayload: null,
+            qrStartedAt: 0
     },
     ui: {
         audio: document.getElementById('audioPlayer'),
@@ -1814,9 +1847,16 @@ const app = {
 
     initEventListeners() {
         document.getElementById('fileInput').addEventListener('change', e => {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files || []);
             if (files.length > 0) this.handleFiles(files);
         });
+        const folderInput = document.getElementById('folderInput');
+        if (folderInput) {
+            folderInput.addEventListener('change', e => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) this.handleFiles(files);
+            });
+        }
         this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
         this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
         this.ui.audio.addEventListener('ended', () => this.playlist.next());
@@ -1885,35 +1925,52 @@ const app = {
 
     setupDragAndDrop() {
         let dragCounter = 0;
+        const isFileDrag = e => {
+            const types = Array.from(e.dataTransfer?.types || []);
+            return types.includes('Files');
+        };
         document.body.addEventListener('dragenter', e => {
-            e.preventDefault(); dragCounter++;
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter++;
             this.ui.dragOverlay.classList.add('active');
         });
         document.body.addEventListener('dragleave', e => {
-            e.preventDefault(); dragCounter--;
-            if (dragCounter <= 0) { dragCounter = 0; this.ui.dragOverlay.classList.remove('active'); }
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                this.ui.dragOverlay.classList.remove('active');
+            }
         });
-        document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-        document.body.addEventListener('drop', e => {
-            e.preventDefault(); dragCounter = 0;
+        document.body.addEventListener('dragover', e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        document.body.addEventListener('drop', async e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter = 0;
             this.ui.dragOverlay.classList.remove('active');
 
-            // CRITICAL: collect entries SYNCHRONOUSLY before any await
-            // DataTransferItemList is cleared after the event handler returns
-            const items = e.dataTransfer.items;
+            const items = Array.from(e.dataTransfer?.items || []);
             const entries = [];
-            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
-                for (let i = 0; i < items.length; i++) {
-                    const entry = items[i].webkitGetAsEntry();
+            for (const item of items) {
+                try {
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
                     if (entry) entries.push(entry);
-                }
+                } catch (_) {}
             }
+            const fallbackFiles = Array.from(e.dataTransfer?.files || []);
 
-            // Also grab files synchronously as fallback
-            const fallbackFiles = Array.from(e.dataTransfer.files);
-
-            // NOW do async resolution
-            this._processDroppedEntries(entries, fallbackFiles);
+            try {
+                this.setLoading(entries.length ? 'Lendo pasta/arquivos...' : 'Lendo arquivos...');
+                await this._processDroppedEntries(entries, fallbackFiles);
+            } finally {
+                this.setLoading(null);
+            }
         });
     },
 
@@ -1925,35 +1982,34 @@ const app = {
                     const files = await this._collectEntryFiles(entry);
                     allFiles.push(...files);
                 }
-                if (allFiles.length > 0) {
-                    this.handleFiles(allFiles);
+                const filtered = allFiles.filter(Boolean).sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+                if (filtered.length > 0) {
+                    this.handleFiles(filtered);
                     return;
                 }
             } catch (err) {
                 console.warn('webkitGetAsEntry failed, using fallback:', err);
             }
         }
-        // Fallback: use plain files
         if (fallbackFiles.length > 0) this.handleFiles(fallbackFiles);
     },
 
     async _collectEntryFiles(entry) {
+        if (!entry) return [];
         if (entry.isFile) {
-            return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
-        } else if (entry.isDirectory) {
+            const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+            return [file];
+        }
+        if (entry.isDirectory) {
             const dirReader = entry.createReader();
-            let allEntries = [];
-            // readEntries may not return all files at once — must loop
-            const readBatch = () => new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
-            let batch;
-            do {
-                batch = await readBatch();
+            const allEntries = [];
+            while (true) {
+                const batch = await new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+                if (!batch.length) break;
                 allEntries.push(...batch);
-            } while (batch.length > 0);
-            const files = [];
-            for (const sub of allEntries) {
-                files.push(...await this._collectEntryFiles(sub));
             }
+            let files = [];
+            for (const sub of allEntries) files.push(...await this._collectEntryFiles(sub));
             return files;
         }
         return [];
@@ -2116,8 +2172,17 @@ const app = {
                     }
                     main::-webkit-scrollbar { display: none; }
                     .lyrics-box { padding: 50vh 20px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-                </style>
-            </head>
+                
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
+        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
+        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
+        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
+        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
             <body>
                 <div class="church-name" id="p-churchName"></div>
                 <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
@@ -2935,6 +3000,132 @@ ${JSON.stringify([
         }
         document.getElementById('dropdownSave').style.display = 'none';
         this.setLoading(null);
+    },
+
+        getPublicLyricsBaseUrl() {
+            const custom = String(window.PUBLIC_LYRICS_URL || '').trim();
+            if (custom) return custom.endsWith('/') ? custom : `${custom}/`;
+            const { origin, pathname, protocol } = window.location;
+            if (protocol === 'file:') return '';
+            const basePath = pathname.replace(/[^/]*$/, '');
+            return `${origin}${basePath}letra/`;
+        },
+        getTinyUrlApiToken() {
+            return String(window.TINYURL_API_TOKEN || '').trim();
+        },
+        async shortenUrlWithTinyUrl(longUrl) {
+            const token = this.getTinyUrlApiToken();
+            if (!token) return { url: longUrl, shortened: false, reason: 'missing-token' };
+            const resp = await fetch('https://api.tinyurl.com/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    url: longUrl,
+                    domain: String(window.TINYURL_API_DOMAIN || 'tinyurl.com').trim() || 'tinyurl.com'
+                })
+            });
+            let json = null;
+            try { json = await resp.json(); } catch (_) {}
+            if (!resp.ok) {
+                const msg = json && Array.isArray(json.errors) && json.errors[0] ? json.errors[0] : `TinyURL ${resp.status}`;
+                throw new Error(msg);
+            }
+            const tiny = json?.data?.tiny_url || json?.data?.tinyurl || json?.data?.url || '';
+            if (!tiny) throw new Error('TinyURL não retornou a URL curta.');
+            return { url: tiny, shortened: true, response: json };
+        },
+        getLyricsSharePayload() {
+            if (!this.state.lyrics || (!this.state.lyrics.synced && !this.state.lyrics.plain)) return null;
+            const lines = this.state.lyrics.synced || null;
+            const plain = (this.state.lyrics.plain || (lines ? lines.map(l => l.text).join('\n') : '')).trim();
+            let lrc = plain;
+            if (lines && lines.length) {
+                lrc = lines.map(line => `[${this._lrcFmt(line.startTime)}] ${line.text}`.trim()).join('\n');
+            }
+            const startedAt = Date.now() - Math.round((this.ui.audio.currentTime || 0) * 1000);
+            const payload = {
+                v: 2,
+                c: this.config.churchName || '',
+                ti: this.state.meta.track || this.state.fileName || 'Letra',
+                ar: this.state.meta.artist || '',
+                l: lrc,
+                p: plain,
+                m: lines && lines.length ? 'synced' : 'plain',
+                t: startedAt
+            };
+            let packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            if (packed && packed.length > 1800 && lines && lines.length) {
+                payload.m = 'plain';
+                payload.l = plain;
+                packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            }
+            return { payload, packed, startedAt };
+        },
+            _extractQrLyricsText() {
+        const lines = Array.from(document.querySelectorAll('#lyricsContainer .l-line, #lyricsContainer .plain-line'));
+        const cleaned = lines.map(el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+        if (cleaned.length) return cleaned.join('\n');
+        const container = document.getElementById('lyricsContainer');
+        return (container?.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+    },
+
+    _buildQrLyricsUrl() {
+        const title = this.state?.meta?.track || document.getElementById('lblTitle')?.innerText || 'Letra';
+        const artist = this.state?.meta?.artist || document.getElementById('lblArtist')?.innerText || '';
+        const plain = this._extractQrLyricsText();
+        if (!plain) throw new Error('Nenhuma letra carregada.');
+        const payload = { v: 3, ti: title, ar: artist, plain, ts: Date.now() };
+        const json = JSON.stringify(payload);
+        const packed = window.LZString ? LZString.compressToEncodedURIComponent(json) : encodeURIComponent(json);
+        const base = (window.PUBLIC_LYRICS_URL || 'https://edimarpcosta.github.io/igreja/playerletras/beta/letra/').replace(/\/?$/, '/');
+        return base + '#lz=' + packed;
+    },
+
+    async generateQrCode() {
+        try {
+            const url = this._buildQrLyricsUrl();
+            this.state.qrLyricsUrl = url;
+            const overlay = document.getElementById('qrOverlay');
+            const wrap = document.getElementById('qrCanvasWrap');
+            const txt = document.getElementById('qrUrlText');
+            const sub = document.getElementById('qrSubtitle');
+            if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
+            wrap.innerHTML = '';
+            txt.textContent = url;
+            if (sub) sub.textContent = url.length > 2500 ? 'Link grande, mas funcional sem TinyURL' : 'Escaneie para acompanhar';
+            new QRCode(wrap, {
+                text: url,
+                width: 240,
+                height: 240,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            overlay.style.display = 'flex';
+        } catch (err) {
+            alert('QR da letra: ' + (err?.message || err));
+            console.error(err);
+        }
+    },
+
+    async copyQrUrl() {
+        try {
+            const url = this.state.qrLyricsUrl || this._buildQrLyricsUrl();
+            await navigator.clipboard.writeText(url);
+            const sub = document.getElementById('qrSubtitle');
+            if (sub) sub.textContent = 'Link copiado!';
+        } catch (err) {
+            alert('Não foi possível copiar o link.');
+            console.error(err);
+        }
+    },
+
+    closeQrOverlay() {
+        const overlay = document.getElementById('qrOverlay');
+        if (overlay) overlay.style.display = 'none';
     }
 };
 
