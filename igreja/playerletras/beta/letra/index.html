@@ -35,48 +35,124 @@
     <div class="help">Toque em uma frase para alinhar manualmente com o momento da música. A página aceita payload novo e antigo no hash do QR.</div>
   </div>
 <script>
+class LrcParser {
+  static parse(text){
+    if(!text) return { synced:null, plain:'' };
+    const clean = String(text).replace(/\[[a-zA-Z].*?\]/g, '').trim();
+    const lines = clean.split(/\r?\n/).filter(Boolean);
+    const synced = [];
+    const plain = [];
+    const rx = /^\[?(\d{2}):(\d{2}(?:\.\d{1,3})?)\]?\s*(.*)$/;
+    lines.forEach(line => {
+      const m = line.match(rx);
+      if (m) synced.push({ startTime: parseInt(m[1],10) * 60 + parseFloat(m[2]), text: (m[3] || '').trim() });
+      else plain.push(line.trim());
+    });
+    return { synced: synced.length ? synced : null, plain: plain.length ? plain.join('\n') : clean };
+  }
+}
 const els = {
+  church: document.getElementById('church'),
   title: document.getElementById('title'),
   artist: document.getElementById('artist'),
+  status: document.getElementById('status'),
   lyrics: document.getElementById('lyrics'),
-  status: document.getElementById('status')
+  btnSync: document.getElementById('btnSync'),
+  btnToggle: document.getElementById('btnToggle')
 };
-function setStatus(msg) { if (els.status) els.status.textContent = msg || ''; }
-function esc(s) { return String(s ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
-function renderPlain(text) {
-  const safe = esc(text).replace(/
-/g, '<br>');
-  els.lyrics.innerHTML = '<div class="plain">' + safe + '</div>';
-}
-function readPayload() {
-  const rawHash = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash;
-  const params = new URLSearchParams(rawHash || location.search);
-  const lz = params.get('lz');
-  if (lz) {
-    const json = window.LZString ? LZString.decompressFromEncodedURIComponent(lz) : decodeURIComponent(lz);
-    if (!json) throw new Error('Falha ao descompactar payload da letra.');
-    return JSON.parse(json);
+let payload = null, parsed = null, currentMode = 'plain', timeOffset = 0, activeIdx = -1, loopStarted = false;
+function fmt(sec){ const m=Math.floor(sec/60).toString().padStart(2,'0'); const s=(sec%60).toFixed(2).padStart(5,'0'); return `[${m}:${s}]`; }
+function setStatus(msg){ els.status.textContent = msg; }
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function nowSongTime(){ return payload ? Math.max(0, ((Date.now() - Number(payload.t || 0)) / 1000) + timeOffset) : 0; }
+function decodePayload(hash){
+  if(!hash) return null;
+  let txt = null;
+  try { txt = LZString.decompressFromEncodedURIComponent(hash); } catch(e) {}
+  if(!txt){
+    try { txt = decodeURIComponent(hash); } catch(e) {}
   }
-  const p = params.get('p') || params.get('payload');
-  if (p) return JSON.parse(decodeURIComponent(p));
-  return null;
+  return txt;
 }
-try {
-  const payload = readPayload();
-  if (!payload) {
+function payloadField(obj, shortKey, longKey, fallback=''){ return obj?.[shortKey] ?? obj?.[longKey] ?? fallback; }
+function render(){
+  if(!parsed) return;
+  els.lyrics.innerHTML = '';
+  activeIdx = -1;
+  if(currentMode === 'synced' && parsed.synced && parsed.synced.length){
+    parsed.synced.forEach((line, idx) => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.dataset.idx = idx;
+      div.innerHTML = `<span class="time">${fmt(line.startTime)}</span><span>${escapeHtml(line.text)}</span>`;
+      div.onclick = () => syncToLine(idx);
+      els.lyrics.appendChild(div);
+    });
+    setStatus('Modo sincronizado ativo. Toque em uma frase para corrigir o tempo.');
+  } else {
+    const div = document.createElement('div');
+    div.className = 'plain';
+    div.textContent = parsed.plain || payloadField(payload, 'p', 'plain', 'Sem letra');
+    els.lyrics.appendChild(div);
+    setStatus('Modo texto simples.');
+  }
+}
+function syncToLine(idx){
+  if(!parsed?.synced?.[idx]) return;
+  timeOffset += parsed.synced[idx].startTime - nowSongTime();
+  setStatus(`Sincronizado manualmente em ${fmt(parsed.synced[idx].startTime)}.`);
+}
+function syncLoop(){
+  if(currentMode === 'synced' && parsed?.synced?.length){
+    const t = nowSongTime();
+    let idx = -1;
+    for(let i = 0; i < parsed.synced.length; i++){
+      if(parsed.synced[i].startTime <= t) idx = i; else break;
+    }
+    if(idx !== activeIdx){
+      const prev = els.lyrics.querySelector('.line.active');
+      if(prev) prev.classList.remove('active');
+      const next = els.lyrics.querySelector(`.line[data-idx="${idx}"]`);
+      if(next){ next.classList.add('active'); next.scrollIntoView({ behavior:'smooth', block:'center' }); }
+      activeIdx = idx;
+    }
+  }
+  requestAnimationFrame(syncLoop);
+}
+function bootstrap(){
+  const hash = location.hash.replace(/^#/, '').trim();
+  if(!hash){
     setStatus('Nenhuma letra recebida nesta URL.');
     els.lyrics.innerHTML = '<div class="plain">Abra esta página por um QR Code gerado no player.</div>';
-  } else {
-    els.title.textContent = payload.ti || payload.title || 'Letra';
-    els.artist.textContent = payload.ar || payload.artist || '';
-    renderPlain(payload.plain || 'Sem letra');
-    setStatus('Letra carregada com sucesso.');
+    return;
   }
-} catch (err) {
-  console.error(err);
-  setStatus('Falha ao processar a letra da URL.');
-  els.lyrics.innerHTML = '<div class="plain">Não foi possível abrir esta letra.</div>';
+  try {
+    const decoded = decodePayload(hash);
+    if(!decoded) throw new Error('decompress-failed');
+    payload = JSON.parse(decoded);
+    const lrc = payloadField(payload, 'l', 'lrc', '') || payloadField(payload, 'p', 'plain', '');
+    parsed = LrcParser.parse(lrc);
+    if(!parsed.plain && payloadField(payload, 'p', 'plain', '')) parsed.plain = payloadField(payload, 'p', 'plain', '');
+    els.church.textContent = payloadField(payload, 'c', 'church', 'Igreja');
+    els.title.textContent = payloadField(payload, 'ti', 'title', 'Letra');
+    els.artist.textContent = payloadField(payload, 'ar', 'artist', '');
+    currentMode = payloadField(payload, 'm', 'mode', 'plain') === 'synced' && parsed.synced ? 'synced' : 'plain';
+    render();
+    if(!loopStarted){ loopStarted = true; syncLoop(); }
+  } catch(e) {
+    console.error(e);
+    setStatus('Falha ao processar a letra da URL.');
+    els.lyrics.innerHTML = '<div class="plain">O conteúdo recebido está inválido, não pôde ser descomprimido ou não está no formato esperado.</div>';
+  }
 }
+els.btnSync.onclick = () => {
+  timeOffset = 0;
+  setStatus('Sincronização recalculada usando o relógio atual do aparelho.');
+};
+els.btnToggle.onclick = () => {
+  if(parsed?.synced){ currentMode = currentMode === 'synced' ? 'plain' : 'synced'; render(); }
+};
+bootstrap();
 </script>
 </body>
 </html>
