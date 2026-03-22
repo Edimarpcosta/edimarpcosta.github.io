@@ -313,7 +313,7 @@ loadID3Writer();
         .tag-txt { background: #fdcb6e; color: #333; }
 
         footer { padding: 0; background: var(--surface); border-top: 1px solid #333; transition: all 0.3s ease; display: flex; flex-direction: column; }
-        audio { width: 100%; outline: none; }
+        audio { width: 100%; outline: none; display: none; }
         
         #loading {
             display: none; position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
@@ -490,6 +490,7 @@ loadID3Writer();
         #seekBar {
             flex: 1; height: 5px; background: #2a2a3a; border-radius: 3px;
             position: relative; cursor: pointer; overflow: visible;
+            -webkit-tap-highlight-color: transparent;
         }
         #seekFill {
             height: 100%; background: var(--primary, #6366f1);
@@ -539,6 +540,15 @@ loadID3Writer();
         }
         #ctrlFullscreen {
             font-size: 1.05em; margin-left: 4px;
+            background: rgba(99,102,241,0.25);
+            border-color: #6366f1;
+            color: #a29bfe;
+        }
+        #ctrlFullscreen:hover {
+            background: #6366f1 !important;
+            color: #fff !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 14px rgba(99,102,241,0.5);
         }
 
         /* ── HAMBURGER MENU ──────────────────────────────────────────── */
@@ -1615,7 +1625,7 @@ class LyricsCascade {
 </script>
 
 <script>
-const CONFIG_KEY = 'churchPlayerConfig_v7';
+const CONFIG_KEY = 'churchPlayerConfig_v8';
 
 const DEFAULT_CONFIG = {
     theme: 'minimalist',
@@ -1716,9 +1726,9 @@ const app = {
             if (audio.duration) audio.currentTime = pct * audio.duration;
         };
         seekBar.addEventListener('mousedown',  e => { seeking = true; doSeek(e); });
-        seekBar.addEventListener('touchstart', e => { seeking = true; doSeek(e); }, { passive: true });
+        seekBar.addEventListener('touchstart', e => { seeking = true; doSeek(e); e.preventDefault(); }, { passive: false });
         document.addEventListener('mousemove',  e => { if (seeking) doSeek(e); });
-        document.addEventListener('touchmove',  e => { if (seeking) doSeek(e); }, { passive: true });
+        document.addEventListener('touchmove',  e => { if (seeking) { doSeek(e); e.preventDefault(); } }, { passive: false });
         document.addEventListener('mouseup',   () => { seeking = false; });
         document.addEventListener('touchend',  () => { seeking = false; });
 
@@ -1770,6 +1780,8 @@ const app = {
         this.loadConfig();
         this.applyConfig();
         this.initPlayerControls();
+        // Garantir estado inicial do slider de timing
+        this.setWordOffset(this.config.wordOffset ?? -0.3);
 
         // Playlist UI
         this.playlistUI = new PlaylistUI(
@@ -1972,6 +1984,7 @@ const app = {
         }
         this._currentObjectURL = URL.createObjectURL(track.audioFile);
         this.ui.audio.src = this._currentObjectURL;
+        const _cp = document.getElementById('ctrlPlay'); if (_cp) _cp.textContent = '▶';
 
         this.setLoading("Lendo Tags...");
         jsmediatags.read(track.audioFile, {
@@ -2084,7 +2097,19 @@ const app = {
                 <style>
                     ${styles}
                     body { overflow: hidden; margin: 0; padding: 0; height: 100vh; cursor: none; font-family: var(--font-family-system); }
+                    body.show-cursor { cursor: default !important; }
                     .controls, header, footer, .modal { display: none !important; }
+                    #p-fsBtn {
+                        position: fixed; bottom: 18px; right: 18px; z-index: 999;
+                        width: 48px; height: 48px; border-radius: 50%;
+                        background: rgba(99,102,241,0.30); border: 2px solid rgba(99,102,241,0.7);
+                        color: #a29bfe; font-size: 1.3em; cursor: pointer;
+                        display: flex; align-items: center; justify-content: center;
+                        opacity: 0; transition: opacity 0.35s, background 0.2s;
+                        backdrop-filter: blur(4px);
+                    }
+                    body.show-cursor #p-fsBtn { opacity: 1; }
+                    #p-fsBtn:hover { background: rgba(99,102,241,0.85); color: #fff; box-shadow: 0 0 20px rgba(99,102,241,0.5); }
                     main { 
                         height: 100vh; width: 100vw; overflow-y: auto; display: block; 
                         scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; 
@@ -2096,11 +2121,42 @@ const app = {
             <body>
                 <div class="church-name" id="p-churchName"></div>
                 <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
+                <button id="p-fsBtn" title="Tela cheia (F11)">⛶</button>
             </body>
             </html>
         `);
 
         this.state.projectorWindow.document.close();
+
+        const _pWin = this.state.projectorWindow;
+        const _pScript = _pWin.document.createElement('script');
+        _pScript.textContent = [
+            "const _fsBtn = document.getElementById('p-fsBtn');",
+            "const _doFs = () => {",
+            "  if (!document.fullscreenElement) {",
+            "    (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || function(){}).call(document.documentElement);",
+            "  } else {",
+            "    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);",
+            "  }",
+            "};",
+            "_fsBtn.addEventListener('click', _doFs);",
+            "document.addEventListener('fullscreenchange', function() {",
+            "  _fsBtn.textContent = document.fullscreenElement ? '\u2715\u26F6' : '\u26F6';",
+            "});",
+            "document.addEventListener('keydown', function(e) {",
+            "  if (e.key === 'F11') { e.preventDefault(); _doFs(); }",
+            "});",
+            "var _curTimer;",
+            "var _showCur = function() {",
+            "  document.body.classList.add('show-cursor');",
+            "  clearTimeout(_curTimer);",
+            "  _curTimer = setTimeout(function(){ document.body.classList.remove('show-cursor'); }, 3000);",
+            "};",
+            "document.addEventListener('mousemove', _showCur);",
+            "document.addEventListener('touchstart', _showCur);"
+        ].join('\n');
+        _pWin.document.body.appendChild(_pScript);
+
         this.applyConfig();
         if (this.state.lyrics) {
             this.state.currentMode === 'synced' ? this.renderSynced() : this.renderPlain();
