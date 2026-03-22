@@ -2611,7 +2611,7 @@ const app = {
     },
 
     syncLoop() {
-        if (this.state.currentMode !== 'synced' || !this.state.lyrics.synced) return;
+        if (this.state.currentMode !== 'synced' || !this.state.lyrics || !this.state.lyrics.synced) return;
         const time = this.ui.audio.currentTime;
         const lines = this.state.lyrics.synced;
         let activeIdx = -1;
@@ -3203,40 +3203,71 @@ ${JSON.stringify([
             const txt     = document.getElementById('qrUrlText');
             const sub     = document.getElementById('qrSubtitle');
             if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
-            const sz = parseInt(document.getElementById('qrSizeSlider')?.value || '240', 10);
+            const sz = parseInt(document.getElementById('qrSizeSlider') ? document.getElementById('qrSizeSlider').value : '240', 10);
             wrap.innerHTML = '';
             wrap.style.width  = sz + 'px';
             wrap.style.height = sz + 'px';
             txt.textContent = url;
-            if (sub) sub.textContent = 'LRC sincronizado · ' + url.length + ' chars · escaneie para acompanhar';
+
+            // QR capacity: level L ~7089 chars, level M ~4296 chars
+            // If URL too long, warn user
+            const MAX_QR = 2900;
+            let level = QRCode.CorrectLevel.M;
+            let finalUrl = url;
+            let warn = '';
+            if (url.length > MAX_QR) {
+                level = QRCode.CorrectLevel.L;
+                warn = ' ⚠️ URL grande, use nivel L';
+            }
+            if (url.length > 4200) {
+                // Too long even for L — strip LRC, send plain only
+                const payload = JSON.parse(
+                    window.LZString
+                        ? LZString.decompressFromEncodedURIComponent(url.split('#lz=')[1])
+                        : decodeURIComponent(url.split('#lz=')[1])
+                );
+                payload.lrc   = '';
+                payload.m     = 'plain';
+                const json2   = JSON.stringify(payload);
+                const packed2 = window.LZString ? LZString.compressToEncodedURIComponent(json2) : encodeURIComponent(json2);
+                const base    = (window.PUBLIC_LYRICS_URL || '').replace(/[/]+$/, '/');
+                finalUrl = base + '#lz=' + packed2;
+                this.state.qrLyricsUrl = finalUrl;
+                txt.textContent = finalUrl;
+                warn = ' ⚠️ LRC removido (URL muito longa) — apenas texto plano';
+            }
+            if (sub) sub.textContent = (finalUrl.length) + ' chars · escaneie para acompanhar' + warn;
             new QRCode(wrap, {
-                text: url,
+                text: finalUrl,
                 width: sz, height: sz,
                 colorDark: '#000000', colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
+                correctLevel: level
             });
             overlay.style.display = 'flex';
         } catch (err) {
-            alert('QR da letra: ' + (err && err.message ? err.message : err));
+            alert('QR da letra: ' + (err && err.message ? err.message : String(err)));
             console.error(err);
         }
     },
 
     resizeQr(size) {
-        const sz  = parseInt(size, 10);
-        const val = document.getElementById('qrSizeVal');
+        const sz   = parseInt(size, 10);
+        const val  = document.getElementById('qrSizeVal');
         const wrap = document.getElementById('qrCanvasWrap');
-        if (val)  val.textContent  = sz + 'px';
+        if (val) val.textContent = sz + 'px';
         if (!wrap || !this.state.qrLyricsUrl) return;
+        const url  = this.state.qrLyricsUrl;
+        const lvl  = url.length > 2900 ? QRCode.CorrectLevel.L : QRCode.CorrectLevel.M;
         wrap.innerHTML = '';
         wrap.style.width  = sz + 'px';
         wrap.style.height = sz + 'px';
-        new QRCode(wrap, {
-            text: this.state.qrLyricsUrl,
-            width: sz, height: sz,
-            colorDark: '#000000', colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-        });
+        try {
+            new QRCode(wrap, {
+                text: url, width: sz, height: sz,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: lvl
+            });
+        } catch(e) { console.warn('QR resize:', e); }
     },
 
     toggleQrFullscreen() {
