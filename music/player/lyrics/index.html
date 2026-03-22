@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+<script>
+(function(){
+  var defBase = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'letra/';
+  window.PUBLIC_LYRICS_URL   = window.PUBLIC_LYRICS_URL   || defBase;
+  window.TINYURL_API_TOKEN   = window.TINYURL_API_TOKEN   || '';
+  window.TINYURL_API_DOMAIN  = window.TINYURL_API_DOMAIN  || 'tinyurl.com';
+})();
+</script><!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -45,6 +52,8 @@ async function loadID3Writer() {
 loadID3Writer();
 </script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@latest/lame.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     
     <style>
         /* ==========================================================================
@@ -79,7 +88,7 @@ loadID3Writer();
             font-family: var(--font-family-system);
             background: var(--bg);
             color: var(--text);
-            height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -111,7 +120,7 @@ loadID3Writer();
 
         header {
             background: var(--surface); padding: 12px 20px; display: flex; align-items: center;
-            gap: 15px; border-bottom: 1px solid #333; z-index: 10; transition: all 0.3s ease;
+            gap: 15px; border-bottom: 1px solid #333; z-index: 10; position: relative; transition: all 0.3s ease; flex-shrink: 0;
         }
         
         .btn-file {
@@ -312,7 +321,7 @@ loadID3Writer();
         .tag-sync { background: #00b894; color: white; }
         .tag-txt { background: #fdcb6e; color: #333; }
 
-        footer { padding: 0; background: var(--surface); border-top: 1px solid #333; transition: all 0.3s ease; display: flex; flex-direction: column; }
+        footer { padding: 0; background: var(--surface); border-top: 1px solid #333; transition: all 0.3s ease; display: flex; flex-direction: column; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom, 0); }
         audio { width: 100%; outline: none; display: none; }
         
         #loading {
@@ -595,14 +604,63 @@ loadID3Writer();
 
         /* ── RESPONSIVO MOBILE ───────────────────────────────────────── */
         @media (max-width: 640px) {
-            .btn-hamburger { display: flex; }
+            /* Header */
+            .btn-hamburger { display: flex !important; }
             .controls { display: none !important; }
             #mainHeader { gap: 8px; padding: 8px 10px; }
+
+            /* Sidebar: overlay flutuante, não empurra conteúdo */
+            .playlist-sidebar {
+                position: fixed !important;
+                top: 58px; left: 0; bottom: 110px;
+                width: min(82vw, 320px) !important;
+                min-width: unset !important;
+                z-index: 30;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                margin-left: 0 !important;
+                border-right: 1px solid #2a2a3a;
+            }
+            .playlist-sidebar:not(.collapsed):not(.empty) {
+                transform: translateX(0) !important;
+            }
+            .playlist-sidebar.collapsed { transform: translateX(-100%) !important; margin-left: 0 !important; }
+
+            /* Footer controls */
             .ctrl-vol { max-width: 80px; }
             .ctrl-btn { width: 38px; height: 38px; font-size: 1em; }
             .ctrl-play { width: 48px; height: 48px; font-size: 1.3em; }
+            #playerWrap { padding: 6px 10px 8px; }
+            #playerBtns { gap: 4px; justify-content: center; }
         }
-    </style>
+    
+        /* ── QR Overlay ── */
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:250;display:flex;align-items:center;justify-content:center;padding:16px;transition:all .2s}
+        .qr-overlay.qr-fullscreen{padding:0;align-items:stretch;justify-content:stretch}
+        .qr-box{position:relative;width:min(94vw,440px);background:var(--surface);border:1px solid #2a2a3a;border-radius:18px;padding:20px;box-shadow:0 25px 60px rgba(0,0,0,.55);text-align:center;max-height:96dvh;overflow-y:auto;transition:all .2s}
+        .qr-overlay.qr-fullscreen .qr-box{width:100vw;max-height:100dvh;border-radius:0;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer;z-index:5}
+        .qr-title{font-size:1.2em;font-weight:800;color:#fff;margin-bottom:4px}
+        .qr-subtitle{font-size:.88em;color:#aaa;margin-bottom:12px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px;transition:all .25s}
+        .qr-url{font-size:.7em;color:#888;word-break:break-all;max-height:68px;overflow:auto;background:#111;padding:8px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+        /* Size controls */
+        .qr-size-controls{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+        .qr-size-controls label{font-size:.8em;color:#aaa;white-space:nowrap}
+        .qr-size-slider{width:140px;accent-color:#6366f1;cursor:pointer}
+        .qr-size-val{font-size:.8em;color:#6366f1;font-weight:700;min-width:36px}
+        .btn-fullscreen{background:#374151;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:.85em;font-weight:700;cursor:pointer}
+        .btn-fullscreen:hover{background:#4b5563}
+</style>
+    <script>
+(function(){
+  var base = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'letra/';
+  window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || base;
+  window.TINYURL_API_TOKEN = window.TINYURL_API_TOKEN || '';
+  window.TINYURL_API_DOMAIN = window.TINYURL_API_DOMAIN || 'tinyurl.com';
+})();
+</script>
 </head>
 <body data-bg-type="solid">
 
@@ -639,6 +697,7 @@ loadID3Writer();
         <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
         <button class="btn" onclick="app.openSearch()">🔍 Manual / Colar</button>
         <button class="btn btn-action" onclick="app.openRemotePlaylist()" title="Músicas demo e playlists remotas">🎵 Remotas</button>
+                <button class="btn" id="btnQrLyrics" onclick="app.generateQrCode()" title="Gerar QR Code da letra para o público">📱 QR Letra</button>
 
         <div class="dropdown" id="dropdownSave" style="display:none">
             <button class="btn btn-action">💾 Salvar...</button>
@@ -653,7 +712,8 @@ loadID3Writer();
     <!-- Hamburger: visível só em mobile -->
     <button class="btn-hamburger" id="btnHamburger" onclick="app.toggleHamburger()" title="Menu">☰</button>
 
-    <!-- Menu drawer mobile -->
+</header>
+<!-- Menu drawer mobile -->
     <div id="mobileMenu" class="mobile-menu">
         <button class="mobile-menu-close" onclick="app.toggleHamburger()">✕ Fechar</button>
         <button class="mobile-menu-item" onclick="app.toggleSidebar();app.toggleHamburger()">📋 Playlist</button>
@@ -661,7 +721,9 @@ loadID3Writer();
         <button class="mobile-menu-item" onclick="app.toggleFullscreen()">⛶ Tela Cheia</button>
         <button class="mobile-menu-item" onclick="app.openSettings();app.toggleHamburger()">⚙️ Configurações</button>
         <button class="mobile-menu-item" onclick="app.openSearch();app.toggleHamburger()">🔍 Busca Manual</button>
+        <button class="mobile-menu-item" onclick="document.getElementById('folderInput').click();app.toggleHamburger()">🗂️ Abrir Pasta</button>
         <button class="mobile-menu-item" onclick="app.openRemotePlaylist();app.toggleHamburger()">🎵 Remotas</button>
+        <button class="mobile-menu-item" onclick="app.generateQrCode();app.toggleHamburger()">📱 QR Letra</button>
         <button class="mobile-menu-item" id="mmbToggleType" onclick="app.toggleView();app.toggleHamburger()" style="display:none">↔️ Sync / Texto</button>
         <div id="mmbSaveGroup" style="display:none">
             <button class="mobile-menu-item" onclick="app.downloadLrc();app.toggleHamburger()">📄 Salvar .LRC</button>
@@ -669,7 +731,7 @@ loadID3Writer();
             <button class="mobile-menu-item" onclick="app.openLrcEditor();app.toggleHamburger()">✏️ Editor LRC</button>
         </div>
     </div>
-</header>
+
 
 <div class="app-layout" id="appLayout">
     <aside class="playlist-sidebar empty" id="playlistSidebar">
@@ -707,6 +769,31 @@ loadID3Writer();
             </div>
         </div>
     </main>
+</div>
+
+<div id="qrOverlay" class="qr-overlay" style="display:none;" onclick="app._qrBgClick(event)">
+        <div class="qr-box" id="qrBox">
+            <button class="qr-close" onclick="app.closeQrOverlay()">&#215;</button>
+            <div class="qr-title">&#128241; Letra no celular</div>
+            <div class="qr-subtitle" id="qrSubtitle">Escaneie para acompanhar</div>
+            <div id="qrCanvasWrap" class="qr-canvas-wrap" style="width:240px;height:240px;"></div>
+            <!-- Size controls -->
+            <div class="qr-size-controls">
+                <label>Tamanho:</label>
+                <input type="range" class="qr-size-slider" id="qrSizeSlider"
+                       min="180" max="600" step="20" value="240"
+                       oninput="app.resizeQr(this.value)">
+                <span class="qr-size-val" id="qrSizeVal">240px</span>
+                <button class="btn-fullscreen" onclick="app.toggleQrFullscreen()" id="btnQrFs">&#9974; Tela cheia</button>
+            </div>
+            <div class="qr-url" id="qrUrlText"></div>
+            <div class="qr-actions">
+                <button class="btn btn-action" onclick="app.copyQrUrl()">&#128203; Copiar Link</button>
+                <button class="btn" onclick="app.closeQrOverlay()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <footer id="mainFooter">
@@ -1671,7 +1758,11 @@ const app = {
         meta: { track: "", artist: "", album: "", duration: 0 },
         lyrics: null, currentMode: 'synced',
         fileName: "", fileType: "", originalFile: null,
-        presentationMode: false, cursorTimeout: null, projectorWindow: null
+        presentationMode: false, cursorTimeout: null, projectorWindow: null,
+            qrUrl: "",
+            qrLongUrl: "",
+            qrPayload: null,
+            qrStartedAt: 0
     },
     ui: {
         audio: document.getElementById('audioPlayer'),
@@ -1789,7 +1880,13 @@ const app = {
             document.getElementById('playlistCount'),
             document.getElementById('playlistSidebar')
         );
-        this.playlistUI.onItemClick = (i) => this.playTrack(i);
+        this.playlistUI.onItemClick = (i) => {
+        this.playTrack(i);
+        if (window.innerWidth <= 640) {
+            const sb = document.getElementById('playlistSidebar');
+            if (sb) sb.classList.add('collapsed');
+        }
+    };
 
         // Cascade
         this.cascade = new LyricsCascade(
@@ -1814,9 +1911,16 @@ const app = {
 
     initEventListeners() {
         document.getElementById('fileInput').addEventListener('change', e => {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files || []);
             if (files.length > 0) this.handleFiles(files);
         });
+        const folderInput = document.getElementById('folderInput');
+        if (folderInput) {
+            folderInput.addEventListener('change', e => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) this.handleFiles(files);
+            });
+        }
         this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
         this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
         this.ui.audio.addEventListener('ended', () => this.playlist.next());
@@ -1885,35 +1989,52 @@ const app = {
 
     setupDragAndDrop() {
         let dragCounter = 0;
+        const isFileDrag = e => {
+            const types = Array.from(e.dataTransfer?.types || []);
+            return types.includes('Files');
+        };
         document.body.addEventListener('dragenter', e => {
-            e.preventDefault(); dragCounter++;
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter++;
             this.ui.dragOverlay.classList.add('active');
         });
         document.body.addEventListener('dragleave', e => {
-            e.preventDefault(); dragCounter--;
-            if (dragCounter <= 0) { dragCounter = 0; this.ui.dragOverlay.classList.remove('active'); }
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                this.ui.dragOverlay.classList.remove('active');
+            }
         });
-        document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-        document.body.addEventListener('drop', e => {
-            e.preventDefault(); dragCounter = 0;
+        document.body.addEventListener('dragover', e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        document.body.addEventListener('drop', async e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter = 0;
             this.ui.dragOverlay.classList.remove('active');
 
-            // CRITICAL: collect entries SYNCHRONOUSLY before any await
-            // DataTransferItemList is cleared after the event handler returns
-            const items = e.dataTransfer.items;
+            const items = Array.from(e.dataTransfer?.items || []);
             const entries = [];
-            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
-                for (let i = 0; i < items.length; i++) {
-                    const entry = items[i].webkitGetAsEntry();
+            for (const item of items) {
+                try {
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
                     if (entry) entries.push(entry);
-                }
+                } catch (_) {}
             }
+            const fallbackFiles = Array.from(e.dataTransfer?.files || []);
 
-            // Also grab files synchronously as fallback
-            const fallbackFiles = Array.from(e.dataTransfer.files);
-
-            // NOW do async resolution
-            this._processDroppedEntries(entries, fallbackFiles);
+            try {
+                this.setLoading(entries.length ? 'Lendo pasta/arquivos...' : 'Lendo arquivos...');
+                await this._processDroppedEntries(entries, fallbackFiles);
+            } finally {
+                this.setLoading(null);
+            }
         });
     },
 
@@ -1925,35 +2046,34 @@ const app = {
                     const files = await this._collectEntryFiles(entry);
                     allFiles.push(...files);
                 }
-                if (allFiles.length > 0) {
-                    this.handleFiles(allFiles);
+                const filtered = allFiles.filter(Boolean).sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+                if (filtered.length > 0) {
+                    this.handleFiles(filtered);
                     return;
                 }
             } catch (err) {
                 console.warn('webkitGetAsEntry failed, using fallback:', err);
             }
         }
-        // Fallback: use plain files
         if (fallbackFiles.length > 0) this.handleFiles(fallbackFiles);
     },
 
     async _collectEntryFiles(entry) {
+        if (!entry) return [];
         if (entry.isFile) {
-            return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
-        } else if (entry.isDirectory) {
+            const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+            return [file];
+        }
+        if (entry.isDirectory) {
             const dirReader = entry.createReader();
-            let allEntries = [];
-            // readEntries may not return all files at once — must loop
-            const readBatch = () => new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
-            let batch;
-            do {
-                batch = await readBatch();
+            const allEntries = [];
+            while (true) {
+                const batch = await new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+                if (!batch.length) break;
                 allEntries.push(...batch);
-            } while (batch.length > 0);
-            const files = [];
-            for (const sub of allEntries) {
-                files.push(...await this._collectEntryFiles(sub));
             }
+            let files = [];
+            for (const sub of allEntries) files.push(...await this._collectEntryFiles(sub));
             return files;
         }
         return [];
@@ -2116,8 +2236,27 @@ const app = {
                     }
                     main::-webkit-scrollbar { display: none; }
                     .lyrics-box { padding: 50vh 20px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-                </style>
-            </head>
+                
+        /* ── QR Overlay ── */
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:250;display:flex;align-items:center;justify-content:center;padding:16px;transition:all .2s}
+        .qr-overlay.qr-fullscreen{padding:0;align-items:stretch;justify-content:stretch}
+        .qr-box{position:relative;width:min(94vw,440px);background:var(--surface);border:1px solid #2a2a3a;border-radius:18px;padding:20px;box-shadow:0 25px 60px rgba(0,0,0,.55);text-align:center;max-height:96dvh;overflow-y:auto;transition:all .2s}
+        .qr-overlay.qr-fullscreen .qr-box{width:100vw;max-height:100dvh;border-radius:0;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer;z-index:5}
+        .qr-title{font-size:1.2em;font-weight:800;color:#fff;margin-bottom:4px}
+        .qr-subtitle{font-size:.88em;color:#aaa;margin-bottom:12px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px;transition:all .25s}
+        .qr-url{font-size:.7em;color:#888;word-break:break-all;max-height:68px;overflow:auto;background:#111;padding:8px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+        /* Size controls */
+        .qr-size-controls{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+        .qr-size-controls label{font-size:.8em;color:#aaa;white-space:nowrap}
+        .qr-size-slider{width:140px;accent-color:#6366f1;cursor:pointer}
+        .qr-size-val{font-size:.8em;color:#6366f1;font-weight:700;min-width:36px}
+        .btn-fullscreen{background:#374151;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:.85em;font-weight:700;cursor:pointer}
+        .btn-fullscreen:hover{background:#4b5563}
+</style>
+</head>
             <body>
                 <div class="church-name" id="p-churchName"></div>
                 <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
@@ -2502,8 +2641,11 @@ const app = {
                         // Projetor: scrollTo direto no p-main para garantir funcionamento cross-window
                         const pMain = container.parentElement;
                         if (pMain) {
-                            const targetTop = nextEl.offsetTop - (pMain.clientHeight / 2) + (nextEl.offsetHeight / 2);
-                            pMain.scrollTo({ top: targetTop, behavior: 'smooth' });
+                            const itemRect = nextEl.getBoundingClientRect();
+                            const mainRect = pMain.getBoundingClientRect();
+                            const targetTop = pMain.scrollTop + (itemRect.top - mainRect.top)
+                                - (pMain.clientHeight / 2) + (nextEl.offsetHeight / 2);
+                            pMain.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
                         }
                     }
                     this._splitLineWords(nextEl, activeIdx, lines);
@@ -2935,6 +3077,207 @@ ${JSON.stringify([
         }
         document.getElementById('dropdownSave').style.display = 'none';
         this.setLoading(null);
+    },
+
+        getPublicLyricsBaseUrl() {
+            const custom = String(window.PUBLIC_LYRICS_URL || '').trim();
+            if (custom) return custom.endsWith('/') ? custom : `${custom}/`;
+            const { origin, pathname, protocol } = window.location;
+            if (protocol === 'file:') return '';
+            const basePath = pathname.replace(/[^/]*$/, '');
+            return `${origin}${basePath}letra/`;
+        },
+        getTinyUrlApiToken() {
+            return String(window.TINYURL_API_TOKEN || '').trim();
+        },
+        async shortenUrlWithTinyUrl(longUrl) {
+            const token = this.getTinyUrlApiToken();
+            if (!token) return { url: longUrl, shortened: false, reason: 'missing-token' };
+            const resp = await fetch('https://api.tinyurl.com/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    url: longUrl,
+                    domain: String(window.TINYURL_API_DOMAIN || 'tinyurl.com').trim() || 'tinyurl.com'
+                })
+            });
+            let json = null;
+            try { json = await resp.json(); } catch (_) {}
+            if (!resp.ok) {
+                const msg = json && Array.isArray(json.errors) && json.errors[0] ? json.errors[0] : `TinyURL ${resp.status}`;
+                throw new Error(msg);
+            }
+            const tiny = json?.data?.tiny_url || json?.data?.tinyurl || json?.data?.url || '';
+            if (!tiny) throw new Error('TinyURL não retornou a URL curta.');
+            return { url: tiny, shortened: true, response: json };
+        },
+        getLyricsSharePayload() {
+            if (!this.state.lyrics || (!this.state.lyrics.synced && !this.state.lyrics.plain)) return null;
+            const lines = this.state.lyrics.synced || null;
+            const plain = (this.state.lyrics.plain || (lines ? lines.map(l => l.text).join('\n') : '')).trim();
+            let lrc = plain;
+            if (lines && lines.length) {
+                lrc = lines.map(line => `[${this._lrcFmt(line.startTime)}] ${line.text}`.trim()).join('\n');
+            }
+            const startedAt = Date.now() - Math.round((this.ui.audio.currentTime || 0) * 1000);
+            const payload = {
+                v: 2,
+                c: this.config.churchName || '',
+                ti: this.state.meta.track || this.state.fileName || 'Letra',
+                ar: this.state.meta.artist || '',
+                l: lrc,
+                p: plain,
+                m: lines && lines.length ? 'synced' : 'plain',
+                t: startedAt
+            };
+            let packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            if (packed && packed.length > 1800 && lines && lines.length) {
+                payload.m = 'plain';
+                payload.l = plain;
+                packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            }
+            return { payload, packed, startedAt };
+        },
+    _buildLrcString() {
+        const lyr = this.state && this.state.lyrics;
+        if (lyr && lyr.synced && lyr.synced.length) {
+            return lyr.synced.map(function(l) {
+                const mm = Math.floor(l.startTime / 60).toString().padStart(2, '0');
+                const ss = (l.startTime % 60).toFixed(2).padStart(5, '0');
+                return '[' + mm + ':' + ss + '] ' + l.text;
+            }).join('\n');
+        }
+        const ta = document.getElementById('lrcEditTextarea');
+        if (ta && ta.value.trim()) return ta.value.trim();
+        return null;
+    },
+
+    _buildPlainString() {
+        const lyr = this.state && this.state.lyrics;
+        if (lyr && lyr.plain) return lyr.plain.trim();
+        if (lyr && lyr.synced && lyr.synced.length)
+            return lyr.synced.map(function(l){ return l.text; }).join('\n');
+        const ta = document.getElementById('lrcEditTextarea');
+        if (ta && ta.value.trim())
+            return ta.value.trim().replace(/\[\d{2}:\d{2}\.\d{2,3}\]\s*/g, '');
+        const container = document.getElementById('lyricsContainer');
+        return container ? (container.innerText || '').replace(/\n{3,}/g, '\n\n').trim() : '';
+    },
+
+    _buildQrLyricsUrl() {
+        const title  = (this.state && this.state.meta && this.state.meta.track)
+                    || (document.getElementById('lblTitle') ? document.getElementById('lblTitle').innerText.replace(/\s*β WORD\s*/g,'').trim() : '')
+                    || 'Letra';
+        const artist = (this.state && this.state.meta && this.state.meta.artist)
+                    || (document.getElementById('lblArtist') ? document.getElementById('lblArtist').innerText : '') || '';
+        const lrc   = this._buildLrcString();
+        const plain = this._buildPlainString();
+        if (!plain && !lrc) throw new Error('Nenhuma letra carregada. Selecione uma musica primeiro.');
+        const audio      = this.ui && this.ui.audio;
+        const currentSec = (audio && !isNaN(audio.currentTime) && audio.currentTime > 0) ? audio.currentTime : 0;
+        const startedAt  = Date.now() - Math.round(currentSec * 1000);
+        const payload = {
+            v: 4, ti: title, ar: artist,
+            lrc:   lrc   || '',
+            plain: plain || '',
+            m:     lrc ? 'synced' : 'plain',
+            t:     startedAt,
+            pos:   Math.round(currentSec)
+        };
+        const json   = JSON.stringify(payload);
+        const packed = window.LZString ? LZString.compressToEncodedURIComponent(json) : encodeURIComponent(json);
+        const base   = (window.PUBLIC_LYRICS_URL || '').replace(/[/]+$/, '/');
+        if (!base) throw new Error('PUBLIC_LYRICS_URL não configurado.');
+        return base + '#lz=' + packed;
+    },
+
+    async generateQrCode() {
+        try {
+            const url = this._buildQrLyricsUrl();
+            this.state.qrLyricsUrl = url;
+            const overlay = document.getElementById('qrOverlay');
+            const wrap    = document.getElementById('qrCanvasWrap');
+            const txt     = document.getElementById('qrUrlText');
+            const sub     = document.getElementById('qrSubtitle');
+            if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
+            const sz = parseInt(document.getElementById('qrSizeSlider')?.value || '240', 10);
+            wrap.innerHTML = '';
+            wrap.style.width  = sz + 'px';
+            wrap.style.height = sz + 'px';
+            txt.textContent = url;
+            if (sub) sub.textContent = 'LRC sincronizado · ' + url.length + ' chars · escaneie para acompanhar';
+            new QRCode(wrap, {
+                text: url,
+                width: sz, height: sz,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            overlay.style.display = 'flex';
+        } catch (err) {
+            alert('QR da letra: ' + (err && err.message ? err.message : err));
+            console.error(err);
+        }
+    },
+
+    resizeQr(size) {
+        const sz  = parseInt(size, 10);
+        const val = document.getElementById('qrSizeVal');
+        const wrap = document.getElementById('qrCanvasWrap');
+        if (val)  val.textContent  = sz + 'px';
+        if (!wrap || !this.state.qrLyricsUrl) return;
+        wrap.innerHTML = '';
+        wrap.style.width  = sz + 'px';
+        wrap.style.height = sz + 'px';
+        new QRCode(wrap, {
+            text: this.state.qrLyricsUrl,
+            width: sz, height: sz,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    },
+
+    toggleQrFullscreen() {
+        const overlay = document.getElementById('qrOverlay');
+        const btn     = document.getElementById('btnQrFs');
+        if (!overlay) return;
+        const isFs = overlay.classList.toggle('qr-fullscreen');
+        if (btn) btn.textContent = isFs ? '\u2715 Sair tela cheia' : '\u26f6 Tela cheia';
+        // On fullscreen, resize QR to fill
+        if (isFs) {
+            const sz = Math.min(window.innerWidth, window.innerHeight) - 80;
+            const slider = document.getElementById('qrSizeSlider');
+            if (slider) { slider.value = sz; }
+            this.resizeQr(sz);
+        }
+    },
+
+    _qrBgClick(e) {
+        if (e.target === document.getElementById('qrOverlay')) this.closeQrOverlay();
+    },
+
+    async copyQrUrl() {
+        try {
+            const url = this.state.qrLyricsUrl || this._buildQrLyricsUrl();
+            await navigator.clipboard.writeText(url);
+            const sub = document.getElementById('qrSubtitle');
+            if (sub) sub.textContent = 'Link copiado!';
+        } catch (err) {
+            alert('Não foi possível copiar o link.');
+            console.error(err);
+        }
+    },
+
+    closeQrOverlay() {
+        const overlay = document.getElementById('qrOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            overlay.classList.remove('qr-fullscreen');
+            const btn = document.getElementById('btnQrFs');
+            if (btn) btn.textContent = '\u26f6 Tela cheia';
+        }
     }
 };
 
