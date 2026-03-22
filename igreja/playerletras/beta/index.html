@@ -614,6 +614,7 @@ loadID3Writer();
         .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
         .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 </style>
+    <script>window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || '';</script>
 </head>
 <body data-bg-type="solid">
 
@@ -673,6 +674,7 @@ loadID3Writer();
         <button class="mobile-menu-item" onclick="app.toggleFullscreen()">⛶ Tela Cheia</button>
         <button class="mobile-menu-item" onclick="app.openSettings();app.toggleHamburger()">⚙️ Configurações</button>
         <button class="mobile-menu-item" onclick="app.openSearch();app.toggleHamburger()">🔍 Busca Manual</button>
+        <button class="mobile-menu-item" onclick="document.getElementById('folderInput').click();app.toggleHamburger()">🗂️ Abrir Pasta</button>
         <button class="mobile-menu-item" onclick="app.openRemotePlaylist();app.toggleHamburger()">🎵 Remotas</button>
         <button class="mobile-menu-item" onclick="app.generateQrCode();app.toggleHamburger()">📱 QR Letra</button>
         <button class="mobile-menu-item" id="mmbToggleType" onclick="app.toggleView();app.toggleHamburger()" style="display:none">↔️ Sync / Texto</button>
@@ -1844,9 +1846,16 @@ const app = {
 
     initEventListeners() {
         document.getElementById('fileInput').addEventListener('change', e => {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files || []);
             if (files.length > 0) this.handleFiles(files);
         });
+        const folderInput = document.getElementById('folderInput');
+        if (folderInput) {
+            folderInput.addEventListener('change', e => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) this.handleFiles(files);
+            });
+        }
         this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
         this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
         this.ui.audio.addEventListener('ended', () => this.playlist.next());
@@ -1915,35 +1924,52 @@ const app = {
 
     setupDragAndDrop() {
         let dragCounter = 0;
+        const isFileDrag = e => {
+            const types = Array.from(e.dataTransfer?.types || []);
+            return types.includes('Files');
+        };
         document.body.addEventListener('dragenter', e => {
-            e.preventDefault(); dragCounter++;
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter++;
             this.ui.dragOverlay.classList.add('active');
         });
         document.body.addEventListener('dragleave', e => {
-            e.preventDefault(); dragCounter--;
-            if (dragCounter <= 0) { dragCounter = 0; this.ui.dragOverlay.classList.remove('active'); }
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                this.ui.dragOverlay.classList.remove('active');
+            }
         });
-        document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-        document.body.addEventListener('drop', e => {
-            e.preventDefault(); dragCounter = 0;
+        document.body.addEventListener('dragover', e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        document.body.addEventListener('drop', async e => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter = 0;
             this.ui.dragOverlay.classList.remove('active');
 
-            // CRITICAL: collect entries SYNCHRONOUSLY before any await
-            // DataTransferItemList is cleared after the event handler returns
-            const items = e.dataTransfer.items;
+            const items = Array.from(e.dataTransfer?.items || []);
             const entries = [];
-            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
-                for (let i = 0; i < items.length; i++) {
-                    const entry = items[i].webkitGetAsEntry();
+            for (const item of items) {
+                try {
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
                     if (entry) entries.push(entry);
-                }
+                } catch (_) {}
             }
+            const fallbackFiles = Array.from(e.dataTransfer?.files || []);
 
-            // Also grab files synchronously as fallback
-            const fallbackFiles = Array.from(e.dataTransfer.files);
-
-            // NOW do async resolution
-            this._processDroppedEntries(entries, fallbackFiles);
+            try {
+                this.setLoading(entries.length ? 'Lendo pasta/arquivos...' : 'Lendo arquivos...');
+                await this._processDroppedEntries(entries, fallbackFiles);
+            } finally {
+                this.setLoading(null);
+            }
         });
     },
 
@@ -1955,35 +1981,34 @@ const app = {
                     const files = await this._collectEntryFiles(entry);
                     allFiles.push(...files);
                 }
-                if (allFiles.length > 0) {
-                    this.handleFiles(allFiles);
+                const filtered = allFiles.filter(Boolean).sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+                if (filtered.length > 0) {
+                    this.handleFiles(filtered);
                     return;
                 }
             } catch (err) {
                 console.warn('webkitGetAsEntry failed, using fallback:', err);
             }
         }
-        // Fallback: use plain files
         if (fallbackFiles.length > 0) this.handleFiles(fallbackFiles);
     },
 
     async _collectEntryFiles(entry) {
+        if (!entry) return [];
         if (entry.isFile) {
-            return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
-        } else if (entry.isDirectory) {
+            const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+            return [file];
+        }
+        if (entry.isDirectory) {
             const dirReader = entry.createReader();
-            let allEntries = [];
-            // readEntries may not return all files at once — must loop
-            const readBatch = () => new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
-            let batch;
-            do {
-                batch = await readBatch();
+            const allEntries = [];
+            while (true) {
+                const batch = await new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+                if (!batch.length) break;
                 allEntries.push(...batch);
-            } while (batch.length > 0);
-            const files = [];
-            for (const sub of allEntries) {
-                files.push(...await this._collectEntryFiles(sub));
             }
+            let files = [];
+            for (const sub of allEntries) files.push(...await this._collectEntryFiles(sub));
             return files;
         }
         return [];
@@ -2156,7 +2181,7 @@ const app = {
         .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
         .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 </style>
-            </head>
+</head>
             <body>
                 <div class="church-name" id="p-churchName"></div>
                 <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
@@ -2977,34 +3002,36 @@ ${JSON.stringify([
     },
 
         getPublicLyricsBaseUrl() {
+            const custom = String(window.PUBLIC_LYRICS_URL || '').trim();
+            if (custom) return custom.endsWith('/') ? custom : `${custom}/`;
             const { origin, pathname, protocol } = window.location;
-            if (protocol === 'file:') return 'http://localhost/letra/';
+            if (protocol === 'file:') return 'http://localhost:8080/letra/';
             const basePath = pathname.replace(/[^/]*$/, '');
             return `${origin}${basePath}letra/`;
         },
         getLyricsSharePayload() {
             if (!this.state.lyrics || (!this.state.lyrics.synced && !this.state.lyrics.plain)) return null;
             const lines = this.state.lyrics.synced || null;
-            let lrc = '';
+            const plain = (this.state.lyrics.plain || (lines ? lines.map(l => l.text).join('\n') : '')).trim();
+            let lrc = plain;
             if (lines && lines.length) {
-                lrc = lines.map(line => `${this._lrcFmt(line.startTime)} ${line.text}`).join('\n');
-            } else {
-                lrc = (this.state.lyrics.plain || '').trim();
+                lrc = lines.map(line => `[${this._lrcFmt(line.startTime)}] ${line.text}`.trim()).join('\n');
             }
             const startedAt = Date.now() - Math.round((this.ui.audio.currentTime || 0) * 1000);
             const payload = {
-                v: 1,
-                church: this.config.churchName || '',
-                title: this.state.meta.track || this.state.fileName || 'Letra',
-                artist: this.state.meta.artist || '',
-                lrc,
-                mode: lines && lines.length ? 'synced' : 'plain',
+                v: 2,
+                c: this.config.churchName || '',
+                ti: this.state.meta.track || this.state.fileName || 'Letra',
+                ar: this.state.meta.artist || '',
+                l: lrc,
+                p: plain,
+                m: lines && lines.length ? 'synced' : 'plain',
                 t: startedAt
             };
             let packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
-            if (packed && packed.length > 2000 && lines && lines.length) {
-                payload.mode = 'plain';
-                payload.lrc = this.state.lyrics.plain || lines.map(l => l.text).join('\n');
+            if (packed && packed.length > 1800 && lines && lines.length) {
+                payload.m = 'plain';
+                payload.l = plain;
                 packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
             }
             return { payload, packed, startedAt };
@@ -3027,11 +3054,10 @@ ${JSON.stringify([
             const subtitle = document.getElementById('qrSubtitle');
             const urlText = document.getElementById('qrUrlText');
             wrap.innerHTML = '';
-            new QRCode(wrap, { text: url, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M });
-            subtitle.textContent = `${data.payload.title}${data.payload.artist ? ' — ' + data.payload.artist : ''}`;
+            new QRCode(wrap, { text: url, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
+            subtitle.textContent = `${data.payload.ti}${data.payload.ar ? ' — ' + data.payload.ar : ''}`;
             urlText.textContent = url;
-            const ov = document.getElementById('qrOverlay');
-            ov.style.display = 'flex';
+            document.getElementById('qrOverlay').style.display = 'flex';
         },
         closeQrOverlay() {
             const ov = document.getElementById('qrOverlay');
