@@ -3195,51 +3195,86 @@ ${JSON.stringify([
     },
 
     async generateQrCode() {
+        const QR_MAX_BYTES  = 2900;  // safe limit for level L, byte mode
+        const QR_MAX_BYTES_M = 2300; // safe limit for level M
+
+        const byteLen = (s) => new TextEncoder().encode(s).length;
+
+        const buildUrl = (payload) => {
+            const base   = (window.PUBLIC_LYRICS_URL || '').replace(/[/]+$/, '/');
+            if (!base) throw new Error('PUBLIC_LYRICS_URL nao configurado.');
+            const json   = JSON.stringify(payload);
+            const packed = window.LZString
+                ? LZString.compressToEncodedURIComponent(json)
+                : encodeURIComponent(json);
+            return base + '#lz=' + packed;
+        };
+
         try {
-            const url = this._buildQrLyricsUrl();
+            // Build full payload (v4 with LRC)
+            const title  = (this.state && this.state.meta && this.state.meta.track)
+                        || (document.getElementById('lblTitle') ? document.getElementById('lblTitle').innerText.replace(/\s*β WORD\s*/g,'').trim() : '')
+                        || 'Letra';
+            const artist = (this.state && this.state.meta && this.state.meta.artist)
+                        || (document.getElementById('lblArtist') ? document.getElementById('lblArtist').innerText : '') || '';
+            const lrc    = this._buildLrcString();
+            const plain  = this._buildPlainString();
+            if (!plain && !lrc) throw new Error('Nenhuma letra carregada. Selecione uma musica primeiro.');
+
+            const audio      = this.ui && this.ui.audio;
+            const currentSec = (audio && !isNaN(audio.currentTime) && audio.currentTime > 0) ? audio.currentTime : 0;
+            const startedAt  = Date.now() - Math.round(currentSec * 1000);
+
+            let payload = { v:4, ti:title, ar:artist, lrc:lrc||'', plain:plain||'',
+                            m: lrc ? 'synced' : 'plain', t:startedAt, pos:Math.round(currentSec) };
+
+            let url = buildUrl(payload);
+            let level = QRCode.CorrectLevel.M;
+            let warn  = '';
+
+            // Step 1: switch to level L if needed
+            if (byteLen(url) > QR_MAX_BYTES_M) {
+                level = QRCode.CorrectLevel.L;
+                warn  = ' (nivel L)';
+            }
+
+            // Step 2: too long even for L — drop LRC, keep plain
+            if (byteLen(url) > QR_MAX_BYTES) {
+                payload.lrc = '';
+                payload.m   = 'plain';
+                url = buildUrl(payload);
+                warn = ' ⚠️ sem sync (URL muito longa)';
+            }
+
+            // Step 3: still too long — truncate plain text to 600 chars
+            if (byteLen(url) > QR_MAX_BYTES) {
+                payload.plain = payload.plain.substring(0, 600);
+                url = buildUrl(payload);
+                warn = ' ⚠️ letra truncada para caber no QR';
+            }
+
+            // Step 4: give up gracefully
+            if (byteLen(url) > QR_MAX_BYTES) {
+                throw new Error('Letra muito longa para QR. Use a opcao "Copiar Link" e envie via WhatsApp.');
+            }
+
             this.state.qrLyricsUrl = url;
+
             const overlay = document.getElementById('qrOverlay');
             const wrap    = document.getElementById('qrCanvasWrap');
             const txt     = document.getElementById('qrUrlText');
             const sub     = document.getElementById('qrSubtitle');
-            if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
-            const sz = parseInt(document.getElementById('qrSizeSlider') ? document.getElementById('qrSizeSlider').value : '240', 10);
-            wrap.innerHTML = '';
-            wrap.style.width  = sz + 'px';
-            wrap.style.height = sz + 'px';
-            txt.textContent = url;
+            if (!overlay || !wrap || !txt) throw new Error('UI do QR nao encontrada.');
 
-            // QR capacity: level L ~7089 chars, level M ~4296 chars
-            // If URL too long, warn user
-            const MAX_QR = 2900;
-            let level = QRCode.CorrectLevel.M;
-            let finalUrl = url;
-            let warn = '';
-            if (url.length > MAX_QR) {
-                level = QRCode.CorrectLevel.L;
-                warn = ' ⚠️ URL grande, use nivel L';
-            }
-            if (url.length > 4200) {
-                // Too long even for L — strip LRC, send plain only
-                const payload = JSON.parse(
-                    window.LZString
-                        ? LZString.decompressFromEncodedURIComponent(url.split('#lz=')[1])
-                        : decodeURIComponent(url.split('#lz=')[1])
-                );
-                payload.lrc   = '';
-                payload.m     = 'plain';
-                const json2   = JSON.stringify(payload);
-                const packed2 = window.LZString ? LZString.compressToEncodedURIComponent(json2) : encodeURIComponent(json2);
-                const base    = (window.PUBLIC_LYRICS_URL || '').replace(/[/]+$/, '/');
-                finalUrl = base + '#lz=' + packed2;
-                this.state.qrLyricsUrl = finalUrl;
-                txt.textContent = finalUrl;
-                warn = ' ⚠️ LRC removido (URL muito longa) — apenas texto plano';
-            }
-            if (sub) sub.textContent = (finalUrl.length) + ' chars · escaneie para acompanhar' + warn;
+            const sz = parseInt(document.getElementById('qrSizeSlider') ? document.getElementById('qrSizeSlider').value : '240', 10);
+            wrap.innerHTML   = '';
+            wrap.style.width = sz + 'px';
+            wrap.style.height = sz + 'px';
+            txt.textContent  = url;
+            if (sub) sub.textContent = byteLen(url) + ' bytes · escaneie para acompanhar' + warn;
+
             new QRCode(wrap, {
-                text: finalUrl,
-                width: sz, height: sz,
+                text: url, width: sz, height: sz,
                 colorDark: '#000000', colorLight: '#ffffff',
                 correctLevel: level
             });
@@ -3250,7 +3285,7 @@ ${JSON.stringify([
         }
     },
 
-    resizeQr(size) {
+        resizeQr(size) {
         const sz   = parseInt(size, 10);
         const val  = document.getElementById('qrSizeVal');
         const wrap = document.getElementById('qrCanvasWrap');
@@ -3291,7 +3326,9 @@ ${JSON.stringify([
 
     async copyQrUrl() {
         try {
-            const url = this.state.qrLyricsUrl || this._buildQrLyricsUrl();
+            if (!this.state.qrLyricsUrl) await this.generateQrCode();
+            const url = this.state.qrLyricsUrl;
+            if (!url) return;
             await navigator.clipboard.writeText(url);
             const sub = document.getElementById('qrSubtitle');
             if (sub) sub.textContent = 'Link copiado!';
