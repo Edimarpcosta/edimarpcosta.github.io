@@ -3064,76 +3064,42 @@ ${JSON.stringify([
             }
             return { payload, packed, startedAt };
         },
-        async generateQrCode() {
-            if (typeof LZString === 'undefined' || typeof QRCode === 'undefined') {
-                alert('Bibliotecas do QR/LZString não carregaram ainda. Recarregue a página.');
-                return;
-            }
-            const data = this.getLyricsSharePayload();
-            if (!data || !data.packed) {
-                alert('Carregue uma música com letra antes de gerar o QR Code.');
-                return;
-            }
-            const baseUrl = this.getPublicLyricsBaseUrl();
-            if (!baseUrl) {
-                alert('Defina uma URL pública para a página /letra/ antes de gerar QR. Em file:// a página local não pode ser usada no celular. Ajuste window.PUBLIC_LYRICS_URL para a URL publicada no GitHub Pages.');
-                return;
-            }
-            const longUrl = `${baseUrl}#${data.packed}`;
-            this.state.qrLongUrl = longUrl;
-            this.state.qrPayload = data.payload;
-            this.state.qrStartedAt = data.startedAt;
-
-            const wrap = document.getElementById('qrCanvasWrap');
-            const subtitle = document.getElementById('qrSubtitle');
-            const urlText = document.getElementById('qrUrlText');
+        async     async generateQrCode() {
+        try {
+            const url = this._buildQrLyricsUrl();
+            this.state.qrLyricsUrl = url;
             const overlay = document.getElementById('qrOverlay');
-            wrap.innerHTML = '<div style="color:#666;font-size:.9em">Preparando QR...</div>';
-            subtitle.textContent = 'Preparando link da letra...';
-            urlText.textContent = longUrl;
-            overlay.style.display = 'flex';
-
-            let finalUrl = longUrl;
-            let shortened = false;
-            try {
-                const tiny = await this.shortenUrlWithTinyUrl(longUrl);
-                finalUrl = tiny.url || longUrl;
-                shortened = !!tiny.shortened;
-            } catch (err) {
-                console.warn('TinyURL falhou, usando URL longa:', err);
-            }
-
-            this.state.qrUrl = finalUrl;
+            const wrap = document.getElementById('qrCanvasWrap');
+            const txt = document.getElementById('qrUrlText');
+            const sub = document.getElementById('qrSubtitle');
+            if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
             wrap.innerHTML = '';
-            try {
-                new QRCode(wrap, { text: finalUrl, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
-            } catch (err) {
-                console.error('Falha ao gerar QR:', err);
-                wrap.innerHTML = '<div style="color:#d63031;font-size:.92em;line-height:1.5">Não foi possível montar o QR com esse link.<br>Configure o TinyURL token para encurtar a URL ou reduza o tamanho da letra.</div>';
-            }
-            subtitle.textContent = `${data.payload.ti}${data.payload.ar ? ' — ' + data.payload.ar : ''}${shortened ? ' • TinyURL' : ' • Link direto'}`;
-            urlText.textContent = finalUrl;
-        },
-        closeQrOverlay() {
-            const ov = document.getElementById('qrOverlay');
-            if (ov) ov.style.display = 'none';
-        },
-        async copyQrUrl() {
-            const toCopy = this.state.qrUrl || this.state.qrLongUrl;
-            if (!toCopy) return;
-            try {
-                await navigator.clipboard.writeText(toCopy);
-                const el = document.getElementById('qrSubtitle');
-                if (el) {
-                    const prev = el.textContent;
-                    el.textContent = 'Link copiado!';
-                    setTimeout(() => el.textContent = prev, 1400);
-                }
-            } catch (e) {
-                alert('Não foi possível copiar.');
-            }
+            txt.textContent = url;
+            if (sub) sub.textContent = url.length > 2500 ? 'Link grande, mas funcional sem TinyURL' : 'Escaneie para acompanhar';
+            new QRCode(wrap, { text: url, width: 240, height: 240, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+            overlay.style.display = 'flex';
+        } catch (err) {
+            alert('QR da letra: ' + (err?.message || err));
+            console.error(err);
         }
+    },
 
+            closeQrOverlay() {
+        const overlay = document.getElementById('qrOverlay');
+        if (overlay) overlay.style.display = 'none';
+    },
+
+        async     async copyQrUrl() {
+        try {
+            const url = this.state.qrLyricsUrl || this._buildQrLyricsUrl();
+            await navigator.clipboard.writeText(url);
+            const sub = document.getElementById('qrSubtitle');
+            if (sub) sub.textContent = 'Link copiado!';
+        } catch (err) {
+            alert('Não foi possível copiar o link.');
+            console.error(err);
+        }
+    },
 };
 
 app.init();
