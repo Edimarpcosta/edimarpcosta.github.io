@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+<script>
+(function(){
+  var defBase = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'letra/';
+  window.PUBLIC_LYRICS_URL   = window.PUBLIC_LYRICS_URL   || defBase;
+  window.TINYURL_API_TOKEN   = window.TINYURL_API_TOKEN   || '';
+  window.TINYURL_API_DOMAIN  = window.TINYURL_API_DOMAIN  || 'tinyurl.com';
+})();
+</script><!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -627,14 +634,24 @@ loadID3Writer();
             #playerBtns { gap: 4px; justify-content: center; }
         }
     
-        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
-        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
-        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
-        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
-        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
-        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
-        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
-        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+        /* ── QR Overlay ── */
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:250;display:flex;align-items:center;justify-content:center;padding:16px;transition:all .2s}
+        .qr-overlay.qr-fullscreen{padding:0;align-items:stretch;justify-content:stretch}
+        .qr-box{position:relative;width:min(94vw,440px);background:var(--surface);border:1px solid #2a2a3a;border-radius:18px;padding:20px;box-shadow:0 25px 60px rgba(0,0,0,.55);text-align:center;max-height:96dvh;overflow-y:auto;transition:all .2s}
+        .qr-overlay.qr-fullscreen .qr-box{width:100vw;max-height:100dvh;border-radius:0;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer;z-index:5}
+        .qr-title{font-size:1.2em;font-weight:800;color:#fff;margin-bottom:4px}
+        .qr-subtitle{font-size:.88em;color:#aaa;margin-bottom:12px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px;transition:all .25s}
+        .qr-url{font-size:.7em;color:#888;word-break:break-all;max-height:68px;overflow:auto;background:#111;padding:8px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+        /* Size controls */
+        .qr-size-controls{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+        .qr-size-controls label{font-size:.8em;color:#aaa;white-space:nowrap}
+        .qr-size-slider{width:140px;accent-color:#6366f1;cursor:pointer}
+        .qr-size-val{font-size:.8em;color:#6366f1;font-weight:700;min-width:36px}
+        .btn-fullscreen{background:#374151;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:.85em;font-weight:700;cursor:pointer}
+        .btn-fullscreen:hover{background:#4b5563}
 </style>
     <script>
 (function(){
@@ -754,19 +771,30 @@ loadID3Writer();
     </main>
 </div>
 
-<div id="qrOverlay" class="qr-overlay" style="display:none;">
-        <div class="qr-box">
-            <button class="qr-close" onclick="app.closeQrOverlay()">×</button>
-            <div class="qr-title">Letra no celular</div>
+<div id="qrOverlay" class="qr-overlay" style="display:none;" onclick="app._qrBgClick(event)">
+        <div class="qr-box" id="qrBox">
+            <button class="qr-close" onclick="app.closeQrOverlay()">&#215;</button>
+            <div class="qr-title">&#128241; Letra no celular</div>
             <div class="qr-subtitle" id="qrSubtitle">Escaneie para acompanhar</div>
-            <div id="qrCanvasWrap" class="qr-canvas-wrap"></div>
+            <div id="qrCanvasWrap" class="qr-canvas-wrap" style="width:240px;height:240px;"></div>
+            <!-- Size controls -->
+            <div class="qr-size-controls">
+                <label>Tamanho:</label>
+                <input type="range" class="qr-size-slider" id="qrSizeSlider"
+                       min="180" max="600" step="20" value="240"
+                       oninput="app.resizeQr(this.value)">
+                <span class="qr-size-val" id="qrSizeVal">240px</span>
+                <button class="btn-fullscreen" onclick="app.toggleQrFullscreen()" id="btnQrFs">&#9974; Tela cheia</button>
+            </div>
             <div class="qr-url" id="qrUrlText"></div>
             <div class="qr-actions">
-                <button class="btn btn-action" onclick="app.copyQrUrl()">Copiar Link</button>
+                <button class="btn btn-action" onclick="app.copyQrUrl()">&#128203; Copiar Link</button>
                 <button class="btn" onclick="app.closeQrOverlay()">Fechar</button>
             </div>
         </div>
     </div>
+
+</div>
 
 <footer id="mainFooter">
     <audio id="audioPlayer" preload="metadata"></audio>
@@ -2209,14 +2237,24 @@ const app = {
                     main::-webkit-scrollbar { display: none; }
                     .lyrics-box { padding: 50vh 20px; margin: 0 auto; width: 100%; box-sizing: border-box; }
                 
-        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
-        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
-        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
-        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
-        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
-        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
-        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
-        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+        /* ── QR Overlay ── */
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:250;display:flex;align-items:center;justify-content:center;padding:16px;transition:all .2s}
+        .qr-overlay.qr-fullscreen{padding:0;align-items:stretch;justify-content:stretch}
+        .qr-box{position:relative;width:min(94vw,440px);background:var(--surface);border:1px solid #2a2a3a;border-radius:18px;padding:20px;box-shadow:0 25px 60px rgba(0,0,0,.55);text-align:center;max-height:96dvh;overflow-y:auto;transition:all .2s}
+        .qr-overlay.qr-fullscreen .qr-box{width:100vw;max-height:100dvh;border-radius:0;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer;z-index:5}
+        .qr-title{font-size:1.2em;font-weight:800;color:#fff;margin-bottom:4px}
+        .qr-subtitle{font-size:.88em;color:#aaa;margin-bottom:12px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px;transition:all .25s}
+        .qr-url{font-size:.7em;color:#888;word-break:break-all;max-height:68px;overflow:auto;background:#111;padding:8px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+        /* Size controls */
+        .qr-size-controls{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+        .qr-size-controls label{font-size:.8em;color:#aaa;white-space:nowrap}
+        .qr-size-slider{width:140px;accent-color:#6366f1;cursor:pointer}
+        .qr-size-val{font-size:.8em;color:#6366f1;font-weight:700;min-width:36px}
+        .btn-fullscreen{background:#374151;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:.85em;font-weight:700;cursor:pointer}
+        .btn-fullscreen:hover{background:#4b5563}
 </style>
 </head>
             <body>
@@ -3103,23 +3141,56 @@ ${JSON.stringify([
             }
             return { payload, packed, startedAt };
         },
-    _extractQrLyricsText() {
-        const nodes = Array.from(document.querySelectorAll('#lyricsContainer .l-line, #lyricsContainer .plain-line'));
-        const cleaned = nodes.map(el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
-        if (cleaned.length) return cleaned.join('\n');
+    _buildLrcString() {
+        const lyr = this.state && this.state.lyrics;
+        if (lyr && lyr.synced && lyr.synced.length) {
+            return lyr.synced.map(function(l) {
+                const mm = Math.floor(l.startTime / 60).toString().padStart(2, '0');
+                const ss = (l.startTime % 60).toFixed(2).padStart(5, '0');
+                return '[' + mm + ':' + ss + '] ' + l.text;
+            }).join('\n');
+        }
+        const ta = document.getElementById('lrcEditTextarea');
+        if (ta && ta.value.trim()) return ta.value.trim();
+        return null;
+    },
+
+    _buildPlainString() {
+        const lyr = this.state && this.state.lyrics;
+        if (lyr && lyr.plain) return lyr.plain.trim();
+        if (lyr && lyr.synced && lyr.synced.length)
+            return lyr.synced.map(function(l){ return l.text; }).join('\n');
+        const ta = document.getElementById('lrcEditTextarea');
+        if (ta && ta.value.trim())
+            return ta.value.trim().replace(/\[\d{2}:\d{2}\.\d{2,3}\]\s*/g, '');
         const container = document.getElementById('lyricsContainer');
-        return (container ? container.innerText : '').replace(/\n{3,}/g, '\n\n').trim();
+        return container ? (container.innerText || '').replace(/\n{3,}/g, '\n\n').trim() : '';
     },
 
     _buildQrLyricsUrl() {
-        const title  = (this.state && this.state.meta && this.state.meta.track) || (document.getElementById('lblTitle') ? document.getElementById('lblTitle').innerText : '') || 'Letra';
-        const artist = (this.state && this.state.meta && this.state.meta.artist) || (document.getElementById('lblArtist') ? document.getElementById('lblArtist').innerText : '') || '';
-        const plain  = this._extractQrLyricsText();
-        if (!plain) throw new Error('Nenhuma letra carregada. Selecione uma musica primeiro.');
-        const payload = { v: 3, ti: title, ar: artist, plain: plain, ts: Date.now() };
+        const title  = (this.state && this.state.meta && this.state.meta.track)
+                    || (document.getElementById('lblTitle') ? document.getElementById('lblTitle').innerText.replace(/\s*β WORD\s*/g,'').trim() : '')
+                    || 'Letra';
+        const artist = (this.state && this.state.meta && this.state.meta.artist)
+                    || (document.getElementById('lblArtist') ? document.getElementById('lblArtist').innerText : '') || '';
+        const lrc   = this._buildLrcString();
+        const plain = this._buildPlainString();
+        if (!plain && !lrc) throw new Error('Nenhuma letra carregada. Selecione uma musica primeiro.');
+        const audio      = this.ui && this.ui.audio;
+        const currentSec = (audio && !isNaN(audio.currentTime) && audio.currentTime > 0) ? audio.currentTime : 0;
+        const startedAt  = Date.now() - Math.round(currentSec * 1000);
+        const payload = {
+            v: 4, ti: title, ar: artist,
+            lrc:   lrc   || '',
+            plain: plain || '',
+            m:     lrc ? 'synced' : 'plain',
+            t:     startedAt,
+            pos:   Math.round(currentSec)
+        };
         const json   = JSON.stringify(payload);
         const packed = window.LZString ? LZString.compressToEncodedURIComponent(json) : encodeURIComponent(json);
-        const base   = (window.PUBLIC_LYRICS_URL || 'https://edimarpcosta.github.io/igreja/playerletras/beta/letra/').replace(/[/]+$/, '/');
+        const base   = (window.PUBLIC_LYRICS_URL || '').replace(/[/]+$/, '/');
+        if (!base) throw new Error('PUBLIC_LYRICS_URL não configurado.');
         return base + '#lz=' + packed;
     },
 
@@ -3128,26 +3199,63 @@ ${JSON.stringify([
             const url = this._buildQrLyricsUrl();
             this.state.qrLyricsUrl = url;
             const overlay = document.getElementById('qrOverlay');
-            const wrap = document.getElementById('qrCanvasWrap');
-            const txt = document.getElementById('qrUrlText');
-            const sub = document.getElementById('qrSubtitle');
+            const wrap    = document.getElementById('qrCanvasWrap');
+            const txt     = document.getElementById('qrUrlText');
+            const sub     = document.getElementById('qrSubtitle');
             if (!overlay || !wrap || !txt) throw new Error('UI do QR não encontrada.');
+            const sz = parseInt(document.getElementById('qrSizeSlider')?.value || '240', 10);
             wrap.innerHTML = '';
+            wrap.style.width  = sz + 'px';
+            wrap.style.height = sz + 'px';
             txt.textContent = url;
-            if (sub) sub.textContent = url.length > 2500 ? 'Link grande, mas funcional sem TinyURL' : 'Escaneie para acompanhar';
+            if (sub) sub.textContent = 'LRC sincronizado · ' + url.length + ' chars · escaneie para acompanhar';
             new QRCode(wrap, {
                 text: url,
-                width: 240,
-                height: 240,
-                colorDark: '#000000',
-                colorLight: '#ffffff',
+                width: sz, height: sz,
+                colorDark: '#000000', colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
             });
             overlay.style.display = 'flex';
         } catch (err) {
-            alert('QR da letra: ' + (err?.message || err));
+            alert('QR da letra: ' + (err && err.message ? err.message : err));
             console.error(err);
         }
+    },
+
+    resizeQr(size) {
+        const sz  = parseInt(size, 10);
+        const val = document.getElementById('qrSizeVal');
+        const wrap = document.getElementById('qrCanvasWrap');
+        if (val)  val.textContent  = sz + 'px';
+        if (!wrap || !this.state.qrLyricsUrl) return;
+        wrap.innerHTML = '';
+        wrap.style.width  = sz + 'px';
+        wrap.style.height = sz + 'px';
+        new QRCode(wrap, {
+            text: this.state.qrLyricsUrl,
+            width: sz, height: sz,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    },
+
+    toggleQrFullscreen() {
+        const overlay = document.getElementById('qrOverlay');
+        const btn     = document.getElementById('btnQrFs');
+        if (!overlay) return;
+        const isFs = overlay.classList.toggle('qr-fullscreen');
+        if (btn) btn.textContent = isFs ? '\u2715 Sair tela cheia' : '\u26f6 Tela cheia';
+        // On fullscreen, resize QR to fill
+        if (isFs) {
+            const sz = Math.min(window.innerWidth, window.innerHeight) - 80;
+            const slider = document.getElementById('qrSizeSlider');
+            if (slider) { slider.value = sz; }
+            this.resizeQr(sz);
+        }
+    },
+
+    _qrBgClick(e) {
+        if (e.target === document.getElementById('qrOverlay')) this.closeQrOverlay();
     },
 
     async copyQrUrl() {
@@ -3164,7 +3272,12 @@ ${JSON.stringify([
 
     closeQrOverlay() {
         const overlay = document.getElementById('qrOverlay');
-        if (overlay) overlay.style.display = 'none';
+        if (overlay) {
+            overlay.style.display = 'none';
+            overlay.classList.remove('qr-fullscreen');
+            const btn = document.getElementById('btnQrFs');
+            if (btn) btn.textContent = '\u26f6 Tela cheia';
+        }
     }
 };
 
