@@ -1,0 +1,3060 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Player - β Word Karaokê</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script type="module">
+/**
+ * Carrega ID3Writer com cadeia de 3 fallbacks.
+ * O bundle do unpkg exporta: default export com { ID3Writer } dentro,
+ * ou diretamente como named export — o código abaixo trata ambos.
+ */
+async function loadID3Writer() {
+    const sources = [
+        'https://unpkg.com/browser-id3-writer@latest/dist/browser-id3-writer.mjs',
+        'https://raw.githubusercontent.com/egoroof/browser-id3-writer/master/src/ID3Writer.mjs',
+        'https://edimarpcosta.github.io/igreja/playerletras/ID3/ID3Writer.mjs',
+    ];
+
+    for (const src of sources) {
+        try {
+            const mod = await import(src);
+            const Writer = mod.ID3Writer
+                        ?? mod.default?.ID3Writer
+                        ?? mod.default
+                        ?? null;
+            if (Writer && typeof Writer === 'function') {
+                window._ID3Writer = Writer;
+                console.log('[ID3Writer] OK →', src);
+                return;
+            }
+        } catch (err) {
+            console.warn('[ID3Writer] falhou em:', src, '—', err.message);
+        }
+    }
+    console.error('[ID3Writer] Todos os fallbacks falharam. Embed indisponível.');
+}
+
+loadID3Writer();
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@latest/lame.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        /* ==========================================================================
+           CSS COMPLETO E ORIGINAL - SEM CORTES
+           ========================================================================== */
+        :root {
+            --primary: #6366f1;
+            --bg: #0a0a0f;
+            --surface: #1a1a24;
+            --hl: #ffeaa7;
+            --text: #e5e7eb;
+            --success: #00b894;
+            --error: #d63031;
+            --font-family-system: 'Montserrat', 'Segoe UI', sans-serif;
+            --font-family-lyrics: 'Bebas Neue', sans-serif;
+            --font-size-base: 32px;
+            --font-size-active: 40px;
+            --color-inactive: #d4d3d3;
+            --color-active: #eeff00;
+            --bg-type: solid;
+            --bg-value: #000000;
+            --bg-opacity: 1;
+            --bg-blur: 0px;
+            --line-spacing: 1.2;
+            --text-align: center;
+            --font-weight-active: 800;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: var(--font-family-system);
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        body.presentation-mode { cursor: none; }
+        body.presentation-mode header,
+        body.presentation-mode footer,
+        body.presentation-mode .controls { display: none !important; }
+
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -2; background: var(--bg-value); filter: blur(var(--bg-blur));
+        }
+
+        body::after {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; background: rgba(0, 0, 0, var(--bg-opacity));
+        }
+
+        body[data-bg-type="gradient"]::before {
+            background: linear-gradient(135deg, var(--bg-value), var(--bg-value-2, #1a1a24));
+        }
+
+        body[data-bg-type="image"]::before {
+            background-image: var(--bg-value); background-size: cover; background-position: center;
+        }
+
+        header {
+            background: var(--surface); padding: 12px 20px; display: flex; align-items: center;
+            gap: 15px; border-bottom: 1px solid #333; z-index: 10; transition: all 0.3s ease;
+        }
+        
+        .btn-file {
+            position: relative; overflow: hidden; background: var(--primary); color: white;
+            padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: 0.2s; border: none;
+        }
+        .btn-file:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-file input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; top: 0; left: 0; }
+
+        .track-info { flex: 1; display: flex; flex-direction: column; overflow: hidden; white-space: nowrap; }
+        .track-title { font-size: 1.1em; font-weight: bold; color: white; text-overflow: ellipsis; overflow: hidden; }
+        .track-artist { font-size: 0.9em; color: #aaa; text-overflow: ellipsis; overflow: hidden; }
+
+        .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        
+        .btn {
+            background: #333; border: 1px solid #444; color: #ddd; padding: 8px 12px;
+            border-radius: 6px; cursor: pointer; font-size: 0.9em; white-space: nowrap; transition: all 0.2s ease;
+        }
+        .btn:hover { background: #444; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+
+        .btn-presentation { background: #8b5cf6; color: white; font-weight: bold; }
+        .btn-presentation:hover { background: #7c3aed; }
+
+        .dropdown { position: relative; display: inline-block; }
+        .btn-action { background: var(--success); color: white; border: none; font-weight: bold; }
+        .btn-action:hover { background: #00a383; }
+        
+        .dropdown-content {
+            display: none; position: absolute; right: 0; top: 100%; background-color: #2d3436;
+            min-width: 220px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); z-index: 100;
+            border-radius: 6px; overflow: hidden; margin-top: 5px;
+        }
+        .dropdown-content button {
+            color: white; padding: 12px 16px; text-decoration: none; display: block; width: 100%;
+            text-align: left; background: none; border: none; cursor: pointer;
+            border-bottom: 1px solid #444; transition: background 0.2s;
+        }
+        .dropdown-content button:hover { background-color: #333; }
+        .dropdown:hover .dropdown-content { display: block; }
+        .tag-info { font-size: 0.75em; color: #aaa; margin-left: 5px; }
+
+        main {
+            flex: 1; overflow-y: auto; text-align: var(--text-align); position: relative;
+            scroll-behavior: smooth; display: flex; flex-direction: column;
+        }
+
+        .church-name {
+            position: fixed; width: 100%; padding: 20px; font-size: 1.5em; font-weight: bold;
+            z-index: 5; text-align: center; opacity: 0.8; transition: opacity 0.3s;
+        }
+        .church-name.top { top: 0; }
+        .church-name.bottom { bottom: 0; }
+        .church-name.hidden { display: none; }
+
+        .lyrics-box { padding: 50vh 20px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        
+        .l-line {
+            padding: 10px; font-size: var(--font-size-base); color: var(--color-inactive);
+            font-family: var(--font-family-lyrics);
+            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); border-radius: 6px; cursor: pointer;
+            margin: 4px 0; line-height: var(--line-spacing);
+            opacity: 0.55;
+        }
+        .l-line:hover { background: rgba(255,255,255,0.05); opacity: 0.8; }
+        body[data-font="bebas"] .l-line { letter-spacing: 0.06em; text-transform: uppercase; }
+        .l-line.active {
+            color: var(--color-active); font-size: var(--font-size-active); font-weight: var(--font-weight-active);
+            transform: scale(1.05);
+            text-shadow: 0 0 24px var(--color-active), 0 0 48px rgba(255,255,255,0.15);
+            opacity: 1;
+        }
+        /* ── SLIDER TIMING PALAVRAS ──────────────────────────────────────── */
+        .word-offset-wrap {
+            padding: 8px 12px 10px;
+            border-top: 1px solid #1a1a28;
+            background: #0e0e18;
+        }
+        .word-offset-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.72em; color: #666; margin-bottom: 5px;
+        }
+        #wordOffsetVal {
+            font-size: 0.9em; font-weight: 700;
+            color: #6366f1; font-variant-numeric: tabular-nums;
+        }
+        .word-offset-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 4px; border-radius: 2px;
+            background: linear-gradient(to right, #6366f1 0%, #6366f1 var(--slider-pct, 27%), #2a2a3a var(--slider-pct, 27%), #2a2a3a 100%);
+            outline: none; cursor: pointer;
+        }
+        .word-offset-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px;
+            border-radius: 50%; background: #6366f1;
+            border: 2px solid #fff; box-shadow: 0 0 6px rgba(99,102,241,0.6);
+            transition: transform 0.1s;
+        }
+        .word-offset-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .word-offset-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.62em; color: #3a3a4a; margin-top: 3px;
+        }
+
+        /* ── WORD KARAOKÊ ─────────────────────────────────────────────── */
+        .l-line.active .l-word {
+            color: var(--color-word-pending, #888888);
+            text-shadow: none;
+            transition: color 0.13s ease, text-shadow 0.13s ease;
+        }
+        .l-line.active .l-word.l-word-active {
+            color: var(--color-active);
+            text-shadow: 0 0 18px var(--color-active), 0 0 36px rgba(255,255,255,0.15);
+        }
+        .plain-text { white-space: pre-wrap; font-size: 1.2em; line-height: 1.6; color: #ccc; padding-top: 50px; }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px);
+        }
+        .modal.active { display: flex; }
+        
+        .modal-box {
+            background: var(--surface); width: 90%; max-width: 700px; max-height: 85vh;
+            border-radius: 10px; display: flex; flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid #333; animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .modal-header { padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 1.3em; color: white; }
+        .modal-close {
+            background: #d63031; color: white; border: none; width: 32px; height: 32px;
+            border-radius: 50%; cursor: pointer; font-size: 1.2em; display: flex; align-items: center;
+            justify-content: center; transition: all 0.2s;
+        }
+        .modal-close:hover { background: #c0392b; transform: rotate(90deg); }
+
+        .modal-tabs { display: flex; border-bottom: 1px solid #333; background: #16161c; }
+        .modal-tab {
+            flex: 1; padding: 12px; background: none; border: none; color: #888; cursor: pointer;
+            font-size: 0.9em; transition: all 0.2s; border-bottom: 2px solid transparent;
+        }
+        .modal-tab:hover { color: #aaa; background: rgba(255,255,255,0.05); }
+        .modal-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        .modal-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .setting-group { margin-bottom: 25px; }
+        .setting-label { display: block; margin-bottom: 8px; color: #aaa; font-size: 0.9em; font-weight: 600; }
+        .setting-input {
+            width: 100%; background: #222; border: 1px solid #444; color: white;
+            padding: 10px; border-radius: 6px; font-size: 0.95em;
+        }
+        .setting-input:focus { outline: none; border-color: var(--primary); }
+
+        .slider-container { display: flex; align-items: center; gap: 10px; }
+        .slider-container input[type="number"] { -moz-appearance: textfield; }
+        .slider-container input[type="number"]::-webkit-inner-spin-button,
+        .slider-container input[type="number"]::-webkit-outer-spin-button { opacity: 1; }
+        .slider { flex: 1; height: 6px; border-radius: 3px; background: #333; outline: none; -webkit-appearance: none; }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: var(--primary); cursor: pointer; transition: all 0.2s;
+        }
+        .slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .slider-value { min-width: 50px; text-align: right; color: white; font-weight: bold; }
+
+        .color-picker-group { display: flex; gap: 10px; align-items: center; }
+        .color-picker { width: 60px; height: 40px; border: 2px solid #444; border-radius: 6px; cursor: pointer; }
+
+        .radio-group { display: flex; gap: 15px; flex-wrap: wrap; }
+        .radio-option { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .radio-option input[type="radio"] { cursor: pointer; }
+
+        .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
+        .theme-card {
+            background: #222; border: 2px solid #333; border-radius: 8px; padding: 15px;
+            cursor: pointer; transition: all 0.2s; text-align: center;
+        }
+        .theme-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .theme-card.active { border-color: var(--success); background: #2a2a2a; }
+        .theme-preview { width: 100%; height: 60px; border-radius: 6px; margin-bottom: 10px; }
+        .theme-name { font-weight: bold; color: white; }
+
+        .inp-search { flex: 1; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; }
+        .results-area { flex: 1; overflow-y: auto; padding: 10px; }
+        .res-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #333; transition: 0.2s; cursor: pointer; }
+        .res-item:hover { background: #2a2a2a; }
+        .res-info b { display: block; color: white; margin-bottom: 4px; }
+        
+        .tag { padding: 2px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-left: 8px; vertical-align: middle; }
+        .tag-sync { background: #00b894; color: white; }
+        .tag-txt { background: #fdcb6e; color: #333; }
+
+        footer { padding: 0; background: var(--surface); border-top: 1px solid #333; transition: all 0.3s ease; display: flex; flex-direction: column; }
+        audio { width: 100%; outline: none; display: none; }
+        
+        #loading {
+            display: none; position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+            background: var(--primary); color: white; padding: 15px 30px; border-radius: 30px;
+            font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 50; text-align: center;
+        }
+        .progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.3); margin-top: 8px; border-radius: 2px; }
+        .progress-fill { height: 100%; background: white; width: 0%; transition: width 0.1s; border-radius: 2px; }
+
+        /* ========== APP LAYOUT (sidebar + main) ========== */
+        .app-layout { display: flex; flex: 1; overflow: hidden; }
+        .app-layout > main { flex: 1; }
+
+        /* ========== PLAYLIST SIDEBAR ========== */
+        .playlist-sidebar {
+            width: 280px; min-width: 280px; background: #12121a; border-right: 1px solid #2a2a3a;
+            display: flex; flex-direction: column; transition: margin-left 0.3s ease;
+            z-index: 8;
+        }
+        .playlist-sidebar.collapsed { margin-left: -280px; }
+        .playlist-sidebar.empty { display: none; }
+
+        .playlist-header {
+            padding: 14px 16px; border-bottom: 1px solid #2a2a3a; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .playlist-header h3 { font-size: 1em; color: #ccc; margin: 0; }
+        .playlist-count { font-size: 0.8em; color: #666; }
+
+        .playlist-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+        .playlist-list::-webkit-scrollbar { width: 4px; }
+        .playlist-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+        .playlist-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+            cursor: pointer; transition: background 0.15s; border-left: 3px solid transparent;
+            font-size: 0.88em; color: #888;
+        }
+        .playlist-item:hover { background: rgba(255,255,255,0.04); }
+        .playlist-item.active {
+            background: rgba(99,102,241,0.12); border-left-color: var(--primary);
+            color: white; font-weight: 600;
+        }
+        .playlist-item .pl-number { min-width: 22px; text-align: right; font-size: 0.8em; color: #555; }
+        .playlist-item.active .pl-number { color: var(--primary); }
+        .playlist-item .pl-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playlist-item .pl-playing { display: none; color: var(--primary); }
+        .playlist-item.active .pl-playing { display: inline; }
+
+        /* ========== SOURCE BADGES ========== */
+        .badge {
+            padding: 1px 6px; border-radius: 3px; font-size: 0.7em; font-weight: 700;
+            letter-spacing: 0.3px; white-space: nowrap;
+        }
+        .badge-lrc { background: #00b894; color: #fff; }
+        .badge-emb { background: #fdcb6e; color: #333; }
+        .badge-api { background: #a29bfe; color: #fff; }
+        .badge-br  { background: #e17055; color: #fff; }
+        .badge-ovh { background: #3498db; color: #333; }
+        .badge-man { background: #9b59b6; color: #fff; }
+        .badge-pending { background: #444; color: #888; }
+
+        /* ========== PLAYLIST CONTROLS ========== */
+        .playlist-controls {
+            padding: 12px; border-top: 1px solid #2a2a3a; display: flex;
+            justify-content: center; gap: 8px;
+        }
+        .playlist-controls button {
+            background: #222; border: 1px solid #333; color: #888; width: 38px; height: 38px;
+            border-radius: 8px; cursor: pointer; font-size: 1.1em; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .playlist-controls button:hover { background: #333; color: #ddd; }
+        .playlist-controls button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        .btn-toggle-sidebar {
+            background: #222; border: 1px solid #333; color: #aaa; padding: 6px 10px;
+            border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: 0.2s; display: none;
+        }
+        .btn-toggle-sidebar:hover { background: #333; }
+        .has-playlist .btn-toggle-sidebar { display: inline-flex; }
+
+        /* ========== DRAG OVERLAY ========== */
+        .drag-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(99,102,241,0.15); backdrop-filter: blur(4px); z-index: 200;
+            justify-content: center; align-items: center; pointer-events: none;
+        }
+        .drag-overlay.active { display: flex; }
+        .drag-overlay-box {
+            border: 3px dashed var(--primary); border-radius: 16px; padding: 40px 60px;
+            background: rgba(26,26,36,0.9); text-align: center;
+        }
+        .drag-overlay-box .icon { font-size: 3em; margin-bottom: 10px; }
+        .drag-overlay-box .text { font-size: 1.1em; color: #ccc; }
+
+        @media (max-width: 1024px) { .lyrics-box { width: 85%; } }
+        @media (max-width: 768px) {
+            header { flex-wrap: wrap; padding: 10px; }
+            .controls { width: 100%; justify-content: space-between; }
+            .btn { padding: 6px 10px; font-size: 0.85em; }
+            .lyrics-box { width: 95%; padding: 40vh 15px; }
+            .l-line { font-size: calc(var(--font-size-base) * 0.85); }
+            .l-line.active { font-size: calc(var(--font-size-active) * 0.9); }
+            .modal-box { width: 95%; max-height: 90vh; }
+            .modal-tabs { overflow-x: auto; }
+            .modal-tab { font-size: 0.8em; padding: 10px 8px; }
+            .theme-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .playlist-sidebar { position: fixed; left: 0; top: 0; height: 100%; z-index: 15; }
+            .playlist-sidebar.collapsed { margin-left: -280px; }
+        }
+        @media (max-width: 480px) {
+            .track-info { display: none; }
+            .btn-file span { display: none; }
+            .btn-file::after { content: '📂'; }
+        }
+
+        /* ── LRC EDITOR MODAL ───────────────────────────────────────────── */
+        #lrcEditorModal .modal-box { max-width: 700px; display: flex; flex-direction: column; }
+        .lrc-mode-bar { display: flex; gap: 8px; padding: 10px 15px; border-bottom: 1px solid #333; background: #16161c; align-items: center; }
+        .lrc-mode-btn { padding: 6px 18px; border-radius: 4px; border: 1px solid #444; background: #222; color: #aaa; cursor: pointer; font-size: 0.85em; transition: all 0.15s; }
+        .lrc-mode-btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .lrc-mode-btn:hover:not(.active) { background: #2d2d40; color: #ccc; }
+        .lrc-listen-area { overflow-y: auto; height: 340px; padding: 8px 10px; }
+        .lrc-listen-line { display: flex; align-items: baseline; gap: 12px; padding: 5px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+        .lrc-listen-line:hover { background: #1e1e2e; }
+        .lrc-listen-line.lrc-active { background: #2d2b55; }
+        .lrc-listen-line.lrc-active .lrc-listen-text { color: #ffeaa7; font-weight: 700; }
+        .lrc-listen-line.lrc-active .lrc-listen-time { color: #a29bfe; }
+        .lrc-listen-time { font-family: 'Courier New', monospace; font-size: 0.78em; color: #555; min-width: 70px; flex-shrink: 0; }
+        .lrc-listen-text { font-size: 0.95em; color: #bbb; }
+        .lrc-edit-wrap { display: flex; flex-direction: column; gap: 8px; padding: 10px 15px; height: 340px; }
+        .lrc-edit-hint { font-size: 0.75em; color: #555; }
+        .lrc-edit-hint code { color: #a29bfe; background: #1a1a2e; padding: 1px 5px; border-radius: 3px; }
+        .lrc-edit-textarea { flex: 1; background: #0d0d15; color: #d4d4d4; border: 1px solid #333; border-radius: 5px; padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 0.84em; line-height: 1.7; resize: none; outline: none; }
+        .lrc-edit-textarea:focus { border-color: #4f46e5; }
+        .lrc-editor-footer { display: flex; gap: 8px; padding: 10px 15px; border-top: 1px solid #333; background: #16161c; flex-shrink: 0; }
+        .lrc-editor-info { margin-left: auto; font-size: 0.78em; color: #555; align-self: center; }
+        .lrc-plain-line { padding: 4px 10px; color: #aaa; font-size: 0.95em; line-height: 1.6; }
+
+        /* ── REMOTE PLAYLIST MODAL ─────────────────────────────────── */
+        .remote-section { padding: 14px 16px; border-bottom: 1px solid #2a2a3a; }
+        .remote-section:last-child { border-bottom: none; }
+        .remote-track-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 9px 12px; border-radius: 6px; cursor: pointer;
+            border: 1px solid #2a2a3a; margin-bottom: 6px;
+            transition: background 0.15s;
+        }
+        .remote-track-item:hover { background: #1e1e2e; border-color: #4f46e5; }
+        .remote-track-icon { font-size: 1.4em; flex-shrink: 0; }
+        .remote-track-info { flex: 1; min-width: 0; }
+        .remote-track-name { font-weight: 600; color: #ddd; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .remote-track-artist { font-size: 0.78em; color: #666; margin-top: 2px; }
+        .remote-load-btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #4f46e5; background: transparent; color: #a29bfe; cursor: pointer; font-size: 0.8em; flex-shrink: 0; transition: all 0.15s; }
+        .remote-load-btn:hover { background: #4f46e5; color: #fff; }
+        .playlist-format-box { background: #0d0d15; border: 1px solid #2a2a3a; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.78em; color: #a29bfe; white-space: pre; overflow-x: auto; line-height: 1.6; margin-top: 8px; }
+        .remote-url-row { display: flex; gap: 8px; margin-top: 8px; }
+        .remote-url-input { flex: 1; padding: 8px 10px; background: #1a1a2e; border: 1px solid #444; border-radius: 4px; color: #ddd; font-size: 0.84em; }
+        .template-btns { display: flex; gap: 8px; margin-top: 8px; }
+
+        /* ── CONTROLES CUSTOMIZADOS DO PLAYER ───────────────────────── */
+        #playerWrap {
+            display: flex; flex-direction: column; gap: 6px;
+            width: 100%; padding: 8px 14px 10px; box-sizing: border-box;
+        }
+        #seekTrack {
+            display: flex; align-items: center; gap: 10px;
+        }
+        #timeCur, #timeDur {
+            font-size: 0.75em; color: #888; min-width: 36px;
+            font-variant-numeric: tabular-nums; flex-shrink: 0;
+        }
+        #seekBar {
+            flex: 1; height: 5px; background: #2a2a3a; border-radius: 3px;
+            position: relative; cursor: pointer; overflow: visible;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #seekFill {
+            height: 100%; background: var(--primary, #6366f1);
+            border-radius: 3px; width: 0%; pointer-events: none;
+            transition: width 0.1s linear;
+        }
+        #seekThumb {
+            width: 13px; height: 13px; background: #fff;
+            border-radius: 50%; position: absolute; top: 50%;
+            transform: translate(-50%, -50%);
+            left: 0%; pointer-events: none;
+            box-shadow: 0 0 4px rgba(99,102,241,0.7);
+            transition: left 0.1s linear;
+        }
+        #seekBar:hover #seekThumb { transform: translate(-50%, -50%) scale(1.3); }
+        #playerBtns {
+            display: flex; align-items: center; gap: 6px; justify-content: center;
+        }
+        .ctrl-btn {
+            background: #1a1a28; border: 1px solid #2a2a3a; color: #bbb;
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+            font-size: 1.1em; transition: all 0.15s; display: flex;
+            align-items: center; justify-content: center; flex-shrink: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .ctrl-btn:hover { background: #2a2a3a; color: #fff; border-color: #555; }
+        .ctrl-btn:active { transform: scale(0.9); }
+        .ctrl-play {
+            width: 52px; height: 52px; font-size: 1.4em;
+            background: var(--primary, #6366f1); border-color: var(--primary, #6366f1);
+            color: #fff; box-shadow: 0 0 16px rgba(99,102,241,0.4);
+        }
+        .ctrl-play:hover { background: #7c7fff; border-color: #7c7fff; }
+        .ctrl-vol {
+            display: flex; align-items: center; gap: 5px;
+            margin-left: 8px; flex: 1; max-width: 120px;
+        }
+        #volIcon { font-size: 0.85em; cursor: pointer; flex-shrink: 0; }
+        #ctrlVolume {
+            -webkit-appearance: none; appearance: none;
+            height: 4px; border-radius: 2px; flex: 1;
+            background: #2a2a3a; outline: none; cursor: pointer;
+        }
+        #ctrlVolume::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 12px; height: 12px;
+            border-radius: 50%; background: #6366f1; border: 2px solid #fff;
+        }
+        #ctrlFullscreen {
+            font-size: 1.05em; margin-left: 4px;
+            background: rgba(99,102,241,0.25);
+            border-color: #6366f1;
+            color: #a29bfe;
+        }
+        #ctrlFullscreen:hover {
+            background: #6366f1 !important;
+            color: #fff !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 14px rgba(99,102,241,0.5);
+        }
+
+        /* ── HAMBURGER MENU ──────────────────────────────────────────── */
+        .btn-hamburger {
+            display: none; /* oculto em desktop */
+            background: #1a1a28; border: 1px solid #2a2a3a; color: #bbb;
+            width: 40px; height: 40px; border-radius: 8px; cursor: pointer;
+            font-size: 1.3em; align-items: center; justify-content: center;
+            flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+            transition: all 0.15s;
+        }
+        .btn-hamburger:hover { background: #2a2a3a; color: #fff; }
+
+        .mobile-menu {
+            display: none; flex-direction: column;
+            position: fixed; top: 0; right: 0; bottom: 0;
+            width: 80%; max-width: 300px;
+            background: #0e0e1a; border-left: 1px solid #2a2a3a;
+            z-index: 1000; padding: 16px 0 20px;
+            box-shadow: -8px 0 32px rgba(0,0,0,0.6);
+            transform: translateX(100%); transition: transform 0.25s ease;
+            overflow-y: auto;
+        }
+        .mobile-menu.open {
+            display: flex; transform: translateX(0);
+        }
+        .mobile-menu-close {
+            background: none; border: none; color: #666; font-size: 0.9em;
+            padding: 10px 20px; cursor: pointer; text-align: left;
+            margin-bottom: 8px; border-bottom: 1px solid #1a1a28; width: 100%;
+        }
+        .mobile-menu-item {
+            background: none; border: none; color: #ccc; font-size: 1em;
+            padding: 14px 20px; cursor: pointer; text-align: left;
+            width: 100%; border-bottom: 1px solid #1a1a28;
+            transition: background 0.1s; -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-menu-item:hover, .mobile-menu-item:active { background: #1a1a2e; color: #fff; }
+        #menuOverlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        #menuOverlay.open { display: block; }
+
+        /* ── RESPONSIVO MOBILE ───────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .btn-hamburger { display: flex; }
+            .controls { display: none !important; }
+            #mainHeader { gap: 8px; padding: 8px 10px; }
+            .ctrl-vol { max-width: 80px; }
+            .ctrl-btn { width: 38px; height: 38px; font-size: 1em; }
+            .ctrl-play { width: 48px; height: 48px; font-size: 1.3em; }
+        }
+    
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
+        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
+        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
+        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
+        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body data-bg-type="solid">
+
+<div id="menuOverlay" onclick="app.toggleHamburger()"></div>
+<div class="drag-overlay" id="dragOverlay">
+    <div class="drag-overlay-box">
+        <div class="icon">🎵</div>
+        <div class="text">Solte os arquivos aqui<br><small>MP3, FLAC, LRC ou pasta inteira</small></div>
+    </div>
+</div>
+
+<div id="loading">
+    <span id="loadingText">Carregando...</span>
+    <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<div class="church-name hidden" id="churchName">Nome da Igreja</div>
+
+<header id="mainHeader">
+    <button class="btn-file">
+        <span>📂 Abrir Arquivos</span>
+        <input type="file" id="fileInput" accept="audio/*,.lrc" multiple>
+    </button>
+
+    <div class="track-info">
+        <div class="track-title" id="lblTitle">Church Player <span style="font-size:0.55em;background:#6366f1;color:#fff;padding:2px 7px;border-radius:20px;font-weight:700;vertical-align:middle;">β WORD</span></div>
+        <div class="track-artist" id="lblArtist">Arraste Áudio (+ LRC) aqui</div>
+    </div>
+
+    <div class="controls" id="headerControls">
+        <button class="btn-toggle-sidebar" id="btnToggleSidebar" onclick="app.toggleSidebar()" title="Playlist">📋</button>
+        <button class="btn btn-presentation" id="btnPresentation" onclick="app.togglePresentationMode()">🖥️ Apresentação</button>
+        <button class="btn" id="btnSettings" onclick="app.openSettings()">⚙️ Configurações</button>
+        <button class="btn" id="btnToggleType" onclick="app.toggleView()" style="display:none">Ver Texto</button>
+        <button class="btn" onclick="app.openSearch()">🔍 Manual / Colar</button>
+        <button class="btn btn-action" onclick="app.openRemotePlaylist()" title="Músicas demo e playlists remotas">🎵 Remotas</button>
+                <button class="btn" id="btnQrLyrics" onclick="app.generateQrCode()" title="Gerar QR Code da letra para o público">📱 QR Letra</button>
+
+        <div class="dropdown" id="dropdownSave" style="display:none">
+            <button class="btn btn-action">💾 Salvar...</button>
+            <div class="dropdown-content">
+                <button onclick="app.downloadLrc()">📄 Salvar .LRC</button>
+                <button id="btnEmbed" onclick="app.embedInFile()">🎵 Embutir no Áudio <span id="embedTag" class="tag-info"></span></button>
+                <button onclick="app.openLrcEditor()">✏️ Editor LRC / Sync</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hamburger: visível só em mobile -->
+    <button class="btn-hamburger" id="btnHamburger" onclick="app.toggleHamburger()" title="Menu">☰</button>
+
+    <!-- Menu drawer mobile -->
+    <div id="mobileMenu" class="mobile-menu">
+        <button class="mobile-menu-close" onclick="app.toggleHamburger()">✕ Fechar</button>
+        <button class="mobile-menu-item" onclick="app.toggleSidebar();app.toggleHamburger()">📋 Playlist</button>
+        <button class="mobile-menu-item" onclick="app.togglePresentationMode();app.toggleHamburger()">🖥️ Apresentação</button>
+        <button class="mobile-menu-item" onclick="app.toggleFullscreen()">⛶ Tela Cheia</button>
+        <button class="mobile-menu-item" onclick="app.openSettings();app.toggleHamburger()">⚙️ Configurações</button>
+        <button class="mobile-menu-item" onclick="app.openSearch();app.toggleHamburger()">🔍 Busca Manual</button>
+        <button class="mobile-menu-item" onclick="app.openRemotePlaylist();app.toggleHamburger()">🎵 Remotas</button>
+        <button class="mobile-menu-item" onclick="app.generateQrCode();app.toggleHamburger()">📱 QR Letra</button>
+        <button class="mobile-menu-item" id="mmbToggleType" onclick="app.toggleView();app.toggleHamburger()" style="display:none">↔️ Sync / Texto</button>
+        <div id="mmbSaveGroup" style="display:none">
+            <button class="mobile-menu-item" onclick="app.downloadLrc();app.toggleHamburger()">📄 Salvar .LRC</button>
+            <button class="mobile-menu-item" onclick="app.embedInFile();app.toggleHamburger()">🎵 Embutir no Áudio</button>
+            <button class="mobile-menu-item" onclick="app.openLrcEditor();app.toggleHamburger()">✏️ Editor LRC</button>
+        </div>
+    </div>
+</header>
+
+<div class="app-layout" id="appLayout">
+    <aside class="playlist-sidebar empty" id="playlistSidebar">
+        <div class="playlist-header">
+            <h3>🎵 Playlist</h3>
+            <span class="playlist-count" id="playlistCount">0 faixas</span>
+        </div>
+        <div class="playlist-list" id="playlistList"></div>
+        <div class="playlist-controls">
+            <button id="btnPrev" onclick="app.prevTrack()" title="Anterior">⏮</button>
+            <button id="btnShuffle" onclick="app.toggleShuffle()" title="Aleatório">🔀</button>
+            <button id="btnLoop" onclick="app.toggleLoop()" title="Repetir">🔁</button>
+            <button id="btnNext" onclick="app.nextTrack()" title="Próxima">⏭</button>
+        </div>
+        <div class="word-offset-wrap">
+            <div class="word-offset-header">
+                <span>⏱ Timing palavras</span>
+                <span id="wordOffsetVal">-0.3s</span>
+            </div>
+            <input type="range" id="wordOffsetSlider"
+                   min="-2.0" max="0.8" step="0.05" value="-0.3"
+                   class="word-offset-slider"
+                   oninput="app.setWordOffset(parseFloat(this.value))">
+            <div class="word-offset-labels">
+                <span>← mais cedo</span>
+                <span>mais tarde →</span>
+            </div>
+        </div>
+    </aside>
+    <main id="mainArea">
+        <div class="lyrics-box" id="lyricsContainer">
+            <div style="margin-top:20vh; color:#444">
+                Suporta MP3 e FLAC (Conversão Auto).<br>
+                Arraste múltiplos arquivos ou pasta inteira.
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="qrOverlay" class="qr-overlay" style="display:none;">
+        <div class="qr-box">
+            <button class="qr-close" onclick="app.closeQrOverlay()">×</button>
+            <div class="qr-title">Letra no celular</div>
+            <div class="qr-subtitle" id="qrSubtitle">Escaneie para acompanhar</div>
+            <div id="qrCanvasWrap" class="qr-canvas-wrap"></div>
+            <div class="qr-url" id="qrUrlText"></div>
+            <div class="qr-actions">
+                <button class="btn btn-action" onclick="app.copyQrUrl()">Copiar Link</button>
+                <button class="btn" onclick="app.closeQrOverlay()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+<footer id="mainFooter">
+    <audio id="audioPlayer" preload="metadata"></audio>
+    <div id="playerWrap">
+        <div id="seekTrack">
+            <span id="timeCur">0:00</span>
+            <div id="seekBar" title="Clique para buscar">
+                <div id="seekFill"></div>
+                <div id="seekThumb"></div>
+            </div>
+            <span id="timeDur">0:00</span>
+        </div>
+        <div id="playerBtns">
+            <button class="ctrl-btn" id="ctrlPrev"       onclick="app.prevTrack()"          title="Faixa anterior">⏮</button>
+            <button class="ctrl-btn" id="ctrlBack"       onclick="app.seekRelative(-10)"    title="-10s">⏪</button>
+            <button class="ctrl-btn ctrl-play" id="ctrlPlay" onclick="app.togglePlay()"    title="Play / Pause">▶</button>
+            <button class="ctrl-btn" id="ctrlFwd"        onclick="app.seekRelative(+10)"   title="+10s">⏩</button>
+            <button class="ctrl-btn" id="ctrlNext"       onclick="app.nextTrack()"          title="Próxima faixa">⏭</button>
+            <div class="ctrl-vol">
+                <span id="volIcon">🔊</span>
+                <input type="range" id="ctrlVolume" min="0" max="1" step="0.05" value="1" title="Volume">
+            </div>
+            <button class="ctrl-btn" id="ctrlFullscreen" onclick="app.toggleFullscreen()"  title="Tela cheia">⛶</button>
+        </div>
+    </div>
+</footer>
+
+<div class="modal" id="searchModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2>Busca Manual / Colar Letra</h2>
+            <button class="modal-close" onclick="app.closeModal('searchModal')">×</button>
+        </div>
+        <div style="padding: 15px; display: flex; gap: 10px; border-bottom: 1px solid #333;">
+            <input type="text" class="inp-search" id="inpTrack" placeholder="Música">
+            <input type="text" class="inp-search" id="inpArtist" placeholder="Artista">
+            <button class="btn btn-action" onclick="app.doManualSearch()">Buscar</button>
+        </div>
+        <div class="results-area" id="resultsList" style="max-height: 200px;">
+            <div style="text-align:center; padding:20px; color:#555">Digite e busque para ver as opções.</div>
+        </div>
+        <div style="padding: 15px; background: #16161c; border-top: 1px solid #333;">
+            <label class="setting-label">Ou Cole a Letra (Sincronizada ou Texto):</label>
+            <textarea id="pastedLyricsText" style="width:100%; height:120px; background:#222; color:#fff; border:1px solid #444; border-radius:4px; padding:10px; font-family:monospace;" placeholder="Ex: [00:12.50] Primeira linha..."></textarea>
+            <button class="btn btn-action" style="width:100%; margin-top:10px;" onclick="app.applyPastedLyrics()">Aplicar Letra Colada</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="lrcEditorModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2>✏️ Editor de Letra</h2>
+            <button class="modal-close" onclick="app.closeModal('lrcEditorModal')">×</button>
+        </div>
+
+        <div class="lrc-mode-bar">
+            <button class="lrc-mode-btn active" id="lrcBtnListen" onclick="app.lrcEditorSetMode('listen')">🎧 Ouvir</button>
+            <button class="lrc-mode-btn" id="lrcBtnEdit" onclick="app.lrcEditorSetMode('edit')">✏️ Editar</button>
+            <span class="lrc-editor-info" id="lrcEditorInfo"></span>
+        </div>
+
+        <!-- MODO OUVIR -->
+        <div id="lrcListenArea" class="lrc-listen-area"></div>
+
+        <!-- MODO EDITAR -->
+        <div id="lrcEditWrap" class="lrc-edit-wrap" style="display:none;">
+            <p class="lrc-edit-hint">Edite o LRC abaixo. Formato: <code>[MM:SS.cs] texto</code> — ex: <code>[00:07.83] Primeira linha</code><br>
+            Linhas sem timestamp são tratadas como letra simples (plain). Alterações têm efeito ao clicar em Aplicar.</p>
+            <textarea id="lrcEditTextarea" class="lrc-edit-textarea" spellcheck="false"></textarea>
+            <button class="btn btn-action" style="flex-shrink:0;" onclick="app.lrcEditorApply()">✅ Aplicar Edições (substitui letra atual)</button>
+        </div>
+
+        <div class="lrc-editor-footer">
+            <button class="btn btn-action" onclick="app.downloadLrc(); app.closeModal('lrcEditorModal');">💾 Salvar .LRC</button>
+            <button class="btn btn-action" id="lrcBtnEmbed" onclick="app.embedInFile()">🎵 Embutir no MP3</button>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal" id="remotePlaylistModal">
+    <div class="modal-box" style="max-width:700px; overflow-y:auto;">
+        <div class="modal-header">
+            <h2>🎵 Músicas Remotas / Playlist</h2>
+            <button class="modal-close" onclick="app.closeModal('remotePlaylistModal')">×</button>
+        </div>
+
+        <!-- DEMO -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:10px; display:block;">🎤 Músicas Demo (prontas para testar)</label>
+            <div id="demoTracksList"></div>
+        </div>
+
+        <!-- CARREGAR PLAYLIST — URL -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:8px; display:block;">📡 Carregar Playlist via URL (CSV ou JSON)</label>
+            <button class="btn btn-action" style="width:100%; margin-bottom:8px;"
+                onclick="app.loadRemotePlaylist('https://edimarpcosta.github.io/igreja/playerletras/music/music.csv')">
+                📋 Playlist ADBUS Piracicaba (GitHub)
+            </button>
+            <div class="remote-url-row">
+                <input type="text" id="playlistUrl" class="remote-url-input" placeholder="Cole aqui a URL do seu CSV ou JSON...">
+                <button class="btn btn-action" onclick="app.loadRemotePlaylist(document.getElementById('playlistUrl').value)">📥 Carregar</button>
+            </div>
+        </div>
+
+        <!-- CARREGAR PLAYLIST — ARQUIVO LOCAL -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:8px; display:block;">📂 Carregar Playlist — Arquivo Local (.csv ou .json)</label>
+            <input type="file" class="setting-input" id="localPlaylistFile" accept=".csv,.json"
+                   onchange="app.loadLocalPlaylist(event)" style="margin-top:4px;">
+        </div>
+
+        <!-- LISTA DE MÚSICAS CARREGADAS -->
+        <div class="remote-section" id="remoteTracksSection" style="display:none;">
+            <label class="setting-label" style="margin-bottom:8px; display:block;" id="remoteTracksLabel">🎵 Músicas Carregadas</label>
+            <div id="remoteTracksList"></div>
+        </div>
+
+        <!-- FORMATO DO ARQUIVO -->
+        <div class="remote-section">
+            <label class="setting-label" style="margin-bottom:6px; display:block;">📄 Formato do Arquivo de Playlist</label>
+            <div class="playlist-format-box">── SIMPLES (padrão) ── metadados lidos do ID3 da música ──
+
+CSV: uma URL por linha (music.csv)
+https://raw.github.../O_Exilado_Hc_36.mp3
+https://raw.github.../Samuel_Miranda.mp3
+
+JSON: chave "music" com array de URLs (music.json)
+{
+  "music": [
+    "https://raw.github.../O_Exilado_Hc_36.mp3",
+    "https://raw.github.../Samuel_Miranda.mp3"
+  ]
+}
+
+── COMPLETO (opcional) ── metadados manuais ──
+
+CSV: nome,artista,url,lrc_url
+O Exilado (Hc 3:6),Harpa Cristã,https://raw.github.../O_Exilado_Hc_36.mp3,
+Primeira Essência,Samuel Miranda,https://raw.github.../Samuel_Miranda.mp3,
+
+JSON: array de objetos
+[
+  { "track":"O Exilado (Hc 3:6)", "artist":"Harpa Cristã",
+    "url":"https://raw.github.../O_Exilado_Hc_36.mp3", "lrcUrl":"" },
+  { "track":"Primeira Essência", "artist":"Samuel Miranda",
+    "url":"https://raw.github.../Samuel_Miranda.mp3",
+    "lrcUrl":"https://raw.github.../Samuel_Miranda.lrc" }
+]</div>
+            <div class="template-btns">
+                <button class="btn" style="flex:1;" onclick="app.downloadPlaylistTemplate('csv')">⬇️ Baixar Modelo CSV</button>
+                <button class="btn" style="flex:1;" onclick="app.downloadPlaylistTemplate('json')">⬇️ Baixar Modelo JSON</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal" id="settingsModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2>Configurações</h2>
+            <button class="modal-close" onclick="app.closeModal('settingsModal')">×</button>
+        </div>
+        
+        <div class="modal-tabs">
+            <button class="modal-tab active" onclick="app.switchTab(event,'appearance')">🎨 Aparência</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'background')">🖼️ Fundo</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'church')">⛪ Igreja</button>
+            <button class="modal-tab" onclick="app.switchTab(event,'themes')">💾 Temas</button>
+        </div>
+
+        <div class="modal-content">
+            <div class="tab-panel active" id="tab-appearance">
+                <div class="setting-group">
+                    <label class="setting-label">Fonte do Player</label>
+                    <select id="fontFamily" style="width:100%;padding:8px 10px;background:#1a1a2e;border:1px solid #444;border-radius:5px;color:#ddd;font-size:0.9em;cursor:pointer;">
+                        <option value="'Bebas Neue', sans-serif">Bebas Neue — Telão/Impacto ⭐</option>
+                        <option value="'Montserrat', sans-serif">Montserrat — Moderna/Igreja</option>
+                        <option value="'Inter', sans-serif">Inter — Digital/Nítida</option>
+                        <option value="'Segoe UI', Tahoma, sans-serif">Segoe UI — Sistema</option>
+                        <option value="Georgia, serif">Georgia — Clássica Serif</option>
+                        <option value="sans-serif">Sans-Serif Padrão</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Fonte Base (inativa) <span class="slider-value" id="fontSizeValue">32px</span></label>
+                    <div class="slider-container" style="gap:8px;">
+                        <input type="range" class="slider" id="fontSize" min="8" max="80" step="1" value="32" style="flex:1;">
+                        <input type="number" id="fontSizeNum" min="8" max="200" value="32"
+                               style="width:62px;padding:4px 6px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#ddd;font-size:0.85em;text-align:center;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Fonte Ativa (linha em destaque) <span class="slider-value" id="fontSizeActiveValue">40px</span></label>
+                    <div class="slider-container" style="gap:8px;">
+                        <input type="range" class="slider" id="fontSizeActive" min="12" max="120" step="1" value="40" style="flex:1;">
+                        <input type="number" id="fontSizeActiveNum" min="12" max="200" value="40"
+                               style="width:62px;padding:4px 6px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#ddd;font-size:0.85em;text-align:center;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Texto Inativo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="colorInactive" value="#555555">
+                        <input type="text" class="setting-input" id="colorInactiveText" value="#555555" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Texto Ativo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="colorActive" value="#ffeaa7">
+                        <input type="text" class="setting-input" id="colorActiveText" value="#ffeaa7" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Cor da Palavra Pendente <small style="color:#555;font-weight:400">(word karaokê — ainda não cantada)</small></label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="wordColorPending" value="#888888">
+                        <input type="text" class="setting-input" id="wordColorPendingText" value="#888888" style="flex:1;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Peso da Fonte Ativa</label>
+                    <div class="radio-group">
+                        <label class="radio-option"><input type="radio" name="fontWeight" value="400"> Normal</label>
+                        <label class="radio-option"><input type="radio" name="fontWeight" value="700"> Bold</label>
+                        <label class="radio-option"><input type="radio" name="fontWeight" value="800" checked> Extra Bold</label>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Espaçamento entre Linhas</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="lineSpacing" min="1.0" max="2.0" step="0.1" value="1.2">
+                        <span class="slider-value" id="lineSpacingValue">1.2</span>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Alinhamento do Texto</label>
+                    <div class="radio-group">
+                        <label class="radio-option"><input type="radio" name="textAlign" value="left"> Esquerda</label>
+                        <label class="radio-option"><input type="radio" name="textAlign" value="center" checked> Centro</label>
+                        <label class="radio-option"><input type="radio" name="textAlign" value="right"> Direita</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-background">
+                <div class="setting-group">
+                    <label class="setting-label">Tipo de Fundo</label>
+                    <div class="radio-group">
+                        <label class="radio-option"><input type="radio" name="bgType" value="solid" checked> Cor Sólida</label>
+                        <label class="radio-option"><input type="radio" name="bgType" value="gradient"> Gradiente</label>
+                        <label class="radio-option"><input type="radio" name="bgType" value="image"> Imagem</label>
+                    </div>
+                </div>
+                <div class="setting-group" id="bgSolidGroup">
+                    <label class="setting-label">Cor do Fundo</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgColor" value="#0a0a0f">
+                        <input type="text" class="setting-input" id="bgColorText" value="#0a0a0f" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="setting-group" id="bgGradientGroup" style="display:none;">
+                    <label class="setting-label">Cor 1 do Gradiente</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgGradient1" value="#0a0a0f">
+                        <input type="text" class="setting-input" id="bgGradient1Text" value="#0a0a0f" style="flex: 1;">
+                    </div>
+                    <label class="setting-label" style="margin-top: 15px;">Cor 2 do Gradiente</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="bgGradient2" value="#1a1a24">
+                        <input type="text" class="setting-input" id="bgGradient2Text" value="#1a1a24" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="setting-group" id="bgImageGroup" style="display:none;">
+                    <label class="setting-label">URL da Imagem</label>
+                    <input type="text" class="setting-input" id="bgImageUrl" placeholder="https://exemplo.com/imagem.jpg">
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Opacidade do Overlay (Escurecimento)</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="bgOpacity" min="0" max="1" step="0.05" value="0.3">
+                        <span class="slider-value" id="bgOpacityValue">30%</span>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Desfoque do Fundo</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="bgBlur" min="0" max="20" step="1" value="0">
+                        <span class="slider-value" id="bgBlurValue">0px</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-church">
+                <div class="setting-group">
+                    <label class="setting-label">Nome da Igreja/Organização</label>
+                    <input type="text" class="setting-input" id="churchNameInp" placeholder="Digite o nome da igreja">
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Posição do Nome</label>
+                    <div class="radio-group">
+                        <label class="radio-option"><input type="radio" name="churchPosition" value="top" checked> Topo</label>
+                        <label class="radio-option"><input type="radio" name="churchPosition" value="bottom"> Rodapé</label>
+                        <label class="radio-option"><input type="radio" name="churchPosition" value="hidden"> Desativado</label>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Tamanho do Nome</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="churchNameSize" min="1.0" max="3.0" step="0.1" value="1.5">
+                        <span class="slider-value" id="churchNameSizeValue">1.5em</span>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Cor do Nome</label>
+                    <div class="color-picker-group">
+                        <input type="color" class="color-picker" id="churchNameColor" value="#ffffff">
+                        <input type="text" class="setting-input" id="churchNameColorText" value="#ffffff" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Opacidade do Nome</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="churchNameOpacity" min="0" max="1" step="0.05" value="0.8">
+                        <span class="slider-value" id="churchNameOpacityValue">80%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-themes">
+                <div class="setting-group">
+                    <label class="setting-label">Temas Pré-definidos</label>
+                    <div class="theme-grid" id="themesGrid"></div>
+                </div>
+                <div class="setting-group" style="margin-top: 30px;">
+                    <button class="btn btn-action" style="width: 100%; padding: 12px;" onclick="app.saveCustomTheme()">💾 Salvar Configuração Atual como Tema</button>
+                </div>
+                <div class="setting-group">
+                    <button class="btn" style="width: 100%; padding: 12px;" onclick="app.exportConfig()">📥 Exportar Configuração (JSON)</button>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Importar Configuração</label>
+                    <input type="file" class="setting-input" id="importConfig" accept=".json" onchange="app.importConfig(event)">
+                </div>
+                <div class="setting-group">
+                    <button class="btn" style="width: 100%; padding: 12px; background: #d63031;" onclick="app.resetToDefault()">🔄 Restaurar Padrão</button>
+                </div>
+                <div class="setting-group" style="border-top: 2px solid #4f46e5; padding-top: 18px; margin-top: 10px;">
+                    <label class="setting-label" style="color:#a29bfe; font-size:0.95em;">📡 Carregar Config Remota (URL)</label>
+                    <button class="btn btn-action" style="width:100%; padding:11px; margin-bottom:8px; background:#4f46e5;"
+                        onclick="app.loadRemoteConfig('https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/Adbus_telao.json')">
+                        🏛️ ADBUS Piracicaba — Telão (GitHub)
+                    </button>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="remoteConfigUrl"
+                            placeholder="Cole aqui outra URL de JSON..."
+                            style="flex:1; padding:8px 10px; background:#1a1a2e; border:1px solid #444; border-radius:4px; color:#ddd; font-size:0.83em;">
+                        <button class="btn btn-action" style="white-space:nowrap; padding:8px 14px;"
+                            onclick="app.loadRemoteConfig(document.getElementById('remoteConfigUrl').value)">
+                            📥 Carregar
+                        </button>
+                    </div>
+                    <p style="font-size:0.75em; color:#555; margin-top:6px;">⚠️ O botão ADBUS carrega tudo, incluindo fundo e logo.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * MÓDULO 1: Parser de Legendas (LrcParser)
+ */
+class LrcParser {
+    static parse(lrcString) {
+        if (!lrcString) return { synced: null, plain: "" };
+        const cleanString = lrcString.replace(/\[[a-zA-Z]+:.+\]/g, "").trim();
+        const lines = cleanString.split('\n');
+        const synced = [];
+        const unsynced = [];
+        const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d{2,3})?)\]/;
+
+        lines.forEach(line => {
+            const match = line.match(timeRegex);
+            if (match) {
+                const rawTime = match[0];
+                const text = line.replace(rawTime, "").trim();
+                const startTime = parseInt(match[1]) * 60 + parseFloat(match[2]);
+                synced.push({ text, startTime });
+            } else {
+                const text = line.trim();
+                if (text) unsynced.push(text);
+            }
+        });
+
+        return {
+            synced: synced.length > 0 ? synced : null,
+            plain: unsynced.length > 0 ? unsynced.join('\n') : cleanString
+        };
+    }
+}
+
+/**
+ * MÓDULO 2: Cliente API (LrcClient)
+ */
+class LrcClient {
+    constructor() {
+        this.baseUrl = "https://lrclib.net/api";
+    }
+
+    async findBestMatch(meta) {
+        try {
+            const exact = await this.doRequest('/get', meta);
+            if (exact && exact.syncedLyrics && !exact.instrumental) return exact;
+        } catch (e) { }
+
+        const searchMeta = { ...meta, album: null };
+        try {
+            const results = await this.doRequest('/search', searchMeta);
+            if (!results || results.length === 0) throw new Error("Nada encontrado");
+            const sorted = results.sort((a, b) => {
+                if (a.instrumental && !b.instrumental) return 1;
+                if (!a.instrumental && b.instrumental) return -1;
+                const aHasSync = !!a.syncedLyrics;
+                const bHasSync = !!b.syncedLyrics;
+                if (aHasSync && !bHasSync) return -1;
+                if (!aHasSync && bHasSync) return 1;
+                return Math.abs(a.duration - meta.duration) - Math.abs(b.duration - meta.duration);
+            });
+            return sorted[0]; 
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async searchRaw(query) {
+        return await this.doRequest('/search', { 
+            track_name: query.track, 
+            artist_name: query.artist 
+        });
+    }
+
+    async doRequest(endpoint, params) {
+        const url = new URL(this.baseUrl + endpoint);
+        if (params.track || params.track_name) url.searchParams.append("track_name", params.track || params.track_name);
+        if (params.artist || params.artist_name) url.searchParams.append("artist_name", params.artist || params.artist_name);
+        if (params.album || params.album_name) url.searchParams.append("album_name", params.album || params.album_name);
+        if (params.duration && params.duration > 0) url.searchParams.append("duration", params.duration);
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Erro API: ${response.status}`);
+        return await response.json();
+    }
+}
+
+/**
+ * MÓDULO 3: Conversor de Áudio (AudioConverter)
+ */
+class AudioConverter {
+    static async convertToMp3(file, onProgress) {
+        if (typeof lamejs === 'undefined') throw new Error("Biblioteca 'lamejs' não carregada.");
+        const arrayBuffer = await file.arrayBuffer();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const channels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
+        const mp3Data = [];
+        const left = audioBuffer.getChannelData(0);
+        const right = channels > 1 ? audioBuffer.getChannelData(1) : null;
+        const sampleBlockSize = 1152;
+        
+        for (let i = 0; i < left.length; i += sampleBlockSize) {
+            const leftChunk = left.subarray(i, i + sampleBlockSize);
+            const leftInt16 = this.floatToInt16(leftChunk);
+            let mp3buf;
+            if (channels === 1) {
+                mp3buf = mp3encoder.encodeBuffer(leftInt16);
+            } else {
+                const rightChunk = right.subarray(i, i + sampleBlockSize);
+                const rightInt16 = this.floatToInt16(rightChunk);
+                mp3buf = mp3encoder.encodeBuffer(leftInt16, rightInt16);
+            }
+            if (mp3buf.length > 0) mp3Data.push(mp3buf);
+            if (onProgress && i % (sampleBlockSize * 50) === 0) {
+                const percent = Math.round((i / left.length) * 100);
+                onProgress(percent);
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+        const endBuf = mp3encoder.flush();
+        if (endBuf.length > 0) mp3Data.push(endBuf);
+        return new Blob(mp3Data, { type: 'audio/mpeg' });
+    }
+
+    static floatToInt16(float32Array) {
+        const int16Array = new Int16Array(float32Array.length);
+        for (let i = 0; i < float32Array.length; i++) {
+            let s = Math.max(-1, Math.min(1, float32Array[i]));
+            int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return int16Array;
+    }
+}
+
+/**
+ * MÓDULO 4: Gravador de Tags (AudioTagger)
+ * Depende de window._ID3Writer injetado via <script type="module"> no <head>.
+ * Aguarda até 10s pelo carregamento (cobre os 3 fallbacks em série em conexão lenta).
+ */
+class AudioTagger {
+    /**
+     * Polling de 100ms até 10s aguardando window._ID3Writer.
+     * Retorna a classe ou null se timeout.
+     */
+    static _getWriter() {
+        if (window._ID3Writer) return Promise.resolve(window._ID3Writer);
+
+        return new Promise((resolve) => {
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                if (window._ID3Writer) {
+                    clearInterval(timer);
+                    resolve(window._ID3Writer);
+                } else if (elapsed >= 10000) {
+                    clearInterval(timer);
+                    resolve(null);
+                }
+                elapsed += 100;
+            }, 100);
+        });
+    }
+
+    static async embedMp3(originalFileBlob, meta, lyricsData) {
+        const WriterClass = await AudioTagger._getWriter();
+
+        if (!WriterClass) {
+            throw new Error(
+                'ID3Writer não carregou (todos os fallbacks falharam).\n' +
+                'Verifique sua conexão com a internet e recarregue a página.'
+            );
+        }
+
+        const arrayBuffer = await originalFileBlob.arrayBuffer();
+        const writer = new WriterClass(arrayBuffer);
+
+        if (meta.track)  writer.setFrame('TIT2', meta.track);
+        if (meta.artist) writer.setFrame('TPE1', [meta.artist]);
+        if (meta.album)  writer.setFrame('TALB', meta.album);
+
+        if (lyricsData.synced && lyricsData.synced.length > 0) {
+            const syltData = lyricsData.synced.map(line =>
+                [line.text, Math.round(line.startTime * 1000)]
+            );
+            writer.setFrame('SYLT', {
+                type: 1,
+                text: syltData,
+                timestampFormat: 2,
+                language: 'por',
+                description: 'Sync Lyrics'
+            });
+        }
+
+        // USLT: quando sync existe, salva LRC (com timestamps) para que
+        // jsmediatags → LrcParser reconstrua sync na releitura do arquivo.
+        // SYLT fica para players externos que o suportam.
+        const _usltText = (lyricsData.synced && lyricsData.synced.length > 0)
+            ? lyricsData.synced.map(l => {
+                const _m = Math.floor(l.startTime / 60).toString().padStart(2, '0');
+                const _s = (l.startTime % 60).toFixed(2).padStart(5, '0');
+                return `[${_m}:${_s}] ${l.text}`;
+            }).join('\n')
+            : (lyricsData.plain || null);
+
+        if (_usltText) {
+            writer.setFrame('USLT', {
+                description: '',
+                lyrics: _usltText,
+                language: 'por'
+            });
+        }
+
+        writer.addTag();
+        return writer.getBlob();
+    }
+}
+
+/**
+ * MÓDULO 5: Gerenciador de Playlist (PlaylistManager)
+ */
+class PlaylistManager {
+    constructor() {
+        this.tracks = [];
+        this.currentIndex = -1;
+        this.shuffleMode = false;
+        this.loopMode = 'none'; // 'none' | 'all' | 'one'
+        this.shuffleOrder = [];
+        this.onTrackChange = null;
+        this.onPlaylistUpdate = null;
+    }
+
+    addFiles(fileList) {
+        const audioFiles = [];
+        const lrcFiles = [];
+        for (const f of fileList) {
+            const name = f.name.toLowerCase();
+            if (name.endsWith('.lrc')) {
+                lrcFiles.push(f);
+            } else if (f.type.startsWith('audio/') || name.match(/\.(mp3|flac|wav|ogg|m4a|aac)$/i)) {
+                audioFiles.push(f);
+            }
+        }
+        // Pair by basename
+        const lrcMap = new Map();
+        for (const lrc of lrcFiles) {
+            const base = lrc.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            lrcMap.set(base, lrc);
+        }
+        for (const audio of audioFiles) {
+            const base = audio.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            const paired = lrcMap.get(base) || null;
+            this.tracks.push({
+                audioFile: audio,
+                lrcFile: paired,
+                baseName: audio.name.replace(/\.[^/.]+$/, ''),
+                meta: { track: '', artist: '', album: '', duration: 0 },
+                lyrics: null,
+                lyricsSource: paired ? 'lrc' : 'pending'
+            });
+        }
+        // Also handle standalone LRC dropped onto existing playing track
+        if (audioFiles.length === 0 && lrcFiles.length > 0 && this.tracks.length > 0) {
+            const curTrack = this.tracks[this.currentIndex];
+            if (curTrack) {
+                curTrack.lrcFile = lrcFiles[0];
+                curTrack.lyricsSource = 'lrc';
+            }
+        }
+        this._rebuildShuffle();
+        if (this.onPlaylistUpdate) this.onPlaylistUpdate();
+    }
+
+    getTrack(index) {
+        return this.tracks[index] || null;
+    }
+
+    getCurrent() {
+        return this.tracks[this.currentIndex] || null;
+    }
+
+    play(index) {
+        if (index < 0 || index >= this.tracks.length) return;
+        this.currentIndex = index;
+        if (this.onTrackChange) this.onTrackChange(index);
+    }
+
+    next() {
+        if (this.tracks.length === 0) return;
+        if (this.loopMode === 'one') { this.play(this.currentIndex); return; }
+        if (this.shuffleMode) {
+            const pos = this.shuffleOrder.indexOf(this.currentIndex);
+            const nextPos = (pos + 1) % this.shuffleOrder.length;
+            if (pos + 1 >= this.shuffleOrder.length && this.loopMode !== 'all') return;
+            this.play(this.shuffleOrder[nextPos]);
+        } else {
+            const next = this.currentIndex + 1;
+            if (next >= this.tracks.length) {
+                if (this.loopMode === 'all') this.play(0);
+                return;
+            }
+            this.play(next);
+        }
+    }
+
+    prev() {
+        if (this.tracks.length === 0) return;
+        if (this.shuffleMode) {
+            const pos = this.shuffleOrder.indexOf(this.currentIndex);
+            const prevPos = pos - 1 < 0 ? this.shuffleOrder.length - 1 : pos - 1;
+            this.play(this.shuffleOrder[prevPos]);
+        } else {
+            const prev = this.currentIndex - 1;
+            this.play(prev < 0 ? this.tracks.length - 1 : prev);
+        }
+    }
+
+    toggleShuffle() {
+        this.shuffleMode = !this.shuffleMode;
+        if (this.shuffleMode) this._rebuildShuffle();
+        return this.shuffleMode;
+    }
+
+    toggleLoop() {
+        const modes = ['none', 'all', 'one'];
+        this.loopMode = modes[(modes.indexOf(this.loopMode) + 1) % modes.length];
+        return this.loopMode;
+    }
+
+    _rebuildShuffle() {
+        this.shuffleOrder = this.tracks.map((_, i) => i);
+        for (let i = this.shuffleOrder.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.shuffleOrder[i], this.shuffleOrder[j]] = [this.shuffleOrder[j], this.shuffleOrder[i]];
+        }
+    }
+
+    get length() { return this.tracks.length; }
+}
+
+/**
+ * MÓDULO 6: UI da Playlist (PlaylistUI)
+ */
+class PlaylistUI {
+    constructor(listEl, countEl, sidebarEl) {
+        this.listEl = listEl;
+        this.countEl = countEl;
+        this.sidebarEl = sidebarEl;
+        this.onItemClick = null;
+    }
+
+    static BADGE_MAP = {
+        lrc: { label: 'LRC', cls: 'badge-lrc' },
+        emb: { label: 'EMB', cls: 'badge-emb' },
+        api: { label: 'API', cls: 'badge-api' },
+        br:  { label: 'BR',  cls: 'badge-br'  },
+        ovh: { label: 'OVH', cls: 'badge-ovh' },
+        man: { label: 'MAN', cls: 'badge-man' },
+        pending: { label: '...', cls: 'badge-pending' }
+    };
+
+    render(tracks, activeIndex) {
+        this.sidebarEl.classList.remove('empty');
+        this.listEl.innerHTML = '';
+        this.countEl.textContent = tracks.length + (tracks.length === 1 ? ' faixa' : ' faixas');
+        tracks.forEach((track, i) => {
+            const div = document.createElement('div');
+            div.className = 'playlist-item' + (i === activeIndex ? ' active' : '');
+            div.dataset.index = i;
+            const badge = PlaylistUI.BADGE_MAP[track.lyricsSource] || PlaylistUI.BADGE_MAP.pending;
+            div.innerHTML = `
+                <span class="pl-number">${i + 1}</span>
+                <span class="pl-playing">▶</span>
+                <span class="pl-title">${this._escHtml(track.baseName)}</span>
+                <span class="badge ${badge.cls}">${badge.label}</span>`;
+            div.onclick = () => { if (this.onItemClick) this.onItemClick(i); };
+            this.listEl.appendChild(div);
+        });
+        document.body.classList.add('has-playlist');
+    }
+
+    setActive(index) {
+        this.listEl.querySelectorAll('.playlist-item').forEach((el, i) => {
+            el.classList.toggle('active', i === index);
+        });
+        const active = this.listEl.children[index];
+        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    updateBadge(index, source) {
+        const item = this.listEl.children[index];
+        if (!item) return;
+        const badge = PlaylistUI.BADGE_MAP[source] || PlaylistUI.BADGE_MAP.pending;
+        const el = item.querySelector('.badge');
+        if (el) { el.className = 'badge ' + badge.cls; el.textContent = badge.label; }
+    }
+
+    _escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+}
+
+/**
+ * MÓDULO 7: letras.mus.br Client (LetrasMusBrClient)
+ */
+class LetrasMusBrClient {
+    static slugify(text) {
+        return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+    }
+
+    async search(artist, track) {
+        if (!artist || !track) return null;
+        const slug = `${LetrasMusBrClient.slugify(artist)}/${LetrasMusBrClient.slugify(track)}`;
+        const url = `https://www.letras.mus.br/${slug}/?ajax`;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+            if (!resp.ok) return null;
+            const html = await resp.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const paragraphs = doc.querySelectorAll('article[class*="cnt-letra"] p');
+            if (paragraphs.length === 0) return null;
+            const lines = [];
+            paragraphs.forEach(p => {
+                const text = p.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+                if (text) { lines.push(text); lines.push(''); }
+            });
+            return { plainLyrics: lines.join('\n').trim() };
+        } catch (e) { return null; }
+    }
+}
+
+/**
+ * MÓDULO 8: Lyrics.ovh Client (LyricsOvhClient)
+ */
+class LyricsOvhClient {
+    async search(artist, track) {
+        if (!artist || !track) return null;
+        const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(track)}`;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (data.lyrics && data.lyrics.trim()) {
+                return { plainLyrics: data.lyrics.trim() };
+            }
+            return null;
+        } catch (e) { return null; }
+    }
+}
+
+/**
+ * MÓDULO 9: Cascata de Letras (LyricsCascade)
+ * Prioridade: LRC local → LRCLIB API → letras.mus.br → Lyrics.ovh → Embedded (fallback) → Manual
+ * SEMPRE prefere letras sincronizadas. Se embedded for só plain, busca APIs antes.
+ */
+class LyricsCascade {
+    constructor(lrcClient, letrasClient, ovhClient) {
+        this.lrcClient = lrcClient;
+        this.letrasClient = letrasClient;
+        this.ovhClient = ovhClient;
+    }
+
+    async resolve(track, onSourceFound) {
+        // ── 1. LRC local — sempre sincronizado ──────────────────────────────
+        if (track.lrcFile) {
+            try {
+                const text = await track.lrcFile.text();
+                if (text && text.trim()) {
+                    onSourceFound('lrc');
+                    return { syncedLyrics: text, plainLyrics: null };
+                }
+            } catch (e) {}
+        }
+
+        // ── 2. Tag ID3 embutida ─────────────────────────────────────────────
+        // Se for sincronizada (começa com timestamp) → usa imediatamente
+        // Se for plain → guarda como fallback de último recurso
+        let embeddedPlainFallback = null;
+        if (track.embeddedLyrics) {
+            const isSynced = /^\[\d{2}:\d{2}/.test(track.embeddedLyrics.trim());
+            if (isSynced) {
+                onSourceFound('emb');
+                return { syncedLyrics: track.embeddedLyrics, plainLyrics: null };
+            } else {
+                embeddedPlainFallback = track.embeddedLyrics;
+            }
+        }
+
+        // ── 3. LRCLIB API ───────────────────────────────────────────────────
+        // syncedLyrics → prioridade máxima, retorna imediatamente
+        // só plainLyrics → guarda como candidato, continua buscando
+        let lrclibPlainCandidate = null;
+        if (track.meta.track) {
+            try {
+                const result = await this.lrcClient.findBestMatch(track.meta);
+                if (result && result.syncedLyrics) {
+                    onSourceFound('api');
+                    return result;
+                }
+                if (result && result.plainLyrics) {
+                    lrclibPlainCandidate = result;
+                }
+            } catch (e) {}
+        }
+
+        // ── 4. letras.mus.br — plain only ──────────────────────────────────
+        if (track.meta.track && track.meta.artist) {
+            const brResult = await this.letrasClient.search(track.meta.artist, track.meta.track);
+            if (brResult) {
+                onSourceFound('br');
+                return brResult;
+            }
+        }
+
+        // ── 5. Lyrics.ovh — plain only ─────────────────────────────────────
+        if (track.meta.track && track.meta.artist) {
+            const ovhResult = await this.ovhClient.search(track.meta.artist, track.meta.track);
+            if (ovhResult) {
+                onSourceFound('ovh');
+                return ovhResult;
+            }
+        }
+
+        // ── 6. LRCLIB plain (candidato guardado) ───────────────────────────
+        // Preferido sobre embutido: metadados mais limpos, sem artefatos do encoder
+        if (lrclibPlainCandidate) {
+            onSourceFound('api');
+            return lrclibPlainCandidate;
+        }
+
+        // ── 7. Embutida plain (último recurso) ─────────────────────────────
+        if (embeddedPlainFallback) {
+            onSourceFound('emb');
+            return { syncedLyrics: null, plainLyrics: embeddedPlainFallback };
+        }
+
+        // ── 8. Manual ───────────────────────────────────────────────────────
+        onSourceFound('pending');
+        return null;
+    }
+}
+</script>
+
+<script>
+const CONFIG_KEY = 'churchPlayerConfig_v8';
+
+const DEFAULT_CONFIG = {
+    theme: 'minimalist',
+    fontSize: 40, fontSizeActive: 60, fontFamily: "'Bebas Neue', sans-serif",
+    colorInactive: '#fb7474', colorActive: '#eeff00',
+    fontWeightActive: 800, lineSpacing: 1.2, textAlign: 'center',
+    bgType: 'solid', bgColor: '#000000', bgGradient1: '#1e3a8a', bgGradient2: '#3b82f6',
+    bgImageUrl: '', bgOpacity: 0.75, bgBlur: 1,
+    churchName: 'ADBUS Piracicaba', churchPosition: 'top', churchNameSize: 2.6,
+    churchNameColor: '#ffd500', churchNameOpacity: 0.8,
+    wordOffset: -0.3,   // segundos — negativo = antecipa highlight
+    wordColorPending: '#888888', // cor das palavras ainda não cantadas
+};
+
+const PRESET_THEMES = {
+    'classic-dark': { name: 'Clássico Escuro', config: { bgType: 'solid', bgColor: '#0a0a0f', colorInactive: '#555555', colorActive: '#ffeaa7', fontSize: 1.4, fontSizeActive: 1.8 }},
+    'divine-light': { name: 'Luz Divina', config: { bgType: 'solid', bgColor: '#f9fafb', colorInactive: '#666666', colorActive: '#4f46e5', fontSize: 1.4, fontSizeActive: 1.8 }},
+    'elegant-blue': { name: 'Elegante Azul', config: { bgType: 'gradient', bgGradient1: '#1e3a8a', bgGradient2: '#3b82f6', colorInactive: '#93c5fd', colorActive: '#ffffff', fontSize: 1.4, fontSizeActive: 1.8 }},
+    'worship-modern': { name: 'Worship Moderno', config: { bgType: 'solid', bgColor: '#1a1a24', colorInactive: '#888888', colorActive: '#fbbf24', fontSize: 1.5, fontSizeActive: 2.0, bgOpacity: 0.6 }},
+    'minimalist': { name: 'Minimalista', config: { bgType: 'solid', bgColor: '#000000', colorInactive: '#666666', colorActive: '#ffffff', fontSize: 1.3, fontSizeActive: 1.7 }}
+};
+
+const DEMO_TRACKS = [
+    {
+        track: 'O Exilado (Hc 3:6)',
+        artist: 'Harpa Cristã',
+        url: 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/O_Exilado_Hc_36.mp3'
+    },
+    {
+        track: 'Primeira Essência (Ao Vivo)',
+        artist: 'Samuel Miranda',
+        url: 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/Samuel%20Miranda%20-%20Primeira%20Ess%C3%AAncia%20(Ao%20Vivo).mp3'
+    }
+];
+
+const app = {
+    client: new LrcClient(),
+    config: { ...DEFAULT_CONFIG },
+    playlist: new PlaylistManager(),
+    playlistUI: null,
+    cascade: null,
+    state: {
+        meta: { track: "", artist: "", album: "", duration: 0 },
+        lyrics: null, currentMode: 'synced',
+        fileName: "", fileType: "", originalFile: null,
+        presentationMode: false, cursorTimeout: null, projectorWindow: null,
+            qrUrl: "",
+            qrPayload: null,
+            qrStartedAt: 0
+    },
+    ui: {
+        audio: document.getElementById('audioPlayer'),
+        container: document.getElementById('lyricsContainer'),
+        loading: document.getElementById('loading'),
+        loadingText: document.getElementById('loadingText'),
+        progressBar: document.getElementById('progressBar'),
+        progressFill: document.getElementById('progressFill'),
+        churchName: document.getElementById('churchName'),
+        dragOverlay: document.getElementById('dragOverlay')
+    },
+
+    /* ── CONTROLES CUSTOMIZADOS ─────────────────────────────────── */
+    initPlayerControls() {
+        const audio = this.ui.audio;
+        const seekBar  = document.getElementById('seekBar');
+        const seekFill = document.getElementById('seekFill');
+        const seekThumb= document.getElementById('seekThumb');
+        const timeCur  = document.getElementById('timeCur');
+        const timeDur  = document.getElementById('timeDur');
+        const ctrlPlay = document.getElementById('ctrlPlay');
+        const volSlider= document.getElementById('ctrlVolume');
+
+        const fmt = s => {
+            if (!isFinite(s)) return '0:00';
+            const m = Math.floor(s/60), sec = Math.floor(s%60);
+            return m + ':' + String(sec).padStart(2,'0');
+        };
+
+        audio.addEventListener('timeupdate', () => {
+            if (!audio.duration) return;
+            const pct = (audio.currentTime / audio.duration * 100).toFixed(2);
+            seekFill.style.width  = pct + '%';
+            seekThumb.style.left  = pct + '%';
+            timeCur.textContent   = fmt(audio.currentTime);
+        });
+
+        audio.addEventListener('loadedmetadata', () => {
+            timeDur.textContent = fmt(audio.duration);
+        });
+
+        audio.addEventListener('play',  () => { ctrlPlay.textContent = '⏸'; });
+        audio.addEventListener('pause', () => { ctrlPlay.textContent = '▶'; });
+        audio.addEventListener('ended', () => { ctrlPlay.textContent = '▶'; });
+
+        // Seek ao clicar/arrastar na barra
+        let seeking = false;
+        const doSeek = e => {
+            const rect = seekBar.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const pct = Math.max(0, Math.min(1, x / rect.width));
+            if (audio.duration) audio.currentTime = pct * audio.duration;
+        };
+        seekBar.addEventListener('mousedown',  e => { seeking = true; doSeek(e); });
+        seekBar.addEventListener('touchstart', e => { seeking = true; doSeek(e); e.preventDefault(); }, { passive: false });
+        document.addEventListener('mousemove',  e => { if (seeking) doSeek(e); });
+        document.addEventListener('touchmove',  e => { if (seeking) { doSeek(e); e.preventDefault(); } }, { passive: false });
+        document.addEventListener('mouseup',   () => { seeking = false; });
+        document.addEventListener('touchend',  () => { seeking = false; });
+
+        // Volume
+        volSlider.addEventListener('input', e => {
+            audio.volume = parseFloat(e.target.value);
+            document.getElementById('volIcon').textContent = audio.volume === 0 ? '🔇' : audio.volume < 0.5 ? '🔉' : '🔊';
+        });
+        document.getElementById('volIcon').addEventListener('click', () => {
+            audio.muted = !audio.muted;
+            document.getElementById('volIcon').textContent = audio.muted ? '🔇' : '🔊';
+        });
+
+        // Fullscreen change
+        document.addEventListener('fullscreenchange', () => {
+            const btn = document.getElementById('ctrlFullscreen');
+            if (btn) btn.textContent = document.fullscreenElement ? '✕⛶' : '⛶';
+        });
+    },
+
+    togglePlay() {
+        if (!this.ui.audio.src) return;
+        this.ui.audio.paused ? this.ui.audio.play() : this.ui.audio.pause();
+    },
+
+    seekRelative(sec) {
+        if (!this.ui.audio.src) return;
+        this.ui.audio.currentTime = Math.max(0, Math.min(this.ui.audio.duration || 0, this.ui.audio.currentTime + sec));
+    },
+
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+        } else {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        }
+    },
+
+    toggleHamburger() {
+        const menu    = document.getElementById('mobileMenu');
+        const overlay = document.getElementById('menuOverlay');
+        const isOpen  = menu.classList.toggle('open');
+        overlay.classList.toggle('open', isOpen);
+    },
+
+    /* ── FIM CONTROLES CUSTOMIZADOS ─────────────────────────────── */
+
+    init() {
+        this.loadConfig();
+        this.applyConfig();
+        this.initPlayerControls();
+        // Garantir estado inicial do slider de timing
+        this.setWordOffset(this.config.wordOffset ?? -0.3);
+
+        // Playlist UI
+        this.playlistUI = new PlaylistUI(
+            document.getElementById('playlistList'),
+            document.getElementById('playlistCount'),
+            document.getElementById('playlistSidebar')
+        );
+        this.playlistUI.onItemClick = (i) => this.playTrack(i);
+
+        // Cascade
+        this.cascade = new LyricsCascade(
+            this.client,
+            new LetrasMusBrClient(),
+            new LyricsOvhClient()
+        );
+
+        // Playlist callbacks
+        this.playlist.onTrackChange = (i) => this._onTrackChange(i);
+        this.playlist.onPlaylistUpdate = () => this._onPlaylistUpdate();
+
+        this.initEventListeners();
+        this.renderThemes();
+        this.setupKeyboardShortcuts();
+        this.setupDragAndDrop();
+        
+        window.addEventListener('beforeunload', () => {
+            if (this.state.projectorWindow) this.state.projectorWindow.close();
+        });
+    },
+
+    initEventListeners() {
+        document.getElementById('fileInput').addEventListener('change', e => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) this.handleFiles(files);
+        });
+        this.ui.audio.addEventListener('timeupdate', () => this.syncLoop());
+        this.ui.audio.onloadedmetadata = () => { this.state.meta.duration = this.ui.audio.duration; };
+        this.ui.audio.addEventListener('ended', () => this.playlist.next());
+
+        // Helper para Inputs
+        const bindInput = (id, prop, isFloat = false) => {
+            const el = document.getElementById(id); if(!el) return;
+            el.addEventListener('input', e => {
+                this.config[prop] = isFloat ? parseFloat(e.target.value) : e.target.value;
+                const v = document.getElementById(id+'Value');
+                if(v) v.textContent = isFloat ? e.target.value + (id.includes('Size')?'x':'') : e.target.value;
+                if(id.includes('Opacity')) v.textContent = Math.round(e.target.value * 100) + '%';
+                if(id.includes('Size') && !id.startsWith('font')) v.textContent = e.target.value + 'em';
+                this.applyConfig();
+            });
+        };
+
+        // Bind paired slider + number para tamanhos de fonte (px)
+        const bindFontSize = (sliderId, numId, prop, minV, maxV) => {
+            const sl  = document.getElementById(sliderId);
+            const num = document.getElementById(numId);
+            const lbl = document.getElementById(sliderId + 'Value');
+            const upd = (raw) => {
+                let val = parseInt(raw, 10);
+                if (isNaN(val)) return;
+                val = Math.max(minV, Math.min(maxV, val));
+                this.config[prop] = val;
+                if (sl)  sl.value  = Math.min(val, parseInt(sl.max));
+                if (num) num.value = val;
+                if (lbl) lbl.textContent = val + 'px';
+                this.applyConfig();
+            };
+            if (sl)  sl.addEventListener('input', e => upd(e.target.value));
+            if (num) { num.addEventListener('input', e => upd(e.target.value)); num.addEventListener('blur', e => upd(e.target.value)); }
+        };
+        bindFontSize('fontSize',       'fontSizeNum',       'fontSize',       8,  200);
+        bindFontSize('fontSizeActive',  'fontSizeActiveNum', 'fontSizeActive', 12, 200);
+
+        // Select de família de fonte
+        const _ffEl = document.getElementById('fontFamily');
+        if (_ffEl) _ffEl.addEventListener('change', e => { this.config.fontFamily = e.target.value; this.applyConfig(); });
+        bindInput('lineSpacing', 'lineSpacing', true); bindInput('bgOpacity', 'bgOpacity', true);
+        bindInput('bgBlur', 'bgBlur', false); bindInput('churchNameSize', 'churchNameSize', true);
+        bindInput('churchNameOpacity', 'churchNameOpacity', true);
+
+        // Helper para Cores
+        const bindColor = (id) => {
+            const pk = document.getElementById(id), tx = document.getElementById(id+'Text');
+            if(!pk || !tx) return;
+            pk.addEventListener('input', e => { this.config[id] = e.target.value; tx.value = e.target.value; this.applyConfig(); });
+            tx.addEventListener('input', e => { this.config[id] = e.target.value; pk.value = e.target.value; this.applyConfig(); });
+        };
+
+        bindColor('colorInactive'); bindColor('colorActive'); bindColor('wordColorPending'); bindColor('bgColor');
+        bindColor('bgGradient1'); bindColor('bgGradient2'); bindColor('churchNameColor');
+
+        document.querySelectorAll('input[name="fontWeight"]').forEach(r => r.addEventListener('change', e => { this.config.fontWeightActive = parseInt(e.target.value); this.applyConfig(); }));
+        document.querySelectorAll('input[name="textAlign"]').forEach(r => r.addEventListener('change', e => { this.config.textAlign = e.target.value; this.applyConfig(); }));
+        document.querySelectorAll('input[name="bgType"]').forEach(r => r.addEventListener('change', e => { this.config.bgType = e.target.value; this.updateBackgroundInputs(); this.applyConfig(); }));
+        document.querySelectorAll('input[name="churchPosition"]').forEach(r => r.addEventListener('change', e => { this.config.churchPosition = e.target.value; this.applyConfig(); }));
+        
+        document.getElementById('bgImageUrl').addEventListener('input', e => { this.config.bgImageUrl = e.target.value; this.applyConfig(); });
+        document.getElementById('churchNameInp').addEventListener('input', e => { this.config.churchName = e.target.value; this.applyConfig(); });
+        document.addEventListener('mousemove', () => this.handleMouseMove());
+    },
+
+    setupDragAndDrop() {
+        let dragCounter = 0;
+        document.body.addEventListener('dragenter', e => {
+            e.preventDefault(); dragCounter++;
+            this.ui.dragOverlay.classList.add('active');
+        });
+        document.body.addEventListener('dragleave', e => {
+            e.preventDefault(); dragCounter--;
+            if (dragCounter <= 0) { dragCounter = 0; this.ui.dragOverlay.classList.remove('active'); }
+        });
+        document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+        document.body.addEventListener('drop', e => {
+            e.preventDefault(); dragCounter = 0;
+            this.ui.dragOverlay.classList.remove('active');
+
+            // CRITICAL: collect entries SYNCHRONOUSLY before any await
+            // DataTransferItemList is cleared after the event handler returns
+            const items = e.dataTransfer.items;
+            const entries = [];
+            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+                for (let i = 0; i < items.length; i++) {
+                    const entry = items[i].webkitGetAsEntry();
+                    if (entry) entries.push(entry);
+                }
+            }
+
+            // Also grab files synchronously as fallback
+            const fallbackFiles = Array.from(e.dataTransfer.files);
+
+            // NOW do async resolution
+            this._processDroppedEntries(entries, fallbackFiles);
+        });
+    },
+
+    async _processDroppedEntries(entries, fallbackFiles) {
+        if (entries.length > 0) {
+            try {
+                const allFiles = [];
+                for (const entry of entries) {
+                    const files = await this._collectEntryFiles(entry);
+                    allFiles.push(...files);
+                }
+                if (allFiles.length > 0) {
+                    this.handleFiles(allFiles);
+                    return;
+                }
+            } catch (err) {
+                console.warn('webkitGetAsEntry failed, using fallback:', err);
+            }
+        }
+        // Fallback: use plain files
+        if (fallbackFiles.length > 0) this.handleFiles(fallbackFiles);
+    },
+
+    async _collectEntryFiles(entry) {
+        if (entry.isFile) {
+            return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            let allEntries = [];
+            // readEntries may not return all files at once — must loop
+            const readBatch = () => new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+            let batch;
+            do {
+                batch = await readBatch();
+                allEntries.push(...batch);
+            } while (batch.length > 0);
+            const files = [];
+            for (const sub of allEntries) {
+                files.push(...await this._collectEntryFiles(sub));
+            }
+            return files;
+        }
+        return [];
+    },
+
+    handleFiles(files) {
+        this.playlist.addFiles(files);
+        if (this.playlist.currentIndex === -1 && this.playlist.length > 0) {
+            this.playlist.play(0);
+        }
+    },
+
+    playTrack(index) { this.playlist.play(index); },
+
+    _onTrackChange(index) {
+        const track = this.playlist.getTrack(index);
+        if (!track) return;
+        this.reset();
+        this.playlistUI.setActive(index);
+        this.state.originalFile = track.audioFile;
+        this.state.fileName = track.baseName;
+        const name = track.audioFile.name.toLowerCase();
+        this.state.fileType = name.endsWith('.mp3') ? 'mp3' : (name.endsWith('.flac') ? 'flac' : 'other');
+
+        // Fix EncodingError: revoke previous objectURL
+        if (this._currentObjectURL) {
+            URL.revokeObjectURL(this._currentObjectURL);
+        }
+        this._currentObjectURL = URL.createObjectURL(track.audioFile);
+        this.ui.audio.src = this._currentObjectURL;
+        const _cp = document.getElementById('ctrlPlay'); if (_cp) _cp.textContent = '▶';
+
+        this.setLoading("Lendo Tags...");
+        jsmediatags.read(track.audioFile, {
+            onSuccess: async (tag) => {
+                const t = tag.tags;
+                track.meta = { track: t.title || track.baseName, artist: t.artist || "", album: t.album || "", duration: 0 };
+                this.state.meta = { ...track.meta };
+                this.updateHeader();
+
+                // Extract embedded lyrics and store on track (for cascade fallback)
+                if (t.lyrics) {
+                    const txt = typeof t.lyrics === 'string' ? t.lyrics : t.lyrics.lyrics;
+                    if (txt && txt.trim()) {
+                        track.embeddedLyrics = txt;
+                    }
+                }
+
+                // Run cascade — handles embedded inside (synced=immediate, plain=fallback)
+                this.setLoading("Buscando Letra...");
+                const result = await this.cascade.resolve(track, (source) => {
+                    track.lyricsSource = source;
+                    this.playlistUI.updateBadge(index, source);
+                });
+                if (result) { this.loadLyrics(result); this.setLoading(null); }
+                else { this.setLoading(null); this.promptManualSearch(); }
+            },
+            onError: () => {
+                track.meta = { track: track.baseName.replace(/^\d+\s*[-_]?\s*/, '').replace(/[-_]/g, ' ').trim(), artist: '', album: '', duration: 0 };
+                this.state.meta = { ...track.meta };
+                this.updateHeader();
+                // Still run cascade (will skip embedded, try APIs)
+                this.setLoading("Buscando Letra...");
+                this.cascade.resolve(track, (source) => {
+                    track.lyricsSource = source;
+                    this.playlistUI.updateBadge(index, source);
+                }).then(result => {
+                    if (result) { this.loadLyrics(result); this.setLoading(null); }
+                    else { this.setLoading(null); this.promptManualSearch(); }
+                });
+            }
+        });
+    },
+
+    _onPlaylistUpdate() { this.playlistUI.render(this.playlist.tracks, this.playlist.currentIndex); },
+    nextTrack() { this.playlist.next(); },
+    prevTrack() { this.playlist.prev(); },
+
+    toggleShuffle() {
+        const active = this.playlist.toggleShuffle();
+        document.getElementById('btnShuffle').classList.toggle('active', active);
+    },
+
+    toggleLoop() {
+        const mode = this.playlist.toggleLoop();
+        const btn = document.getElementById('btnLoop');
+        btn.classList.toggle('active', mode !== 'none');
+        btn.textContent = mode === 'one' ? '🔂' : '🔁';
+        btn.title = mode === 'none' ? 'Repetir' : mode === 'all' ? 'Repetir Playlist' : 'Repetir Faixa';
+    },
+
+    toggleSidebar() {
+        document.getElementById('playlistSidebar').classList.toggle('collapsed');
+    },
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F11' || (e.key.toLowerCase() === 'p' && !e.target.matches('input, textarea'))) { e.preventDefault(); this.togglePresentationMode(); }
+            else if (e.key === ' ' && !e.target.matches('input, textarea')) { e.preventDefault(); this.togglePlay(); }
+            else if (e.key === 'ArrowLeft' && !e.target.matches('input, textarea')) this.ui.audio.currentTime = Math.max(0, this.ui.audio.currentTime - 5);
+            else if (e.key === 'ArrowRight' && !e.target.matches('input, textarea')) this.ui.audio.currentTime = Math.min(this.ui.audio.duration, this.ui.audio.currentTime + 5);
+        });
+    },
+
+    handleMouseMove() {
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            this.state.projectorWindow.document.body.style.cursor = 'default';
+            clearTimeout(this.state.cursorTimeout);
+            this.state.cursorTimeout = setTimeout(() => {
+                if (this.state.projectorWindow && !this.state.projectorWindow.closed) this.state.projectorWindow.document.body.style.cursor = 'none';
+            }, 3000);
+        }
+    },
+
+    togglePresentationMode() {
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            this.state.projectorWindow.focus();
+            return;
+        }
+
+        this.state.projectorWindow = window.open('about:blank', 'ChurchPlayerProjector', 'width=1280,height=720');
+        
+        if (!this.state.projectorWindow) {
+            alert("Bloqueador de pop-ups ativo! Permita pop-ups para usar o projetor.");
+            return;
+        }
+
+        // Clona os estilos para a nova janela
+        const styles = Array.from(document.styleSheets).map(sheet => {
+            try { return Array.from(sheet.cssRules).map(rule => rule.cssText).join(''); } catch(e) { return ''; }
+        }).join('');
+
+        this.state.projectorWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>PROJETOR - ${this.config.churchName || 'Church Player'}</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+                <style>
+                    ${styles}
+                    body { overflow: hidden; margin: 0; padding: 0; height: 100vh; cursor: none; font-family: var(--font-family-system); }
+                    body.show-cursor { cursor: default !important; }
+                    .controls, header, footer, .modal { display: none !important; }
+                    #p-fsBtn {
+                        position: fixed; bottom: 18px; right: 18px; z-index: 999;
+                        width: 48px; height: 48px; border-radius: 50%;
+                        background: rgba(99,102,241,0.30); border: 2px solid rgba(99,102,241,0.7);
+                        color: #a29bfe; font-size: 1.3em; cursor: pointer;
+                        display: flex; align-items: center; justify-content: center;
+                        opacity: 0; transition: opacity 0.35s, background 0.2s;
+                        backdrop-filter: blur(4px);
+                    }
+                    body.show-cursor #p-fsBtn { opacity: 1; }
+                    #p-fsBtn:hover { background: rgba(99,102,241,0.85); color: #fff; box-shadow: 0 0 20px rgba(99,102,241,0.5); }
+                    main { 
+                        height: 100vh; width: 100vw; overflow-y: auto; display: block; 
+                        scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; 
+                    }
+                    main::-webkit-scrollbar { display: none; }
+                    .lyrics-box { padding: 50vh 20px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+                
+        .qr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px}
+        .qr-box{position:relative;width:min(92vw,420px);background:var(--surface);border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);text-align:center}
+        .qr-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:#d63031;color:#fff;font-size:1.3em;cursor:pointer}
+        .qr-title{font-size:1.25em;font-weight:800;color:#fff;margin-bottom:6px}
+        .qr-subtitle{font-size:.9em;color:#aaa;margin-bottom:14px}
+        .qr-canvas-wrap{display:flex;align-items:center;justify-content:center;min-height:260px;background:#fff;border-radius:14px;padding:12px;margin:0 auto 12px}
+        .qr-url{font-size:.72em;color:#888;word-break:break-all;max-height:72px;overflow:auto;background:#111;padding:10px;border-radius:10px;border:1px solid #2a2a3a;margin-bottom:12px;text-align:left}
+        .qr-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+</style>
+            </head>
+            <body>
+                <div class="church-name" id="p-churchName"></div>
+                <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
+                <button id="p-fsBtn" title="Tela cheia (F11)">⛶</button>
+            </body>
+            </html>
+        `);
+
+        this.state.projectorWindow.document.close();
+
+        const _pWin = this.state.projectorWindow;
+        const _pScript = _pWin.document.createElement('script');
+        _pScript.textContent = [
+            "const _fsBtn = document.getElementById('p-fsBtn');",
+            "const _doFs = () => {",
+            "  if (!document.fullscreenElement) {",
+            "    (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || function(){}).call(document.documentElement);",
+            "  } else {",
+            "    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);",
+            "  }",
+            "};",
+            "_fsBtn.addEventListener('click', _doFs);",
+            "document.addEventListener('fullscreenchange', function() {",
+            "  _fsBtn.textContent = document.fullscreenElement ? '\u2715\u26F6' : '\u26F6';",
+            "});",
+            "document.addEventListener('keydown', function(e) {",
+            "  if (e.key === 'F11') { e.preventDefault(); _doFs(); }",
+            "});",
+            "var _curTimer;",
+            "var _showCur = function() {",
+            "  document.body.classList.add('show-cursor');",
+            "  clearTimeout(_curTimer);",
+            "  _curTimer = setTimeout(function(){ document.body.classList.remove('show-cursor'); }, 3000);",
+            "};",
+            "document.addEventListener('mousemove', _showCur);",
+            "document.addEventListener('touchstart', _showCur);"
+        ].join('\n');
+        _pWin.document.body.appendChild(_pScript);
+
+        this.applyConfig();
+        if (this.state.lyrics) {
+            this.state.currentMode === 'synced' ? this.renderSynced() : this.renderPlain();
+        }
+    },
+
+    loadConfig() {
+        try { const saved = localStorage.getItem(CONFIG_KEY); if (saved) this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved) }; } catch (e) { console.error(e); }
+    },
+
+    saveConfig() {
+        try { localStorage.setItem(CONFIG_KEY, JSON.stringify(this.config)); } catch (e) { console.error(e); }
+    },
+
+    applyConfig() {
+        const root = document.documentElement;
+        // Migração: se ainda em em (< 10), converte para px
+        if (this.config.fontSize < 10) this.config.fontSize = Math.round(this.config.fontSize * 16);
+        if (this.config.fontSizeActive < 10) this.config.fontSizeActive = Math.round(this.config.fontSizeActive * 16);
+        root.style.setProperty('--font-size-base', this.config.fontSize + 'px');
+        root.style.setProperty('--font-size-active', this.config.fontSizeActive + 'px');
+        const _ff = this.config.fontFamily || "'Bebas Neue', sans-serif";
+        root.style.setProperty('--font-family-lyrics', _ff);
+        document.body.setAttribute('data-font', _ff.toLowerCase().includes('bebas') ? 'bebas' : 'other');
+        root.style.setProperty('--color-inactive', this.config.colorInactive);
+        root.style.setProperty('--color-active', this.config.colorActive);
+        root.style.setProperty('--color-word-pending', this.config.wordColorPending || '#888888');
+        root.style.setProperty('--font-weight-active', this.config.fontWeightActive);
+        root.style.setProperty('--line-spacing', this.config.lineSpacing);
+        root.style.setProperty('--text-align', this.config.textAlign);
+        root.style.setProperty('--bg-opacity', this.config.bgOpacity);
+        root.style.setProperty('--bg-blur', this.config.bgBlur + 'px');
+
+        document.body.setAttribute('data-bg-type', this.config.bgType);
+        const bgVal = this.config.bgType === 'solid' ? this.config.bgColor : 
+                      this.config.bgType === 'gradient' ? this.config.bgGradient1 : 
+                      `url(${this.config.bgImageUrl})`;
+        root.style.setProperty('--bg-value', bgVal);
+        if (this.config.bgType === 'gradient') root.style.setProperty('--bg-value-2', this.config.bgGradient2);
+
+        this.ui.churchName.textContent = this.config.churchName;
+        this.ui.churchName.className = 'church-name ' + this.config.churchPosition;
+        this.ui.churchName.style.fontSize = this.config.churchNameSize + 'em';
+        this.ui.churchName.style.color = this.config.churchNameColor;
+        this.ui.churchName.style.opacity = this.config.churchNameOpacity;
+
+        // Sincroniza Janela Projetor
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            const pDoc = this.state.projectorWindow.document;
+            pDoc.documentElement.style.cssText = root.style.cssText;
+            // Garante --font-family-lyrics explicitamente (cssText pode omitir em alguns browsers)
+            pDoc.documentElement.style.setProperty('--font-family-lyrics', _ff);
+            pDoc.documentElement.style.setProperty('--font-size-base', this.config.fontSize + 'px');
+            pDoc.documentElement.style.setProperty('--font-size-active', this.config.fontSizeActive + 'px');
+            pDoc.documentElement.style.setProperty('--color-active', this.config.colorActive);
+            pDoc.documentElement.style.setProperty('--color-inactive', this.config.colorInactive);
+            pDoc.documentElement.style.setProperty('--color-word-pending', this.config.wordColorPending || '#888888');
+            pDoc.documentElement.style.setProperty('--font-weight-active', this.config.fontWeightActive);
+            pDoc.documentElement.style.setProperty('--line-spacing', this.config.lineSpacing);
+            pDoc.documentElement.style.setProperty('--text-align', this.config.textAlign);
+            pDoc.body.setAttribute('data-bg-type', this.config.bgType);
+            pDoc.body.setAttribute('data-font', _ff.toLowerCase().includes('bebas') ? 'bebas' : 'other');
+            const pChurch = pDoc.getElementById('p-churchName');
+            if (pChurch) {
+                pChurch.textContent = this.config.churchName;
+                pChurch.className = 'church-name ' + this.config.churchPosition;
+                pChurch.style.fontSize = this.config.churchNameSize + 'em';
+                pChurch.style.color = this.config.churchNameColor;
+                pChurch.style.opacity = this.config.churchNameOpacity;
+            }
+        }
+        this.syncUIWithConfig();
+        this.saveConfig();
+    },
+
+    syncUIWithConfig() {
+        const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+        const setTxt = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+
+        setVal('fontSize', this.config.fontSize); setTxt('fontSizeValue', this.config.fontSize + 'px');
+        const _fsNum = document.getElementById('fontSizeNum'); if (_fsNum) _fsNum.value = this.config.fontSize;
+        setVal('fontSizeActive', this.config.fontSizeActive); setTxt('fontSizeActiveValue', this.config.fontSizeActive + 'px');
+        const _fsaNum = document.getElementById('fontSizeActiveNum'); if (_fsaNum) _fsaNum.value = this.config.fontSizeActive;
+        const _ffSel = document.getElementById('fontFamily'); if (_ffSel) _ffSel.value = this.config.fontFamily || "'Montserrat', sans-serif";
+        setVal('colorInactive', this.config.colorInactive); setVal('colorInactiveText', this.config.colorInactive);
+        setVal('colorActive', this.config.colorActive); setVal('colorActiveText', this.config.colorActive);
+        setVal('wordColorPending', this.config.wordColorPending || '#888888'); setVal('wordColorPendingText', this.config.wordColorPending || '#888888');
+        
+        const fw = document.querySelector(`input[name="fontWeight"][value="${this.config.fontWeightActive}"]`); if(fw) fw.checked = true;
+        setVal('lineSpacing', this.config.lineSpacing); setTxt('lineSpacingValue', this.config.lineSpacing);
+        const ta = document.querySelector(`input[name="textAlign"][value="${this.config.textAlign}"]`); if(ta) ta.checked = true;
+        const bt = document.querySelector(`input[name="bgType"][value="${this.config.bgType}"]`); if(bt) bt.checked = true;
+        
+        this.updateBackgroundInputs();
+        setVal('bgColor', this.config.bgColor); setVal('bgColorText', this.config.bgColor);
+        setVal('bgGradient1', this.config.bgGradient1); setVal('bgGradient1Text', this.config.bgGradient1);
+        setVal('bgGradient2', this.config.bgGradient2); setVal('bgGradient2Text', this.config.bgGradient2);
+        setVal('bgImageUrl', this.config.bgImageUrl);
+        setVal('bgOpacity', this.config.bgOpacity); setTxt('bgOpacityValue', Math.round(this.config.bgOpacity*100) + '%');
+        setVal('bgBlur', this.config.bgBlur); setTxt('bgBlurValue', this.config.bgBlur + 'px');
+        // Slider de timing de palavras
+        const wSlider = document.getElementById('wordOffsetSlider');
+        if (wSlider) {
+            const wVal = this.config.wordOffset ?? -0.3;
+            wSlider.value = wVal;
+            this.setWordOffset(wVal);
+        }
+        setVal('churchNameInp', this.config.churchName);
+        const cp = document.querySelector(`input[name="churchPosition"][value="${this.config.churchPosition}"]`); if(cp) cp.checked = true;
+        setVal('churchNameSize', this.config.churchNameSize); setTxt('churchNameSizeValue', this.config.churchNameSize + 'em');
+        setVal('churchNameColor', this.config.churchNameColor); setVal('churchNameColorText', this.config.churchNameColor);
+        setVal('churchNameOpacity', this.config.churchNameOpacity); setTxt('churchNameOpacityValue', Math.round(this.config.churchNameOpacity*100) + '%');
+    },
+
+    updateBackgroundInputs() {
+        document.getElementById('bgSolidGroup').style.display = this.config.bgType === 'solid' ? 'block' : 'none';
+        document.getElementById('bgGradientGroup').style.display = this.config.bgType === 'gradient' ? 'block' : 'none';
+        document.getElementById('bgImageGroup').style.display = this.config.bgType === 'image' ? 'block' : 'none';
+    },
+
+    renderThemes() {
+        const grid = document.getElementById('themesGrid'); grid.innerHTML = '';
+        Object.entries(PRESET_THEMES).forEach(([key, theme]) => {
+            const card = document.createElement('div'); card.className = 'theme-card';
+            if (this.config.theme === key) card.classList.add('active');
+            const preview = document.createElement('div'); preview.className = 'theme-preview';
+            preview.style.background = theme.config.bgType === 'gradient' 
+                ? `linear-gradient(135deg, ${theme.config.bgGradient1 || theme.config.bgColor}, ${theme.config.bgGradient2 || theme.config.bgColor})`
+                : theme.config.bgColor;
+            card.innerHTML = `<div class="theme-preview" style="background:${preview.style.background}"></div><div class="theme-name">${theme.name}</div>`;
+            card.onclick = () => this.applyTheme(key);
+            grid.appendChild(card);
+        });
+    },
+
+    applyTheme(themeKey) {
+        const theme = PRESET_THEMES[themeKey];
+        if (!theme) return;
+        this.config = { ...this.config, ...theme.config, theme: themeKey };
+        this.applyConfig();
+        this.renderThemes();
+    },
+
+    saveCustomTheme() {
+        const name = prompt('Nome do tema:'); if (!name) return;
+        const key = 'custom-' + Date.now();
+        PRESET_THEMES[key] = { name: name, config: { ...this.config } };
+        this.renderThemes(); alert('Salvo!');
+    },
+
+    exportConfig() {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(this.config, null, 2)], { type: 'application/json' }));
+        a.download = 'church-player-config.json'; a.click();
+    },
+
+    importConfig(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                this.config = { ...DEFAULT_CONFIG, ...JSON.parse(e.target.result) };
+                this.applyConfig(); alert('Importado!');
+            } catch (err) { alert('Erro.'); }
+        };
+        reader.readAsText(file);
+    },
+
+    resetToDefault() {
+        if (!confirm('Restaurar padrão?')) return;
+        this.config = { ...DEFAULT_CONFIG };
+        this.applyConfig();
+        this.renderThemes();
+    },
+
+    openSettings() { document.getElementById('settingsModal').classList.add('active'); },
+    closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); },
+
+    switchTab(e, tabName) {
+        document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        e.target.classList.add('active');
+        document.getElementById('tab-' + tabName).classList.add('active');
+    },
+
+    setLoading(msg, progress = -1) {
+        if (msg) {
+            this.ui.loadingText.innerText = msg;
+            this.ui.loading.style.display = 'block';
+            this.ui.progressBar.style.display = progress >= 0 ? 'block' : 'none';
+            if (progress >= 0) this.ui.progressFill.style.width = progress + '%';
+        } else { this.ui.loading.style.display = 'none'; }
+    },
+
+    // CARREGAMENTO (legacy - delegates to playlist)
+    loadFile(file, companionLrc = null) {
+        if (!file) return;
+        this.handleFiles(companionLrc ? [file, companionLrc] : [file]);
+    },
+
+    updateHeader() {
+        document.getElementById('lblTitle').innerText = this.state.meta.track;
+        document.getElementById('lblArtist').innerText = this.state.meta.artist;
+    },
+
+    promptManualSearch() {
+        this.setLoading(null);
+        this.state.meta.track = this.state.fileName.replace(/^\d+\s*[-_]?\s*/, '').replace(/[-_]/g, ' ').trim();
+        this.state.meta.artist = "";
+        this.updateHeader();
+        this.openSearch();
+    },
+
+
+    loadLyrics(data) {
+        const parsedSynced = LrcParser.parse(data.syncedLyrics);
+        const plainText = data.plainLyrics || parsedSynced.plain;
+        this.state.lyrics = { synced: parsedSynced.synced, plain: plainText };
+
+        if (this.state.lyrics.synced) {
+            this.state.currentMode = 'synced';
+            this.renderSynced();
+        } else {
+            this.state.currentMode = 'plain';
+            this.renderPlain();
+        }
+
+        document.getElementById('dropdownSave').style.display = 'inline-block';
+        const btnEmbed = document.getElementById('btnEmbed');
+        if (this.state.fileType === 'mp3') {
+            btnEmbed.innerText = "🎵 Embutir no MP3 (Rápido)"; btnEmbed.disabled = false;
+        } else if (this.state.fileType === 'flac') {
+            btnEmbed.innerText = "🎵 Converter p/ MP3 + Embed"; btnEmbed.disabled = false;
+        } else {
+            btnEmbed.innerText = "🎵 Embutir Indisponível"; btnEmbed.disabled = true;
+        }
+        document.getElementById('btnToggleType').style.display = (this.state.lyrics.synced && this.state.lyrics.plain) ? 'inline-block' : 'none';
+    },
+
+    renderSynced() {
+        const renderTo = (container, doc) => {
+            if (!container) return;
+            container.innerHTML = '';
+            this.state.lyrics.synced.forEach((line, idx) => {
+                const div = doc.createElement('div');
+                div.className = 'l-line';
+                div.dataset.idx = idx;          // ← necessário para restaurar texto após karaokê
+                div.innerText = line.text;
+                div.onclick = () => { this.ui.audio.currentTime = line.startTime; this.ui.audio.play(); };
+                container.appendChild(div);
+            });
+        };
+        renderTo(this.ui.container, document);
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            const pDoc = this.state.projectorWindow.document;
+            renderTo(pDoc.getElementById('p-lyricsContainer'), pDoc);
+        }
+    },
+
+    renderPlain() {
+        const html = `<div class="plain-text">${this.state.lyrics.plain || "Sem texto."}</div>`;
+        this.ui.container.innerHTML = html;
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            const pBox = this.state.projectorWindow.document.getElementById('p-lyricsContainer');
+            if (pBox) pBox.innerHTML = html;
+        }
+    },
+
+    toggleView() {
+        this.state.currentMode = this.state.currentMode === 'synced' ? 'plain' : 'synced';
+        this.state.currentMode === 'synced' ? this.renderSynced() : this.renderPlain();
+    },
+
+
+    setWordOffset(val) {
+        this.config.wordOffset = val;
+        this.saveConfig();
+        const label = document.getElementById('wordOffsetVal');
+        if (label) label.textContent = (val >= 0 ? '+' : '') + val.toFixed(2) + 's';
+        // Atualiza a barra de progresso do slider via CSS custom property
+        const slider = document.getElementById('wordOffsetSlider');
+        if (slider) {
+            const min = parseFloat(slider.min), max = parseFloat(slider.max);
+            const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+            slider.style.setProperty('--slider-pct', pct);
+        }
+    },
+
+    _splitLineWords(lineEl, idx, lines) {
+        const lineData = lines[idx];
+        const nextData = lines[idx + 1];
+        const lineStart = lineData.startTime;
+        const lineEnd   = nextData ? nextData.startTime : lineStart + 4;
+        const duration  = Math.max(lineEnd - lineStart, 0.5); // mínimo 0.5s
+
+        const words = lineData.text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length <= 1) return; // palavra única — sem split necessário
+
+        const totalChars = words.reduce((a, w) => a + w.length, 0);
+        lineEl.innerHTML = '';
+        let charOffset = 0;
+
+        words.forEach((word, i) => {
+            const span = document.createElement('span');
+            span.className = 'l-word';
+            // Tempo estimado pela proporção de caracteres
+            span.dataset.time = lineStart + (charOffset / totalChars) * duration;
+            span.textContent = word;
+            lineEl.appendChild(span);
+            if (i < words.length - 1) lineEl.appendChild(document.createTextNode(' '));
+            charOffset += word.length;
+        });
+    },
+
+    syncLoop() {
+        if (this.state.currentMode !== 'synced' || !this.state.lyrics.synced) return;
+        const time = this.ui.audio.currentTime;
+        const lines = this.state.lyrics.synced;
+        let activeIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startTime <= time) activeIdx = i; else break;
+        }
+
+        const syncUI = (container) => {
+            if (!container || activeIdx === -1) return;
+            const currentEl = container.querySelector('.l-line.active');
+            const nextEl = container.children[activeIdx];
+
+            if (currentEl !== nextEl) {
+                // Restaura linha anterior ao texto puro (remove spans de palavras)
+                if (currentEl) {
+                    const prevIdx = parseInt(currentEl.dataset.idx);
+                    if (!isNaN(prevIdx)) currentEl.innerText = lines[prevIdx]?.text || '';
+                    currentEl.classList.remove('active');
+                }
+                // Ativa nova linha e divide em palavras
+                if (nextEl) {
+                    nextEl.classList.add('active');
+                    // Scroll: tenta scrollIntoView (documento principal) ou scrollTo no p-main (projetor)
+                    if (container === this.ui.container) {
+                        nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        // Projetor: scrollTo direto no p-main para garantir funcionamento cross-window
+                        const pMain = container.parentElement;
+                        if (pMain) {
+                            const targetTop = nextEl.offsetTop - (pMain.clientHeight / 2) + (nextEl.offsetHeight / 2);
+                            pMain.scrollTo({ top: targetTop, behavior: 'smooth' });
+                        }
+                    }
+                    this._splitLineWords(nextEl, activeIdx, lines);
+                }
+            }
+
+            // Atualiza highlight de palavras a cada tick (com offset de timing)
+            if (nextEl) {
+                const wOffset = this.config.wordOffset ?? -0.3;
+                nextEl.querySelectorAll('.l-word').forEach(w => {
+                    w.classList.toggle('l-word-active', time >= parseFloat(w.dataset.time) + wOffset);
+                });
+            }
+        };
+
+        syncUI(this.ui.container);
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            syncUI(this.state.projectorWindow.document.getElementById('p-lyricsContainer'));
+        }
+
+        // Highlight ativo no lrcListenArea (Editor LRC modo Ouvir)
+        const listenArea = document.getElementById('lrcListenArea');
+        if (listenArea && listenArea.children.length > 0 && activeIdx !== -1) {
+            const curLrc = listenArea.querySelector('.lrc-listen-line.lrc-active');
+            const nextLrc = listenArea.querySelector(`.lrc-listen-line[data-idx="${activeIdx}"]`);
+            if (curLrc !== nextLrc) {
+                if (curLrc) curLrc.classList.remove('lrc-active');
+                if (nextLrc) {
+                    nextLrc.classList.add('lrc-active');
+                    // Só faz scroll se o modal estiver visível
+                    if (document.getElementById('lrcEditorModal').classList.contains('active')) {
+                        nextLrc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }
+        }
+    },
+
+    openSearch() {
+        document.getElementById('searchModal').classList.add('active');
+        document.getElementById('inpTrack').value = this.state.meta.track;
+        document.getElementById('inpArtist').value = this.state.meta.artist;
+    },
+
+    async doManualSearch() {
+        const list = document.getElementById('resultsList');
+        list.innerHTML = '<div style="padding:20px; text-align:center">Buscando...</div>';
+        try {
+            const results = await this.client.searchRaw({ track: document.getElementById('inpTrack').value, artist: document.getElementById('inpArtist').value });
+            list.innerHTML = '';
+            results.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'res-item';
+                const syncTag = item.syncedLyrics
+                    ? '<span class="tag tag-sync">SYNC</span>'
+                    : '<span class="tag tag-txt">TXT</span>';
+                div.innerHTML = `<div class="res-info"><b>${item.trackName}</b><span>${item.artistName} ${syncTag}</span></div>`;
+                div.onclick = () => { this.loadLyrics(item); this.closeModal('searchModal'); };
+                list.appendChild(div);
+            });
+        } catch (e) { list.innerHTML = '<div style="padding:20px; text-align:center">Nada encontrado.</div>'; }
+    },
+
+    applyPastedLyrics() {
+        const text = document.getElementById('pastedLyricsText').value.trim();
+        if (!text) return alert("Cole a letra primeiro.");
+        this.loadLyrics({ syncedLyrics: text });
+        this.closeModal('searchModal');
+    },
+
+    async downloadLrc() {
+        if (!this.state.lyrics) return;
+        const content = this.state.lyrics.synced
+            ? this.state.lyrics.synced.map(l => `[${Math.floor(l.startTime/60).toString().padStart(2,'0')}:${(l.startTime%60).toFixed(2).padStart(5,'0')}] ${l.text}`).join('\n')
+            : this.state.lyrics.plain;
+        this.saveFile(content, this.state.fileName + ".lrc", 'text/plain');
+    },
+
+    async embedInFile() {
+        if (this.state.fileType !== 'mp3' && this.state.fileType !== 'flac') return alert("Formato não suportado.");
+        let targetBlob = this.state.originalFile;
+        try {
+            if (this.state.fileType === 'flac') {
+                targetBlob = await AudioConverter.convertToMp3(this.state.originalFile, (pct) => this.setLoading(`Convertendo: ${pct}%`, pct));
+            }
+            const taggedBlob = await AudioTagger.embedMp3(targetBlob, this.state.meta, this.state.lyrics);
+            this.setLoading(null);
+            this.saveFile(taggedBlob, this.state.fileName + "_tagged.mp3", 'audio/mpeg');
+        } catch (e) { this.setLoading(null); alert("Erro ao processar: " + e.message); }
+    },
+
+    async saveFile(content, filename, mimeType) {
+        const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    },
+
+
+
+    async loadRemoteConfig(url) {
+        if (!url || !url.trim()) return alert('Informe a URL do JSON.');
+        try {
+            this.setLoading('Carregando config remota...');
+            const resp = await fetch(url.trim());
+            if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — ' + resp.statusText);
+            const data = await resp.json();
+            // Migração de campos legados
+            if (typeof data.fontSize === 'number' && data.fontSize < 10)
+                data.fontSize = Math.round(data.fontSize * 16);
+            if (typeof data.fontSizeActive === 'number' && data.fontSizeActive < 10)
+                data.fontSizeActive = Math.round(data.fontSizeActive * 16);
+            if (data.bgBlur !== undefined)
+                data.bgBlur = parseInt(data.bgBlur, 10) || 0;
+            // Merge: DEFAULT_CONFIG garante campos novos não presentes no JSON antigo
+            this.config = { ...DEFAULT_CONFIG, ...data };
+            this.applyConfig();
+            this.syncUIWithConfig();
+            this.updateBackgroundInputs();
+            this.setLoading(null);
+            alert('✅ Config "' + (data.churchName || 'remota') + '" carregada com sucesso!');
+        } catch (e) {
+            this.setLoading(null);
+            alert('❌ Erro ao carregar config remota:\n' + e.message);
+        }
+    },
+
+
+    openRemotePlaylist() {
+        // Renderiza as demos
+        const demoList = document.getElementById('demoTracksList');
+        demoList.innerHTML = '';
+        DEMO_TRACKS.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'remote-track-item';
+            div.innerHTML = `
+                <span class="remote-track-icon">🎵</span>
+                <div class="remote-track-info">
+                    <div class="remote-track-name">${t.track}</div>
+                    <div class="remote-track-artist">${t.artist}</div>
+                </div>
+                <button class="remote-load-btn">▶ Carregar</button>`;
+            div.querySelector('.remote-load-btn').onclick = () => {
+                this.closeModal('remotePlaylistModal');
+                this.loadRemoteAudio(t.url, t.track, t.artist);
+            };
+            demoList.appendChild(div);
+        });
+        document.getElementById('remotePlaylistModal').classList.add('active');
+    },
+
+    async loadRemoteAudio(url, trackName, artist) {
+        const label = trackName || decodeURIComponent(url.split('/').pop().replace(/\.[^.]+$/, ''));
+        this.setLoading(`⬇️ Baixando ${label}...`);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const total = parseInt(resp.headers.get('content-length') || '0');
+            const reader = resp.body.getReader();
+            const chunks = [];
+            let received = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                if (total > 0) {
+                    const pct = Math.round(received / total * 100);
+                    this.setLoading(`⬇️ ${label} — ${pct}%`, pct);
+                }
+            }
+            const blob = new Blob(chunks, { type: 'audio/mpeg' });
+            const filename = decodeURIComponent(url.split('/').pop());
+            const file = new File([blob], filename, { type: 'audio/mpeg' });
+            this.setLoading(null);
+            this.handleFiles([file]);
+        } catch (e) {
+            this.setLoading(null);
+            alert('❌ Erro ao carregar música:\n' + e.message);
+        }
+    },
+
+    async loadRemotePlaylist(url) {
+        if (!url || !url.trim()) return alert('Informe a URL do CSV ou JSON.');
+        try {
+            this.setLoading('Carregando playlist...');
+            const resp = await fetch(url.trim());
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const text = await resp.text();
+            this.setLoading(null);
+            const isJson = url.trim().toLowerCase().endsWith('.json') || text.trimStart().startsWith('[') || text.trimStart().startsWith('{');
+            const tracks = isJson ? this._parsePlaylistJSON(text) : this._parsePlaylistCSV(text);
+            if (!tracks.length) return alert('Nenhuma música encontrada na playlist.');
+            this._renderRemoteTracks(tracks);
+        } catch (e) {
+            this.setLoading(null);
+            alert('❌ Erro ao carregar playlist:\n' + e.message);
+        }
+    },
+
+    loadLocalPlaylist(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target.result;
+            const isJson = file.name.toLowerCase().endsWith('.json') || text.trimStart().startsWith('[') || text.trimStart().startsWith('{');
+            const tracks = isJson ? this._parsePlaylistJSON(text) : this._parsePlaylistCSV(text);
+            if (!tracks.length) return alert('Nenhuma música encontrada no arquivo.');
+            this._renderRemoteTracks(tracks);
+        };
+        reader.readAsText(file, 'utf-8');
+    },
+
+    _parsePlaylistCSV(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        if (!lines.length) return [];
+
+        // Detectar formato simples: linha é só uma URL (sem vírgula ou começa com http)
+        const firstLine = lines[0];
+        const isSimple = firstLine.startsWith('http') && !firstLine.includes(',');
+        if (isSimple) {
+            // Formato simples: uma URL por linha — metadados vêm do ID3
+            return lines
+                .filter(l => l.startsWith('http'))
+                .map(url => ({ track: '', artist: '', url: url.trim(), lrcUrl: '' }));
+        }
+
+        // Formato completo: nome,artista,url,lrc_url
+        const firstLower = firstLine.toLowerCase();
+        const startIdx = (firstLower.startsWith('nome') || firstLower.startsWith('track') || firstLower.startsWith('name')) ? 1 : 0;
+        return lines.slice(startIdx).map(line => {
+            const cols = line.split(',').map(c => c.trim());
+            // Detectar se col[0] é URL direta (sem metadados)
+            if (cols[0].startsWith('http') && cols.length === 1) {
+                return { track: '', artist: '', url: cols[0], lrcUrl: '' };
+            }
+            return { track: cols[0] || '', artist: cols[1] || '', url: cols[2] || '', lrcUrl: cols[3] || '' };
+        }).filter(t => t.url);
+    },
+
+    _parsePlaylistJSON(text) {
+        try {
+            const data = JSON.parse(text);
+            // Suporta: { "music": [...] } | { "tracks": [...] } | [...] | "url string"
+            let arr = data;
+            if (!Array.isArray(data)) {
+                arr = data.music || data.tracks || data.playlist || data.songs || [];
+            }
+            return arr.map(item => {
+                // Formato simples: item é uma string (URL direta)
+                if (typeof item === 'string') {
+                    return { track: '', artist: '', url: item.trim(), lrcUrl: '' };
+                }
+                // Formato completo: item é objeto com metadados
+                return {
+                    track:  item.track  || item.nome  || item.name  || item.title  || '',
+                    artist: item.artist || item.artista || item.autor || '',
+                    url:    item.url    || item.src    || item.file  || item.href   || '',
+                    lrcUrl: item.lrcUrl || item.lrc    || item.lyrics || ''
+                };
+            }).filter(t => t.url);
+        } catch (e) { alert('JSON inválido: ' + e.message); return []; }
+    },
+
+    _renderRemoteTracks(tracks) {
+        const section = document.getElementById('remoteTracksSection');
+        const list    = document.getElementById('remoteTracksList');
+        const label   = document.getElementById('remoteTracksLabel');
+        label.textContent = `🎵 ${tracks.length} música${tracks.length !== 1 ? 's' : ''} carregada${tracks.length !== 1 ? 's' : ''}`;
+        list.innerHTML = '';
+        tracks.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'remote-track-item';
+            div.innerHTML = `
+                <span class="remote-track-icon">🎵</span>
+                <div class="remote-track-info">
+                    <div class="remote-track-name">${t.track || decodeURIComponent(t.url.split('/').pop().replace(/\.[^.]+$/, ''))}</div>
+                    <div class="remote-track-artist">${t.artist || '<em style="opacity:.4">metadados via ID3</em>'}</div>
+                </div>
+                <button class="remote-load-btn">▶ Play</button>`;
+            div.querySelector('.remote-load-btn').onclick = () => {
+                this.closeModal('remotePlaylistModal');
+                this.loadRemoteAudio(t.url, t.track, t.artist);
+            };
+            list.appendChild(div);
+        });
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+
+    downloadPlaylistTemplate(format) {
+        const URL1 = 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/O_Exilado_Hc_36.mp3';
+        const URL2 = 'https://raw.githubusercontent.com/Edimarpcosta/edimarpcosta.github.io/refs/heads/main/igreja/playerletras/music/Samuel%20Miranda%20-%20Primeira%20Ess%C3%AAncia%20(Ao%20Vivo).mp3';
+
+        if (format === 'csv') {
+            // Padrão simples: só URLs (metadados do ID3)
+            const csvContent =
+`# Formato simples: uma URL por linha (metadados vem do ID3)
+${URL1}
+${URL2}
+
+# Formato completo (opcional): nome,artista,url,lrc_url
+# O Exilado (Hc 3:6),Harpa Cristã,${URL1},
+# Primeira Essência (Ao Vivo),Samuel Miranda,${URL2},`;
+            this.saveFile(csvContent, 'music.csv', 'text/csv');
+
+        } else {
+            // Padrão simples: { "music": ["url1", "url2"] }
+            const jsonSimple = JSON.stringify({ music: [URL1, URL2] }, null, 2);
+            // Completo: array de objetos (comentado como referência)
+            const jsonContent = jsonSimple + `
+
+/* Formato completo (opcional):
+${JSON.stringify([
+  { track: 'O Exilado (Hc 3:6)', artist: 'Harpa Cristã', url: URL1, lrcUrl: '' },
+  { track: 'Primeira Essência', artist: 'Samuel Miranda', url: URL2, lrcUrl: '' }
+], null, 2)}
+*/`;
+            this.saveFile(jsonContent, 'music.json', 'application/json');
+        }
+    },
+
+    openLrcEditor() {
+        if (!this.state.lyrics) return alert('Nenhuma letra carregada.');
+        // Atualizar botão embed conforme tipo de arquivo
+        const btnEmbed = document.getElementById('lrcBtnEmbed');
+        if (this.state.fileType === 'mp3') {
+            btnEmbed.innerText = '🎵 Embutir no MP3'; btnEmbed.disabled = false;
+        } else if (this.state.fileType === 'flac') {
+            btnEmbed.innerText = '🎵 Converter + Embutir'; btnEmbed.disabled = false;
+        } else {
+            btnEmbed.innerText = '🎵 Embutir (N/D)'; btnEmbed.disabled = true;
+        }
+        this.lrcEditorSetMode('listen');
+        document.getElementById('lrcEditorModal').classList.add('active');
+    },
+
+    lrcEditorSetMode(mode) {
+        const listenArea = document.getElementById('lrcListenArea');
+        const editWrap   = document.getElementById('lrcEditWrap');
+        document.getElementById('lrcBtnListen').classList.toggle('active', mode === 'listen');
+        document.getElementById('lrcBtnEdit').classList.toggle('active', mode === 'edit');
+
+        if (mode === 'listen') {
+            listenArea.style.display = 'block';
+            editWrap.style.display   = 'none';
+            this._lrcRenderListen();
+        } else {
+            listenArea.style.display = 'none';
+            editWrap.style.display   = 'flex';
+            this._lrcRenderEdit();
+        }
+
+        const lyr = this.state.lyrics;
+        const type = (lyr && lyr.synced && lyr.synced.length > 0) ? '🔵 SYNC' : '⚪ PLAIN';
+        document.getElementById('lrcEditorInfo').innerText = `Fonte atual: ${type}`;
+    },
+
+    _lrcFmt(sec) {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toFixed(2).padStart(5, '0');
+        return `${m}:${s}`;
+    },
+
+    _lrcRenderListen() {
+        const area = document.getElementById('lrcListenArea');
+        area.innerHTML = '';
+        if (!this.state.lyrics) return;
+
+        if (this.state.lyrics.synced && this.state.lyrics.synced.length > 0) {
+            this.state.lyrics.synced.forEach((line, idx) => {
+                const div = document.createElement('div');
+                div.className = 'lrc-listen-line';
+                div.dataset.idx = idx;
+                div.innerHTML = `<span class="lrc-listen-time">[${this._lrcFmt(line.startTime)}]</span>`
+                              + `<span class="lrc-listen-text">${line.text || '<em style="opacity:.3">—</em>'}</span>`;
+                div.onclick = () => {
+                    this.ui.audio.currentTime = line.startTime;
+                    this.ui.audio.play();
+                };
+                area.appendChild(div);
+            });
+        } else if (this.state.lyrics.plain) {
+            this.state.lyrics.plain.split('\n').forEach(txt => {
+                const div = document.createElement('div');
+                div.className = 'lrc-plain-line';
+                div.textContent = txt || ' ';
+                area.appendChild(div);
+            });
+        } else {
+            area.innerHTML = '<div style="padding:30px; text-align:center; color:#444;">Sem letra carregada.</div>';
+        }
+    },
+
+    _lrcRenderEdit() {
+        const ta = document.getElementById('lrcEditTextarea');
+        if (!this.state.lyrics) { ta.value = ''; return; }
+
+        if (this.state.lyrics.synced && this.state.lyrics.synced.length > 0) {
+            ta.value = this.state.lyrics.synced
+                .map(l => `[${this._lrcFmt(l.startTime)}] ${l.text}`)
+                .join('\n');
+        } else if (this.state.lyrics.plain) {
+            ta.value = this.state.lyrics.plain;
+        } else {
+            ta.value = '';
+        }
+    },
+
+    lrcEditorApply() {
+        const text = document.getElementById('lrcEditTextarea').value.trim();
+        if (!text) return alert('Editor vazio — nada para aplicar.');
+        // loadLyrics detecta se é LRC (tem timestamps) ou texto simples
+        this.loadLyrics({ syncedLyrics: text });
+        // Volta para modo Ouvir para ver o resultado imediatamente
+        this.lrcEditorSetMode('listen');
+    },
+
+    reset() {
+        this.state.lyrics = null;
+        this.state.meta = { track: "", artist: "", album: "", duration: 0 };
+        this.ui.container.innerHTML = '';
+        if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
+            this.state.projectorWindow.document.getElementById('p-lyricsContainer').innerHTML = '';
+        }
+        document.getElementById('dropdownSave').style.display = 'none';
+        this.setLoading(null);
+    },
+
+        getPublicLyricsBaseUrl() {
+            const { origin, pathname, protocol } = window.location;
+            if (protocol === 'file:') return 'http://localhost/letra/';
+            const basePath = pathname.replace(/[^/]*$/, '');
+            return `${origin}${basePath}letra/`;
+        },
+        getLyricsSharePayload() {
+            if (!this.state.lyrics || (!this.state.lyrics.synced && !this.state.lyrics.plain)) return null;
+            const lines = this.state.lyrics.synced || null;
+            let lrc = '';
+            if (lines && lines.length) {
+                lrc = lines.map(line => `${this._lrcFmt(line.startTime)} ${line.text}`).join('\n');
+            } else {
+                lrc = (this.state.lyrics.plain || '').trim();
+            }
+            const startedAt = Date.now() - Math.round((this.ui.audio.currentTime || 0) * 1000);
+            const payload = {
+                v: 1,
+                church: this.config.churchName || '',
+                title: this.state.meta.track || this.state.fileName || 'Letra',
+                artist: this.state.meta.artist || '',
+                lrc,
+                mode: lines && lines.length ? 'synced' : 'plain',
+                t: startedAt
+            };
+            let packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            if (packed && packed.length > 2000 && lines && lines.length) {
+                payload.mode = 'plain';
+                payload.lrc = this.state.lyrics.plain || lines.map(l => l.text).join('\n');
+                packed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            }
+            return { payload, packed, startedAt };
+        },
+        generateQrCode() {
+            if (typeof LZString === 'undefined' || typeof QRCode === 'undefined') {
+                alert('Bibliotecas do QR/LZString não carregaram ainda. Recarregue a página.');
+                return;
+            }
+            const data = this.getLyricsSharePayload();
+            if (!data || !data.packed) {
+                alert('Carregue uma música com letra antes de gerar o QR Code. Se estiver em file://, rode em servidor local ou publique no GitHub Pages para o link abrir no celular.');
+                return;
+            }
+            const url = `${this.getPublicLyricsBaseUrl()}#${data.packed}`;
+            this.state.qrUrl = url;
+            this.state.qrPayload = data.payload;
+            this.state.qrStartedAt = data.startedAt;
+            const wrap = document.getElementById('qrCanvasWrap');
+            const subtitle = document.getElementById('qrSubtitle');
+            const urlText = document.getElementById('qrUrlText');
+            wrap.innerHTML = '';
+            new QRCode(wrap, { text: url, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M });
+            subtitle.textContent = `${data.payload.title}${data.payload.artist ? ' — ' + data.payload.artist : ''}`;
+            urlText.textContent = url;
+            const ov = document.getElementById('qrOverlay');
+            ov.style.display = 'flex';
+        },
+        closeQrOverlay() {
+            const ov = document.getElementById('qrOverlay');
+            if (ov) ov.style.display = 'none';
+        },
+        async copyQrUrl() {
+            if (!this.state.qrUrl) return;
+            try {
+                await navigator.clipboard.writeText(this.state.qrUrl);
+                const el = document.getElementById('qrSubtitle');
+                if (el) {
+                    const prev = el.textContent;
+                    el.textContent = 'Link copiado!';
+                    setTimeout(() => el.textContent = prev, 1400);
+                }
+            } catch (e) {
+                alert('Não foi possível copiar.');
+            }
+        }
+
+};
+
+app.init();
+</script>
+</body>
+</html>
