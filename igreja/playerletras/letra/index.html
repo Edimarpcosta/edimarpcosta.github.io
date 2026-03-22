@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Letra no Celular</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+  <style>
+    :root{--text:#f3f4f6;--muted:#9ca3af;--active:#eeff00;--accent:#6366f1}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#08080d,#111827);color:var(--text);font-family:Inter,system-ui,sans-serif}
+    .wrap{max-width:860px;margin:0 auto;padding:16px 16px 36px}.hero{position:sticky;top:0;z-index:10;background:rgba(8,8,13,.88);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.08);margin:-16px -16px 18px;padding:16px}
+    .church{font-size:.8rem;color:#ffd500;text-transform:uppercase;letter-spacing:.08em;font-weight:800}.title{font-size:1.25rem;font-weight:800;margin-top:6px}.artist{font-size:.92rem;color:var(--muted);margin-top:4px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.btn{border:none;border-radius:12px;padding:10px 14px;background:#1f2937;color:#fff;font-weight:700}.btn.primary{background:var(--accent)}
+    .status{font-size:.82rem;color:var(--muted);margin-top:10px}.lyrics{padding-top:8px}.line{padding:10px 12px;border-radius:12px;margin:6px 0;color:#fda4af;font-size:1.08rem;line-height:1.45;transition:.22s;background:rgba(255,255,255,.02)}
+    .line.active{color:var(--active);background:rgba(255,255,255,.07);transform:scale(1.02);font-weight:800;box-shadow:0 0 18px rgba(238,255,0,.12)}.line .time{display:inline-block;min-width:70px;color:#818cf8;font-size:.75rem;vertical-align:middle;margin-right:8px}
+    .plain{white-space:pre-wrap;line-height:1.7;font-size:1.05rem;color:#e5e7eb;background:rgba(255,255,255,.03);padding:14px;border-radius:14px}.help{font-size:.84rem;color:var(--muted);margin-top:14px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="church" id="church">Igreja</div>
+      <div class="title" id="title">Letra</div>
+      <div class="artist" id="artist"></div>
+      <div class="actions">
+        <button class="btn primary" id="btnSync">Sincronizar agora</button>
+        <button class="btn" id="btnToggle">Alternar modo</button>
+      </div>
+      <div class="status" id="status">Preparando letra...</div>
+    </div>
+    <div id="lyrics" class="lyrics"></div>
+    <div class="help">Toque em uma frase para alinhar manualmente com o momento da música. Se a letra vier sem timestamps, ela será exibida como texto simples.</div>
+  </div>
+<script>
+class LrcParser {
+  static parse(lrcString){
+    if(!lrcString) return {synced:null, plain:''};
+    const cleanString = lrcString.replace(/\[[a-zA-Z].*?\]/g, '').trim();
+    const lines = cleanString.split(/
+?
+/);
+    const synced = [], unsynced = [];
+    const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/;
+    lines.forEach(line => {
+      const match = line.match(timeRegex);
+      if(match){
+        const rawTime = match[0];
+        const text = line.replace(rawTime,'').trim();
+        const startTime = parseInt(match[1],10) * 60 + parseFloat(match[2]);
+        synced.push({text, startTime});
+      } else {
+        const text = line.trim();
+        if(text) unsynced.push(text);
+      }
+    });
+    return { synced: synced.length ? synced : null, plain: unsynced.length ? unsynced.join('
+') : cleanString };
+  }
+}
+const els = {
+  church: document.getElementById('church'),
+  title: document.getElementById('title'),
+  artist: document.getElementById('artist'),
+  status: document.getElementById('status'),
+  lyrics: document.getElementById('lyrics'),
+  btnSync: document.getElementById('btnSync'),
+  btnToggle: document.getElementById('btnToggle')
+};
+let payload=null, parsed=null, currentMode='plain', timeOffset=0, activeIdx=-1;
+function fmt(sec){ const m=Math.floor(sec/60).toString().padStart(2,'0'); const s=(sec%60).toFixed(2).padStart(5,'0'); return `[${m}:${s}]`; }
+function setStatus(msg){ els.status.textContent = msg; }
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function nowSongTime(){ return payload ? Math.max(0, ((Date.now()-payload.t)/1000)+timeOffset) : 0; }
+function render(){
+  if(!parsed) return;
+  els.lyrics.innerHTML='';
+  activeIdx = -1;
+  if(currentMode==='synced' && parsed.synced && parsed.synced.length){
+    parsed.synced.forEach((line, idx)=>{
+      const div=document.createElement('div');
+      div.className='line';
+      div.dataset.idx=idx;
+      div.innerHTML=`<span class="time">${fmt(line.startTime)}</span><span>${escapeHtml(line.text)}</span>`;
+      div.onclick=()=>syncToLine(idx);
+      els.lyrics.appendChild(div);
+    });
+    setStatus('Modo sincronizado ativo. Toque em uma frase para corrigir o tempo.');
+  } else {
+    const div=document.createElement('div');
+    div.className='plain';
+    div.textContent=parsed.plain||'Sem letra';
+    els.lyrics.appendChild(div);
+    setStatus('Modo texto simples.');
+  }
+}
+function syncToLine(idx){
+  if(!parsed || !parsed.synced || !parsed.synced[idx]) return;
+  const current=nowSongTime();
+  timeOffset += parsed.synced[idx].startTime-current;
+  setStatus(`Sincronizado manualmente em ${fmt(parsed.synced[idx].startTime)}.`);
+}
+function syncLoop(){
+  if(currentMode==='synced' && parsed && parsed.synced && parsed.synced.length){
+    const t=nowSongTime();
+    let idx=-1;
+    for(let i=0;i<parsed.synced.length;i++){
+      if(parsed.synced[i].startTime<=t) idx=i; else break;
+    }
+    if(idx!==activeIdx){
+      const prev=els.lyrics.querySelector('.line.active');
+      if(prev) prev.classList.remove('active');
+      const next=els.lyrics.querySelector(`.line[data-idx="${idx}"]`);
+      if(next){ next.classList.add('active'); next.scrollIntoView({behavior:'smooth',block:'center'}); }
+      activeIdx=idx;
+    }
+  }
+  requestAnimationFrame(syncLoop);
+}
+function bootstrap(){
+  const hash=location.hash.slice(1);
+  if(!hash){
+    setStatus('Nenhuma letra recebida nesta URL.');
+    els.lyrics.innerHTML='<div class="plain">Abra esta página por um QR Code gerado no player.</div>';
+    return;
+  }
+  try {
+    const json=LZString.decompressFromEncodedURIComponent(hash);
+    payload=JSON.parse(json);
+    parsed=LrcParser.parse(payload.lrc||'');
+    els.church.textContent=payload.church||'Igreja';
+    els.title.textContent=payload.title||'Letra';
+    els.artist.textContent=payload.artist||'';
+    currentMode = payload.mode==='synced' && parsed.synced ? 'synced' : 'plain';
+    render();
+    syncLoop();
+  } catch(e){
+    setStatus('Falha ao processar a letra da URL.');
+    els.lyrics.innerHTML='<div class="plain">O conteúdo recebido está inválido ou corrompido.</div>';
+  }
+}
+els.btnSync.onclick=()=>{
+  if(!payload) return;
+  const current = nowSongTime();
+  timeOffset = 0;
+  payload.t = Date.now()-Math.round(current*1000);
+  setStatus('Tempo recalibrado para o relógio atual do aparelho.');
+};
+els.btnToggle.onclick=()=>{
+  if(parsed && parsed.synced){ currentMode=currentMode==='synced'?'plain':'synced'; render(); }
+};
+bootstrap();
+</script>
+</body>
+</html>
