@@ -1296,17 +1296,20 @@ class LrcParser {
         const synced = [];
         const unsynced = [];
         const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d{2,3})?)\]/;
+        // Padrões de lixo/watermark a ignorar
+        const JUNK_RE = /^(by\s+ai\s+lrc|lrc\s+generator|https?:\/\/|\[instrumental\]|generated\s+by)/i;
 
         lines.forEach(line => {
             const match = line.match(timeRegex);
             if (match) {
                 const rawTime = match[0];
                 const text = line.replace(rawTime, "").trim();
+                if (JUNK_RE.test(text)) return; // ignora watermark
                 const startTime = parseInt(match[1]) * 60 + parseFloat(match[2]);
                 synced.push({ text, startTime });
             } else {
                 const text = line.trim();
-                if (text) unsynced.push(text);
+                if (text && !JUNK_RE.test(text)) unsynced.push(text);
             }
         });
 
@@ -1316,6 +1319,69 @@ class LrcParser {
         };
     }
 }
+
+/**
+ * MÓDULO 1b: Parsers SRT (.srt) e ASS/SSA (.ass)
+ */
+class SrtParser {
+    static parse(srtString) {
+        if (!srtString) return { synced: null, plain: '' };
+        const blocks  = srtString.replace(/\r/g, '').trim().split(/\n\n+/);
+        const synced  = [];
+        const timeRe  = /(\d{2}):(\d{2}):(\d{2})[,\.](\d{1,3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,\.](\d{1,3})/;
+        blocks.forEach(block => {
+            const ls     = block.split('\n');
+            const tsLine = ls.find(l => timeRe.test(l));
+            if (!tsLine) return;
+            const m         = tsLine.match(timeRe);
+            const p3        = s => parseInt(s.padEnd(3,'0').slice(0,3));
+            const startTime = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseInt(m[3]) + p3(m[4])/1000;
+            const endTime   = parseInt(m[5])*3600 + parseInt(m[6])*60 + parseInt(m[7]) + p3(m[8])/1000;
+            const txtIdx    = ls.indexOf(tsLine) + 1;
+            const text      = ls.slice(txtIdx).join(' ').replace(/<[^>]+>/g,'').replace(/\{[^}]+\}/g,'').trim();
+            if (text) synced.push({ text, startTime, endTime });
+        });
+        return { synced: synced.length ? synced : null, plain: synced.map(s => s.text).join('\n') };
+    }
+    // Converte para string LRC para reuso no pipeline existente
+    static toLrc(synced) {
+        return synced.map(s => {
+            const m  = String(Math.floor(s.startTime / 60)).padStart(2,'0');
+            const sc = (s.startTime % 60).toFixed(2).padStart(5,'0');
+            return `[${m}:${sc}] ${s.text}`;
+        }).join('\n');
+    }
+}
+
+class AssParser {
+    static parseT(t) { const [h,mn,s]=t.split(':'); return parseInt(h)*3600+parseInt(mn)*60+parseFloat(s); }
+    static parse(assString) {
+        if (!assString) return { synced: null, plain: '' };
+        const synced = [];
+        const lineRe = /^Dialogue:\s*\d+,([\d:.]+),([\d:.]+),([^,]*),([^,]*),\d+,\d+,\d+,([^,]*),(.*)$/;
+        const SKIP   = /^(fx|template|code)/i;
+        const seen   = new Set();
+        assString.split('\n').forEach(line => {
+            const m = line.match(lineRe);
+            if (!m || SKIP.test(m[5].trim())) return;
+            const startTime = AssParser.parseT(m[1]);
+            const endTime   = AssParser.parseT(m[2]);
+            const text = m[6]
+                .replace(/\{[^}]*\}/g, '')
+                .replace(/\\[kKfFNh][-\d]*/g, ' ')
+                .replace(/  +/g,' ').trim();
+            if (!text) return;
+            const key = startTime.toFixed(2)+'|'+text;
+            if (seen.has(key)) return;
+            seen.add(key);
+            synced.push({ text, startTime, endTime });
+        });
+        synced.sort((a,b) => a.startTime - b.startTime);
+        return { synced: synced.length ? synced : null, plain: synced.map(s => s.text).join('\n') };
+    }
+    static toLrc(synced) { return SrtParser.toLrc(synced); }
+}
+
 
 /**
  * MÓDULO 2: Cliente API (LrcClient)
@@ -1517,40 +1583,44 @@ class PlaylistManager {
     }
 
     addFiles(fileList) {
-        const audioFiles = [];
-        const lrcFiles = [];
+        const audioFiles  = [];
+        const lyricFiles  = [];
+        const LYRIC_EXT   = /\.(lrc|srt|ass|ssa)$/i;
+        const LYRIC_PRIO  = { lrc:0, srt:1, ass:2, ssa:2 };
         for (const f of fileList) {
             const name = f.name.toLowerCase();
-            if (name.endsWith('.lrc')) {
-                lrcFiles.push(f);
-            } else if (f.type.startsWith('audio/') || name.match(/\.(mp3|flac|wav|ogg|m4a|aac)$/i)) {
-                audioFiles.push(f);
-            }
+            if (LYRIC_EXT.test(name)) lyricFiles.push(f);
+            else if (f.type.startsWith('audio/') || name.match(/\.(mp3|flac|wav|ogg|m4a|aac)$/i)) audioFiles.push(f);
         }
-        // Pair by basename
-        const lrcMap = new Map();
-        for (const lrc of lrcFiles) {
-            const base = lrc.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
-            lrcMap.set(base, lrc);
+        // Pair by basename — lrc wins over srt, srt over ass
+        const lyricMap = new Map();
+        for (const lf of lyricFiles) {
+            const ext  = lf.name.split('.').pop().toLowerCase();
+            const base = lf.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            const cur  = lyricMap.get(base);
+            if (!cur || LYRIC_PRIO[ext] < LYRIC_PRIO[cur.name.split('.').pop().toLowerCase()]) lyricMap.set(base, lf);
         }
         for (const audio of audioFiles) {
-            const base = audio.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
-            const paired = lrcMap.get(base) || null;
+            const base   = audio.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            const paired = lyricMap.get(base) || null;
+            const ext    = paired ? paired.name.split('.').pop().toLowerCase() : null;
             this.tracks.push({
                 audioFile: audio,
-                lrcFile: paired,
-                baseName: audio.name.replace(/\.[^/.]+$/, ''),
+                lrcFile:   paired,
+                lrcExt:    ext,
+                baseName:  audio.name.replace(/\.[^/.]+$/, ''),
                 meta: { track: '', artist: '', album: '', duration: 0 },
                 lyrics: null,
-                lyricsSource: paired ? 'lrc' : 'pending'
+                lyricsSource: paired ? ext : 'pending'
             });
         }
-        // Also handle standalone LRC dropped onto existing playing track
-        if (audioFiles.length === 0 && lrcFiles.length > 0 && this.tracks.length > 0) {
+        // Standalone lyric dropped onto current track
+        if (audioFiles.length === 0 && lyricFiles.length > 0 && this.tracks.length > 0) {
             const curTrack = this.tracks[this.currentIndex];
             if (curTrack) {
-                curTrack.lrcFile = lrcFiles[0];
-                curTrack.lyricsSource = 'lrc';
+                const lf = lyricFiles[0];
+                const ext = lf.name.split('.').pop().toLowerCase();
+                curTrack.lrcFile = lf; curTrack.lrcExt = ext; curTrack.lyricsSource = ext;
             }
         }
         this._rebuildShuffle();
@@ -1637,6 +1707,9 @@ class PlaylistUI {
 
     static BADGE_MAP = {
         lrc: { label: 'LRC', cls: 'badge-lrc' },
+        srt: { label: 'SRT', cls: 'badge-lrc' },
+        ass: { label: 'ASS', cls: 'badge-lrc' },
+        ssa: { label: 'SSA', cls: 'badge-lrc' },
         emb: { label: 'EMB', cls: 'badge-emb' },
         api: { label: 'API', cls: 'badge-api' },
         br:  { label: 'BR',  cls: 'badge-br'  },
@@ -1778,15 +1851,30 @@ class LyricsCascade {
     }
 
     async resolve(track, onSourceFound) {
-        // ── 1. LRC local — sempre sincronizado ──────────────────────────────
+        // ── 1. Arquivo de letra local (.lrc / .srt / .ass / .ssa) ───────────
         if (track.lrcFile) {
             try {
-                const text = await track.lrcFile.text();
-                if (text && text.trim()) {
-                    onSourceFound('lrc');
-                    return { syncedLyrics: text, plainLyrics: null };
+                const raw = await track.lrcFile.text();
+                if (raw && raw.trim()) {
+                    const ext = (track.lrcExt || 'lrc').toLowerCase();
+                    if (ext === 'srt') {
+                        const parsed = SrtParser.parse(raw);
+                        if (parsed.synced && parsed.synced.length) {
+                            onSourceFound('srt');
+                            return { syncedLyrics: SrtParser.toLrc(parsed.synced), plainLyrics: parsed.plain };
+                        }
+                    } else if (ext === 'ass' || ext === 'ssa') {
+                        const parsed = AssParser.parse(raw);
+                        if (parsed.synced && parsed.synced.length) {
+                            onSourceFound('ass');
+                            return { syncedLyrics: AssParser.toLrc(parsed.synced), plainLyrics: parsed.plain };
+                        }
+                    } else {
+                        onSourceFound('lrc');
+                        return { syncedLyrics: raw, plainLyrics: null };
+                    }
                 }
-            } catch (e) {}
+            } catch (e) { console.warn('[Lyrics] erro ao ler arquivo:', e); }
         }
 
         // ── 2. Tag ID3 embutida ─────────────────────────────────────────────
@@ -3525,9 +3613,10 @@ ${JSON.stringify([
         const idx = this.state.plainFocusIdx || 0;
         containers.forEach(container => {
             if (!container) return;
-            const navEl   = document.getElementById('plainNav');
-            const infoEl  = document.getElementById('plainNavInfo');
-            const spans   = Array.from(container.querySelectorAll('.plain-line'));
+            const doc    = container.ownerDocument;
+            const navEl  = doc.getElementById('plainNav');
+            const infoEl = doc.getElementById('plainNavInfo');
+            const spans  = Array.from(container.querySelectorAll('.plain-line'));
             if (!spans.length) return;
             const total   = spans.length;
             // Apply classes
@@ -3536,17 +3625,25 @@ ${JSON.stringify([
                 if (i >= idx && i < idx + 3) s.classList.add('pf-active');
                 else if (i === idx + 3)      s.classList.add('pf-next');
             });
-            // Scroll so first active line is near center
+            // Centraliza bloco das 3 linhas no centro via offsetTop
+            // (não usa getBoundingClientRect — funciona com scrolls rápidos e consecutivos)
             const activeEl = spans[idx];
+            const lastEl   = spans[Math.min(idx + 2, total - 1)];
             if (activeEl) {
-                const parent = container.closest('.lyrics-box') || container.parentElement;
-                if (parent) {
-                    const itemTop = activeEl.offsetTop;
-                    const target  = itemTop - parent.clientHeight * 0.35;
-                    parent.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+                const scrollBox = container.closest('main') || container.parentElement;
+                if (scrollBox) {
+                    // Sobe o offsetParent até chegar no scrollBox para obter posição real no DOM
+                    const offsetRelTo = (el, anc) => {
+                        let top = 0, cur = el;
+                        while (cur && cur !== anc) { top += cur.offsetTop; cur = cur.offsetParent; }
+                        return top;
+                    };
+                    const elTop   = offsetRelTo(activeEl, scrollBox);
+                    const lastBot = offsetRelTo(lastEl, scrollBox) + lastEl.offsetHeight;
+                    const target  = (elTop + lastBot) / 2 - scrollBox.clientHeight / 2;
+                    scrollBox.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
                 }
             }
-            // Update nav bar
             if (navEl)  navEl.classList.add('visible');
             if (infoEl) infoEl.textContent =
                 'Linha ' + (idx + 1) + '–' + Math.min(idx + 3, total) + ' de ' + total;
