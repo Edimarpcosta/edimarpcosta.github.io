@@ -16,14 +16,6 @@
  * O bundle do unpkg exporta: default export com { ID3Writer } dentro,
  * ou diretamente como named export — o código abaixo trata ambos.
  */
-      <script>
-(function(){
-  var defBase = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'letra/';
-  window.PUBLIC_LYRICS_URL   = window.PUBLIC_LYRICS_URL   || defBase;
-  window.TINYURL_API_TOKEN   = window.TINYURL_API_TOKEN   || '';
-  window.TINYURL_API_DOMAIN  = window.TINYURL_API_DOMAIN  || 'tinyurl.com';
-})();
-</script>
 async function loadID3Writer() {
     const sources = [
         'https://unpkg.com/browser-id3-writer@latest/dist/browser-id3-writer.mjs',
@@ -100,6 +92,7 @@ loadID3Writer();
         body.presentation-mode header,
         body.presentation-mode footer,
         body.presentation-mode .controls { display: none !important; }
+        body.presentation-mode #compactControls { display: none !important; }
 
         body::before {
             content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -238,30 +231,78 @@ loadID3Writer();
             color: var(--color-active);
             text-shadow: 0 0 18px var(--color-active), 0 0 36px rgba(255,255,255,0.15);
         }
-        /* Plain text — same appearance as synced lines */
+        /* ── PLAIN TEXT MANUAL MODE ── */
         .plain-text {
-            white-space: pre-wrap;
             font-size: var(--font-size-base);
             line-height: var(--line-spacing);
-            color: var(--color-inactive);
             font-family: var(--font-family-lyrics);
             padding: 10px;
-            opacity: 0.9;
         }
         body[data-font="bebas"] .plain-text { letter-spacing: 0.06em; text-transform: uppercase; }
-        /* Highlight the "current" line estimated by plain scroll */
-        .plain-text .plain-line-active {
-            color: var(--color-active);
-            font-size: var(--font-size-active);
-            font-weight: var(--font-weight-active);
-            text-shadow: 0 0 24px var(--color-active), 0 0 48px rgba(255,255,255,0.15);
-            display: block;
-            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        /* ── COMPACT CONTROLS STRIP (mobile/small screens) ── */
+        #compactControls {
+            display: none;  /* hidden by default, shown on mobile */
+            flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding: 6px 10px;
+            background: var(--surface); border-bottom: 1px solid #1e1e2e;
+            scrollbar-width: none; align-items: center; flex-shrink: 0;
         }
+        #compactControls::-webkit-scrollbar { display: none; }
+        #compactControls .btn-c {
+            flex-shrink: 0; border: none; border-radius: 8px; padding: 7px 10px;
+            background: #1f2937; color: #fff; font-size: 1.1em; cursor: pointer;
+            transition: background .15s; white-space: nowrap; display: flex;
+            align-items: center; gap: 4px;
+        }
+        #compactControls .btn-c.primary { background: #6366f1; }
+        #compactControls .btn-c.green   { background: #00b894; color: #fff; }
+        #compactControls .btn-c:hover   { filter: brightness(1.15); }
+        #compactControls .btn-c .lbl    { font-size: .72em; font-weight: 700; }
+
+        /* ── Plain lines: 3 estados ── */
         .plain-text .plain-line {
             display: block;
-            padding: 4px 0;
-            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            padding: 6px 0;
+            color: var(--color-inactive);
+            opacity: 0.35;
+            font-size: var(--font-size-base);
+            transition: all 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        /* 3 linhas do foco — amarelo igual ao sync ativo */
+        .plain-text .plain-line.pf-active {
+            color: var(--color-active);
+            opacity: 1;
+            font-size: var(--font-size-active);
+            font-weight: var(--font-weight-active);
+            text-shadow: 0 0 22px var(--color-active), 0 0 44px rgba(255,255,255,0.12);
+        }
+        /* Próxima linha (4ª) — vermelho de aviso */
+        .plain-text .plain-line.pf-next {
+            color: #ff6b6b;
+            opacity: 0.85;
+            font-size: var(--font-size-base);
+            font-weight: 600;
+        }
+        /* Barra nav plain (▲ ▼ botões) */
+        #plainNav {
+            display: none;
+            position: sticky; bottom: 0;
+            background: rgba(8,8,13,.92); backdrop-filter: blur(8px);
+            border-top: 1px solid #1e1e2e;
+            padding: 8px 14px; gap: 10px; align-items: center;
+            flex-shrink: 0; z-index: 20;
+        }
+        #plainNav.visible { display: flex; }
+        .pnav-btn {
+            flex-shrink: 0; border: none; border-radius: 10px; padding: 9px 18px;
+            background: #1f2937; color: #fff; font-size: 1.1em; cursor: pointer;
+            font-weight: 700; transition: background .15s;
+        }
+        .pnav-btn:hover  { background: #374151; }
+        .pnav-btn:active { background: #6366f1; }
+        .pnav-btn.primary { background: #6366f1; }
+        .pnav-info {
+            flex: 1; text-align: center; font-size: .82em; color: #666;
+            font-variant-numeric: tabular-nums;
         }
 
         .modal {
@@ -393,7 +434,28 @@ loadID3Writer();
         }
         .playlist-item .pl-number { min-width: 22px; text-align: right; font-size: 0.8em; color: #555; }
         .playlist-item.active .pl-number { color: var(--primary); }
-        .playlist-item .pl-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* ── Playlist title scroll ── */
+        .pl-title-wrap {
+            flex: 1; overflow: hidden; white-space: nowrap;
+            min-width: 0; position: relative;
+        }
+        .pl-title {
+            display: inline-block; white-space: nowrap;
+            transition: transform 0.05s linear;
+            will-change: transform; cursor: default;
+        }
+        /* Tooltip nome completo */
+        .pl-tooltip {
+            position: fixed; z-index: 500;
+            background: #1e1e2e; color: #e2e8f0;
+            border: 1px solid #4f46e5; border-radius: 8px;
+            padding: 6px 12px; font-size: .82em; font-weight: 600;
+            white-space: nowrap; pointer-events: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,.6);
+            opacity: 0; transition: opacity .15s;
+            max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+        }
+        .pl-tooltip.visible { opacity: 1; }
         .playlist-item .pl-playing { display: none; color: var(--primary); }
         .playlist-item.active .pl-playing { display: inline; }
 
@@ -447,7 +509,7 @@ loadID3Writer();
         @media (max-width: 1024px) { .lyrics-box { width: 85%; } }
         @media (max-width: 768px) {
             header { flex-wrap: wrap; padding: 10px; }
-            .controls { width: 100%; justify-content: space-between; }
+            .controls { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
             .btn { padding: 6px 10px; font-size: 0.85em; }
             .lyrics-box { width: 95%; padding: 40vh 15px; }
             .l-line { font-size: calc(var(--font-size-base) * 0.85); }
@@ -629,10 +691,11 @@ loadID3Writer();
 
         /* ── RESPONSIVO MOBILE ───────────────────────────────────────── */
         @media (max-width: 640px) {
-            /* Header */
+            /* Header — esconde controles, mostra hamburger + compact strip */
             .btn-hamburger { display: flex !important; }
             .controls { display: none !important; }
             #mainHeader { gap: 8px; padding: 8px 10px; }
+            #compactControls { display: flex !important; }
 
             /* Sidebar: overlay flutuante, não empurra conteúdo */
             .playlist-sidebar {
@@ -684,6 +747,14 @@ loadID3Writer();
   window.PUBLIC_LYRICS_URL = window.PUBLIC_LYRICS_URL || base;
   window.TINYURL_API_TOKEN = window.TINYURL_API_TOKEN || '';
   window.TINYURL_API_DOMAIN = window.TINYURL_API_DOMAIN || 'tinyurl.com';
+})();
+</script>
+    <script>
+(function(){
+  var defBase = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'letra/';
+  window.PUBLIC_LYRICS_URL   = window.PUBLIC_LYRICS_URL   || defBase;
+  window.TINYURL_API_TOKEN   = window.TINYURL_API_TOKEN   || '';
+  window.TINYURL_API_DOMAIN  = window.TINYURL_API_DOMAIN  || 'tinyurl.com';
 })();
 </script>
 </head>
@@ -738,6 +809,18 @@ loadID3Writer();
     <button class="btn-hamburger" id="btnHamburger" onclick="app.toggleHamburger()" title="Menu">☰</button>
 
 </header>
+
+<!-- Barra de ações compacta (mobile) -->
+<div id="compactControls">
+    <button class="btn-c" onclick="app.toggleSidebar()" title="Playlist">📋 <span class="lbl">Playlist</span></button>
+    <button class="btn-c primary" onclick="app.togglePresentationMode()" title="Apresentação">🖥️ <span class="lbl">Apresentar</span></button>
+    <button class="btn-c" onclick="app.generateQrCode()" title="QR Letra">📱 <span class="lbl">QR</span></button>
+    <button class="btn-c" onclick="app.openSearch()" title="Manual/Colar">🔍 <span class="lbl">Letra</span></button>
+    <button class="btn-c" onclick="app.openRemotePlaylist()" title="Remotas">🎵 <span class="lbl">Remotas</span></button>
+    <button class="btn-c" onclick="app.openSettings()" title="Configurações">⚙️ <span class="lbl">Config</span></button>
+    <button class="btn-c green" onclick="app.toggleHamburger()" title="Mais opções">☰ <span class="lbl">Mais</span></button>
+</div>
+
 <!-- Menu drawer mobile -->
     <div id="mobileMenu" class="mobile-menu">
         <button class="mobile-menu-close" onclick="app.toggleHamburger()">✕ Fechar</button>
@@ -818,6 +901,14 @@ loadID3Writer();
             </div>
         </div>
     </div>
+
+<!-- Plain text nav bar -->
+<div id="plainNav">
+    <button class="pnav-btn" onclick="app.plainNavStep(-1)" title="3 linhas anteriores (&#8593;)">&#9650; Anterior</button>
+    <div class="pnav-info" id="plainNavInfo">- / -</div>
+    <button class="pnav-btn primary" onclick="app.plainNavStep(1)" title="3 pr&#243;ximas linhas (&#8595;)">Pr&#243;ximo &#9660;</button>
+</div>
+
 
 </div>
 
@@ -1566,9 +1657,40 @@ class PlaylistUI {
             div.innerHTML = `
                 <span class="pl-number">${i + 1}</span>
                 <span class="pl-playing">▶</span>
-                <span class="pl-title">${this._escHtml(track.baseName)}</span>
+                <span class="pl-title-wrap"><span class="pl-title" title="${this._escHtml(track.baseName)}">${this._escHtml(track.baseName)}</span></span>
                 <span class="badge ${badge.cls}">${badge.label}</span>`;
             div.onclick = () => { if (this.onItemClick) this.onItemClick(i); };
+            // Slide title on hover + show tooltip
+            div.addEventListener('mouseenter', function(e) {
+                const wrap = this.querySelector('.pl-title-wrap');
+                const span = this.querySelector('.pl-title');
+                if (!wrap || !span) return;
+                // overflow = inner text width - visible container width
+                const overflow = span.scrollWidth - wrap.clientWidth;
+                if (overflow > 4) {
+                    const dur = Math.max(1.8, overflow / 55);
+                    span.style.transition = 'transform ' + dur + 's ease-in-out';
+                    span.style.transform  = 'translateX(-' + overflow + 'px)';
+                }
+                // Tooltip nome completo
+                const tip = document.getElementById('plTooltip');
+                if (tip) {
+                    tip.textContent = span.title || span.textContent;
+                    const r = this.getBoundingClientRect();
+                    tip.style.left = Math.min(r.left, window.innerWidth - tip.offsetWidth - 10) + 'px';
+                    tip.style.top  = (r.top - 40) + 'px';
+                    tip.classList.add('visible');
+                }
+            });
+            div.addEventListener('mouseleave', function() {
+                const span = this.querySelector('.pl-title');
+                if (span) {
+                    span.style.transition = 'transform 0.5s ease';
+                    span.style.transform  = 'translateX(0)';
+                }
+                const tip = document.getElementById('plTooltip');
+                if (tip) tip.classList.remove('visible');
+            });
             this.listEl.appendChild(div);
         });
         document.body.classList.add('has-playlist');
@@ -2196,10 +2318,15 @@ const app = {
 
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', e => {
-            if (e.key === 'F11' || (e.key.toLowerCase() === 'p' && !e.target.matches('input, textarea'))) { e.preventDefault(); this.togglePresentationMode(); }
-            else if (e.key === ' ' && !e.target.matches('input, textarea')) { e.preventDefault(); this.togglePlay(); }
-            else if (e.key === 'ArrowLeft' && !e.target.matches('input, textarea')) this.ui.audio.currentTime = Math.max(0, this.ui.audio.currentTime - 5);
-            else if (e.key === 'ArrowRight' && !e.target.matches('input, textarea')) this.ui.audio.currentTime = Math.min(this.ui.audio.duration, this.ui.audio.currentTime + 5);
+            const tgt = e.target.matches('input, textarea, select');
+            if (e.key === 'F11' || (e.key.toLowerCase() === 'p' && !tgt)) { e.preventDefault(); this.togglePresentationMode(); }
+            else if (e.key === 'ArrowLeft'  && !tgt) this.ui.audio.currentTime = Math.max(0, this.ui.audio.currentTime - 5);
+            else if (e.key === 'ArrowRight' && !tgt) this.ui.audio.currentTime = Math.min(this.ui.audio.duration, this.ui.audio.currentTime + 5);
+            else if (!tgt && this.state.currentMode === 'plain' && document.getElementById('plainNav')) {
+                // Plain manual: Space/ArrowDown = próximas 3; ArrowUp = 3 anteriores
+                if (e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); this.plainNavStep(1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); this.plainNavStep(-1); }
+            } else if (e.key === ' ' && !tgt) { e.preventDefault(); this.togglePlay(); }
         });
     },
 
@@ -2286,7 +2413,9 @@ const app = {
                 <div class="church-name" id="p-churchName"></div>
                 <main id="p-main"><div class="lyrics-box" id="p-lyricsContainer"></div></main>
                 <button id="p-fsBtn" title="Tela cheia (F11)">⛶</button>
-            </body>
+            
+<div id="plTooltip" class="pl-tooltip"></div>
+</body>
             </html>
         `);
 
@@ -2542,6 +2671,8 @@ const app = {
 
         if (this.state.lyrics.synced) {
             this.state.currentMode = 'synced';
+            const pn = document.getElementById('plainNav');
+            if (pn) pn.classList.remove('visible');
             this.renderSynced();
         } else {
             this.state.currentMode = 'plain';
@@ -2587,6 +2718,12 @@ const app = {
                     `<span class="plain-line" data-idx="${i}">${l || '&nbsp;'}</span>`
                 ).join('\n');
                 const html = `<div class="plain-text" id="plainTextBlock">${spans}</div>`;
+                this.state.plainFocusIdx = 0;
+                // schedule after DOM update
+                setTimeout(() => {
+                    const b = document.getElementById('plainTextBlock');
+                    if (b) this._applyPlainFocus([b]);
+                }, 50);
         this.ui.container.innerHTML = html;
         if (this.state.projectorWindow && !this.state.projectorWindow.closed) {
             const pBox = this.state.projectorWindow.document.getElementById('p-lyricsContainer');
@@ -2643,46 +2780,7 @@ const app = {
     syncLoop() {
         // Plain text: proportional scroll + active line highlight
         if (this.state.currentMode !== 'synced') {
-            if (this.state.currentMode === 'plain') {
-                const audio   = this.ui.audio;
-                const dur     = audio.duration;
-                const cur     = audio.currentTime;
-                if (!dur || isNaN(dur) || dur === 0) return;
-                const pct     = cur / dur;
-                const block   = document.getElementById('plainTextBlock');
-                const container = document.getElementById('lyricsContainer');
-                if (block && container) {
-                    // Smooth scroll
-                    const maxScroll = container.scrollHeight - container.clientHeight;
-                    const target    = Math.max(0, pct * maxScroll);
-                    container.scrollTo({ top: target, behavior: 'smooth' });
-                    // Highlight proportional line
-                    const spans = block.querySelectorAll('.plain-line');
-                    if (spans.length) {
-                        const activeIdx = Math.min(
-                            Math.floor(pct * spans.length),
-                            spans.length - 1
-                        );
-                        spans.forEach((s, i) => {
-                            s.classList.toggle('plain-line-active', i === activeIdx);
-                        });
-                    }
-                }
-                // Also sync projector window if open
-                if (this._projWin && !this._projWin.closed) {
-                    const pBlock = this._projWin.document.getElementById('plainTextBlock');
-                    const pCont  = this._projWin.document.getElementById('lyricsContainer');
-                    if (pBlock && pCont) {
-                        const maxS  = pCont.scrollHeight - pCont.clientHeight;
-                        pCont.scrollTo({ top: Math.max(0, pct * maxS), behavior: 'smooth' });
-                        const pSpans = pBlock.querySelectorAll('.plain-line');
-                        if (pSpans.length) {
-                            const ai = Math.min(Math.floor(pct * pSpans.length), pSpans.length - 1);
-                            pSpans.forEach((s, i) => s.classList.toggle('plain-line-active', i === ai));
-                        }
-                    }
-                }
-            }
+            // Plain mode: navegação manual — syncLoop não faz auto-scroll
             return;
         }
         if (!this.state.lyrics || !this.state.lyrics.synced) return;
@@ -3420,7 +3518,58 @@ ${JSON.stringify([
             const btn = document.getElementById('btnQrFs');
             if (btn) btn.textContent = '\u26f6 Tela cheia';
         }
-    }
+    },
+
+    // ── Plain text manual navigation ─────────────────────────────────
+    _applyPlainFocus(containers) {
+        const idx = this.state.plainFocusIdx || 0;
+        containers.forEach(container => {
+            if (!container) return;
+            const navEl   = document.getElementById('plainNav');
+            const infoEl  = document.getElementById('plainNavInfo');
+            const spans   = Array.from(container.querySelectorAll('.plain-line'));
+            if (!spans.length) return;
+            const total   = spans.length;
+            // Apply classes
+            spans.forEach((s, i) => {
+                s.classList.remove('pf-active', 'pf-next');
+                if (i >= idx && i < idx + 3) s.classList.add('pf-active');
+                else if (i === idx + 3)      s.classList.add('pf-next');
+            });
+            // Scroll so first active line is near center
+            const activeEl = spans[idx];
+            if (activeEl) {
+                const parent = container.closest('.lyrics-box') || container.parentElement;
+                if (parent) {
+                    const itemTop = activeEl.offsetTop;
+                    const target  = itemTop - parent.clientHeight * 0.35;
+                    parent.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+                }
+            }
+            // Update nav bar
+            if (navEl)  navEl.classList.add('visible');
+            if (infoEl) infoEl.textContent =
+                'Linha ' + (idx + 1) + '–' + Math.min(idx + 3, total) + ' de ' + total;
+        });
+    },
+
+    plainNavStep(direction) {
+        const block = document.getElementById('plainTextBlock');
+        if (!block) return;
+        const total   = block.querySelectorAll('.plain-line').length;
+        const current = this.state.plainFocusIdx || 0;
+        const next    = Math.max(0, Math.min(current + direction * 3, total - 1));
+        this.state.plainFocusIdx = next;
+        // Collect containers: main + projector
+        const containers = [block];
+        if (this._projWin && !this._projWin.closed) {
+            const pBlock = this._projWin.document.getElementById('plainTextBlock');
+            if (pBlock) containers.push(pBlock);
+        }
+        this._applyPlainFocus(containers);
+    },
+
+
 };
 
 app.init();
