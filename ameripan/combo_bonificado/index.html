@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Ferramenta Combo Bonificado v11</title>
+  <title>Ferramenta Combo Bonificado v13</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -185,7 +185,6 @@
     .sug-item:hover { background-color: var(--cyano); color: #fff; }
     .sug-item:hover span.sug-cod { color: #e0e0e0; }
     
-    /* Botão Adicionar Todos na lista */
     .si-addall {
       background: linear-gradient(90deg, #e8f0fa, #fff); color: #004890;
       font-weight: 900; font-size: 14px; border-bottom: 2px solid #f47920; justify-content: center;
@@ -328,7 +327,7 @@
       db: null,
       init() {
         return new Promise((resolve, reject) => {
-          const req = indexedDB.open('AmeripanApp_v11', 1);
+          const req = indexedDB.open('AmeripanApp_v13', 1);
           req.onupgradeneeded = (e) => {
             let db = e.target.result;
             if(!db.objectStoreNames.contains('state')) db.createObjectStore('state');
@@ -437,7 +436,6 @@
         calcRow(tr);
       });
 
-      // --- LOGICA DE AUTOCOMPLETE DO PRODUTO (ATUALIZADA) ---
       prod.addEventListener('input', (e) => {
         const val = e.target.value.trim();
         const sugMenu = document.getElementById('search-sug');
@@ -455,26 +453,30 @@
         } else {
             sugMenu.innerHTML = '';
             
-            // Cria o botão mágico de "Adicionar Todos" se houver mais de 1 item
             if (results.length > 1) {
               const btnAll = document.createElement('div');
               btnAll.className = 'sug-item si-addall';
               btnAll.innerHTML = `<i class="fa fa-layer-group" style="margin-right:6px"></i> Adicionar todos os <strong style="margin:0 4px">${results.length}</strong> itens abaixo`;
+              
               btnAll.onclick = () => {
                 const tbody = document.getElementById('sheet-body');
-                const allRows = Array.from(tbody.querySelectorAll('tr'));
-                const currentRowIndex = allRows.indexOf(tr);
-
-                // Garante que existam linhas suficientes abaixo
-                const rowsNeeded = currentRowIndex + results.length;
-                if (rowsNeeded > allRows.length) {
-                    generateRows(rowsNeeded - allRows.length);
-                }
-
-                const updatedRows = Array.from(tbody.querySelectorAll('tr'));
+                sugMenu.style.display = 'none';
 
                 results.forEach((item, idx) => {
-                    const targetRow = updatedRows[currentRowIndex + idx];
+                    let targetRow;
+                    if (idx === 0) {
+                        targetRow = tr; 
+                    } else {
+                        let emptyRows = Array.from(tbody.querySelectorAll('tr.row-empty'));
+                        if (emptyRows.length > 0) {
+                            targetRow = emptyRows[0];
+                        } else {
+                            generateRows(1);
+                            let allRows = Array.from(tbody.querySelectorAll('tr'));
+                            targetRow = allRows[allRows.length - 1];
+                        }
+                    }
+
                     targetRow.querySelector('.inp-cod').value = item.cod;
                     targetRow.querySelector('.inp-produto').value = item.desc;
                     const rQtde = targetRow.querySelector('.inp-qtde');
@@ -482,14 +484,12 @@
                     calcRow(targetRow);
                 });
 
-                sugMenu.style.display = 'none';
-                if (!isSensitiveHidden) updatedRows[currentRowIndex].querySelector('.inp-custo').focus();
-                else updatedRows[currentRowIndex].querySelector('.inp-preco-final').focus();
+                if (!isSensitiveHidden) tr.querySelector('.inp-custo').focus();
+                else tr.querySelector('.inp-preco-final').focus();
               };
               sugMenu.appendChild(btnAll);
             }
 
-            // Lista os resultados padrão
             results.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'sug-item';
@@ -556,7 +556,7 @@
         tr.classList.add('row-empty');
         qtdeInp.value = ''; custoInp.value = ''; precoFinalInp.value = ''; 
         margemInp.value = ''; markupInp.value = ''; precoTotalInp.value = '';
-        tr.querySelector('.inp-produto').value = ''; // GARANTE QUE O NOME ZERE AO LIMPAR A LINHA
+        tr.querySelector('.inp-produto').value = ''; 
         spans.forEach(s => s.style.display = 'none');
         applyColor(margemInp, ''); applyColor(markupInp, '');
       } else {
@@ -639,7 +639,8 @@
           document.getElementById('inp-cli-cod').value = ''; document.getElementById('inp-cli-nome').value = '';
           document.querySelectorAll('#sheet-body tr').forEach(tr => { 
             tr.querySelector('.inp-cod').value = ''; 
-            tr.querySelector('.inp-cod').dispatchEvent(new Event('blur')); // Vai trigar o calcRow que agora zera o nome!
+            tr.querySelector('.inp-produto').value = '';
+            tr.querySelector('.inp-cod').dispatchEvent(new Event('blur')); 
           });
           scheduleSave();
         }
@@ -717,15 +718,21 @@
       const area = document.getElementById('export-area');
       const wrapper = document.querySelector('.table-wrapper');
       const table = document.getElementById('spreadsheet');
+      const tfoot = table.querySelector('tfoot');
       const dummyEls = document.querySelectorAll('.col-dummy, .dummy-cell');
       
+      // ALINHA PARA CIMA PARA NÃO CORTAR SE TIVER ROLADO
+      window.scrollTo(0, 0);
+      wrapper.scrollTo(0, 0);
+
       // SALVA O ESTADO ATUAL PARA RESTAURAR DEPOIS
       const origBodyCSS = document.body.style.cssText;
       const origAreaCSS = area.style.cssText;
       const origWrapCSS = wrapper.style.cssText;
       const origTableCSS = table.style.cssText;
+      const origTfootCSS = tfoot.style.cssText;
       
-      // PREPARA A TELA: Força tudo a virar um bloco isolado e abraçar a tabela
+      // PREPARA A TELA E REMOVE O BUG DO TFOOT (TOTAIS) NO MEIO DA TELA
       dummyEls.forEach(el => el.style.display = 'none');
       
       document.body.style.height = 'auto'; 
@@ -736,7 +743,7 @@
       area.style.overflow = 'visible';
       area.style.height = 'max-content'; 
       area.style.width = 'max-content';  
-      area.style.display = 'inline-block'; // ESSENCIAL PARA O CORTE PERFEITO DO ESPAÇO BRANCO
+      area.style.display = 'inline-block';
 
       wrapper.style.overflow = 'visible';
       wrapper.style.height = 'max-content';
@@ -748,6 +755,10 @@
       table.style.height = 'max-content';
       table.style.margin = '0';
       
+      // MAGICA DO RODAPÉ: Remove a posição "flutuante" para ele ficar no final absoluto da lista
+      tfoot.style.position = 'static';
+      tfoot.style.bottom = 'auto';
+      
       try {
         const canvas = await html2canvas(area, { scale: 2 });
         
@@ -756,6 +767,7 @@
         area.style.cssText = origAreaCSS;
         wrapper.style.cssText = origWrapCSS;
         table.style.cssText = origTableCSS;
+        tfoot.style.cssText = origTfootCSS;
         dummyEls.forEach(el => el.style.display = '');
         
         const filename = `Cotacao_${document.getElementById('inp-cli-nome').value || 'Cliente'}`;
@@ -770,7 +782,7 @@
             }
           });
         } else {
-          // O PDF agora nasce com as dimensões EXATAS do canvas gerado, sem sobras.
+          // O PDF agora nasce com as dimensões EXATAS do canvas gerado, sem sobras e sem cortes
           const { jsPDF } = window.jspdf; 
           const pdf = new jsPDF({
             orientation: canvas.width > canvas.height ? 'l' : 'p',
@@ -793,6 +805,7 @@
         area.style.cssText = origAreaCSS;
         wrapper.style.cssText = origWrapCSS;
         table.style.cssText = origTableCSS;
+        tfoot.style.cssText = origTfootCSS;
         dummyEls.forEach(el => el.style.display = '');
         alert("Erro ao gerar arquivo."); console.error(err); 
       }
