@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ferramenta Combo Bonificado v6</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --cyano: #2ab2cd;
+      --red: #d9534f;
+      --yellow: #f0ad4e;
+      --green: #5cb85c;
+      --bg-gray: #cfd0d2;
+      --border-color: #000;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: var(--bg-gray);
+      margin: 0; padding: 10px;
+      display: flex; justify-content: center;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .app-container {
+      background-color: #fff; border: 2px solid var(--border-color);
+      width: 100%; max-width: 1500px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+      display: flex; flex-direction: column; position: relative; 
+      height: 100%; overflow: hidden;
+    }
+
+    /* Botão flutuante Ocultar Vazias */
+    .btn-float-left {
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      background: #333; color: #fff; border: 2px solid #000; border-left: none;
+      padding: 15px 5px; cursor: pointer; border-radius: 0 8px 8px 0; 
+      writing-mode: vertical-rl; text-orientation: mixed; font-weight: bold; 
+      z-index: 100; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); transition: background 0.2s;
+    }
+    .btn-float-left:hover { background: #555; }
+
+    /* Header e Botões */
+    .header {
+      background-color: #e8e8e8; border-bottom: 2px solid var(--border-color);
+      padding: 8px 10px; display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;
+    }
+    .header-left, .header-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    
+    .classic-btn {
+      width: 42px; height: 42px; background: #e4e4e4; border: 2px solid;
+      border-top-color: #fff; border-left-color: #fff;
+      border-right-color: #888; border-bottom-color: #888;
+      border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 20px; color: #000; cursor: pointer; box-sizing: border-box; outline: none;
+    }
+    .classic-btn:active {
+      border-top-color: #888; border-left-color: #888;
+      border-right-color: #fff; border-bottom-color: #fff;
+      padding-top: 2px; padding-left: 2px;
+    }
+
+    .header-title { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #000; margin-left: 8px; }
+
+    .btn-action {
+      background-color: #fff; border: 2px solid #333; padding: 4px 10px;
+      font-weight: bold; cursor: pointer; border-radius: 4px; display: flex;
+      align-items: center; gap: 6px; font-size: 13px;
+    }
+    .btn-action:hover { background-color: #f0f0f0; }
+
+    /* Status Bar */
+    .status-bar {
+      padding: 6px 10px; font-size: 13px; font-weight: bold;
+      display: flex; justify-content: space-between; align-items: center;
+      background-color: #fff; border-bottom: 2px solid #000; flex-wrap: wrap; gap: 8px;
+      flex-shrink: 0;
+    }
+    .client-inputs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .client-inputs input {
+      border: 1px solid #ccc; padding: 2px 4px; border-radius: 3px; font-size: 13px; font-weight: bold;
+    }
+
+    /* Tabela */
+    .table-wrapper {
+      padding: 0; flex: 1; overflow: auto;
+      -webkit-overflow-scrolling: touch; background: #fff;
+    }
+    
+    table {
+      border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%;
+    }
+    
+    th, td {
+      border: 1px solid #000; height: 28px;
+      vertical-align: middle; position: relative; padding: 0;
+    }
+    
+    th {
+      background-color: #fff; font-size: 14px; font-weight: 900;
+      text-align: center; border-bottom: 2px solid #000; padding: 2px 4px;
+      position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.4);
+    }
+    
+    .resizer {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
+      cursor: col-resize; user-select: none; z-index: 11; background-color: transparent;
+    }
+    .resizer:hover { background-color: rgba(0,0,0,0.2); }
+
+    input.cell-inp {
+      width: 100%; height: 100%; border: none; padding: 0 4px;
+      font-family: 'Arial', sans-serif; font-size: 15px; font-weight: 900;
+      background: transparent; outline: none; box-sizing: border-box;
+    }
+    input.cell-inp:focus { background-color: #fffacd; }
+
+    /* Colunas */
+    .col-cod { width: 60px; }
+    .col-qtde { width: 55px; }
+    .col-produto { width: 450px; }
+    .col-custo { width: 120px; }
+    .col-preco-final { width: 135px; }
+    .col-margem { width: 90px; }
+    .col-markup { width: 90px; }
+    .col-preco-total { width: 150px; }
+    .col-dummy { width: 100vw; border-right: none !important; border-top: none !important; }
+
+    .inp-cod, .inp-qtde { text-align: center; color: #000; }
+    .inp-produto { color: var(--cyano); text-transform: uppercase; }
+    
+    /* PREÇO FINAL AGORA É PRETO (#000) E PREÇO TOTAL CONTINUA CIANO */
+    .inp-custo { text-align: right; color: var(--cyano) !important; font-size: 16px !important; }
+    .inp-preco-final { text-align: right; color: #000 !important; font-size: 16px !important; }
+    .inp-preco-total { text-align: right; color: var(--cyano) !important; font-size: 16px !important; }
+    .inp-margem, .inp-markup { text-align: center; font-size: 16px !important; }
+
+    .preco-wrapper {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-left: 4px; height: 100%; box-sizing: border-box; width: 100%;
+    }
+    .moeda-symbol { font-weight: 900; color: #000; font-size: 15px; flex-shrink: 0; }
+
+    .color-red { color: var(--red) !important; }
+    .color-yellow { color: var(--yellow) !important; }
+    .color-green { color: var(--green) !important; }
+
+    .hide-sensitive .sensitive-col { display: none !important; }
+    .hide-empty .row-empty { display: none !important; }
+
+    /* Tfoot Fixado */
+    tfoot {
+      position: sticky; bottom: 0; z-index: 10;
+    }
+    tfoot td {
+      background-color: #f9f9f9; font-weight: 900; font-size: 16px; 
+      border-top: 3px solid #000; padding: 4px; vertical-align: middle;
+      box-shadow: 0 -2px 2px -1px rgba(0,0,0,0.4);
+      overflow: hidden; white-space: nowrap; /* Impede quebrar texto se a coluna for encolhida */
+    }
+    .dummy-cell { border-right: none !important; border-top: none !important; border-bottom: none !important; background: #fff !important; pointer-events: none; box-shadow: none !important;}
+
+    /* Modais */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-content {
+      background: #fff; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%;
+      border: 2px solid #000; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px; }
+    .modal-close { cursor: pointer; font-size: 20px; font-weight: bold; }
+    .history-list { max-height: 400px; overflow-y: auto; }
+    .history-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .history-item:hover { background: #f5f5f5; }
+    .history-item strong { color: var(--cyano); }
+  </style>
+
+  <style id="collapse-styles"></style>
+
+</head>
+<body>
+
+  <div class="app-container" id="export-area">
+    <button id="btn-toggle-empty" class="btn-float-left" data-html2canvas-ignore title="Ocultar Linhas Vazias">
+      <i class="fa fa-filter"></i> Vazias
+    </button>
+
+    <div class="header" data-html2canvas-ignore>
+      <div class="header-left">
+        <button class="classic-btn" id="btn-new" title="Nova Cotação"><i class="fa-regular fa-file"></i></button>
+        <button class="classic-btn" id="btn-cloud" title="Histórico Salvo"><i class="fa-solid fa-cloud"></i></button>
+        <button class="classic-btn" id="btn-copy" title="Copiar Itens"><i class="fa-regular fa-copy"></i></button>
+        <button class="classic-btn" id="btn-config" title="Configurações e Histórico"><i class="fa-solid fa-gear"></i></button>
+        
+        <div class="header-title">FERRAMENTA COMBO_BONIFICADO</div>
+      </div>
+      <div class="header-right">
+        <button id="btn-print" class="btn-action"><i class="fa fa-camera"></i> Foto (Compartilhar)</button>
+        <button id="btn-pdf" class="btn-action"><i class="fa fa-file-pdf"></i> PDF (Compartilhar)</button>
+        <button id="btn-toggle-costs" class="btn-action"><i class="fa fa-eye-slash"></i> Ocultar Custos</button>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div><span id="update-time">--/--/---- --:--:--</span></div>
+      <div class="client-inputs">
+        <label>Cód. Cliente:</label>
+        <input type="text" id="inp-cli-cod" style="width: 70px;" autocomplete="off">
+        <label>Nome do Cliente:</label>
+        <input type="text" id="inp-cli-nome" style="width: 280px;" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="spreadsheet">
+        <colgroup>
+          <col style="width: 60px;">  
+          <col style="width: 55px;">  
+          <col style="width: 450px;"> 
+          <col class="sensitive-col" style="width: 120px;"> 
+          <col style="width: 135px;"> 
+          <col class="sensitive-col" style="width: 90px;">  
+          <col class="sensitive-col" style="width: 90px;">  
+          <col style="width: 150px;"> 
+          <col style="width: 100vw;"> 
+        </colgroup>
+        <thead>
+          <tr>
+            <th>COD.<div class="resizer"></div></th>
+            <th>QTDE.<div class="resizer"></div></th>
+            <th>PRODUTO<div class="resizer"></div></th>
+            <th class="sensitive-col">CUSTO<div class="resizer"></div></th>
+            <th>PREÇO<br>FINAL<div class="resizer"></div></th>
+            <th class="sensitive-col">MARGEM<div class="resizer"></div></th>
+            <th class="sensitive-col">MARKUP<div class="resizer"></div></th>
+            <th>PREÇO<br>TOTAL<div class="resizer"></div></th>
+            <th class="dummy-cell"></th>
+          </tr>
+        </thead>
+        <tbody id="sheet-body">
+          </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align: right; border-right: none;">TOTAIS GERAIS:</td>
+            
+            <td class="sensitive-col" style="color: var(--cyano); text-align: right;">
+              <div class="preco-wrapper"><span class="moeda-symbol">R$</span><span id="tot-custo" style="padding-right: 4px;">0,00</span></div>
+            </td>
+            
+            <td></td> <td class="sensitive-col" id="tot-margem" style="text-align: center;">0,00%</td>
+            <td class="sensitive-col" id="tot-markup" style="text-align: center;">0,00%</td>
+            
+            <td style="color: var(--cyano); text-align: right;">
+              <div class="preco-wrapper"><span class="moeda-symbol">R$</span><span id="tot-geral" style="text-decoration: underline; padding-right: 4px;">0,00</span></div>
+            </td>
+            
+            <td class="dummy-cell"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-config" data-html2canvas-ignore>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa fa-gear"></i> Configurações & Histórico</h2>
+        <span class="modal-close" id="close-modal">&times;</span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>Adicionar linhas extras à tabela:</label>
+        <input type="number" id="inp-add-rows" value="5" style="width: 50px; padding: 3px;">
+        <button class="btn-action" id="btn-add-rows" style="display: inline-block; padding: 4px 8px;">Adicionar</button>
+      </div>
+      <h4>Últimas 25 Cotações</h4>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const CFG = { sheetId: "1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q", apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", defaultRows: 25 };
+    let catalogMap = new Map();
+    let isSensitiveHidden = false; let isEmptyHidden = false; let saveTimeout = null;
+
+    const parseNum = (str) => parseFloat((str||'').toString().replace(/\./g, '').replace(',', '.')) || 0;
+    const formatCur = (num) => (num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatPct = (num) => isFinite(num) ? num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%' : '0,00%';
+
+    const updateTime = () => {
+      const d = new Date();
+      document.getElementById('update-time').innerText = `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR')}`;
+    };
+
+    const DB = {
+      db: null,
+      init() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open('AmeripanApp_v6', 1);
+          req.onupgradeneeded = (e) => {
+            let db = e.target.result;
+            if(!db.objectStoreNames.contains('state')) db.createObjectStore('state');
+            if(!db.objectStoreNames.contains('history')) db.createObjectStore('history', { keyPath: 'id' });
+          };
+          req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+          req.onerror = (e) => reject(e);
+        });
+      },
+      async putState(data) {
+        return new Promise(res => {
+          const tx = this.db.transaction('state', 'readwrite');
+          tx.objectStore('state').put(data, 'current');
+          tx.oncomplete = () => res();
+        });
+      },
+      async getState() {
+        return new Promise(res => {
+          const tx = this.db.transaction('state', 'readonly');
+          const req = tx.objectStore('state').get('current');
+          req.onsuccess = () => res(req.result);
+        });
+      },
+      async saveHistory(quote) {
+        return new Promise(res => {
+          const tx = this.db.transaction('history', 'readwrite');
+          const store = tx.objectStore('history'); store.put(quote);
+          const reqAll = store.getAll();
+          reqAll.onsuccess = () => {
+            let all = reqAll.result;
+            if(all.length > 25) {
+              all.sort((a,b) => a.timestamp - b.timestamp);
+              let toDelete = all.length - 25;
+              for(let i=0; i<toDelete; i++) store.delete(all[i].id);
+            }
+          };
+          tx.oncomplete = () => res();
+        });
+      },
+      async getHistory() {
+        return new Promise(res => {
+          const tx = this.db.transaction('history', 'readonly');
+          const req = tx.objectStore('history').getAll();
+          req.onsuccess = () => res(req.result.sort((a,b) => b.timestamp - a.timestamp)); 
+        });
+      }
+    };
+
+    async function initApp() {
+      setInterval(updateTime, 1000); updateTime();
+      await DB.init(); await loadCatalog();
+      
+      const savedState = await DB.getState();
+      if(savedState && savedState.rows && savedState.rows.length > 0) {
+        document.getElementById('inp-cli-cod').value = savedState.cliCod || '';
+        document.getElementById('inp-cli-nome').value = savedState.cliNome || '';
+        generateRows(savedState.rows.length); restoreTableState(savedState.rows);
+      } else { generateRows(CFG.defaultRows); }
+      setupEvents(); calcTotals();
+    }
+
+    async function loadCatalog() {
+      try {
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.sheetId}/values/produtos!A2:C?key=${CFG.apiKey}`);
+        const data = await res.json();
+        (data.values || []).forEach(r => { if(r[0]) catalogMap.set(r[0].trim(), r[1].trim()); });
+      } catch (e) { console.error("Erro catálogo", e); }
+    }
+
+    function createRowElement() {
+      const tr = document.createElement('tr'); tr.className = 'row-empty';
+      tr.innerHTML = `
+        <td><input type="text" class="cell-inp inp-cod" autocomplete="off"></td>
+        <td><input type="text" class="cell-inp inp-qtde" autocomplete="off"></td>
+        <td><input type="text" class="cell-inp inp-produto" autocomplete="off" tabindex="-1"></td>
+        <td class="sensitive-col"><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-custo" autocomplete="off"></div></td>
+        <td><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-preco-final" autocomplete="off"></div></td>
+        <td class="sensitive-col"><input type="text" class="cell-inp inp-margem" readonly tabindex="-1"></td>
+        <td class="sensitive-col"><input type="text" class="cell-inp inp-markup" readonly tabindex="-1"></td>
+        <td><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-preco-total" readonly tabindex="-1"></div></td>
+        <td class="dummy-cell"></td>
+      `;
+      bindRowEvents(tr); return tr;
+    }
+
+    function generateRows(count) {
+      const tbody = document.getElementById('sheet-body');
+      for (let i = 0; i < count; i++) tbody.appendChild(createRowElement());
+    }
+
+    function bindRowEvents(tr) {
+      const inps = tr.querySelectorAll('input'); const [cod, qtde, prod, custo, preco] = inps;
+      inps.forEach(i => i.addEventListener('input', scheduleSave));
+
+      cod.addEventListener('blur', () => {
+        const c = cod.value.trim(); prod.value = c ? (catalogMap.get(c) || "NÃO ENCONTRADO") : "";
+        if(!c) qtde.value = ''; else if(!qtde.value) qtde.value = '1';
+        calcRow(tr);
+      });
+
+      cod.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); qtde.focus(); qtde.select(); }});
+      qtde.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); isSensitiveHidden ? preco.focus() : custo.focus(); }});
+      custo.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); preco.focus(); }});
+      preco.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); const n = tr.nextElementSibling; if(n) n.querySelector('.inp-cod').focus(); }});
+
+      [qtde, custo, preco].forEach(inp => {
+        inp.addEventListener('blur', (e) => { if (inp !== qtde && e.target.value) e.target.value = formatCur(parseNum(e.target.value)); calcRow(tr); });
+        inp.addEventListener('focus', (e) => { if (inp !== qtde && e.target.value) e.target.value = parseNum(e.target.value).toString().replace('.', ','); e.target.select(); });
+      });
+    }
+
+    function applyColor(element, value) {
+      element.classList.remove('color-red', 'color-yellow', 'color-green');
+      if (value === '' || isNaN(value)) return;
+      if (value <= 18) element.classList.add('color-red');
+      else if (value <= 20) element.classList.add('color-yellow');
+      else element.classList.add('color-green');
+    }
+
+    function calcRow(tr) {
+      const cod = tr.querySelector('.inp-cod').value.trim();
+      const [qtdeInp, custoInp, precoFinalInp, margemInp, markupInp, precoTotalInp] = 
+        ['.inp-qtde', '.inp-custo', '.inp-preco-final', '.inp-margem', '.inp-markup', '.inp-preco-total'].map(s => tr.querySelector(s));
+      const spans = tr.querySelectorAll('.hide-on-empty');
+
+      if(!cod) {
+        tr.classList.add('row-empty');
+        qtdeInp.value = ''; custoInp.value = ''; precoFinalInp.value = ''; 
+        margemInp.value = ''; markupInp.value = ''; precoTotalInp.value = '';
+        spans.forEach(s => s.style.display = 'none');
+        applyColor(margemInp, ''); applyColor(markupInp, '');
+      } else {
+        tr.classList.remove('row-empty');
+        spans.forEach(s => s.style.display = 'inline'); 
+        
+        const q = parseNum(qtdeInp.value) || 1; const c = parseNum(custoInp.value); const p = parseNum(precoFinalInp.value);
+        if (p > 0) {
+          precoTotalInp.value = formatCur(q * p);
+          if (c > 0) {
+            const lucro = p - c; const margem = (lucro / p) * 100; const markup = (lucro / c) * 100;
+            margemInp.value = formatPct(margem); markupInp.value = formatPct(markup);
+            applyColor(margemInp, margem); applyColor(markupInp, margem);
+          } else { margemInp.value = ''; markupInp.value = ''; applyColor(margemInp, ''); applyColor(markupInp, ''); }
+        } else { precoTotalInp.value = ''; margemInp.value = ''; markupInp.value = ''; }
+      }
+      calcTotals(); scheduleSave();
+    }
+
+    function calcTotals() {
+      let sumCusto = 0; let sumPreco = 0;
+      document.querySelectorAll('#sheet-body tr').forEach(tr => {
+        if(tr.classList.contains('row-empty')) return;
+        const q = parseNum(tr.querySelector('.inp-qtde').value) || 1;
+        const c = parseNum(tr.querySelector('.inp-custo').value);
+        const p = parseNum(tr.querySelector('.inp-preco-final').value);
+        if(c > 0 && p > 0) { sumCusto += (c * q); sumPreco += (p * q); }
+      });
+
+      document.getElementById('tot-custo').innerText = formatCur(sumCusto);
+      document.getElementById('tot-geral').innerText = formatCur(sumPreco);
+
+      const mrgEl = document.getElementById('tot-margem'); const mkpEl = document.getElementById('tot-markup');
+      if (sumPreco > 0 && sumCusto > 0) {
+        const lucro = sumPreco - sumCusto; const margem = (lucro / sumPreco) * 100; const markup = (lucro / sumCusto) * 100;
+        mrgEl.innerText = formatPct(margem); mkpEl.innerText = formatPct(markup);
+        applyColor(mrgEl, margem); applyColor(mkpEl, margem);
+      } else { mrgEl.innerText = '0,00%'; mkpEl.innerText = '0,00%'; applyColor(mrgEl, ''); applyColor(mkpEl, ''); }
+    }
+
+    function scheduleSave() { clearTimeout(saveTimeout); saveTimeout = setTimeout(saveCurrentState, 1000); }
+
+    async function saveCurrentState() {
+      const rows = [];
+      document.querySelectorAll('#sheet-body tr').forEach(tr => {
+        rows.push({
+          cod: tr.querySelector('.inp-cod').value, qtde: tr.querySelector('.inp-qtde').value,
+          custo: tr.querySelector('.inp-custo').value, preco: tr.querySelector('.inp-preco-final').value
+        });
+      });
+      await DB.putState({ cliCod: document.getElementById('inp-cli-cod').value, cliNome: document.getElementById('inp-cli-nome').value, rows: rows });
+    }
+
+    function restoreTableState(rowsData) {
+      const rows = document.querySelectorAll('#sheet-body tr');
+      rowsData.forEach((data, i) => {
+        if(rows[i]) {
+          rows[i].querySelector('.inp-cod').value = data.cod; rows[i].querySelector('.inp-qtde').value = data.qtde;
+          rows[i].querySelector('.inp-custo').value = data.custo; rows[i].querySelector('.inp-preco-final').value = data.preco;
+          rows[i].querySelector('.inp-cod').dispatchEvent(new Event('blur'));
+        }
+      });
+    }
+
+    function setupEvents() {
+      document.getElementById('inp-cli-cod').addEventListener('input', scheduleSave);
+      document.getElementById('inp-cli-nome').addEventListener('input', scheduleSave);
+
+      document.getElementById('btn-new').addEventListener('click', () => {
+        if(confirm("Iniciar nova cotação limpa?")) {
+          document.getElementById('inp-cli-cod').value = ''; document.getElementById('inp-cli-nome').value = '';
+          document.querySelectorAll('#sheet-body tr').forEach(tr => { tr.querySelector('.inp-cod').value = ''; tr.querySelector('.inp-cod').dispatchEvent(new Event('blur')); });
+          scheduleSave();
+        }
+      });
+
+      document.getElementById('btn-copy').addEventListener('click', () => {
+        let text = `Cotação - Cliente: ${document.getElementById('inp-cli-nome').value || 'S/N'}\n\n`;
+        document.querySelectorAll('#sheet-body tr').forEach(tr => {
+          if(!tr.classList.contains('row-empty')) {
+            text += `${tr.querySelector('.inp-qtde').value}x ${tr.querySelector('.inp-produto').value} = R$ ${tr.querySelector('.inp-preco-total').value}\n`;
+          }
+        });
+        text += `\nTotal: R$ ${document.getElementById('tot-geral').innerText}`;
+        navigator.clipboard.writeText(text).then(() => alert("Copiado!"));
+      });
+
+      document.getElementById('btn-toggle-costs').addEventListener('click', (e) => {
+        isSensitiveHidden = !isSensitiveHidden; document.getElementById('spreadsheet').classList.toggle('hide-sensitive', isSensitiveHidden);
+        e.currentTarget.innerHTML = isSensitiveHidden ? '<i class="fa fa-eye"></i> Mostrar Custos' : '<i class="fa fa-eye-slash"></i> Ocultar Custos';
+      });
+
+      document.getElementById('btn-toggle-empty').addEventListener('click', (e) => {
+        isEmptyHidden = !isEmptyHidden; document.getElementById('spreadsheet').classList.toggle('hide-empty', isEmptyHidden);
+        e.currentTarget.innerHTML = isEmptyHidden ? '<i class="fa fa-filter"></i> Mostrar Vazias' : '<i class="fa fa-filter"></i> Vazias';
+      });
+
+      const openConfigModal = async () => {
+        const list = document.getElementById('history-list'); list.innerHTML = '';
+        const history = await DB.getHistory();
+        history.forEach(item => {
+          const div = document.createElement('div'); div.className = 'history-item'; const d = new Date(item.timestamp);
+          div.innerHTML = `<div><strong>Cód: ${item.cliCod || 'S/N'}</strong> - ${item.cliNome || 'Sem Nome'}</div> <div>${d.toLocaleDateString()} ${d.toLocaleTimeString()}</div>`;
+          div.onclick = () => {
+            document.getElementById('inp-cli-cod').value = item.cliCod; document.getElementById('inp-cli-nome').value = item.cliNome;
+            document.getElementById('sheet-body').innerHTML = ''; generateRows(item.rows.length); restoreTableState(item.rows);
+            document.getElementById('modal-config').style.display = 'none';
+          };
+          list.appendChild(div);
+        });
+        if(history.length === 0) list.innerHTML = '<p>Nenhuma cotação salva.</p>';
+        document.getElementById('modal-config').style.display = 'flex';
+      };
+
+      document.getElementById('btn-cloud').addEventListener('click', openConfigModal);
+      document.getElementById('btn-config').addEventListener('click', openConfigModal);
+      document.getElementById('close-modal').addEventListener('click', () => document.getElementById('modal-config').style.display = 'none');
+
+      document.getElementById('btn-add-rows').addEventListener('click', () => {
+        const qtd = parseInt(document.getElementById('inp-add-rows').value) || 0;
+        if(qtd > 0) { generateRows(qtd); scheduleSave(); document.getElementById('modal-config').style.display = 'none'; }
+      });
+
+      document.getElementById('btn-print').addEventListener('click', () => exportDoc('print'));
+      document.getElementById('btn-pdf').addEventListener('click', () => exportDoc('pdf'));
+
+      initResizers();
+    }
+
+    async function exportDoc(type) {
+      if(confirm("Deseja arquivar esta cotação no histórico antes de compartilhar?")) {
+        const rows = [];
+        document.querySelectorAll('#sheet-body tr').forEach(tr => {
+          if(!tr.classList.contains('row-empty')) {
+            rows.push({
+              cod: tr.querySelector('.inp-cod').value, qtde: tr.querySelector('.inp-qtde').value,
+              custo: tr.querySelector('.inp-custo').value, preco: tr.querySelector('.inp-preco-final').value
+            });
+          }
+        });
+        if(rows.length > 0) {
+          await DB.saveHistory({ id: Date.now().toString(), timestamp: Date.now(), cliCod: document.getElementById('inp-cli-cod').value, cliNome: document.getElementById('inp-cli-nome').value, rows: rows });
+        }
+      }
+      
+      const area = document.getElementById('export-area');
+      area.style.border = 'none'; area.style.boxShadow = 'none';
+      
+      try {
+        const canvas = await html2canvas(area, { scale: 2 });
+        area.style.border = ''; area.style.boxShadow = '';
+        const filename = `Cotacao_${document.getElementById('inp-cli-nome').value || 'Cliente'}`;
+
+        if (type === 'print') {
+          canvas.toBlob(async (blob) => {
+            const file = new File([blob], filename + ".png", { type: "image/png" });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              try { await navigator.share({ files: [file], title: 'Cotação', text: 'Segue a cotação gerada.' }); } catch(err){}
+            } else {
+              const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = filename + ".png"; a.click();
+            }
+          });
+        } else {
+          const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4');
+          const imgProps = pdf.getImageProperties(canvas.toDataURL('image/png'));
+          const pdfWidth = pdf.internal.pageSize.getWidth(); const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, pdfHeight);
+          
+          const pdfBlob = pdf.output('blob');
+          const file = new File([pdfBlob], filename + ".pdf", { type: "application/pdf" });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+             try { await navigator.share({ files: [file], title: 'Cotação PDF', text: 'Segue a cotação em PDF.' }); } catch(err){}
+          } else {
+             pdf.save(filename + ".pdf");
+          }
+        }
+      } catch (err) { alert("Erro ao gerar arquivo."); console.error(err); }
+    }
+
+    // -------------------------------------------------------------
+    // LÓGICA DE REDIMENSIONAR E OCULTAR ESTILO EXCEL
+    // -------------------------------------------------------------
+    const collapsedCols = new Set();
+    
+    function updateCollapseStyles() {
+      let css = '';
+      collapsedCols.forEach(idx => {
+        let n = idx + 1; // nth-child é base 1
+        css += `
+        #spreadsheet th:nth-child(${n}) { background-color: #d4d4d4 !important; color: transparent !important; padding: 0 !important; cursor: col-resize; }
+        #spreadsheet th:nth-child(${n}) .resizer { width: 100%; right: 0; background-color: transparent; }
+        #spreadsheet th:nth-child(${n}):hover .resizer { background-color: rgba(0,0,0,0.1); }
+        #spreadsheet tbody td:nth-child(${n}) { background-color: #e8e8e8 !important; padding: 0 !important; }
+        #spreadsheet tbody td:nth-child(${n}) * { opacity: 0 !important; pointer-events: none !important; }
+        `;
+      });
+      document.getElementById('collapse-styles').innerHTML = css;
+    }
+
+    function initResizers() {
+      const ths = document.querySelectorAll('#spreadsheet th:not(.dummy-cell)');
+      const cols = document.querySelectorAll('#spreadsheet colgroup col');
+
+      ths.forEach((th, index) => {
+        const resizer = th.querySelector('.resizer');
+        if(!resizer) return;
+
+        function restoreCol() {
+          if (collapsedCols.has(index)) {
+            collapsedCols.delete(index);
+            updateCollapseStyles();
+            let oldW = th.dataset.oldWidth || 100;
+            cols[index].style.width = oldW + 'px';
+            th.style.width = oldW + 'px';
+          }
+        }
+
+        // Duplo Clique na linha para restaurar
+        resizer.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          restoreCol();
+        });
+
+        const startResize = (e) => {
+          e.preventDefault(); 
+          let startX = e.type.includes('mouse') ? e.pageX : e.touches[0].pageX;
+          let startWidth = th.getBoundingClientRect().width;
+          let pressTimer;
+
+          // Long Press no celular para restaurar
+          if (e.type.includes('touch')) {
+            pressTimer = setTimeout(() => {
+              restoreCol();
+              stopResize();
+            }, 600);
+          }
+
+          const doResize = (ev) => {
+            if (pressTimer) clearTimeout(pressTimer);
+            let currentX = ev.type.includes('mouse') ? ev.pageX : ev.touches[0].pageX;
+            let newWidth = startWidth + (currentX - startX);
+            
+            // Oculta se ficar menor que 30px
+            if (newWidth < 30) {
+              newWidth = 12; // Tamanho visual da coluna recolhida
+              if (!collapsedCols.has(index)) {
+                th.dataset.oldWidth = startWidth > 30 ? startWidth : 100;
+                collapsedCols.add(index);
+                updateCollapseStyles();
+              }
+            } else {
+              if (collapsedCols.has(index)) {
+                collapsedCols.delete(index);
+                updateCollapseStyles();
+              }
+            }
+            
+            cols[index].style.width = newWidth + 'px';
+            th.style.width = newWidth + 'px';
+          };
+
+          const stopResize = () => {
+            if (pressTimer) clearTimeout(pressTimer);
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            document.removeEventListener('touchmove', doResize);
+            document.removeEventListener('touchend', stopResize);
+          };
+
+          document.addEventListener('mousemove', doResize);
+          document.addEventListener('mouseup', stopResize);
+          document.addEventListener('touchmove', doResize, {passive: false});
+          document.addEventListener('touchend', stopResize);
+        };
+
+        resizer.addEventListener('mousedown', startResize);
+        resizer.addEventListener('touchstart', startResize, {passive: false});
+      });
+    }
+
+    window.onload = initApp;
+  </script>
+</body>
+</html>
