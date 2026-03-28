@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Ferramenta Combo Bonificado v10</title>
+  <title>Ferramenta Combo Bonificado v11</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -96,7 +96,7 @@
     }
     
     th, td {
-      border: 1px solid #000; height: 30px; /* Altura aumentada para caber a fonte grande */
+      border: 1px solid #000; height: 30px; 
       vertical-align: middle; position: relative; padding: 0;
     }
     
@@ -134,9 +134,7 @@
     .inp-cod, .inp-qtde { text-align: center; color: #000; }
     .inp-produto { color: var(--cyano); text-transform: uppercase; }
     
-    /* FONTES GIGANTES (ESTILO EXCEL)
-       Tamanho 19px para preencher a altura da linha 
-    */
+    /* FONTES GIGANTES (ESTILO EXCEL) */
     .inp-custo { text-align: right; color: var(--cyano) !important; font-size: 19px !important; }
     .inp-preco-final { text-align: right; color: #000 !important; font-size: 19px !important; }
     .inp-preco-total { text-align: right; color: var(--cyano) !important; font-size: 19px !important; }
@@ -160,16 +158,39 @@
       position: sticky; bottom: 0; z-index: 10;
     }
     tfoot td {
-      background-color: #f9f9f9; font-weight: 900; font-size: 18px; /* Totais também maiores */
+      background-color: #f9f9f9; font-weight: 900; font-size: 18px; 
       border-top: 3px solid #000; padding: 4px; vertical-align: middle;
       box-shadow: 0 -2px 2px -1px rgba(0,0,0,0.4);
       overflow: hidden; white-space: nowrap;
     }
     
-    /* Força tamanho grande nos spans dos totais */
     #tot-custo, #tot-geral, #tot-margem, #tot-markup { font-size: 19px !important; }
 
     .dummy-cell { border-right: none !important; border-top: none !important; border-bottom: none !important; background: #fff !important; pointer-events: none; box-shadow: none !important;}
+
+    /* MENU DE SUGESTÕES E ADICIONAR TODOS */
+    .sug-menu {
+      position: absolute; background: #fff; border: 2px solid var(--cyano);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 99999; max-height: 300px;
+      overflow-y: auto; border-radius: 0 0 8px 8px; display: none;
+    }
+    .sug-item {
+      padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer;
+      font-size: 14px; font-weight: 900; color: var(--cyano); display: flex; align-items: center;
+    }
+    .sug-item:last-child { border-bottom: none; }
+    .sug-item span.sug-cod {
+      display: inline-block; width: 55px; color: #666; font-size: 12px; margin-right: 8px; text-align: right;
+    }
+    .sug-item:hover { background-color: var(--cyano); color: #fff; }
+    .sug-item:hover span.sug-cod { color: #e0e0e0; }
+    
+    /* Botão Adicionar Todos na lista */
+    .si-addall {
+      background: linear-gradient(90deg, #e8f0fa, #fff); color: #004890;
+      font-weight: 900; font-size: 14px; border-bottom: 2px solid #f47920; justify-content: center;
+    }
+    .si-addall:hover { background: #fff3e8; color: #d4640e; }
 
     /* Modais */
     .modal-overlay {
@@ -270,6 +291,8 @@
     </div>
   </div>
 
+  <div id="search-sug" class="sug-menu" data-html2canvas-ignore></div>
+
   <div class="modal-overlay" id="modal-config" data-html2canvas-ignore>
     <div class="modal-content">
       <div class="modal-header">
@@ -289,6 +312,7 @@
   <script>
     const CFG = { sheetId: "1cN_1GBR29BN77eRZAkzvikt96i_kX9AZ04cTc6XRM8Q", apiKey: "AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo", defaultRows: 25 };
     let catalogMap = new Map();
+    let catalogArray = [];
     let isSensitiveHidden = false; let isEmptyHidden = false; let saveTimeout = null;
 
     const parseNum = (str) => parseFloat((str||'').toString().replace(/\./g, '').replace(',', '.')) || 0;
@@ -304,7 +328,7 @@
       db: null,
       init() {
         return new Promise((resolve, reject) => {
-          const req = indexedDB.open('AmeripanApp_v10', 1);
+          const req = indexedDB.open('AmeripanApp_v11', 1);
           req.onupgradeneeded = (e) => {
             let db = e.target.result;
             if(!db.objectStoreNames.contains('state')) db.createObjectStore('state');
@@ -370,7 +394,14 @@
       try {
         const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.sheetId}/values/produtos!A2:C?key=${CFG.apiKey}`);
         const data = await res.json();
-        (data.values || []).forEach(r => { if(r[0]) catalogMap.set(r[0].trim(), r[1].trim()); });
+        catalogArray = [];
+        (data.values || []).forEach(r => { 
+          if(r[0]) {
+            const cod = r[0].trim(); const desc = r[1] ? r[1].trim() : '';
+            catalogMap.set(cod, desc); 
+            catalogArray.push({ cod, desc }); 
+          }
+        });
       } catch (e) { console.error("Erro catálogo", e); }
     }
 
@@ -379,7 +410,7 @@
       tr.innerHTML = `
         <td><input type="text" class="cell-inp inp-cod" autocomplete="off"></td>
         <td><input type="text" class="cell-inp inp-qtde" autocomplete="off"></td>
-        <td><input type="text" class="cell-inp inp-produto" autocomplete="off" tabindex="-1"></td>
+        <td><input type="text" class="cell-inp inp-produto" autocomplete="off"></td>
         <td class="sensitive-col"><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-custo" autocomplete="off"></div></td>
         <td><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-preco-final" autocomplete="off"></div></td>
         <td class="sensitive-col"><input type="text" class="cell-inp inp-margem" readonly tabindex="-1"></td>
@@ -400,13 +431,104 @@
       inps.forEach(i => i.addEventListener('input', scheduleSave));
 
       cod.addEventListener('blur', () => {
-        const c = cod.value.trim(); prod.value = c ? (catalogMap.get(c) || "NÃO ENCONTRADO") : "";
+        const c = cod.value.trim(); 
+        if (c && catalogMap.has(c)) { prod.value = catalogMap.get(c); }
         if(!c) qtde.value = ''; else if(!qtde.value) qtde.value = '1';
         calcRow(tr);
       });
 
+      // --- LOGICA DE AUTOCOMPLETE DO PRODUTO (ATUALIZADA) ---
+      prod.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        const sugMenu = document.getElementById('search-sug');
+        
+        if (val.length < 2) { sugMenu.style.display = 'none'; return; }
+
+        const terms = val.toLowerCase().split(' ').filter(t => t);
+        const results = catalogArray.filter(item => {
+            const desc = item.desc.toLowerCase();
+            return terms.every(t => desc.includes(t));
+        }).slice(0, 50);
+
+        if (results.length === 0) {
+            sugMenu.innerHTML = '<div style="padding:10px; color:#999; font-size:13px; text-align:center;">Nenhum produto encontrado...</div>';
+        } else {
+            sugMenu.innerHTML = '';
+            
+            // Cria o botão mágico de "Adicionar Todos" se houver mais de 1 item
+            if (results.length > 1) {
+              const btnAll = document.createElement('div');
+              btnAll.className = 'sug-item si-addall';
+              btnAll.innerHTML = `<i class="fa fa-layer-group" style="margin-right:6px"></i> Adicionar todos os <strong style="margin:0 4px">${results.length}</strong> itens abaixo`;
+              btnAll.onclick = () => {
+                const tbody = document.getElementById('sheet-body');
+                const allRows = Array.from(tbody.querySelectorAll('tr'));
+                const currentRowIndex = allRows.indexOf(tr);
+
+                // Garante que existam linhas suficientes abaixo
+                const rowsNeeded = currentRowIndex + results.length;
+                if (rowsNeeded > allRows.length) {
+                    generateRows(rowsNeeded - allRows.length);
+                }
+
+                const updatedRows = Array.from(tbody.querySelectorAll('tr'));
+
+                results.forEach((item, idx) => {
+                    const targetRow = updatedRows[currentRowIndex + idx];
+                    targetRow.querySelector('.inp-cod').value = item.cod;
+                    targetRow.querySelector('.inp-produto').value = item.desc;
+                    const rQtde = targetRow.querySelector('.inp-qtde');
+                    if (!rQtde.value) rQtde.value = '1';
+                    calcRow(targetRow);
+                });
+
+                sugMenu.style.display = 'none';
+                if (!isSensitiveHidden) updatedRows[currentRowIndex].querySelector('.inp-custo').focus();
+                else updatedRows[currentRowIndex].querySelector('.inp-preco-final').focus();
+              };
+              sugMenu.appendChild(btnAll);
+            }
+
+            // Lista os resultados padrão
+            results.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'sug-item';
+                div.innerHTML = `<span class="sug-cod">${item.cod}</span> <span>${item.desc}</span>`;
+                div.onclick = () => {
+                    cod.value = item.cod; prod.value = item.desc;
+                    if (!qtde.value) qtde.value = '1';
+                    sugMenu.style.display = 'none';
+                    calcRow(tr);
+                    if (!isSensitiveHidden) custo.focus(); else preco.focus();
+                };
+                sugMenu.appendChild(div);
+            });
+        }
+        
+        const rect = prod.getBoundingClientRect();
+        sugMenu.style.left = rect.left + 'px';
+        sugMenu.style.top = rect.bottom + 'px';
+        sugMenu.style.width = Math.max(rect.width, 350) + 'px';
+        sugMenu.style.display = 'block';
+        window._currentActiveSug = prod;
+      });
+
+      prod.addEventListener('keydown', (e) => {
+        const sugMenu = document.getElementById('search-sug');
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (sugMenu.style.display === 'block') {
+                const first = sugMenu.querySelector('.sug-item');
+                if (first) first.click();
+            } else {
+                if (!isSensitiveHidden) custo.focus(); else preco.focus();
+            }
+        }
+        if (e.key === 'Escape') sugMenu.style.display = 'none';
+      });
+
       cod.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); qtde.focus(); qtde.select(); }});
-      qtde.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); isSensitiveHidden ? preco.focus() : custo.focus(); }});
+      qtde.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); if (!isSensitiveHidden) custo.focus(); else preco.focus(); }});
       custo.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); preco.focus(); }});
       preco.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); const n = tr.nextElementSibling; if(n) n.querySelector('.inp-cod').focus(); }});
 
@@ -434,6 +556,7 @@
         tr.classList.add('row-empty');
         qtdeInp.value = ''; custoInp.value = ''; precoFinalInp.value = ''; 
         margemInp.value = ''; markupInp.value = ''; precoTotalInp.value = '';
+        tr.querySelector('.inp-produto').value = ''; // GARANTE QUE O NOME ZERE AO LIMPAR A LINHA
         spans.forEach(s => s.style.display = 'none');
         applyColor(margemInp, ''); applyColor(markupInp, '');
       } else {
@@ -502,10 +625,22 @@
       document.getElementById('inp-cli-cod').addEventListener('input', scheduleSave);
       document.getElementById('inp-cli-nome').addEventListener('input', scheduleSave);
 
+      document.querySelector('.table-wrapper').addEventListener('scroll', () => { document.getElementById('search-sug').style.display = 'none'; });
+      window.addEventListener('resize', () => { document.getElementById('search-sug').style.display = 'none'; });
+      document.addEventListener('click', (e) => {
+        const sugMenu = document.getElementById('search-sug');
+        if (sugMenu.style.display === 'block' && !sugMenu.contains(e.target) && e.target !== window._currentActiveSug) {
+            sugMenu.style.display = 'none';
+        }
+      });
+
       document.getElementById('btn-new').addEventListener('click', () => {
         if(confirm("Iniciar nova cotação limpa?")) {
           document.getElementById('inp-cli-cod').value = ''; document.getElementById('inp-cli-nome').value = '';
-          document.querySelectorAll('#sheet-body tr').forEach(tr => { tr.querySelector('.inp-cod').value = ''; tr.querySelector('.inp-cod').dispatchEvent(new Event('blur')); });
+          document.querySelectorAll('#sheet-body tr').forEach(tr => { 
+            tr.querySelector('.inp-cod').value = ''; 
+            tr.querySelector('.inp-cod').dispatchEvent(new Event('blur')); // Vai trigar o calcRow que agora zera o nome!
+          });
           scheduleSave();
         }
       });
@@ -590,26 +725,28 @@
       const origWrapCSS = wrapper.style.cssText;
       const origTableCSS = table.style.cssText;
       
-      // PREPARA A TELA: Remove limites de altura para que a foto pegue apenas as linhas e colunas reais
+      // PREPARA A TELA: Força tudo a virar um bloco isolado e abraçar a tabela
       dummyEls.forEach(el => el.style.display = 'none');
       
-      document.body.style.height = 'auto'; // Remove 100vh do body
+      document.body.style.height = 'auto'; 
+      document.body.style.display = 'block'; 
       
       area.style.border = 'none';
       area.style.boxShadow = 'none';
       area.style.overflow = 'visible';
-      area.style.height = 'max-content'; // Encolhe a altura
-      area.style.width = 'max-content';  // Encolhe a largura
-      area.style.flex = 'none';
+      area.style.height = 'max-content'; 
+      area.style.width = 'max-content';  
+      area.style.display = 'inline-block'; // ESSENCIAL PARA O CORTE PERFEITO DO ESPAÇO BRANCO
 
       wrapper.style.overflow = 'visible';
       wrapper.style.height = 'max-content';
       wrapper.style.width = 'max-content';
-      wrapper.style.flex = 'none'; // Impede o flex de ocupar o espaço restante
+      wrapper.style.display = 'inline-block';
       
-      table.style.width = 'max-content'; 
+      table.style.width = 'auto'; 
       table.style.minWidth = '0';
       table.style.height = 'max-content';
+      table.style.margin = '0';
       
       try {
         const canvas = await html2canvas(area, { scale: 2 });
@@ -627,13 +764,13 @@
           canvas.toBlob(async (blob) => {
             const file = new File([blob], filename + ".png", { type: "image/png" });
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-              try { await navigator.share({ files: [file], title: 'Cotação' }); } catch(err){}
+              try { await navigator.share({ files: [file] }); } catch(err){}
             } else {
               const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = filename + ".png"; a.click();
             }
           });
         } else {
-          // O PDF agora nasce com as dimensões EXATAS do canvas (como uma imagem)
+          // O PDF agora nasce com as dimensões EXATAS do canvas gerado, sem sobras.
           const { jsPDF } = window.jspdf; 
           const pdf = new jsPDF({
             orientation: canvas.width > canvas.height ? 'l' : 'p',
@@ -646,7 +783,7 @@
           const pdfBlob = pdf.output('blob');
           const file = new File([pdfBlob], filename + ".pdf", { type: "application/pdf" });
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
-             try { await navigator.share({ files: [file], title: 'Cotação PDF' }); } catch(err){}
+             try { await navigator.share({ files: [file] }); } catch(err){}
           } else {
              pdf.save(filename + ".pdf");
           }
