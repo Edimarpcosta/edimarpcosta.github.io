@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -461,7 +462,7 @@
         <td><input type="text" class="cell-inp inp-produto" autocomplete="off"></td>
         <td class="sensitive-col"><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-custo" autocomplete="off"></div></td>
         <td><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-preco-final" autocomplete="off"></div></td>
-        <td class="sensitive-col"><input type="text" class="cell-inp inp-margem" readonly tabindex="-1"></td>
+        <td class="sensitive-col"><input type="text" class="cell-inp inp-margem" autocomplete="off"></td>
         <td class="sensitive-col"><input type="text" class="cell-inp inp-markup" readonly tabindex="-1"></td>
         <td><div class="preco-wrapper"><span class="moeda-symbol hide-on-empty" style="display:none;">R$</span><input type="text" class="cell-inp inp-preco-total" readonly tabindex="-1"></div></td>
         <td class="dummy-cell"></td>
@@ -475,7 +476,7 @@
     }
 
     function bindRowEvents(tr) {
-      const inps = tr.querySelectorAll('input'); const [cod, qtde, prod, custo, preco] = inps;
+      const inps = tr.querySelectorAll('input'); const [cod, qtde, prod, custo, preco, margem] = inps;
       inps.forEach(i => i.addEventListener('input', scheduleSave));
 
       cod.addEventListener('blur', () => {
@@ -593,15 +594,51 @@
         if (e.key === 'Escape') sugMenu.style.display = 'none';
       });
 
+      // Fluxo Enter: COD → QTDE → CUSTO → PREÇO FINAL → próxima linha COD
       cod.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); qtde.focus(); qtde.select(); }});
-      qtde.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); if (!isSensitiveHidden) custo.focus(); else preco.focus(); }});
-      custo.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); preco.focus(); }});
+      qtde.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); custo.focus(); custo.select(); }});
+      custo.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); preco.focus(); preco.select(); }});
       preco.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); const n = tr.nextElementSibling; if(n) n.querySelector('.inp-cod').focus(); }});
+
+      // Margem: ao editar e dar Enter ou blur, calcula o Preço Final = Custo / (1 - Margem/100)
+      margem.addEventListener('blur', () => { calcPrecoFromMargem(tr); });
+      margem.addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); margem.blur(); preco.focus(); }});
+      margem.addEventListener('focus', (e) => {
+        // Ao focar, mostra valor limpo sem % para edição
+        const raw = e.target.value.replace('%','').replace(',','.').trim();
+        const num = parseFloat(raw);
+        if (!isNaN(num) && num !== 0) e.target.value = num.toString().replace('.',',');
+        else e.target.value = '';
+        e.target.select();
+      });
 
       [qtde, custo, preco].forEach(inp => {
         inp.addEventListener('blur', (e) => { if (inp !== qtde && e.target.value) e.target.value = formatCur(parseNum(e.target.value)); calcRow(tr); });
         inp.addEventListener('focus', (e) => { if (inp !== qtde && e.target.value) e.target.value = parseNum(e.target.value).toString().replace('.', ','); e.target.select(); });
       });
+    }
+
+    // Calcula Preço Final a partir da margem digitada: Preço = Custo / (1 - Margem/100)
+    function calcPrecoFromMargem(tr) {
+      const margemInp = tr.querySelector('.inp-margem');
+      const custoInp = tr.querySelector('.inp-custo');
+      const precoInp = tr.querySelector('.inp-preco-final');
+      const codVal = tr.querySelector('.inp-cod').value.trim();
+      
+      if (!codVal) return;
+      
+      const margemVal = parseFloat(margemInp.value.replace('%','').replace(',','.').trim());
+      const custoVal = parseNum(custoInp.value);
+      
+      if (!isNaN(margemVal) && margemVal > 0 && margemVal < 100 && custoVal > 0) {
+        // Fórmula: Preço Final = Custo / (1 - Margem/100)
+        const novoPreco = custoVal / (1 - margemVal / 100);
+        precoInp.value = formatCur(novoPreco);
+        calcRow(tr);
+      } else if (!isNaN(margemVal)) {
+        // Se margem foi digitada mas custo é 0, apenas formata a margem
+        calcRow(tr);
+      }
     }
 
     function applyColor(element, value) {
@@ -780,6 +817,12 @@
           await DB.saveHistory({ id: Date.now().toString(), timestamp: Date.now(), cliCod: document.getElementById('inp-cli-cod').value, cliNome: document.getElementById('inp-cli-nome').value, rows: rows });
         }
       }
+
+      // Auto-ocultar linhas vazias ao exportar (a menos que o usuário tenha escolhido mostrá-las)
+      const wasEmptyHidden = isEmptyHidden;
+      if (!isEmptyHidden) {
+        document.getElementById('spreadsheet').classList.add('hide-empty');
+      }
       
       const area = document.getElementById('export-area');
       const wrapper = document.querySelector('.table-wrapper');
@@ -835,6 +878,8 @@
         table.style.cssText = origTableCSS;
         tfoot.style.cssText = origTfootCSS;
         dummyEls.forEach(el => el.style.display = '');
+        // Restaura estado de linhas vazias
+        if (!wasEmptyHidden) document.getElementById('spreadsheet').classList.remove('hide-empty');
         
         const filename = `Cotacao_${document.getElementById('inp-cli-nome').value || 'Cliente'}`;
 
@@ -873,6 +918,7 @@
         table.style.cssText = origTableCSS;
         tfoot.style.cssText = origTfootCSS;
         dummyEls.forEach(el => el.style.display = '');
+        if (!wasEmptyHidden) document.getElementById('spreadsheet').classList.remove('hide-empty');
         alert("Erro ao gerar arquivo."); console.error(err); 
       }
     }
