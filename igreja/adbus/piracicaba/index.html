@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -414,6 +415,45 @@
     .bg-pill { border-radius: 12px; border: 2px solid transparent; cursor: pointer; overflow: hidden; transition: all 0.2s; width: 80px; height: 50px; background-size: cover; background-position: center; flex-shrink: 0; }
     .bg-pill.active { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(67,24,255,0.3); }
     .bg-pill:hover { transform: scale(1.06); }
+
+    /* =========================================
+       MODAL MEMBRO — SEÇÕES EXPANDIDAS
+    ========================================= */
+    .modal-section { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .modal-section:last-child { margin-bottom: 0; }
+    .modal-section-title {
+      background: var(--bg); padding: 9px 16px;
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .modal-section-body {
+      padding: 16px; display: grid;
+      grid-template-columns: repeat(2, 1fr); gap: 12px;
+    }
+    .modal-section-body .full { grid-column: 1 / -1; }
+    @media (max-width: 600px) { .modal-section-body { grid-template-columns: 1fr; } }
+
+    /* CEP row */
+    .cep-row { display: flex; gap: 8px; align-items: flex-end; }
+    .cep-row .input { flex: 1; min-width: 0; }
+    .btn-cep { padding: 12px 13px; white-space: nowrap; border-radius: 12px; font-size: 13px; }
+
+    /* Error / validation state */
+    .input.error, .select.error {
+      border-color: var(--bad) !important;
+      box-shadow: 0 0 0 3px rgba(238,93,80,0.12);
+    }
+    .field-error { font-size: 11px; color: var(--bad); font-weight: 600; margin-top: 3px; display: none; }
+    .field-error.show { display: block; }
+
+    /* Ocupação livre */
+    #fmOcupacaoLivre { display: none; margin-top: 8px; }
+
+    /* Readonly address fields visual hint */
+    .input[readonly] { opacity: 0.7; cursor: not-allowed; }
+    .input[readonly]:focus { border-color: var(--line); box-shadow: none; }
   </style>
 </head>
 <body>
@@ -526,16 +566,16 @@
 
           <div class="tab-content active" id="sec-membros" style="padding: 20px;">
             <div class="row between" style="margin-bottom: 16px;">
-              <input type="text" class="input" placeholder="Buscar membro..." style="max-width: 300px;">
+              <input type="text" class="input" id="filtBuscaMembro" oninput="Pages.filtrarMembros()" placeholder="Buscar membro..." style="max-width: 300px;">
               <button class="btn primary" onclick="UI.openModal('modalMembro')">+ Novo Membro</button>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Nome</th><th>Telefone</th><th>Status</th><th>Ações</th></tr>
+                  <tr><th>Nome</th><th>Ocupação</th><th>Telefone</th><th>Cidade / UF</th><th>Ações</th></tr>
                 </thead>
                 <tbody id="tbMembros">
-                  <tr><td colspan="4" class="muted">Carregando dados...</td></tr>
+                  <tr><td colspan="5" class="muted">Carregando dados...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1152,33 +1192,167 @@
     </main>
   </div>
 
-  <!-- Modais Secretaria -->
-  <div class="modal" id="modalMembro">
+  <!-- Modal Membro (expandido — 6 seções / 22 campos) -->
+  <div class="modal" id="modalMembro" style="max-width: 740px;">
     <div class="modal-header">
-      <h3>Novo Membro</h3>
+      <h3 id="modalMembroTitle">Novo Membro</h3>
       <button class="modal-close" onclick="UI.closeModals()">&times;</button>
     </div>
-    <div class="modal-body grid two">
-      <div class="field" style="grid-column: 1 / -1;"><label>Nome Completo</label><input type="text" class="input" id="fmNome" placeholder="Nome completo do membro"></div>
-      <div class="field"><label>Telefone / WhatsApp</label><input type="text" class="input" id="fmTel" placeholder="(00) 00000-0000"></div>
-      <div class="field"><label>E-mail</label><input type="email" class="input" id="fmEmail" placeholder="membro@email.com"></div>
-      <div class="field"><label>📅 Data de Nascimento</label><input type="date" class="input" id="fmNasc"></div>
-      <div class="field"><label>Data de Batismo</label><input type="date" class="input" id="fmBatismo"></div>
-      <div class="field">
-        <label>Status</label>
-        <select class="select" id="fmStatus">
-          <option value="ATIVO">Ativo</option>
-          <option value="VISITANTE">Visitante</option>
-          <option value="INATIVO">Inativo</option>
-        </select>
+    <div class="modal-body" style="padding: 20px;">
+
+      <!-- SEÇÃO 1: Dados Pessoais -->
+      <div class="modal-section">
+        <div class="modal-section-title">📋 Dados Pessoais</div>
+        <div class="modal-section-body">
+          <div class="field full">
+            <label>Nome Completo <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmNome" placeholder="Nome completo do membro">
+            <span class="field-error" id="errNome">Campo obrigatório</span>
+          </div>
+          <div class="field">
+            <label>CPF</label>
+            <input type="text" class="input" id="fmCpf" placeholder="000.000.000-00" maxlength="14">
+          </div>
+          <div class="field">
+            <label>Data de Nascimento <span style="color:var(--bad)">*</span></label>
+            <input type="date" class="input" id="fmNasc">
+            <span class="field-error" id="errNasc">Campo obrigatório</span>
+          </div>
+          <div class="field full">
+            <label>Ocupação / Função</label>
+            <select class="select" id="fmOcupacao" onchange="Pages.onOcupacaoChange()">
+              <option value="Membro">Membro</option>
+              <option value="Visitante">Visitante</option>
+              <option value="Pastor">Pastor</option>
+              <option value="Secretário(a)">Secretário(a)</option>
+              <option value="Diácono / Diaconisa">Diácono / Diaconisa</option>
+              <option value="Líder de Célula">Líder de Célula</option>
+              <option value="Obreiro(a)">Obreiro(a)</option>
+              <option value="Jovem">Jovem</option>
+              <option value="Criança">Criança</option>
+              <option value="Outro">Outro...</option>
+            </select>
+            <input type="text" class="input" id="fmOcupacaoLivre" placeholder="Digite a ocupação...">
+          </div>
+        </div>
       </div>
-      <div class="field" style="grid-column: 1 / -1;"><label>Observações</label><textarea class="textarea" id="fmObs" rows="2" placeholder="Informações adicionais..."></textarea></div>
+
+      <!-- SEÇÃO 2: Histórico Espiritual -->
+      <div class="modal-section">
+        <div class="modal-section-title">✝️ Histórico Espiritual</div>
+        <div class="modal-section-body">
+          <div class="field">
+            <label>Data de Conversão</label>
+            <input type="date" class="input" id="fmConversao">
+          </div>
+          <div class="field">
+            <label>Igreja de Conversão</label>
+            <input type="text" class="input" id="fmIgrejaConversao" placeholder="Nome da igreja">
+          </div>
+          <div class="field">
+            <label>Data de Batismo</label>
+            <input type="date" class="input" id="fmBatismo">
+          </div>
+          <div class="field">
+            <label>Igreja de Batismo</label>
+            <input type="text" class="input" id="fmIgrejaBatismo" placeholder="Nome da igreja">
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 3: Contato -->
+      <div class="modal-section">
+        <div class="modal-section-title">📞 Contato</div>
+        <div class="modal-section-body">
+          <div class="field">
+            <label>Telefone / WhatsApp <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmTel" placeholder="(19) 9 9999-9999" maxlength="16">
+            <span class="field-error" id="errTel">Campo obrigatório</span>
+          </div>
+          <div class="field">
+            <label>E-mail</label>
+            <input type="email" class="input" id="fmEmail" placeholder="membro@email.com">
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 4: Endereço -->
+      <div class="modal-section">
+        <div class="modal-section-title">📍 Endereço</div>
+        <div class="modal-section-body">
+          <div class="field full">
+            <label>CEP <span style="color:var(--bad)">*</span></label>
+            <div class="cep-row">
+              <input type="text" class="input" id="fmCep" placeholder="00000-000" maxlength="9">
+              <button class="btn primary btn-cep" onclick="Pages.buscarCep()" id="btnBuscarCep">🔍 Buscar</button>
+              <button class="btn btn-cep" onclick="Pages.modoManualEndereco()" title="Preencher manualmente">✏️ Manual</button>
+            </div>
+            <span class="field-error" id="errCep">CEP obrigatório</span>
+            <div id="cepMsg" style="font-size:12px; color:var(--bad); margin-top:4px; display:none;"></div>
+          </div>
+          <div class="field full">
+            <label>Rua / Logradouro <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmRua" placeholder="Nome da rua" readonly>
+          </div>
+          <div class="field">
+            <label>Número <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmNumero" placeholder="Ex: 123">
+          </div>
+          <div class="field">
+            <label>Complemento</label>
+            <input type="text" class="input" id="fmComplemento" placeholder="Ex: Ap 01, Bloco B, Casa dos fundos">
+          </div>
+          <div class="field">
+            <label>Bairro <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmBairro" placeholder="Bairro" readonly>
+          </div>
+          <div class="field">
+            <label>Cidade <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmCidade" placeholder="Cidade" readonly>
+          </div>
+          <div class="field">
+            <label>UF <span style="color:var(--bad)">*</span></label>
+            <input type="text" class="input" id="fmUf" placeholder="SP" maxlength="2" style="text-transform:uppercase;" readonly>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 5: Contato de Confiança -->
+      <div class="modal-section">
+        <div class="modal-section-title">🤝 Contato de Confiança <span style="font-weight:400;text-transform:none;font-size:11px;margin-left:4px;">(opcional)</span></div>
+        <div class="modal-section-body">
+          <div class="field">
+            <label>Nome</label>
+            <input type="text" class="input" id="fmContatoNome" placeholder="Nome do contato">
+          </div>
+          <div class="field">
+            <label>Vínculo</label>
+            <input type="text" class="input" id="fmContatoVinculo" placeholder="Ex: Cônjuge, Pai, Irmão">
+          </div>
+          <div class="field">
+            <label>Telefone</label>
+            <input type="text" class="input" id="fmContatoTel" placeholder="(00) 9 0000-0000" maxlength="16">
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 6: Observações -->
+      <div class="modal-section">
+        <div class="modal-section-title">📝 Observações</div>
+        <div class="modal-section-body">
+          <div class="field full">
+            <textarea class="textarea" id="fmObs" rows="3" placeholder="Informações adicionais sobre o membro..."></textarea>
+          </div>
+        </div>
+      </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="UI.closeModals()">Cancelar</button>
-      <button class="btn primary" onclick="Pages.saveMembro()">Salvar Membro</button>
+      <button class="btn primary" onclick="Pages.saveMembro()">💾 Salvar Membro</button>
     </div>
   </div>
+
 
   <div class="modal" id="modalCulto">
     <div class="modal-header">
@@ -1279,7 +1453,7 @@
 
       <!-- Campos extras — Casamento -->
       <div id="extraCasamento" style="display:none; grid-column: 1 / -1; background:rgba(255,206,32,0.08); border-radius:12px; padding:16px;">
-        <p style="margin:0 0 12px; font-size:13px; font-weight:700; color:#b68900);">💍 Dados do Casamento</p>
+        <p style="margin:0 0 12px; font-size:13px; font-weight:700; color:#b68900;">💍 Dados do Casamento</p>
         <div class="grid two" style="gap:12px;">
           <div class="field"><label>Nome do Noivo</label><input type="text" class="input" id="feCasNoivo" placeholder="Nome completo"></div>
           <div class="field"><label>Nome da Noiva</label><input type="text" class="input" id="feCasNoiva" placeholder="Nome completo"></div>
@@ -1944,6 +2118,30 @@
     window.addEventListener("hashchange", Router.resolve);
 
     /* =========================================
+       FUNÇÕES DE MÁSCARA (ESCOPO GLOBAL)
+    ========================================= */
+    function maskPhone(value) {
+      let v = String(value || '').replace(/\D/g,'').substring(0,11);
+      if (v.length <= 2)       v = v.replace(/^(\d{0,2})/,'($1');
+      else if (v.length <= 6)  v = v.replace(/^(\d{2})(\d{0,1})(\d{0,4})/,'($1) $2 $3');
+      else if (v.length <= 10) v = v.replace(/^(\d{2})(\d{1})(\d{0,4})(\d{0,4})/,'($1) $2 $3-$4');
+      else                     v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{0,4})/,'($1) $2 $3-$4');
+      return v;
+    }
+    function maskCPF(value) {
+      let v = String(value || '').replace(/\D/g,'').substring(0,11);
+      v = v.replace(/^(\d{3})(\d)/,'$1.$2');
+      v = v.replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3');
+      v = v.replace(/\.(\d{3})(\d)/,'.$1-$2');
+      return v;
+    }
+    function maskCEP(value) {
+      return String(value || '').replace(/\D/g,'')
+        .replace(/(\d{5})(\d)/,'$1-$2')
+        .substring(0,9);
+    }
+
+    /* =========================================
        INTERFACE DE USUÁRIO (UI)
     ========================================= */
     const UI = {
@@ -1966,7 +2164,16 @@
       closeModals() {
         document.getElementById('modalBackdrop').classList.remove('open');
         document.querySelectorAll('.modal.open').forEach(m => m.classList.remove('open'));
+        // Reseta estado do modal de membro
+        const modalMembro = document.getElementById('modalMembro');
+        if (modalMembro) {
+          delete modalMembro.dataset.editId;
+          const title = document.getElementById('modalMembroTitle');
+          if (title) title.textContent = 'Novo Membro';
+        }
+        if (typeof Pages !== 'undefined') Pages._saveMembroTentativas = 0;
       },
+
 
       // ── Máscaras de input ────────────────────────────────────────────
       maskPhone(el) {
@@ -2147,13 +2354,22 @@
           }
         });
 
-        // Máscaras automáticas em todos os inputs de telefone
-        document.querySelectorAll('input[id$="Tel"], input[id$="tel"], #fbTel, #fmTel, #fpTel').forEach(el => {
-          el.addEventListener('input', () => UI.maskPhone(el));
+        // Máscaras automáticas — telefones (inclui contato de confiança)
+        ['fmTel','fmContatoTel','fbTel','fpTel'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener('input', () => el.value = maskPhone(el.value));
         });
-        document.querySelectorAll('input[id$="Cpf"], #fbCpf').forEach(el => {
-          el.addEventListener('input', () => UI.maskCPF(el));
+        // CPF
+        ['fmCpf','fbCpf'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener('input', () => el.value = maskCPF(el.value));
         });
+        // CEP — máscara + busca automática no blur
+        const fmCep = document.getElementById('fmCep');
+        if (fmCep) {
+          fmCep.addEventListener('input', () => fmCep.value = maskCEP(fmCep.value));
+          fmCep.addEventListener('blur', () => { if (fmCep.value.replace(/\D/g,'').length === 8) Pages.buscarCep(); });
+        }
 
         // Login
         document.getElementById("btnLogin").onclick = async () => {
@@ -2222,6 +2438,7 @@
       },
 
       _membrosDados: [], // cache para edição por índice
+      _saveMembroTentativas: 0, // contador de tentativas de salvar
 
       async loadMembros() {
         const tb = document.getElementById("tbMembros");
@@ -2229,40 +2446,119 @@
           const res = await Api.getData("MEMBROS");
           if (!res.data || res.data.length === 0) {
             tb.innerHTML = `<tr><td colspan="5" class="muted">Nenhum membro cadastrado.</td></tr>`;
+            const kpi = document.getElementById('kpiMembros'); if (kpi) kpi.textContent = '0';
             return;
           }
-          this._membrosDados = res.data; // guarda no cache
-          const hoje = new Date(); hoje.setHours(0,0,0,0);
-          // Atualiza cabeçalho
+          this._membrosDados = res.data;
+          // Atualiza KPI membros no dashboard
+          const kpi = document.getElementById('kpiMembros');
+          if (kpi) kpi.textContent = res.data.filter(m => (m.OCUPACAO || m.STATUS || '') !== 'Visitante').length;
+          // Atualiza KPI visitantes
+          const kpiV = document.getElementById('kpiVisitantes');
+          if (kpiV) kpiV.textContent = res.data.filter(m => (m.OCUPACAO || m.STATUS || '') === 'Visitante').length;
+
+          // Atualiza cabeçalho da tabela
           const thead = tb.closest('table')?.querySelector('thead tr');
-          if (thead) thead.innerHTML = '<th>Nome</th><th>Telefone</th><th>Aniversário</th><th>Status</th><th>Ações</th>';
+          if (thead) thead.innerHTML = '<th>Nome</th><th>Ocupação</th><th>Telefone</th><th>Cidade / UF</th><th>Ações</th>';
 
           tb.innerHTML = res.data.map((m, idx) => {
-            let anivInfo = '';
-            if (m.DATA_NASC) {
-              const nasc = new Date(m.DATA_NASC);
-              const anivEsteAno = new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate());
-              if (anivEsteAno < hoje) anivEsteAno.setFullYear(hoje.getFullYear() + 1);
-              const dias = Math.round((anivEsteAno - hoje) / 86400000);
-              const diaF = nasc.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
-              if      (dias === 0)  anivInfo = `<span class="badge brand" style="font-size:11px;">🎂 Hoje!</span>`;
-              else if (dias <= 15) anivInfo = `<span class="badge warn"  style="font-size:11px;">🎂 ${diaF} (${dias}d)</span>`;
-              else                 anivInfo = `<span style="font-size:12px;color:var(--muted);">🎂 ${diaF}</span>`;
-            }
-            const tel = m.TELEFONE ? m.TELEFONE.replace(/\D/g,'') : '';
-            const wppBtn = tel ? `<a href="https://wa.me/55${tel}" target="_blank" class="aniv-wpp-btn" style="font-size:11px;padding:3px 8px;">💬 WhatsApp</a>` : '';
+            const nome     = m.NOME_COMPLETO || m.NOME || '—';
+            const ocupacao = m.OCUPACAO || m.STATUS || '—';
+            const tel      = m.TELEFONE || '—';
+            const cidadeUf = [m.CIDADE, m.UF].filter(Boolean).join(' / ') || '—';
+            const telNum   = (m.TELEFONE || '').replace(/\D/g, '');
+            const wppBtn   = telNum ? `<a href="https://wa.me/55${telNum}" target="_blank" class="aniv-wpp-btn" style="font-size:11px;padding:3px 8px;">💬</a>` : '';
             return `<tr>
-              <td><strong>${m.NOME || '—'}</strong></td>
-              <td>${m.TELEFONE || '—'} ${wppBtn}</td>
-              <td>${anivInfo || '<span class="muted" style="font-size:12px;">—</span>'}</td>
-              <td><span class="badge ${m.STATUS==='ATIVO'?'good':(m.STATUS==='VISITANTE'?'brand':'bad')}">${m.STATUS||'—'}</span></td>
-              <td><button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarMembro(Pages._membrosDados[${idx}])">✏️ Editar</button></td>
+              <td><strong>${nome}</strong></td>
+              <td>${ocupacao}</td>
+              <td>${tel} ${wppBtn}</td>
+              <td>${cidadeUf}</td>
+              <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarMembro(Pages._membrosDados[${idx}])">✏️ Editar</button>
+                <button class="btn danger" style="padding:4px 8px;font-size:12px;" onclick="Pages.deletarMembro(Pages._membrosDados[${idx}])">🗑️</button>
+              </td>
             </tr>`;
           }).join('');
         } catch(err) {
           tb.innerHTML = `<tr><td colspan="5" style="color:var(--bad)">Erro: ${err.message}</td></tr>`;
         }
       },
+
+      filtrarMembros() {
+        const q = (document.getElementById('filtBuscaMembro')?.value || '').toLowerCase();
+        document.querySelectorAll('#tbMembros tr').forEach(tr => {
+          tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      },
+
+      editarMembro(m) {
+        if (!m?.ID) { UI.toast('Registro sem ID.', 'error'); return; }
+        document.getElementById('modalMembroTitle').textContent = 'Editar Membro';
+        document.getElementById('modalMembro').dataset.editId = m.ID;
+        this._saveMembroTentativas = 0;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        // Compatibilidade: registros antigos usam NOME e STATUS
+        setVal('fmNome',            m.NOME_COMPLETO || m.NOME || '');
+        setVal('fmCpf',             m.CPF || '');
+        setVal('fmNasc',            fmtDate(m.DATA_NASC));
+        setVal('fmConversao',       fmtDate(m.DATA_CONVERSAO));
+        setVal('fmIgrejaConversao', m.IGREJA_CONVERSAO || '');
+        setVal('fmBatismo',         fmtDate(m.DATA_BATISMO));
+        setVal('fmIgrejaBatismo',   m.IGREJA_BATISMO || '');
+        setVal('fmTel',             m.TELEFONE || '');
+        setVal('fmEmail',           m.EMAIL || '');
+        setVal('fmCep',             m.CEP || '');
+        setVal('fmRua',             m.RUA || '');
+        setVal('fmNumero',          m.NUMERO || '');
+        setVal('fmComplemento',     m.COMPLEMENTO || '');
+        setVal('fmBairro',          m.BAIRRO || '');
+        setVal('fmCidade',          m.CIDADE || '');
+        setVal('fmUf',              m.UF || '');
+        setVal('fmContatoNome',     m.CONTATO_NOME || '');
+        setVal('fmContatoVinculo',  m.CONTATO_VINCULO || '');
+        setVal('fmContatoTel',      m.CONTATO_TELEFONE || '');
+        setVal('fmObs',             m.OBSERVACOES || '');
+        // Ocupação — compatível com STATUS antigo
+        const ocupacoesPadrao = ['Membro','Visitante','Pastor','Secretário(a)',
+          'Diácono / Diaconisa','Líder de Célula','Obreiro(a)','Jovem','Criança'];
+        const ocup  = m.OCUPACAO || m.STATUS || 'Membro';
+        const selOc = document.getElementById('fmOcupacao');
+        if (selOc) {
+          if (ocupacoesPadrao.includes(ocup)) {
+            selOc.value = ocup;
+            document.getElementById('fmOcupacaoLivre').style.display = 'none';
+          } else {
+            selOc.value = 'Outro';
+            document.getElementById('fmOcupacaoLivre').style.display = 'block';
+            setVal('fmOcupacaoLivre', ocup);
+          }
+        }
+        // Habilita campos de endereço se já tiver dados
+        ['fmRua','fmBairro','fmCidade','fmUf'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el && el.value) el.readOnly = false;
+        });
+        // Limpa erros de validação anteriores
+        ['fmNome','fmNasc','fmTel','fmCep'].forEach(id => {
+          document.getElementById(id)?.classList.remove('error');
+        });
+        ['errNome','errNasc','errTel','errCep'].forEach(id => {
+          document.getElementById(id)?.classList.remove('show');
+        });
+        UI.openModal('modalMembro');
+      },
+
+      async deletarMembro(m) {
+        if (!m?.ID) { UI.toast('Registro sem ID.', 'error'); return; }
+        if (!confirm(`Excluir o membro "${m.NOME_COMPLETO || m.NOME}"?\nEsta ação não pode ser desfeita.`)) return;
+        try {
+          UI.toast('Excluindo...');
+          await Api.deleteData('MEMBROS', m.ID);
+          UI.toast('✅ Membro excluído.');
+          this.loadMembros();
+        } catch(err) { UI.toast(err.message, 'error'); }
+      },
+
 
       _cultosDados: [],
 
@@ -2435,26 +2731,130 @@
         mostrar('extraEBD',      ['EBD','ESTUDO_BIBLICO','SEMINARIO'].includes(cat));
       },
 
-      async saveMembro() {
-        const rowData = [
-          "", 
-          document.getElementById('fmNome').value,
-          document.getElementById('fmTel').value,
-          document.getElementById('fmEmail').value,
-          document.getElementById('fmBatismo').value,
-          document.getElementById('fmStatus').value,
-          document.getElementById('fmObs').value,
-          document.getElementById('fmNasc').value   // DATA_NASC — coluna H
-        ];
-        if(!rowData[1]) { UI.toast("Nome é obrigatório", "error"); return; }
+      // CEP — Busca ViaCEP + Modo Manual
+      async buscarCep() {
+        const cepEl = document.getElementById('fmCep');
+        const msg   = document.getElementById('cepMsg');
+        if (!cepEl || !msg) return;
+        const cep = cepEl.value.replace(/\D/g,'');
+        if (cep.length !== 8) return;
+        const btn = document.getElementById('btnBuscarCep');
+        if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+        msg.style.display = 'none';
         try {
-          UI.toast("Salvando membro...");
-          await Api.saveData("MEMBROS", rowData);
+          const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+          const d = await r.json();
+          if (d.erro) {
+            msg.textContent = 'CEP não encontrado. Verifique ou preencha manualmente.';
+            msg.style.display = 'block';
+            this.modoManualEndereco();
+          } else {
+            const setRW = (id, val) => {
+              const el = document.getElementById(id);
+              if (el) { el.value = val || ''; el.readOnly = false; }
+            };
+            setRW('fmRua',    d.logradouro || '');
+            setRW('fmBairro', d.bairro     || '');
+            setRW('fmCidade', d.localidade || '');
+            setRW('fmUf',     d.uf         || '');
+            // Cursor pula para número
+            setTimeout(() => document.getElementById('fmNumero')?.focus(), 100);
+          }
+        } catch(e) {
+          msg.textContent = 'Sem conexão com ViaCEP. Preencha o endereço manualmente.';
+          msg.style.display = 'block';
+          this.modoManualEndereco();
+        } finally {
+          if (btn) { btn.textContent = '🔍 Buscar'; btn.disabled = false; }
+        }
+      },
+
+      modoManualEndereco() {
+        ['fmRua','fmBairro','fmCidade','fmUf'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.readOnly = false;
+        });
+      },
+
+      onOcupacaoChange() {
+        const sel   = document.getElementById('fmOcupacao')?.value;
+        const livre = document.getElementById('fmOcupacaoLivre');
+        if (livre) livre.style.display = sel === 'Outro' ? 'block' : 'none';
+      },
+
+      async saveMembro() {
+        // Validação com insistência
+        const camposObrig = [
+          { id: 'fmNome', err: 'errNome' },
+          { id: 'fmNasc', err: 'errNasc' },
+          { id: 'fmTel',  err: 'errTel'  },
+          { id: 'fmCep',  err: 'errCep'  },
+        ];
+        const invalidos = [];
+        camposObrig.forEach(c => {
+          const el  = document.getElementById(c.id);
+          const err = document.getElementById(c.err);
+          const vazio = !el?.value?.trim();
+          el?.classList.toggle('error', vazio);
+          if (err) err.classList.toggle('show', vazio);
+          if (vazio) invalidos.push(el?.previousElementSibling?.textContent?.replace('*','').trim() || c.id);
+        });
+        if (invalidos.length > 0) {
+          this._saveMembroTentativas++;
+          if (this._saveMembroTentativas >= 2) {
+            const ok = confirm(`⚠️ Campos importantes em branco:\n• ${invalidos.join('\n• ')}\n\nDeseja salvar mesmo assim?`);
+            if (!ok) return;
+          } else {
+            UI.toast('Preencha os campos obrigatórios destacados.', 'error');
+            return;
+          }
+        }
+
+        const ocupacao = document.getElementById('fmOcupacao')?.value;
+        const ocupacaoFinal = ocupacao === 'Outro'
+          ? (document.getElementById('fmOcupacaoLivre')?.value || 'Outro')
+          : (ocupacao || 'Membro');
+
+        const rowData = [
+          "",                                                       // A: ID
+          document.getElementById('fmNome').value,                  // B: NOME_COMPLETO
+          document.getElementById('fmCpf')?.value || "",            // C: CPF
+          document.getElementById('fmNasc').value,                  // D: DATA_NASC
+          document.getElementById('fmConversao')?.value || "",      // E: DATA_CONVERSAO
+          document.getElementById('fmIgrejaConversao')?.value || "",// F: IGREJA_CONVERSAO
+          document.getElementById('fmBatismo')?.value || "",        // G: DATA_BATISMO
+          document.getElementById('fmIgrejaBatismo')?.value || "",  // H: IGREJA_BATISMO
+          ocupacaoFinal,                                            // I: OCUPACAO
+          document.getElementById('fmTel').value,                   // J: TELEFONE
+          document.getElementById('fmCep').value,                   // K: CEP
+          document.getElementById('fmRua')?.value || "",            // L: RUA
+          document.getElementById('fmNumero')?.value || "",         // M: NUMERO
+          document.getElementById('fmComplemento')?.value || "",    // N: COMPLEMENTO
+          document.getElementById('fmBairro')?.value || "",         // O: BAIRRO
+          document.getElementById('fmCidade')?.value || "",         // P: CIDADE
+          document.getElementById('fmUf')?.value || "",             // Q: UF
+          document.getElementById('fmEmail')?.value || "",          // R: EMAIL
+          document.getElementById('fmContatoNome')?.value || "",    // S: CONTATO_NOME
+          document.getElementById('fmContatoVinculo')?.value || "", // T: CONTATO_VINCULO
+          document.getElementById('fmContatoTel')?.value || "",     // U: CONTATO_TELEFONE
+          document.getElementById('fmObs')?.value || ""             // V: OBSERVACOES
+        ];
+
+        try {
+          UI.toast('Salvando membro...');
+          const editId = document.getElementById('modalMembro')?.dataset?.editId;
+          if (editId) {
+            rowData[0] = editId;
+            await Api.updateData('MEMBROS', editId, rowData);
+            UI.toast('✅ Membro atualizado!');
+          } else {
+            await Api.saveData('MEMBROS', rowData);
+            UI.toast('✅ Membro salvo com sucesso!');
+          }
           UI.closeModals();
-          UI.toast("Membro salvo com sucesso!");
           this.loadMembros();
         } catch(err) {
-          UI.toast(err.message, "error");
+          UI.toast(err.message, 'error');
         }
       },
 
@@ -3607,28 +4007,39 @@
         });
       },
 
-      // Editar membro — recebe o objeto do membro direto
-      editarMembro(dados) {
-        if (!dados || !dados.ID) { UI.toast("Registro sem ID — não é possível editar.", "error"); return; }
-        UI.openEdit('Editar Membro', [
-          { label:'Nome Completo', id:'nome',    value: dados.NOME,        full: true },
-          { label:'Telefone',      id:'tel',     value: dados.TELEFONE               },
-          { label:'E-mail',        id:'email',   value: dados.EMAIL,       type:'email' },
-          { label:'Data Nasc.',    id:'nasc',    value: fmtDate(dados.DATA_NASC), type:'date' },
-          { label:'Data Batismo',  id:'batismo', value: fmtDate(dados.DATA_BATISMO), type:'date' },
-          { label:'Status',        id:'status',  value: dados.STATUS,      type:'select',
-            options:[{v:'ATIVO',l:'Ativo'},{v:'VISITANTE',l:'Visitante'},{v:'INATIVO',l:'Inativo'}] },
-          { label:'Observações',   id:'obs',     value: dados.OBSERVACOES, type:'textarea', full:true }
-        ], async (v) => {
-          // Ordem das colunas MEMBROS: ID, NOME, TELEFONE, EMAIL, DATA_BATISMO, STATUS, OBSERVACOES, DATA_NASC
-          const rowData = [dados.ID, v.nome, v.tel, v.email, v.batismo, v.status, v.obs, v.nasc];
-          try {
-            await Api.updateData("MEMBROS", dados.ID, rowData);
-            UI.toast("✅ Membro atualizado com sucesso!");
-            UI.closeModals();
-            this.loadMembros(); // recarrega a tabela do servidor
-          } catch(err) { UI.toast(err.message, "error"); }
-        });
+      // Projeção: inicializa o manager na aba
+      async initCultoManager() {
+        Projecao.init();
+        // Carrega aniversariantes para a lista de projeção
+        try {
+          const res = await Api.getData("MEMBROS");
+          const hoje = new Date(); hoje.setHours(0,0,0,0);
+          const lista = (res.data||[]).filter(m => m.DATA_NASC).map(m => {
+            const nome = m.NOME_COMPLETO || m.NOME || '—';
+            const nasc = new Date(m.DATA_NASC);
+            const aniv = new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate());
+            if (aniv < hoje) aniv.setFullYear(hoje.getFullYear()+1);
+            const dias = Math.round((aniv-hoje)/86400000);
+            return { ...m, _nome: nome, _dias: dias, _nasc: nasc };
+          }).filter(m => m._dias <= 30).sort((a,b)=>a._dias-b._dias);
+
+          const wrap = document.getElementById('projAnivLista');
+          if (wrap) {
+            if (lista.length === 0) {
+              wrap.innerHTML = `<span class="muted" style="font-size:13px;">Nenhum aniversariante nos próximos 30 dias.</span>`;
+            } else {
+              wrap.innerHTML = lista.map(m => {
+                const diasTxt = m._dias === 0 ? '🎉 Hoje!' : `em ${m._dias}d`;
+                const badgeCls = m._dias === 0 ? 'good' : (m._dias<=7?'warn':'');
+                return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
+                  <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${m._nome}</div>
+                  <span class="badge ${badgeCls}" style="font-size:11px;">${diasTxt}</span>
+                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${m._nome.replace(/'/g,"\\\\'")}','${diasTxt}')">📺</button>
+                </div>`;
+              }).join('');
+            }
+          }
+        } catch(e) { console.warn('initCultoManager:', e.message); }
       },
 
       // Projeção: inicializa o manager na aba
