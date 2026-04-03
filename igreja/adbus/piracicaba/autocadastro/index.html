@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auto-Cadastro ADBUS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Premium CSS Base Extraído do ADBUS */
+    :root {
+      --bg: #f4f7fe;
+      --panel: #ffffff;
+      --text: #2b3674;
+      --muted: #a3aed1;
+      --line: #e9edf7;
+      --brand: #4318ff;
+      --brand-hover: #3311db;
+      --good: #05cd99;
+      --warn: #ffce20;
+      --bad: #ee5d50;
+      --font: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); }
+    body { padding: 40px 20px; display: flex; align-items: flex-start; justify-content: center; }
+
+    .cadastro-wrapper { max-width: 740px; width: 100%; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* UI Components */
+    .card-cadastro { background: var(--panel); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1); overflow: hidden; position: relative; }
+    .header-cadastro { background: linear-gradient(135deg, var(--brand), #868cff); padding: 40px 30px; text-align: center; color: white; }
+    .header-cadastro h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .header-cadastro p { margin: 8px 0 0; opacity: 0.9; font-size: 15px; font-weight: 500; }
+    .body-cadastro { padding: 30px; display: flex; flex-direction: column; gap: 32px; }
+    .footer-cadastro { padding: 24px 30px; background: #fafcff; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+
+    .modal-section { margin-bottom: 8px; }
+    .modal-section-title { font-size: 14px; font-weight: 700; color: var(--brand); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .modal-section-body { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); align-items: start; }
+    @media (max-width: 600px) { .modal-section-body { grid-template-columns: 1fr; } }
+    
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { font-size: 14px; font-weight: 600; color: var(--text); }
+    
+    .input, .select, .textarea { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; font-weight: 500; outline: none; transition: 0.2s; }
+    .input:focus, .select:focus, .textarea:focus { border-color: var(--brand); background: var(--panel); box-shadow: 0 0 0 4px rgba(67,24,255,0.1); }
+    .input.error { border-color: var(--bad); background: #fff0f0; }
+    .input::placeholder { color: var(--muted); }
+    
+    .field-error { font-size: 12px; font-weight: 600; color: var(--bad); display: none; margin-top: -4px; }
+    .field-error.show { display: block; }
+    
+    .btn { cursor: pointer; border-radius: 12px; border: none; background: var(--line); color: var(--text); padding: 12px 24px; font-size: 15px; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn.primary { background: var(--brand); color: white; box-shadow: 0 4px 14px rgba(67,24,255,0.3); }
+    .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(67,24,255,0.4); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    
+    .cep-row { display: flex; gap: 8px; }
+    .btn-cep { flex-shrink: 0; padding: 12px 16px; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background: #2b3674; color: white; padding: 14px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; z-index: 100; opacity: 0; transition: all 0.3s; display: flex; gap: 10px; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Sucesso */
+    .sucesso-view { display: none; text-align: center; padding: 60px 20px; }
+    .sucesso-view h2 { color: var(--good); font-size: 28px; margin-bottom: 8px; font-weight: 800; }
+    .sucesso-view p { color: var(--muted); font-size: 16px; line-height: 1.5; margin-bottom: 0px; }
+    .spinner { border: 3px solid rgba(255,255,255,0.3); border-left-color: white; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .spinner.dark { border-color: rgba(67,24,255,0.1); border-left-color: var(--brand); width: 16px; height: 16px; }
+  </style>
+</head>
+<body>
+
+  <div class="cadastro-wrapper">
+    <div class="card-cadastro" id="telaSucesso" class="sucesso-view" style="display:none; text-align:center; padding: 80px 30px;">
+      <div style="font-size:72px; margin-bottom:20px;">🎉</div>
+      <h2>Cadastro Concluído!</h2>
+      <p style="color:var(--text); font-weight:500;">Seus dados foram enviados com sucesso para a ADBUS.</p>
+      <p style="color:var(--muted); font-size:14px; margin-top:8px;">Deus os abençoe! Você já pode fechar esta página.</p>
+    </div>
+
+    <div class="card-cadastro" id="telaForm">
+      <div class="header-cadastro">
+        <h1>ADBUS</h1>
+        <p>Bem-vindo! Preencha o formulário abaixo para criar ou atualizar seu cadastro.</p>
+      </div>
+      
+      <div class="body-cadastro">
+        <!-- SEÇÃO 1: Dados Pessoais -->
+        <div class="modal-section">
+          <div class="modal-section-title">📋 Dados Pessoais</div>
+          <div class="modal-section-body">
+            <div class="field full">
+              <label>Nome Completo <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmNome" placeholder="Seu nome completo">
+              <span class="field-error" id="errNome">Campo obrigatório</span>
+            </div>
+            <div class="field">
+              <label>CPF</label>
+              <input type="text" class="input" id="fmCpf" placeholder="000.000.000-00" maxlength="14">
+            </div>
+            <div class="field">
+              <label>Data de Nascimento <span style="color:var(--bad)">*</span></label>
+              <input type="date" class="input" id="fmNasc">
+              <span class="field-error" id="errNasc">Campo obrigatório</span>
+            </div>
+            <div class="field full">
+              <label>Sua Função na Igreja (Opcional)</label>
+              <select class="select" id="fmOcupacao" onchange="onOcupacaoChange()">
+                <option value="Membro">Membro</option>
+                <option value="Visitante">Visitante</option>
+                <option value="Pastor">Pastor</option>
+                <option value="Obreiro(a)">Obreiro(a)</option>
+                <option value="Outro">Outro...</option>
+              </select>
+              <input type="text" class="input" id="fmOcupacaoLivre" placeholder="Specifique sua função..." style="display:none; margin-top:8px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 2: Histórico Espiritual -->
+        <div class="modal-section">
+          <div class="modal-section-title">✝️ Histórico Espiritual</div>
+          <div class="modal-section-body">
+            <div class="field">
+              <label>Data de Conversão</label>
+              <input type="date" class="input" id="fmConversao">
+            </div>
+            <div class="field">
+              <label>Igreja de Conversão</label>
+              <input type="text" class="input" id="fmIgrejaConversao" placeholder="Ex: Assembleia de Deus">
+            </div>
+            <div class="field">
+              <label>Data de Batismo</label>
+              <input type="date" class="input" id="fmBatismo">
+            </div>
+            <div class="field">
+              <label>Igreja de Batismo</label>
+              <input type="text" class="input" id="fmIgrejaBatismo" placeholder="Ex: ADBUS">
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 3: Contato -->
+        <div class="modal-section">
+          <div class="modal-section-title">📞 Comunicação</div>
+          <div class="modal-section-body">
+            <div class="field">
+              <label>Telefone / WhatsApp <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmTel" placeholder="(00) 9 0000-0000" maxlength="16">
+              <span class="field-error" id="errTel">Telefone obrigatório</span>
+            </div>
+            <div class="field">
+              <label>E-mail (Opcional)</label>
+              <input type="email" class="input" id="fmEmail" placeholder="seu@email.com">
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 4: Endereço -->
+        <div class="modal-section">
+          <div class="modal-section-title">📍 Endereço</div>
+          <div class="modal-section-body">
+            <div class="field full">
+              <label>CEP <span style="color:var(--bad)">*</span></label>
+              <div class="cep-row">
+                <input type="text" class="input" id="fmCep" placeholder="00000-000" maxlength="9">
+                <button class="btn primary btn-cep" onclick="buscarCep()" id="btnBuscarCep">🔍 Buscar</button>
+                <button class="btn btn-cep" onclick="modoManualEndereco()" title="Preencher manualmente">✏️ Manual</button>
+              </div>
+              <span class="field-error" id="errCep">CEP obrigatório</span>
+              <div id="cepMsg" style="font-size:12px; color:var(--bad); margin-top:4px; display:none;"></div>
+            </div>
+            <div class="field full">
+              <label>Rua / Logradouro <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmRua" placeholder="Sua rua" readonly>
+            </div>
+            <div class="field">
+              <label>Número <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmNumero" placeholder="123">
+            </div>
+            <div class="field">
+              <label>Complemento</label>
+              <input type="text" class="input" id="fmComplemento" placeholder="Ap, Bloco, Casa...">
+            </div>
+            <div class="field">
+              <label>Bairro <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmBairro" placeholder="Seu bairro" readonly>
+            </div>
+            <div class="field">
+              <label>Cidade <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmCidade" placeholder="Cidade" readonly>
+            </div>
+            <div class="field">
+              <label>UF <span style="color:var(--bad)">*</span></label>
+              <input type="text" class="input" id="fmUf" placeholder="UF" maxlength="2" style="text-transform:uppercase;" readonly>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 5: Contato de Confiança -->
+        <div class="modal-section">
+          <div class="modal-section-title">🤝 Contato de Emergência <span style="font-weight:400; font-size:11px; text-transform:none;">(Opcional)</span></div>
+          <div class="modal-section-body">
+            <div class="field full">
+              <label>Nome do Contato</label>
+              <input type="text" class="input" id="fmContatoNome" placeholder="Nome">
+            </div>
+            <div class="field">
+              <label>Vínculo</label>
+              <input type="text" class="input" id="fmContatoVinculo" placeholder="Ex: Marido, Esposa, Pai...">
+            </div>
+            <div class="field">
+              <label>Telefone de Emergência</label>
+              <input type="text" class="input" id="fmContatoTel" placeholder="(00) 9 0000-0000" maxlength="16">
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 6: Observações -->
+        <div class="modal-section">
+          <div class="modal-section-title">📝 Observações Extras</div>
+          <div class="modal-section-body">
+            <div class="field full">
+              <textarea class="textarea" id="fmObs" rows="3" placeholder="Algo mais que a igreja deva saber? (Ex: Alergias, disponibilidade ministerial, etc.)"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-cadastro">
+        <button class="btn primary" id="btnSalvar" onclick="saveMembro()" style="padding:14px 28px; width: 100%;">
+          Concluir Cadastro
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // URL OFICIAL DA ROTA DE BACKEND DO ADBUS (GAS WebApp)
+    const API_URL = "https://script.google.com/macros/s/AKfycbwDt3TRY7bdw50Kv8j0Qgveh4xD1GWp3dOafVqDNYlLvnxzrfYv2xv5YtBddcH5S1XgMQ/exec";
+
+    // ── MÁSCARAS ────────────────────────────
+    function maskPhone(value) {
+      let v = String(value || '').replace(/\D/g,'').substring(0,11);
+      if (v.length <= 2)       v = v.replace(/^(\d{0,2})/,'($1');
+      else if (v.length <= 6)  v = v.replace(/^(\d{2})(\d{0,1})(\d{0,4})/,'($1) $2 $3');
+      else if (v.length <= 10) v = v.replace(/^(\d{2})(\d{1})(\d{0,4})(\d{0,4})/,'($1) $2 $3-$4');
+      else                     v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{0,4})/,'($1) $2 $3-$4');
+      return v;
+    }
+    function maskCPF(value) {
+      let v = String(value || '').replace(/\D/g,'').substring(0,11);
+      v = v.replace(/^(\d{3})(\d)/,'$1.$2');
+      v = v.replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3');
+      v = v.replace(/\.(\d{3})(\d)/,'.$1-$2');
+      return v;
+    }
+    function maskCEP(value) {
+      return String(value || '').replace(/\D/g,'')
+        .replace(/(\d{5})(\d)/,'$1-$2')
+        .substring(0,9);
+    }
+    
+    document.getElementById('fmTel').addEventListener('input', e => e.target.value = maskPhone(e.target.value));
+    document.getElementById('fmContatoTel').addEventListener('input', e => e.target.value = maskPhone(e.target.value));
+    document.getElementById('fmCpf').addEventListener('input', e => e.target.value = maskCPF(e.target.value));
+    document.getElementById('fmCep').addEventListener('input', e => e.target.value = maskCEP(e.target.value));
+
+    // ── INTERFACE ───────────────────────────
+    let toastTimer;
+    function toast(msg, type = 'info') {
+      const el = document.getElementById("toast");
+      el.innerHTML = type === 'error' ? '⚠️ ' + msg : '✅ ' + msg;
+      el.style.background = type === 'error' ? 'var(--bad)' : (type === 'warn' ? 'var(--warn)' : '#2b3674');
+      el.style.color = type === 'warn' ? '#0f172a' : '#fff';
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.classList.remove("show"); }, 4000);
+    }
+
+    function onOcupacaoChange() {
+      const v = document.getElementById('fmOcupacao').value;
+      const ocLivre = document.getElementById('fmOcupacaoLivre');
+      if (v === 'Outro') {
+        ocLivre.style.display = 'block';
+        ocLivre.value = '';
+        ocLivre.focus();
+      } else {
+        ocLivre.style.display = 'none';
+        ocLivre.value = '';
+      }
+    }
+
+    // ── VIACEP ──────────────────────────────
+    function modoManualEndereco() {
+      ['fmRua','fmBairro','fmCidade','fmUf'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.readOnly = false; el.value = ''; }
+      });
+      document.getElementById('fmRua')?.focus();
+    }
+
+    async function buscarCep() {
+      const btn = document.getElementById('btnBuscarCep');
+      const cep = document.getElementById('fmCep').value.replace(/\D/g, '');
+      const err = document.getElementById('cepMsg');
+      err.style.display = 'none';
+      if (cep.length !== 8) {
+        err.textContent = 'CEP inválido.';
+        err.style.display = 'block';
+        return;
+      }
+      btn.innerHTML = '<div class="spinner dark"></div>';
+      btn.disabled = true;
+      try {
+        const res = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+        const data = await res.json();
+        if (data.erro) { throw new Error('CEP não encontrado'); }
+        document.getElementById('fmRua').value = data.logradouro || '';
+        document.getElementById('fmBairro').value = data.bairro || '';
+        document.getElementById('fmCidade').value = data.localidade || '';
+        document.getElementById('fmUf').value = data.uf || '';
+        document.getElementById('fmComplemento').value = data.complemento || '';
+        
+        ['fmRua','fmBairro','fmCidade','fmUf'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.readOnly = el.value.trim().length > 0;
+        });
+        document.getElementById('fmNumero')?.focus();
+      } catch (e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+        modoManualEndereco();
+      } finally {
+        btn.innerHTML = '🔍 Buscar';
+        btn.disabled = false;
+      }
+    }
+
+    // ── ENVIO DE DADOS ──────────────────────
+    let tentativas = 0;
+    async function saveMembro() {
+      tentativas++;
+      const val = id => document.getElementById(id).value.trim();
+      
+      const nome = val('fmNome');      const nasc = val('fmNasc');
+      const tel = val('fmTel');        const cep = val('fmCep');
+      const rua = val('fmRua');        const num = val('fmNumero');
+      const bairro = val('fmBairro');  const cidade = val('fmCidade');  const uf = val('fmUf');
+      
+      const ocSel = val('fmOcupacao');
+      const ocupacao = ocSel === 'Outro' ? val('fmOcupacaoLivre') : ocSel;
+
+      // Validação Flexível (Mesma Regra do Admin)
+      let hasError = false;
+      const chk = (id, isValid) => {
+        const el = document.getElementById(id);
+        const err = document.getElementById(id.replace('fm', 'err'));
+        if (!isValid) {
+          el.classList.add('error');
+          if (err) err.classList.add('show');
+          hasError = true;
+        } else {
+          el.classList.remove('error');
+          if (err) err.classList.remove('show');
+        }
+      };
+
+      chk('fmNome', nome.length > 2);
+      chk('fmNasc', nasc.length === 10);
+      chk('fmTel', tel.length >= 14);
+      chk('fmCep', cep.length === 9 || tentativas > 1);
+
+      if (hasError && tentativas === 1) {
+        toast("Por favor, preencha os campos destacados.", "error");
+        const btn = document.getElementById('btnSalvar');
+        btn.style.transform = 'translate(-4px, 0)';
+        setTimeout(() => btn.style.transform = 'translate(4px, 0)', 100);
+        setTimeout(() => btn.style.transform = 'translate(-4px, 0)', 200);
+        setTimeout(() => btn.style.transform = 'translate(0, 0)', 300);
+        return;
+      }
+      
+      if (!nome || !nasc || (!tel && !cep && !rua && tentativas > 1)) {
+        toast("Dados incompletos. Informe pelo menos Nome, Contato e Data de Nasc.", "error"); return;
+      }
+
+      // Arrays exato de 22 colunas mapeadas no schema do GAS
+      // [A:ID, B:NOME, C:CPF, D:NASC... etc]
+      const rowData = [
+        "", // ID
+        nome,
+        val('fmCpf'),
+        nasc,
+        val('fmConversao'),
+        val('fmIgrejaConversao'),
+        val('fmBatismo'),
+        val('fmIgrejaBatismo'),
+        ocupacao,
+        tel,
+        cep,
+        rua,
+        num,
+        val('fmComplemento'),
+        bairro,
+        cidade,
+        uf,
+        val('fmEmail'),
+        val('fmContatoNome'),
+        val('fmContatoVinculo'),
+        val('fmContatoTel'),
+        val('fmObs')
+      ];
+
+      const btn = document.getElementById('btnSalvar');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner"></div> Processando...';
+      btn.disabled = true;
+
+      try {
+        const payload = { action: 'saveData', sheetName: 'MEMBROS', rowData: rowData };
+        // Chamada direta para a API usando no-cors para evitar bloqueios cross-origin de submit direto
+        await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        
+        // Exibimos a tela de sucesso
+        document.getElementById('telaForm').style.display = 'none';
+        document.getElementById('telaSucesso').style.display = 'block';
+        window.scrollTo(0,0);
+        
+      } catch (err) {
+        toast("Erro de conexão. Tente novamente em instantes.", "error");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
