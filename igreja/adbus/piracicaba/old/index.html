@@ -2175,6 +2175,8 @@
           modalMembro.querySelectorAll('input, select, textarea').forEach(el => {
             if (el.id === 'fmOcupacao') el.value = 'Membro';
             else el.value = '';
+            el.readOnly = false; // reabilita todos
+            if (el.tagName === 'SELECT') el.removeAttribute('disabled');
           });
 
           // Reseta a exibição da ocupação livre
@@ -2186,6 +2188,10 @@
             const el = document.getElementById(id);
             if (el) el.readOnly = true;
           });
+
+          // Mostra botão de salvar
+          const btnSave = document.getElementById('btnSalvarMembro');
+          if (btnSave) btnSave.style.display = 'inline-flex';
 
           // Remove classes de erro de validação
           ['fmNome','fmNasc','fmTel','fmCep'].forEach(id => {
@@ -2492,12 +2498,18 @@
             const cidadeUf = [m.CIDADE, m.UF].filter(Boolean).join(' / ') || '—';
             const telNum   = (m.TELEFONE || '').replace(/\D/g, '');
             const wppBtn   = telNum ? `<a href="https://wa.me/55${telNum}" target="_blank" class="aniv-wpp-btn" style="font-size:11px;padding:3px 8px;">💬</a>` : '';
+            
+            const endFull = [m.RUA, m.NUMERO, m.BAIRRO, m.CIDADE, m.UF].filter(Boolean).join(', ').trim();
+            const mapBtn = endFull ? `<a href="https://maps.google.com/?q=${encodeURIComponent(endFull)}" target="_blank" class="btn ghost" style="padding:4px 8px;font-size:12px;">📍 Navegar</a>` : '';
+
             return `<tr>
               <td><strong>${nome}</strong></td>
               <td>${ocupacao}</td>
               <td>${tel} ${wppBtn}</td>
               <td>${cidadeUf}</td>
               <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.verMembro(Pages._membrosDados[${idx}])">👁️ Ver</button>
+                ${mapBtn}
                 <button class="btn ghost" style="padding:4px 8px;font-size:12px;" onclick="Pages.editarMembro(Pages._membrosDados[${idx}])">✏️ Editar</button>
                 <button class="btn danger" style="padding:4px 8px;font-size:12px;" onclick="Pages.deletarMembro(Pages._membrosDados[${idx}])">🗑️</button>
               </td>
@@ -2513,6 +2525,68 @@
         document.querySelectorAll('#tbMembros tr').forEach(tr => {
           tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
         });
+      },
+
+      verMembro(m) {
+        if (!m?.ID) { UI.toast('Registro sem ID.', 'error'); return; }
+        document.getElementById('modalMembroTitle').textContent = 'Detalhes do Membro';
+        document.getElementById('modalMembro').dataset.editId = m.ID;
+        this._saveMembroTentativas = 0;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        setVal('fmNome',            m.NOME_COMPLETO || m.NOME || '');
+        setVal('fmCpf',             m.CPF || '');
+        setVal('fmNasc',            fmtDate(m.DATA_NASC));
+        setVal('fmConversao',       fmtDate(m.DATA_CONVERSAO));
+        setVal('fmIgrejaConversao', m.IGREJA_CONVERSAO || '');
+        setVal('fmBatismo',         fmtDate(m.DATA_BATISMO));
+        setVal('fmIgrejaBatismo',   m.IGREJA_BATISMO || '');
+        setVal('fmTel',             m.TELEFONE || '');
+        setVal('fmEmail',           m.EMAIL || '');
+        setVal('fmCep',             m.CEP || '');
+        setVal('fmRua',             m.RUA || '');
+        setVal('fmNumero',          m.NUMERO || '');
+        setVal('fmComplemento',     m.COMPLEMENTO || '');
+        setVal('fmBairro',          m.BAIRRO || '');
+        setVal('fmCidade',          m.CIDADE || '');
+        setVal('fmUf',              m.UF || '');
+        setVal('fmContatoNome',     m.CONTATO_NOME || '');
+        setVal('fmContatoVinculo',  m.CONTATO_VINCULO || '');
+        setVal('fmContatoTel',      m.CONTATO_TELEFONE || '');
+        setVal('fmObs',             m.OBSERVACOES || '');
+
+        const ocupacoesPadrao = ['Membro','Visitante','Pastor','Secretário(a)',
+          'Diácono / Diaconisa','Líder de Célula','Obreiro(a)','Jovem','Criança'];
+        const ocup  = m.OCUPACAO || m.STATUS || 'Membro';
+        const selOc = document.getElementById('fmOcupacao');
+        if (selOc) {
+          if (ocupacoesPadrao.includes(ocup)) {
+            selOc.value = ocup;
+            document.getElementById('fmOcupacaoLivre').style.display = 'none';
+          } else {
+            selOc.value = 'Outro';
+            document.getElementById('fmOcupacaoLivre').style.display = 'block';
+            setVal('fmOcupacaoLivre', ocup);
+          }
+        }
+        
+        ['fmNome','fmNasc','fmTel','fmCep'].forEach(id => {
+          document.getElementById(id)?.classList.remove('error');
+        });
+        ['errNome','errNasc','errTel','errCep'].forEach(id => {
+          document.getElementById(id)?.classList.remove('show');
+        });
+        
+        // Bloqueia campos e esconde botão de salvar
+        document.querySelectorAll('#modalMembro input, #modalMembro select, #modalMembro textarea').forEach(el => {
+          el.readOnly = true;
+          if (el.tagName === 'SELECT') {
+            el.setAttribute('disabled', 'disabled');
+          }
+        });
+        const btnSave = document.getElementById('btnSalvarMembro');
+        if (btnSave) btnSave.style.display = 'none';
+
+        UI.openModal('modalMembro');
       },
 
       editarMembro(m) {
@@ -3034,7 +3108,8 @@
           else if (isBreve) { badgeClass='breve-badge'; badgeText=`🔔 Em ${dias} dia${dias>1?'s':''}`; }
 
           const tel = m.TELEFONE ? m.TELEFONE.replace(/\D/g,'') : '';
-          const msg = encodeURIComponent(`🎂 Feliz Aniversário, ${m.NOME}! 🎉\n\nDesejamos que Deus te abençoe muito neste dia especial! Que este novo ano de vida seja repleto de alegrias, saúde e bênçãos. 🙏✨\n\nCom carinho, ADBUS Igreja`);
+          const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
+          const msg = encodeURIComponent(`🎂 Feliz Aniversário, ${mNomeCompat}! 🎉\n\nDesejamos que Deus te abençoe muito neste dia especial! Que este novo ano de vida seja repleto de alegrias, saúde e bênçãos. 🙏✨\n\nCom carinho, ADBUS Igreja`);
           const wppBtn = tel
             ? `<a href="https://wa.me/55${tel}?text=${msg}" target="_blank" class="aniv-wpp-btn">💬 WhatsApp</a>`
             : `<button class="btn" style="font-size:12px;padding:4px 10px;opacity:0.4;" disabled title="Telefone não cadastrado">💬 WhatsApp</button>`;
@@ -3051,7 +3126,7 @@
             <div class="row" style="gap:12px;align-items:center;">
               <div class="aniv-avatar">${inicial}</div>
               <div class="aniv-info">
-                <div class="aniv-nome">${m.NOME}</div>
+                <div class="aniv-nome">${mNomeCompat}</div>
                 <div class="aniv-data">🎂 ${dataFmt} · ${idadeProx} anos</div>
                 ${m.TELEFONE ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">📱 ${m.TELEFONE}</div>` : ''}
               </div>
@@ -3089,8 +3164,9 @@
         comNasc.forEach(m => {
           const nasc = new Date(m.DATA_NASC);
           const yyyymmdd = new Date(ano, nasc.getMonth(), nasc.getDate()).toISOString().replace(/-/g,'');
-          const title = encodeURIComponent(`🎂 Aniversário: ${m.NOME}`);
-          const details = encodeURIComponent(`Aniversário de ${m.NOME}\nIgreja ADBUS`);
+          const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
+          const title = encodeURIComponent(`🎂 Aniversário: ${mNomeCompat}`);
+          const details = encodeURIComponent(`Aniversário de ${mNomeCompat}\nIgreja ADBUS`);
           const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${yyyymmdd}/${yyyymmdd}&details=${details}&recur=RRULE:FREQ=YEARLY`;
           setTimeout(() => window.open(url, '_blank'), count * 400);
           count++;
@@ -4058,7 +4134,7 @@
                 return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
                   <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${m._nome}</div>
                   <span class="badge ${badgeCls}" style="font-size:11px;">${diasTxt}</span>
-                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${m._nome.replace(/'/g,"\\\\'")}','${diasTxt}')">📺</button>
+                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${m._nome.replace(/'/g,"\\\\\\'")}','${diasTxt}')">📺</button>
                 </div>`;
               }).join('');
             }
@@ -4089,10 +4165,11 @@
               wrap.innerHTML = lista.map(m => {
                 const diasTxt = m._dias === 0 ? '🎉 Hoje!' : `em ${m._dias}d`;
                 const badgeCls = m._dias === 0 ? 'good' : (m._dias<=7?'warn':'');
-                return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
-                  <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${m.NOME}</div>
+                  const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
+                  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
+                  <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${mNomeCompat}</div>
                   <span class="badge ${badgeCls}" style="font-size:11px;">${diasTxt}</span>
-                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${m.NOME.replace(/'/g,"\\'")}','${diasTxt}')">📺</button>
+                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${mNomeCompat.replace(/'/g,"\\\\\\'")}','${diasTxt}')">📺</button>
                 </div>`;
               }).join('');
             }
@@ -4741,10 +4818,11 @@
               : lista.map(m => {
                   const diasTxt = m._dias === 0 ? '🎉 Hoje!' : `em ${m._dias}d`;
                   const badgeCls = m._dias === 0 ? 'good' : (m._dias<=7?'warn':'');
+                  const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
                   return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
-                    <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${m.NOME}</div>
+                    <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${mNomeCompat}</div>
                     <span class="badge ${badgeCls}" style="font-size:11px;">${diasTxt}</span>
-                    <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${m.NOME.replace(/'/g,"\\'")}','${diasTxt}')">📺</button>
+                    <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${mNomeCompat.replace(/'/g,"\\\\\\'")}','${diasTxt}')">📺</button>
                   </div>`;
                 }).join('');
           }
@@ -4788,7 +4866,7 @@
             lista = anivHoje; estado = 'state-today';
             emoji = '🎉🎂🎉';
             titulo = anivHoje.length === 1
-              ? `Feliz Aniversário, ${anivHoje[0].NOME.split(' ')[0]}!`
+              ? `Feliz Aniversário, ${(anivHoje[0].NOME_COMPLETO || anivHoje[0].NOME || '?').split(' ')[0]}!`
               : `${anivHoje.length} Aniversariantes Hoje!`;
             sub = 'Não esqueça de parabenizar! 🙏';
           } else if (anivBreve.length > 0) {
@@ -4807,18 +4885,19 @@
 
           // Monta a lista do popup
           const listHTML = lista.map(m => {
+            const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
             const tel = m.TELEFONE ? m.TELEFONE.replace(/\D/g,'') : '';
             const nasc = m._nasc;
             const dataFmt = nasc.toLocaleDateString('pt-BR',{day:'2-digit',month:'long'});
             const diasTxt = m._dias === 0 ? 'Hoje! 🎉' : `em ${m._dias} dia${m._dias>1?'s':''}`;
-            const msg = encodeURIComponent(`🎂 Feliz Aniversário, ${m.NOME}! 🎉\n\nDesejamos que Deus te abençoe muito neste dia especial! Que este novo ano de vida seja repleto de alegrias, saúde e bênçãos. 🙏✨\n\nCom carinho, ADBUS Igreja`);
+            const msg = encodeURIComponent(`🎂 Feliz Aniversário, ${mNomeCompat}! 🎉\n\nDesejamos que Deus te abençoe muito neste dia especial! Que este novo ano de vida seja repleto de alegrias, saúde e bênçãos. 🙏✨\n\nCom carinho, ADBUS Igreja`);
             const wpp = tel
               ? `<a href="https://wa.me/55${tel}?text=${msg}" target="_blank" class="aniv-wpp-btn">💬</a>`
               : '';
             return `<div class="aniv-popup-item">
-              <div class="pip">${(m.NOME||'?')[0].toUpperCase()}</div>
+              <div class="pip">${mNomeCompat[0].toUpperCase()}</div>
               <div class="pinfo">
-                <div class="pname">${m.NOME}</div>
+                <div class="pname">${mNomeCompat}</div>
                 <div class="pdate">🎂 ${dataFmt} · ${diasTxt}</div>
               </div>
               ${wpp}
