@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bíblia Sagrada</title>
+    <style>
+        :root {
+            --bg-body: #f0f0f0;
+            --border-color: #999;
+            --text-color: #222;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ─── TOPO (TÍTULO E GRID DE LIVROS) ─── */
+        .header {
+            background-color: #e5e5e5;
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .books-grid {
+            display: grid;
+            grid-template-columns: repeat(11, 1fr);
+            gap: 2px;
+            border: 1px solid var(--border-color);
+            background-color: #fff;
+            padding: 2px;
+            margin-bottom: 15px;
+        }
+
+        .btn-book {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1.5; /* Mantém a proporção retangular horizontal */
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            transition: all 0.1s ease;
+            user-select: none;
+        }
+
+        .btn-book:hover {
+            filter: brightness(1.2);
+            transform: scale(0.98);
+        }
+
+        .btn-book.selected {
+            box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.4);
+            filter: brightness(0.85);
+        }
+
+        .btn-book .abbr {
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .btn-book .name {
+            font-size: 10px;
+            line-height: 1;
+            text-align: center;
+            opacity: 0.95;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        /* ─── PAINEIS INFERIORES (CAPÍTULOS E VERSÍCULOS) ─── */
+        .bottom-panels {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .panel {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            padding: 4px;
+            min-height: 300px;
+        }
+        
+        .panel.capitulos-wrapper { flex: 9; }
+        .panel.versiculos-wrapper { flex: 7; }
+
+        .items-grid {
+            display: grid;
+            gap: 2px;
+        }
+
+        .items-grid.cols-9 { grid-template-columns: repeat(9, 1fr); }
+        .items-grid.cols-7 { grid-template-columns: repeat(7, 1fr); }
+
+        .btn-num {
+            background-color: #a06b43; /* Tom marrom padrão dos números no print */
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            aspect-ratio: 1;
+            font-size: 28px;
+            font-weight: 700;
+            transition: all 0.1s;
+        }
+
+        .btn-num:hover {
+            background-color: #b57a4d;
+        }
+
+        .btn-num.selected {
+            background-color: #4a301f; /* Marrom escuro quando selecionado */
+        }
+        
+        .btn-num.hidden {
+            visibility: hidden;
+        }
+
+        /* ─── MODAL DE LEITURA ─── */
+        .modal-overlay {
+            position: fixed;
+            top:0; left:0; right:0; bottom:0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #fff;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            font-size: 22px;
+            line-height: 1.6;
+            color: #222;
+        }
+
+        .verse-num {
+            font-size: 14px;
+            font-weight: bold;
+            color: #666;
+            vertical-align: super;
+            margin-right: 4px;
+            user-select: none;
+        }
+        
+        #loadingMsg {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #666;
+            font-style: italic;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        ❤ Versículos
+    </div>
+
+    <!-- Grid dos 66 Livros -->
+    <div class="books-grid" id="booksGrid"></div>
+
+    <!-- Paineis de Capítulos e Versículos -->
+    <div class="bottom-panels">
+        <!-- Capítulos -->
+        <div class="panel capitulos-wrapper">
+            <div class="items-grid cols-9" id="capsGrid">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+
+        <!-- Versículos -->
+        <div class="panel versiculos-wrapper">
+            <div class="items-grid cols-7" id="versGrid">
+                 <!-- Preenchido via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Exibição do Texto -->
+<div class="modal-overlay" id="readModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Gênesis 1</h2>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div id="loadingMsg" style="display:none;">Carregando Palavra de Deus...</div>
+            <div id="modalText"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// URL base da API
+const API_BASE = "https://bible-api.com/data/almeida";
+
+// Dicionário de Cores Fiel ao Print
+const colors = {
+    p_dark:  '#311c12', // Pentateuco (Ex: Gênesis)
+    p_light: '#915328', // Pentateuco (Ex: Êxodo, Nm...)
+    h_dark:  '#bf681c', // Históricos 1 (Ex: Js, Ed...)
+    h_light: '#da8a21', // Históricos 2 (Ex: Jz, Ne...)
+    poet:    '#b41320', // Poéticos (Jó, Salmos)
+    prof_ma: '#6e2978', // Profetas Maiores
+    prof_me: '#96236b', // Profetas Menores
+    gospels: '#284f8d', // Evangelhos
+    acts:    '#00869a', // Atos
+    pauline: '#0b8243', // Epístolas Paulinas (Verde escuro)
+    general: '#089d53', // Epístolas Gerais (Verde médio)
+    rev:     '#7fac1c'  // Apocalipse (Limonada)
+};
+
+// Configuração dos 66 Livros
+const booksData = [
+    // --- LINHA 1 ---
+    { id: 'GEN', abbr: 'Gn', name: 'Gênesis', bg: colors.p_dark },
+    { id: 'EXO', abbr: 'Ex', name: 'Êxodo', bg: colors.p_light },
+    { id: 'LEV', abbr: 'Lv', name: 'Levítico', bg: colors.p_light },
+    { id: 'NUM', abbr: 'Nm', name: 'Números', bg: colors.p_light },
+    { id: 'DEU', abbr: 'Dt', name: 'Deuteronômio', bg: colors.p_light },
+    { id: 'JOS', abbr: 'Js', name: 'Josué', bg: colors.h_light },
+    { id: 'JDG', abbr: 'Jz', name: 'Juízes', bg: colors.h_light },
+    { id: 'RUT', abbr: 'Rt', name: 'Rute', bg: colors.h_light },
+    { id: '1SA', abbr: '1Sm', name: '1 Samuel', bg: colors.h_light },
+    { id: '2SA', abbr: '2Sm', name: '2 Samuel', bg: colors.h_light },
+    { id: '1KI', abbr: '1Rs', name: '1 Reis', bg: colors.h_light },
+    // --- LINHA 2 ---
+    { id: '2KI', abbr: '2Rs', name: '2 Reis', bg: colors.h_light },
+    { id: '1CH', abbr: '1Cr', name: '1 Crônicas', bg: colors.h_light },
+    { id: '2CH', abbr: '2Cr', name: '2 Crônicas', bg: colors.h_light },
+    { id: 'EZR', abbr: 'Ed', name: 'Esdras', bg: colors.h_dark },
+    { id: 'NEH', abbr: 'Ne', name: 'Neemias', bg: colors.h_light },
+    { id: 'EST', abbr: 'Et', name: 'Ester', bg: colors.h_light },
+    { id: 'JOB', abbr: 'Jó', name: 'Jó', bg: colors.poet },
+    { id: 'PSA', abbr: 'Sl', name: 'Salmos', bg: colors.poet },
+    { id: 'PRO', abbr: 'Pv', name: 'Provérbios', bg: colors.poet },
+    { id: 'ECC', abbr: 'Ec', name: 'Eclesiastes', bg: colors.poet },
+    { id: 'SNG', abbr: 'Ct', name: 'Cantares', bg: colors.poet },
+    // --- LINHA 3 ---
+    { id: 'ISA', abbr: 'Is', name: 'Isaías', bg: colors.prof_ma },
+    { id: 'JER', abbr: 'Jr', name: 'Jeremias', bg: colors.prof_ma },
+    { id: 'LAM', abbr: 'Lm', name: 'Lamentações', bg: prof_ma_cor(2) },
+    { id: 'EZK', abbr: 'Ez', name: 'Ezequiel', bg: colors.prof_ma },
+    { id: 'DAN', abbr: 'Dn', name: 'Daniel', bg: prof_ma_cor(4) }, // Ajustes isolados que deixarei p/ cor centralizada
+    { id: 'HOS', abbr: 'Os', name: 'Oséias', bg: colors.prof_me },
+    { id: 'JOL', abbr: 'Jl', name: 'Joel', bg: colors.prof_me },
+    { id: 'AMO', abbr: 'Am', name: 'Amós', bg: colors.prof_me },
+    { id: 'OBA', abbr: 'Ob', name: 'Obadias', bg: colors.prof_me },
+    { id: 'JON', abbr: 'Jn', name: 'Jonas', bg: colors.prof_me },
+    { id: 'MIC', abbr: 'Mq', name: 'Miquéias', bg: colors.prof_me },
+    // --- LINHA 4 ---
+    { id: 'NAM', abbr: 'Na', name: 'Naum', bg: colors.prof_me },
+    { id: 'HAB', abbr: 'Hc', name: 'Habacuque', bg: colors.prof_me },
+    { id: 'ZEP', abbr: 'Sf', name: 'Sofonias', bg: colors.prof_me },
+    { id: 'HAG', abbr: 'Ag', name: 'Ageu', bg: colors.prof_me },
+    { id: 'ZEC', abbr: 'Zc', name: 'Zacarias', bg: colors.prof_me },
+    { id: 'MAL', abbr: 'Ml', name: 'Malaquias', bg: colors.prof_me },
+    { id: 'MAT', abbr: 'Mt', name: 'Mateus', bg: colors.gospels },
+    { id: 'MRK', abbr: 'Mc', name: 'Marcos', bg: colors.gospels },
+    { id: 'LUK', abbr: 'Lc', name: 'Lucas', bg: colors.gospels },
+    { id: 'JHN', abbr: 'Jo', name: 'João', bg: colors.gospels },
+    { id: 'ACT', abbr: 'At', name: 'Atos', bg: colors.acts },
+    // --- LINHA 5 ---
+    { id: 'ROM', abbr: 'Rm', name: 'Romanos', bg: colors.general },
+    { id: '1CO', abbr: '1Co', name: '1 Coríntios', bg: colors.general },
+    { id: '2CO', abbr: '2Co', name: '2 Coríntios', bg: colors.general },
+    { id: 'GAL', abbr: 'Gl', name: 'Gálatas', bg: colors.general },
+    { id: 'EPH', abbr: 'Ef', name: 'Efésios', bg: colors.general },
+    { id: 'PHP', abbr: 'Fp', name: 'Filipenses', bg: colors.general },
+    { id: 'COL', abbr: 'Cl', name: 'Colossenses', bg: colors.general },
+    { id: '1TH', abbr: '1Ts', name: '1 Tessalonicenses', bg: colors.general },
+    { id: '2TH', abbr: '2Ts', name: '2 Tessalonicenses', bg: colors.general },
+    { id: '1TI', abbr: '1Tm', name: '1 Timóteo', bg: colors.general },
+    { id: '2TI', abbr: '2Tm', name: '2 Timóteo', bg: colors.general },
+    // --- LINHA 6 ---
+    { id: 'TIT', abbr: 'Tt', name: 'Tito', bg: colors.general },
+    { id: 'PHM', abbr: 'Fm', name: 'Filemom', bg: colors.general },
+    { id: 'HEB', abbr: 'Hb', name: 'Hebreus', bg: colors.general },
+    { id: 'JAS', abbr: 'Tg', name: 'Tiago', bg: colors.general },
+    { id: '1PE', abbr: '1Pe', name: '1 Pedro', bg: colors.pauline },
+    { id: '2PE', abbr: '2Pe', name: '2 Pedro', bg: colors.pauline },
+    { id: '1JN', abbr: '1Jo', name: '1 João', bg: colors.pauline },
+    { id: '2JN', abbr: '2Jo', name: '2 João', bg: colors.pauline },
+    { id: '3JN', abbr: '3Jo', name: '3 João', bg: colors.pauline },
+    { id: 'JUD', abbr: 'Jd', name: 'Judas', bg: colors.pauline },
+    { id: 'REV', abbr: 'Ap', name: 'Apocalipse', bg: colors.rev }
+];
+
+// Funções Helpers para as poucas variações finas que o print tem (mas mantendo padronização)
+function prof_ma_cor(idx) { return colors.prof_ma; }
+
+// Estado da Aplicação
+let selBookId = null;
+let selBookName = null;
+let selChapter = null;
+let currentChapterData = null; // Guarda o JSON do capitulo fetchado
+let selVerses = new Set(); // Múltiplos versículos selecionados
+
+// Inicializa a interface
+function init() {
+    renderBooks();
+    
+    // Seleciona Gênesis por padrão
+    if (booksData.length > 0) {
+        selectBook(booksData[0].id, booksData[0].name);
+    }
+}
+
+// ── RENDERIZAÇÕES PRINCIPAIS ──
+function renderBooks() {
+    const grid = document.getElementById('booksGrid');
+    booksData.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-book';
+        btn.id = `bk_${b.id}`;
+        btn.style.backgroundColor = b.bg;
+        btn.innerHTML = `<span class="abbr">${b.abbr}</span><span class="name">${b.name}</span>`;
+        btn.onclick = () => selectBook(b.id, b.name);
+        grid.appendChild(btn);
+    });
+}
+
+function renderNumbers(containerId, count, clickHandler, activeSet, hideZeros=false) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-num';
+        btn.textContent = i;
+        if (activeSet.has(i)) btn.classList.add('selected');
+        
+        btn.onclick = () => {
+            // Remove as seleções do container (se for single select)
+            if (activeSet.size === 1 && containerId === 'capsGrid') {
+                Array.from(container.children).forEach(c => c.classList.remove('selected'));
+                btn.classList.add('selected');
+            }
+            clickHandler(i, btn);
+        };
+        container.appendChild(btn);
+    }
+}
+
+// ── FLUXOS DE CLIQUE ──
+// 1. Clicou no Livro
+async function selectBook(bookId, bookName) {
+    // UI Update
+    document.querySelectorAll('.btn-book').forEach(b => b.classList.remove('selected'));
+    document.getElementById(`bk_${bookId}`).classList.add('selected');
+    
+    selBookId = bookId;
+    selBookName = bookName;
+    selChapter = null;
+    selVerses.clear();
+    
+    // Mostra loading nos capítulos
+    document.getElementById('capsGrid').innerHTML = '<span style="grid-column: span 9; text-align: center; color: #666; padding: 20px; font-weight: bold; font-family: sans-serif;">Buscando Capítulos...</span>';
+    document.getElementById('versGrid').innerHTML = ''; // Limpa os versos
+
+    try {
+        const res = await fetch(`${API_BASE}/${bookId}`);
+        const data = await res.json();
+        
+        if (!data.chapters) throw new Error("Sem capítulos");
+        
+        // Renderiza botões de capítulo
+        renderNumbers('capsGrid', data.chapters.length, (capNum) => selectChapter(capNum), new Set());
+        
+        // Auto seleciona o cap 1
+        if (data.chapters.length > 0) {
+            selectChapter(1);
+        }
+        
+    } catch (err) {
+        console.error(err);
+        document.getElementById('capsGrid').innerHTML = '<span style="grid-column: span 9; color: red;">Erro ao carregar capítulos. Tente recarregar.</span>';
+    }
+}
+
+// 2. Clicou no Capítulo
+async function selectChapter(capNum) {
+    selChapter = capNum;
+    selVerses.clear();
+    
+    const capBtns = document.getElementById('capsGrid').children;
+    Array.from(capBtns).forEach(b => {
+        if(b.textContent == capNum) b.classList.add('selected');
+        else b.classList.remove('selected');
+    });
+
+    document.getElementById('versGrid').innerHTML = '<span style="grid-column: span 7; text-align: center; color: #666; padding: 20px; font-weight: bold; font-family: sans-serif;">Buscando Versos...</span>';
+
+    try {
+        const res = await fetch(`${API_BASE}/${selBookId}/${capNum}`);
+        const data = await res.json();
+        
+        if (!data.verses) throw new Error("Sem versículos");
+        currentChapterData = data.verses; // Armazena em RAM para montarmos o texto depois rápido
+        
+        renderNumbers('versGrid', data.verses.length, (verseNum, btnEl) => toggleVerse(verseNum, btnEl), new Set());
+        
+    } catch (err) {
+        console.error(err);
+        document.getElementById('versGrid').innerHTML = '<span style="grid-column: span 7; color: red;">Erro ao carregar versículos.</span>';
+    }
+}
+
+// 3. Clicou no Versículo
+function toggleVerse(verseNum, btnEl) {
+    // Ao invés de múltipla seleção complexa para começar, aplicamos a lógica simples e ágil:
+    // Clicou, ele logo abre o modal bonito com o texto da Palavra.
+    btnEl.classList.add('selected');
+    
+    // Imediatamente tenta ler o versículo da memória (pois o fetch do capítulo puxou a lista)
+    lerVersiculoSelecionado(verseNum);
+}
+
+
+// ── LÓGICA DE EXIBIÇÃO NO MODAL ──
+function lerVersiculoSelecionado(vNum) {
+    if (!currentChapterData) return;
+    
+    const verseObj = currentChapterData.find(v => v.chapter === selChapter && v.verse === vNum);
+    if (!verseObj) return;
+
+    document.getElementById('modalTitle').textContent = `${selBookName} ${selChapter}:${vNum}`;
+    document.getElementById('loadingMsg').style.display = 'none';
+    
+    // Monta o visual
+    document.getElementById('modalText').innerHTML = `
+        <p><span class="verse-num">${verseObj.verse}</span> ${verseObj.text}</p>
+    `;
+    
+    // Abre o Modal
+    document.getElementById('readModal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('readModal').classList.remove('show');
+    // Desmarca a visualização preta
+    const versBtns = document.getElementById('versGrid').children;
+    Array.from(versBtns).forEach(b => b.classList.remove('selected'));
+}
+
+// Fechar popup no Esc
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+});
+
+// Fechar popup clicando no overlay negro de fora
+document.getElementById('readModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('readModal')) {
+        closeModal();
+    }
+});
+
+// Boot!
+window.onload = init;
+
+</script>
+
+</body>
+</html>
