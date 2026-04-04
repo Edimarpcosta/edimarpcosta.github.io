@@ -1119,9 +1119,12 @@
       </section>
 
       <section class="page" id="page-culto">
-        <div class="title-group">
-          <h2>🎬 Projeção de Culto</h2>
-          <p>Versículos, aniversariantes e textos para a telão.</p>
+        <div class="title-group row between">
+          <div>
+            <h2>🎬 Projeção de Culto</h2>
+            <p>Versículos, aniversariantes e textos para o telão.</p>
+          </div>
+          <button class="btn primary" onclick="window.location.href='biblia/biblia.html'">Grid Bíblico Interativo</button>
         </div>
         <div class="grid two" style="gap:20px; margin-bottom:20px;">
           <div class="culto-panel">
@@ -4142,40 +4145,6 @@
         } catch(e) { console.warn('initCultoManager:', e.message); }
       },
 
-      // Projeção: inicializa o manager na aba
-      async initCultoManager() {
-        Projecao.init();
-        // Carrega aniversariantes para a lista de projeção
-        try {
-          const res = await Api.getData("MEMBROS");
-          const hoje = new Date(); hoje.setHours(0,0,0,0);
-          const lista = (res.data||[]).filter(m => m.DATA_NASC).map(m => {
-            const nasc = new Date(m.DATA_NASC);
-            const aniv = new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate());
-            if (aniv < hoje) aniv.setFullYear(hoje.getFullYear()+1);
-            const dias = Math.round((aniv-hoje)/86400000);
-            return { ...m, _dias: dias, _nasc: nasc };
-          }).filter(m => m._dias <= 30).sort((a,b)=>a._dias-b._dias);
-
-          const wrap = document.getElementById('projAnivLista');
-          if (wrap) {
-            if (lista.length === 0) {
-              wrap.innerHTML = `<span class="muted" style="font-size:13px;">Nenhum aniversariante nos próximos 30 dias.</span>`;
-            } else {
-              wrap.innerHTML = lista.map(m => {
-                const diasTxt = m._dias === 0 ? '🎉 Hoje!' : `em ${m._dias}d`;
-                const badgeCls = m._dias === 0 ? 'good' : (m._dias<=7?'warn':'');
-                  const mNomeCompat = m.NOME_COMPLETO || m.NOME || '?';
-                  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:8px;">
-                  <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">🎂 ${mNomeCompat}</div>
-                  <span class="badge ${badgeCls}" style="font-size:11px;">${diasTxt}</span>
-                  <button class="btn primary" style="font-size:11px;padding:3px 10px;" onclick="Projecao.projetarAniversariante('${mNomeCompat.replace(/'/g,"\\\\\\'")}','${diasTxt}')">📺</button>
-                </div>`;
-              }).join('');
-            }
-          }
-        } catch(e) { console.warn('initCultoManager:', e.message); }
-      },
 
       // ── DASHBOARD ────────────────────────────────────────────────────
       async loadDashboard() {
@@ -4185,13 +4154,23 @@
             Api.getData("EVENTOS"),
             Api.getData("CELULAS")
           ]);
-          const ativos = (resMembros.data || []).filter(m => m.STATUS === 'ATIVO').length;
-          const visitantes = (resMembros.data || []).filter(m => m.STATUS === 'VISITANTE').length;
+          const ativos = (resMembros.data || []).filter(m => {
+            const op = String(m.OCUPACAO || m.STATUS || '').trim().toUpperCase();
+            return op && op !== 'VISITANTE';
+          }).length;
+          const visitantes = (resMembros.data || []).filter(m => {
+            const op = String(m.OCUPACAO || m.STATUS || '').trim().toUpperCase();
+            return op === 'VISITANTE';
+          }).length;
           const now = new Date();
           const eventosDoMes = (resEventos.data || []).filter(e => {
+            if (!e.DATA) return false;
             const d = new Date(e.DATA); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
           }).length;
-          const celulasAtivas = (resCelulas.data || []).filter(c => c.STATUS === 'ATIVO').length;
+          const celulasAtivas = (resCelulas.data || []).filter(c => {
+             const st = String(c.STATUS || '').trim().toUpperCase();
+             return st === 'ATIVO' || st === 'ATIVA';
+          }).length;
 
           const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
           setEl('kpiMembros', ativos);
@@ -4381,37 +4360,170 @@
       },
 
       _atualizarNavBtns() {
-        const prev = document.getElementById('projNavPrev');
-        const next = document.getElementById('projNavNext');
-        if (!prev || !next) return;
-        const total = this._versiculoVersos.length;
-        prev.disabled = (this._versoIdx <= 0 || total === 0);
-        next.disabled = (this._versoIdx >= total - 1 || total === 0);
       },
 
-      proximoVersiculo() {
-        if (!this._versiculoVersos.length) return;
-        if (this._versoIdx >= this._versiculoVersos.length - 1) {
-          // Fim do trecho — tenta avançar para próximo capítulo se soubermos o livro
-          if (this._bib.livroApi) this.proximoCapitulo();
-          return;
+      _findBookIndex(query) {
+        let flatIdx = 0;
+        const q = query.toLowerCase().replace(/\+/g, ' ');
+        for (let g of this.BIBLIA) {
+          for (let l of g.livros) {
+            if (l.a === query || l.n.toLowerCase() === q) return { idx: flatIdx, ...l };
+            flatIdx++;
+          }
         }
-        this._versoIdx++;
-        this._exibirVerso();
-        this._mostrarTexto();
-        this._atualizarNavBtns();
+        return null;
       },
 
-      anteriorVersiculo() {
-        if (!this._versiculoVersos.length) return;
-        if (this._versoIdx <= 0) {
-          if (this._bib.livroApi) this.capituloAnterior();
+      _getBookByIndex(idx) {
+        let current = 0;
+        for (let g of this.BIBLIA) {
+            for (let l of g.livros) {
+                if (current === idx) return l;
+                current++;
+            }
+        }
+        return null;
+      },
+
+      async _fetchContinuousVerse(livroApi, cap, vers, bookInfoObj = null) {
+        let pText = document.getElementById('projText');
+        if (pText) { pText.style.transition = "opacity 0.2s"; pText.style.opacity = 0.5; }
+        const url = `https://bible-api.com/${livroApi}+${cap}:${vers}?translation=almeida`;
+        try {
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!data.verses?.length) {
+              if(pText) pText.style.opacity = 1;
+              return false;
+          }
+          this._versiculoAtual = data;
+          this._versiculoVersos = data.verses;
+          this._versoIdx = 0;
+          this._bib.livroApi = livroApi;
+          this._bib.cap = cap;
+          this._bib.vers = data.verses[0].verse;
+          if (bookInfoObj) {
+            this._bib.livro = bookInfoObj.n;
+            this._bib.totalCaps = bookInfoObj.c;
+          }
+          this._exibirVerso();
+          this._mostrarTexto();
+          if(pText) pText.style.opacity = 1;
+          return true;
+        } catch(e) {
+          if(pText) pText.style.opacity = 1;
+          return false;
+        }
+      },
+
+      async _fetchUltimoVersiculo(livroApi, cap, bookInfoObj) {
+        let pText = document.getElementById('projText');
+        if (pText) { pText.style.transition = "opacity 0.2s"; pText.style.opacity = 0.5; }
+        const url = `https://bible-api.com/${livroApi}+${cap}?translation=almeida`;
+        try {
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!data.verses?.length) { if(pText) pText.style.opacity = 1; return false; }
+
+          let ultimo = data.verses[data.verses.length - 1];
+          this._versiculoAtual = data;
+          this._versiculoVersos = data.verses;
+          this._versoIdx = data.verses.length - 1;
+          this._bib.livroApi = livroApi;
+          this._bib.cap = cap;
+          this._bib.vers = ultimo.verse;
+          if (bookInfoObj) {
+            this._bib.livro = bookInfoObj.n;
+            this._bib.totalCaps = bookInfoObj.c;
+          }
+          this._exibirVerso();
+          this._mostrarTexto();
+          if(pText) pText.style.opacity = 1;
+          return true;
+        } catch(e) { if(pText) pText.style.opacity = 1; return false; }
+      },
+
+      async proximoVersiculo() {
+        if (!this._bib.livroApi && !this._versiculoVersos.length) {
+          this._bib.livro = 'Gênesis';
+          this._bib.livroApi = 'genesis';
+          this._bib.totalCaps = 50;
+          this._bib.cap = 1;
+          this._bib.vers = 1;
+          await this._fetchContinuousVerse(this._bib.livroApi, 1, 1);
           return;
         }
-        this._versoIdx--;
-        this._exibirVerso();
-        this._mostrarTexto();
-        this._atualizarNavBtns();
+        if (!this._versiculoVersos.length) return;
+        if (this._versoIdx < this._versiculoVersos.length - 1) {
+          this._versoIdx++;
+          this._bib.vers = this._versiculoVersos[this._versoIdx].verse;
+          this._exibirVerso();
+          this._mostrarTexto();
+          return;
+        }
+        if (!this._bib.livroApi) {
+           let b = this._findBookIndex(this._versiculoAtual?.reference?.split(' ')[0] || '');
+           if (b) {
+               this._bib.livroApi = b.a; this._bib.livro = b.n; this._bib.totalCaps = b.c;
+           }
+        }
+        if (!this._bib.livroApi) return;
+        let success = await this._fetchContinuousVerse(this._bib.livroApi, this._bib.cap, this._bib.vers + 1);
+        if (!success) {
+           let novoCap = this._bib.cap + 1;
+           let b = this._findBookIndex(this._bib.livroApi);
+           if (!b) return;
+           if (novoCap > b.c) {
+             let nextBook = this._getBookByIndex(b.idx + 1);
+             if (!nextBook) return UI.toast("Fim da Bíblia!", "warn");
+             await this._fetchContinuousVerse(nextBook.a, 1, 1, nextBook);
+           } else {
+             await this._fetchContinuousVerse(this._bib.livroApi, novoCap, 1, b);
+           }
+        }
+      },
+
+      async anteriorVersiculo() {
+        if (!this._bib.livroApi && !this._versiculoVersos.length) {
+          this._bib.livro = 'Gênesis';
+          this._bib.livroApi = 'genesis';
+          this._bib.totalCaps = 50;
+          this._bib.cap = 1;
+          this._bib.vers = 1;
+          await this._fetchContinuousVerse(this._bib.livroApi, 1, 1);
+          return;
+        }
+        if (!this._versiculoVersos.length) return;
+        if (this._versoIdx > 0) {
+          this._versoIdx--;
+          this._bib.vers = this._versiculoVersos[this._versoIdx].verse;
+          this._exibirVerso();
+          this._mostrarTexto();
+          return;
+        }
+        if (!this._bib.livroApi) {
+           let b = this._findBookIndex(this._versiculoAtual?.reference?.split(' ')[0] || '');
+           if (b) {
+               this._bib.livroApi = b.a; this._bib.livro = b.n; this._bib.totalCaps = b.c;
+           }
+        }
+        if (!this._bib.livroApi) return;
+        if (this._bib.vers > 1) {
+          let success = await this._fetchContinuousVerse(this._bib.livroApi, this._bib.cap, this._bib.vers - 1);
+          if (success) return;
+        }
+        let novoCap = this._bib.cap - 1;
+        let b = this._findBookIndex(this._bib.livroApi);
+        if (!b) return;
+        let targetLivroApi = this._bib.livroApi;
+        let targetCap = novoCap;
+        let targetBook = b;
+        if (novoCap < 1) {
+          let prevBook = this._getBookByIndex(b.idx - 1);
+          if (!prevBook) return UI.toast("Início da Bíblia!", "warn");
+          targetLivroApi = prevBook.a; targetBook = prevBook; targetCap = prevBook.c;
+        }
+        await this._fetchUltimoVersiculo(targetLivroApi, targetCap, targetBook);
       },
 
       async proximoCapitulo() {
@@ -4429,20 +4541,24 @@
       },
 
       async _carregarCapitulo(livroApi, cap, versInicio) {
+        let pText = document.getElementById('projText');
+        if (pText) { pText.style.transition = "opacity 0.2s"; pText.style.opacity = 0.5; }
         const url = `https://bible-api.com/${livroApi}+${cap}:${versInicio}?translation=almeida`;
         try {
           const res  = await fetch(url);
           const data = await res.json();
-          if (!data.verses?.length) { UI.toast("Capítulo não encontrado", "warn"); return; }
+          if (!data.verses?.length) { UI.toast("Capítulo não encontrado", "warn"); if(pText) pText.style.opacity = 1; return; }
           this._versiculoAtual  = data;
           this._versiculoVersos = data.verses;
           this._versoIdx = 0;
           this._bib.cap = cap;
           this._bib.vers = versInicio;
+          let b = this._findBookIndex(livroApi);
+          if (b) { this._bib.livroApi = b.a; this._bib.livro = b.n; this._bib.totalCaps = b.c; }
           this._exibirVerso();
           this._mostrarTexto();
-          this._atualizarNavBtns();
-        } catch(e) { UI.toast("Erro ao carregar capítulo", "error"); }
+          if(pText) pText.style.opacity = 1;
+        } catch(e) { UI.toast("Erro ao carregar capítulo", "error"); if(pText) pText.style.opacity = 1; }
       },
 
       // ── Modal Bíblia ─────────────────────────────────────────────────
@@ -4636,22 +4752,14 @@
         const projText = document.getElementById('projText');
         const projRef  = document.getElementById('projRef');
         if (projText) { projText.style.animation='none'; void projText.offsetWidth; projText.style.animation=''; projText.textContent = text; }
-        if (projRef)  projRef.textContent = `${ref} — v.${v.verse}`;
+        
+        const refFinal = this._bib.livroApi && this._bib.livro 
+            ? `${this._bib.livro} ${this._bib.cap}:${v.verse}`
+            : `${ref} — v.${v.verse}`;
+        if (projRef)  projRef.textContent = refFinal;
       },
 
-      proximoVersiculo() {
-        if (!this._versiculoVersos.length) return;
-        this._versoIdx = Math.min(this._versoIdx+1, this._versiculoVersos.length-1);
-        this._exibirVerso();
-        this._mostrarTexto();
-      },
 
-      anteriorVersiculo() {
-        if (!this._versiculoVersos.length) return;
-        this._versoIdx = Math.max(this._versoIdx-1, 0);
-        this._exibirVerso();
-        this._mostrarTexto();
-      },
 
       // Busca rápida via campo da barra de controles (ex: "Jo 3:16")
       async buscaRapida(query) {
@@ -4672,6 +4780,13 @@
           this._versiculoAtual  = data;
           this._versiculoVersos = data.verses;
           this._versoIdx = 0;
+          
+          let b = this._findBookIndex(livroApi);
+          if (b) {
+              this._bib.livroApi = b.a; this._bib.livro = b.n; this._bib.totalCaps = b.c;
+              this._bib.cap = parseInt(cap); this._bib.vers = data.verses[0].verse;
+          }
+
           this._exibirVerso();
           this._mostrarTexto();
           document.getElementById('projSearch').value = '';
