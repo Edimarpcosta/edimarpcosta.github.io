@@ -245,10 +245,9 @@ const uiControllers = {
         utils.updateStats();
 
         // Habilita exportação
-        if (elements.exportBtn) {
-            elements.exportBtn.disabled = false;
-            elements.exportBtn.classList.remove('opacity-50');
-        }
+        [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
+            if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
+        });
     },
 
     // ===== §4.3 — TABELA COM VIRTUALIZAÇÃO LEVE =====
@@ -407,7 +406,8 @@ function init() {
         startBtn: document.getElementById('startBtn'),
         pauseBtn: document.getElementById('pauseBtn'),
         resumeBtn: document.getElementById('resumeBtn'),
-        exportBtn: document.getElementById('exportBtn'),
+        exportMaposcopeBtn: document.getElementById('exportMaposcopeBtn'),
+        exportCompletoBtn: document.getElementById('exportCompletoBtn'),
         resultsTable: document.getElementById('resultsTable'),
         resultsBody: document.getElementById('resultsBody'),
         apiDelayInput: document.getElementById('apiDelay'),
@@ -422,7 +422,8 @@ function init() {
     elements.startBtn?.addEventListener('click', () => uiControllers.startProcessing());
     elements.pauseBtn?.addEventListener('click', () => uiControllers.pauseProcessing());
     elements.resumeBtn?.addEventListener('click', () => uiControllers.resumeProcessing());
-    elements.exportBtn?.addEventListener('click', () => dataHandlers.exportToExcel());
+    elements.exportMaposcopeBtn?.addEventListener('click', () => dataHandlers.exportMaposcope());
+    elements.exportCompletoBtn?.addEventListener('click', () => dataHandlers.exportCompleto());
 
     // Botão "Testar Todas"
     document.getElementById('testAllApisBtn')?.addEventListener('click', async () => {
@@ -477,10 +478,9 @@ function init() {
     });
 
     // Exportação desabilitada inicialmente
-    if (elements.exportBtn) {
-        elements.exportBtn.disabled = true;
-        elements.exportBtn.classList.add('opacity-50');
-    }
+    [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
+        if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
+    });
 
     console.log('%c✅ GetLista Prospecta carregado com sucesso!', 'background:#4ade80; color:#064e3b; padding:4px 8px; border-radius:4px; font-weight:bold');
 }

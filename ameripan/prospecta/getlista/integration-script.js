@@ -62,127 +62,193 @@ Object.assign(dataHandlers, {
             .filter(l => l.length === 14);
     },
 
-    // §3 + §4 — Exportação Enriquecida para Excel
-    exportToExcel() {
+    // ====== FILTRO COMPARTILHADO (respeita checkboxes de Situação Cadastral) ======
+    _getFilteredResults() {
+        const exportAll = document.getElementById('exportAll')?.checked ?? true;
+        const allowedStatuses = Array.from(document.querySelectorAll('.export-status:checked')).map(cb => cb.value.toLowerCase());
+
+        const successRows = [];
+        const errorRows = [];
+        const apiStats = {};
+
+        state.results.forEach(result => {
+            if (!result) return;
+
+            // Filtro por situação cadastral
+            if (!result.error && !exportAll) {
+                const statusVal = (result.descricao_situacao_cadastral || '').toLowerCase();
+                const matchesStatus = allowedStatuses.some(s => statusVal.includes(s));
+                if (!matchesStatus) return;
+            }
+
+            if (result.error) {
+                errorRows.push({
+                    'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
+                    'Erro': result.errorMessage,
+                    'Data': new Date().toLocaleString('pt-BR')
+                });
+                return;
+            }
+
+            const apiUsed = result.api_origem || 'Desconhecida';
+            apiStats[apiUsed] = (apiStats[apiUsed] || 0) + 1;
+            successRows.push({ result, apiUsed });
+        });
+
+        return { successRows, errorRows, apiStats };
+    },
+
+    // ====== ABAS COMUNS (Erros + Resumo) ======
+    _addCommonSheets(workbook, errorRows, apiStats, successCount) {
+        if (errorRows.length > 0) {
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(errorRows), 'Erros');
+        }
+        const totalProcessed = state.results.filter(r => r !== undefined).length;
+        const summary = [
+            ['RESUMO DA PROSPECÇÃO'],
+            [''],
+            ['Data da exportação', new Date().toLocaleString('pt-BR')],
+            ['Total de CNPJs carregados', state.cnpjList.length],
+            ['Total processados', totalProcessed],
+            ['Sucessos (exportados)', successCount],
+            ['Erros', errorRows.length],
+            [''],
+            ['CONSUMO DE APIS'],
+            ...Object.entries(apiStats).map(([api, count]) => [api, count]),
+            [''],
+            ['APIs configuradas', state.apis.map(a => `${a.name} (${a.active ? 'ativa' : 'inativa'})`).join(', ')]
+        ];
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Resumo');
+    },
+
+    // ====== 🗺️ EXPORTAR MAPOSCOPE (otimizado) ======
+    exportMaposcope() {
         try {
             if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
 
-            utils.updateStatus('Preparando exportação enriquecida...');
+            utils.updateStatus('Preparando exportação Maposcope...');
+            const { successRows, errorRows, apiStats } = this._getFilteredResults();
             const workbook = XLSX.utils.book_new();
 
-            const successRows = [];
-            const errorRows = [];
-            const apiStats = {};
+            const rows = successRows.map(({ result }) => {
+                const tel1 = utils.cleanPhone(result.ddd_telefone_1);
+                const whatsapp = tel1.length >= 10 ? `wa.me/55${tel1}` : '';
+                const descCnae = result.cnae_fiscal_descricao || '';
+                const cnpjFmt = utils.formatCnpjForDisplay(result.cnpj);
+                const situacao = result.descricao_situacao_cadastral || '';
+                const telefone = result.ddd_telefone_1 || '';
+                const email = result.email || '';
 
-            state.results.forEach(result => {
-                if (!result) return;
+                // Monta descrição rica para o campo "Descrição" do Maposcope
+                let descParts = [];
+                if (descCnae) descParts.push(descCnae);
+                if (situacao) descParts.push('Situação: ' + situacao);
+                if (cnpjFmt) descParts.push('CNPJ: ' + cnpjFmt);
+                if (telefone) descParts.push('Tel: ' + telefone);
+                if (whatsapp) descParts.push('WhatsApp: ' + whatsapp);
+                if (email) descParts.push('Email: ' + email);
 
-                if (result.error) {
-                    errorRows.push({
-                        'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
-                        'Erro': result.errorMessage,
-                        'Data': new Date().toLocaleString('pt-BR')
-                    });
-                    return;
-                }
+                return {
+                    'Name': result.nome_fantasia || result.razao_social || 'Sem Nome',
+                    'Address': (result.logradouro || '') + ', ' + (result.numero || 'SN') + ' - ' + (result.bairro || '') + ', ' + (result.cep || ''),
+                    'City': result.municipio || '',
+                    'Country': 'Brasil',
+                    'Description': descParts.join(' | ')
+                };
+            });
 
-                // Contabiliza uso de APIs
-                const apiUsed = result.api_origem || 'Desconhecida';
-                apiStats[apiUsed] = (apiStats[apiUsed] || 0) + 1;
+            if (rows.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Maposcope');
+            } else {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado']]), 'Maposcope');
+            }
 
-                // §4.1 — Higienização de contatos + WhatsApp Links
+            this._addCommonSheets(workbook, errorRows, apiStats, rows.length);
+
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            XLSX.writeFile(workbook, 'maposcope_' + dateStr + '.xlsx');
+            utils.updateStatus('✅ Maposcope exportado! ' + rows.length + ' pinos.');
+        } catch (err) {
+            console.error('Erro na exportação Maposcope:', err);
+            alert('Erro ao exportar: ' + err.message);
+        }
+    },
+
+    // ====== 📊 EXPORTAR COMPLETO (PT-BR) ======
+    exportCompleto() {
+        try {
+            if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
+            if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
+
+            utils.updateStatus('Preparando exportação completa...');
+            const { successRows, errorRows, apiStats } = this._getFilteredResults();
+            const workbook = XLSX.utils.book_new();
+
+            const rows = successRows.map(({ result, apiUsed }) => {
                 const tel1 = utils.cleanPhone(result.ddd_telefone_1);
                 const tel2 = utils.cleanPhone(result.ddd_telefone_2);
 
                 const row = {
-                    'CNPJ': utils.formatCnpjForDisplay(result.cnpj),
+                    'CNPJ': result.cnpj,
+                    'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
                     'Razão Social': result.razao_social || '',
                     'Nome Fantasia': result.nome_fantasia || '',
                     'Situação Cadastral': result.descricao_situacao_cadastral || '',
-                    // §4.2 — CNAE em português legível (sem código)
-                    'Atividade Principal': result.cnae_fiscal_descricao || '',
-                    'CNAE Código': result.cnae_fiscal || '',
-                    'Endereço': `${result.logradouro || ''}, ${result.numero || ''} - ${result.bairro || ''}`.trim().replace(/^,\s*/, ''),
-                    'Cidade/UF': `${result.municipio || ''}/${result.uf || ''}`,
-                    'CEP': result.cep || '',
-                    'E-mail': result.email || '',
-                    'Telefone 1': result.ddd_telefone_1 || '',
-                    'Telefone 2': result.ddd_telefone_2 || '',
-                    // §4.1 — Links WhatsApp prontos pro SDR
-                    'WhatsApp 1': tel1.length >= 10 ? `https://wa.me/55${tel1}` : '',
-                    'WhatsApp 2': tel2.length >= 10 ? `https://wa.me/55${tel2}` : '',
+                    'Data de Abertura': result.data_inicio_atividade || '',
+                    'CNAE Principal': result.cnae_fiscal || '',
+                    'Descrição CNAE': result.cnae_fiscal_descricao || '',
                     'Natureza Jurídica': result.natureza_juridica || '',
+                    'Logradouro': result.logradouro || '',
+                    'Número': result.numero || '',
+                    'Complemento': result.complemento || '',
+                    'Bairro': result.bairro || '',
+                    'Município': result.municipio || '',
+                    'UF': result.uf || '',
+                    'CEP': result.cep || '',
+                    'Telefone': result.ddd_telefone_1 || '',
+                    'Telefone 2': result.ddd_telefone_2 || '',
+                    'Email': result.email || '',
+                    'WhatsApp 1': tel1.length >= 10 ? 'https://wa.me/55' + tel1 : '',
+                    'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
                     'Capital Social': result.capital_social || '',
                     'Porte': result.porte || '',
-                    'Abertura': result.data_inicio_atividade || '',
                     'API Origem': apiUsed
                 };
 
                 // Sócios como colunas extras
                 if (result.qsa && result.qsa.length > 0) {
                     result.qsa.forEach((s, i) => {
-                        row[`Sócio ${i + 1}`] = s.nome_socio || '';
-                        row[`Qualificação ${i + 1}`] = s.qualificacao_socio || '';
+                        row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || '';
+                        row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || '';
                     });
                 }
 
-                // §3 — Modo Merge: Appender de colunas originais da planilha de input
-                if (state.rawInputData) {
-                    const cleanCnpj = String(result.cnpj).replace(/\D/g, '');
-                    const originalRow = state.rawInputData.find(orig => {
-                        const vals = Object.values(orig).map(v => String(v).replace(/\D/g, ''));
-                        return vals.includes(cleanCnpj);
+                // CNAEs Secundários
+                if (result.cnaes_secundarios && result.cnaes_secundarios.length > 0) {
+                    result.cnaes_secundarios.forEach((c, i) => {
+                        row['CNAE Secundário ' + (i + 1)] = c.codigo || '';
+                        row['Descrição CNAE Secundário ' + (i + 1)] = c.descricao || '';
                     });
-                    if (originalRow) {
-                        Object.keys(originalRow).forEach(k => {
-                            if (!row[k] && !k.toLowerCase().includes('cnpj')) {
-                                row[`[Orig] ${k}`] = originalRow[k];
-                            }
-                        });
-                    }
                 }
 
-                successRows.push(row);
+                return row;
             });
 
-            // Aba 1: Dados Enriquecidos
-            if (successRows.length > 0) {
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(successRows), 'CNPJs Enriquecidos');
+            if (rows.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'CNPJs Enriquecidos');
             } else {
                 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado com sucesso']]), 'CNPJs Enriquecidos');
             }
 
-            // Aba 2: Erros
-            if (errorRows.length > 0) {
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(errorRows), 'Erros');
-            }
+            this._addCommonSheets(workbook, errorRows, apiStats, rows.length);
 
-            // Aba 3: Resumo
-            const totalProcessed = state.results.filter(r => r !== undefined).length;
-            const summary = [
-                ['RESUMO DA PROSPECÇÃO'],
-                [''],
-                ['Data da exportação', new Date().toLocaleString('pt-BR')],
-                ['Total de CNPJs carregados', state.cnpjList.length],
-                ['Total processados', totalProcessed],
-                ['Sucessos', successRows.length],
-                ['Erros', errorRows.length],
-                [''],
-                ['CONSUMO DE APIS'],
-                ...Object.entries(apiStats).map(([api, count]) => [api, count]),
-                [''],
-                ['APIs configuradas', state.apis.map(a => `${a.name} (${a.active ? 'ativa' : 'inativa'})`).join(', ')]
-            ];
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Resumo');
-
-            // Gera nome com data
             const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            XLSX.writeFile(workbook, `getlista_prospeccao_${dateStr}.xlsx`);
-            utils.updateStatus('✅ Exportação concluída!');
+            XLSX.writeFile(workbook, 'getlista_completo_' + dateStr + '.xlsx');
+            utils.updateStatus('✅ Exportação completa! ' + rows.length + ' CNPJs.');
         } catch (err) {
-            console.error('Erro na exportação:', err);
-            alert(`Erro ao exportar: ${err.message}`);
+            console.error('Erro na exportação completa:', err);
+            alert('Erro ao exportar: ' + err.message);
         }
     }
 });
