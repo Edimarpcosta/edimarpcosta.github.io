@@ -88,8 +88,14 @@ const utils = {
 // Cada API retorna um JSON diferente. Os Adapters convertem todos para um formato único.
 const apiAdapters = {
     brasilapi: (data) => {
-        // BrasilAPI já retorna no formato mais limpo; adicionamos api_origem
         data.api_origem = 'BrasilAPI';
+        // BrasilAPI separa tipo de logradouro — juntar para ficar "RUA NOME DA RUA"
+        if (data.descricao_tipo_de_logradouro && data.logradouro) {
+            const tipo = data.descricao_tipo_de_logradouro.trim();
+            if (!data.logradouro.toUpperCase().startsWith(tipo.toUpperCase())) {
+                data.logradouro = tipo + ' ' + data.logradouro;
+            }
+        }
         return data;
     },
     publica_cnpj_ws: (data) => {

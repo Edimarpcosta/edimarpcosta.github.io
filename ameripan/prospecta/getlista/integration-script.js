@@ -134,23 +134,36 @@ Object.assign(dataHandlers, {
             const rows = successRows.map(({ result, apiUsed }) => {
                 const tel1 = utils.cleanPhone(result.ddd_telefone_1);
                 const tel2 = utils.cleanPhone(result.ddd_telefone_2);
+                const rua = result.logradouro || '';
+                const numero = result.numero || 'SN';
+                const bairro = result.bairro || '';
+                const cep = result.cep || '';
+                const cidade = result.municipio || '';
+                const estado = result.uf || '';
 
                 return {
+                    // === Campos que o Maposcope mapeia diretamente ===
                     'Name': result.nome_fantasia || result.razao_social || 'Sem Nome',
-                    'Address': (result.logradouro || '') + ', ' + (result.numero || 'SN') + ' - ' + (result.bairro || '') + ', ' + (result.cep || ''),
-                    'City': result.municipio || '',
+                    'Address': rua + ', ' + numero + ' - ' + bairro + ', ' + cidade + ' - ' + estado + ', ' + cep,
+                    'Street': rua,
+                    'Street Number': numero,
+                    'City': cidade,
+                    'State': estado,
+                    'Zip Code': cep,
                     'Country': 'Brasil',
-                    'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+                    'ID': utils.formatCnpjForDisplay(result.cnpj),
+
+                    // === Dados normais (Maposcope usa em Descrição → Todas as colunas) ===
                     'Razão Social': result.razao_social || '',
                     'Situação Cadastral': result.descricao_situacao_cadastral || '',
                     'Descrição CNAE': result.cnae_fiscal_descricao || '',
                     'CNAE Principal': result.cnae_fiscal || '',
+                    'Bairro': bairro,
                     'Telefone': result.ddd_telefone_1 || '',
                     'Telefone 2': result.ddd_telefone_2 || '',
                     'WhatsApp 1': tel1.length >= 10 ? 'https://wa.me/55' + tel1 : '',
                     'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
                     'Email': result.email || '',
-                    'UF': result.uf || '',
                     'Capital Social': result.capital_social || '',
                     'Porte': result.porte || ''
                 };
