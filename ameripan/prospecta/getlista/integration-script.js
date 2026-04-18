@@ -131,30 +131,28 @@ Object.assign(dataHandlers, {
             const { successRows, errorRows, apiStats } = this._getFilteredResults();
             const workbook = XLSX.utils.book_new();
 
-            const rows = successRows.map(({ result }) => {
+            const rows = successRows.map(({ result, apiUsed }) => {
                 const tel1 = utils.cleanPhone(result.ddd_telefone_1);
-                const whatsapp = tel1.length >= 10 ? `wa.me/55${tel1}` : '';
-                const descCnae = result.cnae_fiscal_descricao || '';
-                const cnpjFmt = utils.formatCnpjForDisplay(result.cnpj);
-                const situacao = result.descricao_situacao_cadastral || '';
-                const telefone = result.ddd_telefone_1 || '';
-                const email = result.email || '';
-
-                // Monta descrição rica para o campo "Descrição" do Maposcope
-                let descParts = [];
-                if (descCnae) descParts.push(descCnae);
-                if (situacao) descParts.push('Situação: ' + situacao);
-                if (cnpjFmt) descParts.push('CNPJ: ' + cnpjFmt);
-                if (telefone) descParts.push('Tel: ' + telefone);
-                if (whatsapp) descParts.push('WhatsApp: ' + whatsapp);
-                if (email) descParts.push('Email: ' + email);
+                const tel2 = utils.cleanPhone(result.ddd_telefone_2);
 
                 return {
                     'Name': result.nome_fantasia || result.razao_social || 'Sem Nome',
                     'Address': (result.logradouro || '') + ', ' + (result.numero || 'SN') + ' - ' + (result.bairro || '') + ', ' + (result.cep || ''),
                     'City': result.municipio || '',
                     'Country': 'Brasil',
-                    'Description': descParts.join(' | ')
+                    'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+                    'Razão Social': result.razao_social || '',
+                    'Situação Cadastral': result.descricao_situacao_cadastral || '',
+                    'Descrição CNAE': result.cnae_fiscal_descricao || '',
+                    'CNAE Principal': result.cnae_fiscal || '',
+                    'Telefone': result.ddd_telefone_1 || '',
+                    'Telefone 2': result.ddd_telefone_2 || '',
+                    'WhatsApp 1': tel1.length >= 10 ? 'https://wa.me/55' + tel1 : '',
+                    'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
+                    'Email': result.email || '',
+                    'UF': result.uf || '',
+                    'Capital Social': result.capital_social || '',
+                    'Porte': result.porte || ''
                 };
             });
 
@@ -163,8 +161,6 @@ Object.assign(dataHandlers, {
             } else {
                 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado']]), 'Maposcope');
             }
-
-            this._addCommonSheets(workbook, errorRows, apiStats, rows.length);
 
             const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
             XLSX.writeFile(workbook, 'maposcope_' + dateStr + '.xlsx');
