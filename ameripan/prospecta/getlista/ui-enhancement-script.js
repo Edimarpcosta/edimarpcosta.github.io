@@ -482,6 +482,11 @@ function init() {
         if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
     });
 
+    // Inicializar Mining Engine (Fase 1)
+    if (typeof MiningEngine !== 'undefined') {
+        MiningEngine.init();
+    }
+
     console.log('%c✅ GetLista Prospecta carregado com sucesso!', 'background:#4ade80; color:#064e3b; padding:4px 8px; border-radius:4px; font-weight:bold');
 }
 
