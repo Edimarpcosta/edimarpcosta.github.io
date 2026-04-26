@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -645,6 +646,7 @@
         <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportLeadsXlsx()">📤 <span class="txt">Exportar Leads</span></button>
         <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportLeadsAsClientsXlsx()">🧾 <span class="txt">Leads→Clientes</span></button>
         <button class="btn success" style="width:100%; margin-bottom:8px;" onclick="exportClientsXlsx()">📤 <span class="txt">Exportar Clientes</span></button>
+        <button class="btn primary" style="width:100%; margin-bottom:8px;" onclick="pushToGoogleSheets()">☁️ <span class="txt">Exportar para Nuvem</span></button>
         <button class="btn ghost" style="width:100%;" onclick="exportBackup()">💾 <span class="txt">Backup (JSON)</span></button>
       </div>
 
@@ -3692,17 +3694,36 @@ async function importLeadsFromRows(rows, filename='import'){
     const r = r0 || {};
 
     // suporta tanto formato do app quanto export direto do MapsScraper (variações de header, acentos, espaços, etc.)
-    const name = getRow(r, 'Name','Business Name','Empresa','Nome','Title','title','name','Business name') || '';
-    const fulladdress = getRow(r, 'Fulladdress','Full Address','Address','Endereço','Endereco','Full address') || '';
-    const street = getRow(r, 'Street','Rua') || '';
-    const mun = getRow(r, 'Municipality','Cidade','City','Município','Municipio','Localidade','Locality') || '';
-    const {city, uf} = parseMunicipality(mun);
-    const category = getRow(r, 'Categories','Category','Categorias','Categoria') || '';
+    const name = getRow(r, 'Name','Business Name','Empresa','Nome','Title','title','name','Business name', 'Nome Fantasia', 'Razão Social', 'Razao Social') || '';
+    
+    // Address parts for gabriela_leads.xlsx
+    const logradouro = getRow(r, 'Logradouro');
+    const numero = getRow(r, 'Número', 'Numero');
+    const complemento = getRow(r, 'Complemento');
+    const bairro = getRow(r, 'Bairro');
+    let generatedAddress = '';
+    if(logradouro){
+        generatedAddress = logradouro;
+        if(numero) generatedAddress += ', ' + numero;
+        if(complemento) generatedAddress += ' - ' + complemento;
+        if(bairro) generatedAddress += ' - ' + bairro;
+    }
 
-    const doc = getRow(r, 'CPF/CNPJ','Doc','Documento','CNPJ','CPF','cpf','cnpj','Documento (CPF/CNPJ)') || '';
+    const fulladdress = getRow(r, 'Fulladdress','Full Address','Address','Endereço','Endereco','Full address') || generatedAddress || '';
+    const street = getRow(r, 'Street','Rua', 'Logradouro') || '';
+    const mun = getRow(r, 'Municipality','Cidade','City','Município','Municipio','Localidade','Locality') || '';
+    const {city, uf: parsedUf} = parseMunicipality(mun);
+    const rawUf = getRow(r, 'UF', 'State', 'Estado');
+    const finalCity = city || mun;
+    const finalUf = parsedUf || rawUf || '';
+    const cep = getRow(r, 'CEP', 'Cep', 'Zipcode', 'Zip Code', 'zip') || '';
+
+    const category = getRow(r, 'Categories','Category','Categorias','Categoria', 'Descrição CNAE') || '';
+
+    const doc = getRow(r, 'CPF/CNPJ','Doc','Documento','CNPJ','CPF','cpf','cnpj','Documento (CPF/CNPJ)', 'CNPJ Formatado') || '';
 
     const phone = pickFirstPhone(
-      getRow(r, 'Phone','Telefone','WhatsApp','Whatsapp','Celular','Mobile','Phone Number','Phone number'),
+      getRow(r, 'Phone','Telefone','WhatsApp','Whatsapp','Celular','Mobile','Phone Number','Phone number', 'WhatsApp 1', 'WhatsApp 2', 'Telefone 2'),
       getRow(r, 'Phones','Telefones','Phones (all)','All phones','Phones all')
     );
 
@@ -3746,8 +3767,9 @@ async function importLeadsFromRows(rows, filename='import'){
       url: url,
       name: name,
       address: address,
-      city: city,
-      uf: uf,
+      city: finalCity,
+      uf: finalUf,
+      cep: cep,
       category: category,
       phone: phone,
       email: email,
