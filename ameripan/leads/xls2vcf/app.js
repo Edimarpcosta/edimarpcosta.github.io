@@ -11,6 +11,7 @@ const ADR_KW = ['endereço','endereco','rua','logradouro','address'];
 const GEO_KW = ['lat','long','gps','coordenada','latitude','longitude'];
 const NOTE_KW = ['ramo','horário','horario','abre as','entrega','visita','observação','observacao','obs','nota','description'];
 const BDAY_KW = ['aniversário','aniversario','nascimento','data de nascimento','bday','birthday'];
+const SITE_KW = ['site','url','link','facebook','instagram','linkedin','web','rede social'];
 const VCF_FIELDS = [
   {v:'',l:'— Ignorar —'},
   {v:'fn',l:'Nome Completo'},
@@ -33,7 +34,7 @@ const VCF_FIELDS = [
 ];
 
 // --- State ---
-let state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, phoneCols:[], vcfBlob:null, vcfFileName:'contatos.vcf'};
+let state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, siteCol:null, phoneCols:[], vcfBlob:null, vcfFileName:'contatos.vcf', exportedContacts:[]};
 
 // --- DOM refs ---
 const $ = id => document.getElementById(id);
@@ -61,16 +62,114 @@ uploadZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
 $('btn-remove-file').addEventListener('click', () => {
-  state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, phoneCols:[], vcfBlob:null, vcfFileName:'contatos.vcf'};
+  state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, siteCol:null, phoneCols:[], vcfBlob:null, vcfFileName:'contatos.vcf'};
   fileInput.value = '';
   $('file-section').classList.add('hidden');
   $('mapping-section').classList.add('hidden');
   $('export-section').classList.add('hidden');
 });
 
+// --- VCF Parser (Rebuilder) ---
+function parseVCF(text) {
+  const contacts = [];
+  const blocks = text.split(/BEGIN:VCARD/i).slice(1);
+
+  blocks.forEach(block => {
+    const lines = block.split(/\r?\n/);
+    const contact = {};
+    let currentKey = '';
+    let currentVal = '';
+
+    const flush = () => {
+      if (!currentKey) return;
+      const key = currentKey.toUpperCase();
+      const val = currentVal.replace(/\\n/g, '\n').trim();
+
+      if (key === 'FN') contact['Nome Completo'] = val;
+      else if (key.startsWith('TEL')) {
+        const typeMatch = currentKey.match(/TYPE=([^;:]+)/i);
+        const typeRaw = typeMatch ? typeMatch[1].toUpperCase() : '';
+        if (typeRaw.includes('WORK')) {
+          contact['Tel. Comercial'] = contact['Tel. Comercial']
+            ? contact['Tel. Comercial'] + '; ' + val : val;
+        } else if (typeRaw.includes('HOME')) {
+          contact['Tel. Residencial'] = contact['Tel. Residencial']
+            ? contact['Tel. Residencial'] + '; ' + val : val;
+        } else if (typeRaw.includes('FAX')) {
+          contact['Fax'] = val;
+        } else {
+          contact['Celular'] = contact['Celular']
+            ? contact['Celular'] + '; ' + val : val;
+        }
+      }
+      else if (key === 'ORG')      contact['Empresa'] = val;
+      else if (key === 'EMAIL')    contact['Email'] = contact['Email']
+                                      ? contact['Email'] + '; ' + val : val;
+      else if (key.startsWith('ADR')) contact['Endereço'] = val
+                                        .replace(/^;+/, '').replace(/;/g, ', ').trim();
+      else if (key === 'URL')      contact['Site'] = val;
+      else if (key === 'NOTE')     contact['Anotações'] = val;
+      else if (key === 'BDAY')     contact['Aniversário'] = val;
+      else if (key === 'GEO')      contact['GPS'] = val;
+      else if (key === 'X-ANDROID-CUSTOM') {
+        const gParts = val.split(';');
+        if (gParts[0].includes('group_membership') && gParts[1])
+          contact['Grupo'] = gParts[1].trim();
+      }
+      currentKey = '';
+      currentVal = '';
+    };
+
+    lines.forEach(line => {
+      if (/^END:VCARD/i.test(line)) { flush(); return; }
+      if (line.startsWith(' ') || line.startsWith('\t')) {
+        // folded line continuation
+        currentVal += line.slice(1);
+        return;
+      }
+      flush();
+      const colonIdx = line.indexOf(':');
+      if (colonIdx === -1) return;
+      currentKey = line.slice(0, colonIdx).trim();
+      currentVal = line.slice(colonIdx + 1).trim();
+    });
+
+    flush();
+    if (contact['Nome Completo'] || contact['Celular']) {
+      contacts.push(contact);
+    }
+  });
+
+  return contacts;
+}
+
 function handleFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  if (!['xlsx','xls','csv'].includes(ext)) { alert('Formato não suportado. Use .xlsx, .xls ou .csv'); return; }
+  
+  if (ext === 'vcf') {
+    state.vcfFileName = file.name.replace(/\.[^.]+$/, '') + '_rebuild.vcf';
+    const reader = new FileReader();
+    reader.onload = e => {
+       const rows = parseVCF(e.target.result);
+       if(rows.length === 0) return alert('Nenhum contato válido encontrado no VCF.');
+       const virtualHeaders = new Set();
+       rows.forEach(r => Object.keys(r).forEach(k => virtualHeaders.add(k)));
+       state.headers = Array.from(virtualHeaders);
+       state.rows = rows.map(r => state.headers.map(h => r[h] || ''));
+       
+       renderFileInfo(file);
+       $('file-section').classList.remove('hidden');
+       $('mapping-section').classList.remove('hidden');
+       $('export-section').classList.add('hidden');
+       detectColumns();
+       renderPreview();
+       $('file-section').scrollIntoView({behavior:'smooth', block:'start'});
+    };
+    reader.readAsText(file);
+    return;
+  }
+
+  if (!['xlsx','xls','csv'].includes(ext)) { alert('Formato não suportado. Use .xlsx, .xls, .csv ou .vcf'); return; }
 
   state.vcfFileName = file.name.replace(/\.[^.]+$/, '') + '.vcf';
   const reader = new FileReader();
@@ -127,6 +226,7 @@ function detectColumns() {
   state.companyCol = null;
   state.emailCol = null;
   state.addressCol = null;
+  state.siteCol = null;
   state.phoneCols = [];
   
   const sig = state.headers.join('|');
@@ -139,6 +239,7 @@ function detectColumns() {
     if (state.companyCol === null && COMPANY_KW.some(k => hl.includes(k))) state.companyCol = i;
     if (state.emailCol === null && EMAIL_KW.some(k => hl.includes(k))) state.emailCol = i;
     if (state.addressCol === null && ADR_KW.some(k => hl.includes(k))) state.addressCol = i;
+    if (state.siteCol === null && SITE_KW.some(k => hl.includes(k))) state.siteCol = i;
   });
   
   if (state.phoneCols.length > 0) state.phoneCol = state.phoneCols[0];
@@ -164,6 +265,7 @@ function renderEasyMode() {
   const ps3 = $('easy-phone3-select');
   const es = $('easy-email-select');
   const as = $('easy-address-select');
+  const ss = $('easy-site-select');
   const cs = $('easy-company-select');
   
   if (!ns || !ps || !cs) return;
@@ -186,6 +288,7 @@ function renderEasyMode() {
   if(ps3) ps3.innerHTML = optsOpt;
   if(es) es.innerHTML = optsOpt;
   if(as) as.innerHTML = optsOpt;
+  if(ss) ss.innerHTML = optsOpt;
   cs.innerHTML = optsOpt;
   
   if (state.nameCol !== null) ns.value = state.nameCol;
@@ -194,6 +297,7 @@ function renderEasyMode() {
   if (ps3 && state.phoneCols.length > 2) ps3.value = state.phoneCols[2];
   if (es && state.emailCol !== null) es.value = state.emailCol;
   if (as && state.addressCol !== null) as.value = state.addressCol;
+  if (ss && state.siteCol !== null) ss.value = state.siteCol;
   if (state.companyCol !== null) cs.value = state.companyCol;
   
   window.updateEasyPreview();
@@ -208,6 +312,7 @@ window.updateEasyPreview = function() {
   const ps3 = $('easy-phone3-select')?.value || '';
   const es = $('easy-email-select')?.value || '';
   const as = $('easy-address-select')?.value || '';
+  const ss = $('easy-site-select')?.value || '';
   const cs = $('easy-company-select').value;
   
   const hasName = ns !== '';
@@ -223,6 +328,7 @@ window.updateEasyPreview = function() {
      if (ps3 !== '') mappings.push({colIndex: parseInt(ps3), field: 'homePhone', prefix: '', suffix: ''});
      if (es !== '') mappings.push({colIndex: parseInt(es), field: 'email', prefix: '', suffix: ''});
      if (as !== '') mappings.push({colIndex: parseInt(as), field: 'address', prefix: '', suffix: ''});
+     if (ss !== '') mappings.push({colIndex: parseInt(ss), field: 'site', prefix: '', suffix: ''});
      if (cs !== '') mappings.push({colIndex: parseInt(cs), field: 'company', prefix: '', suffix: ''});
      renderLivePreview(mappings, false);
   }
@@ -517,7 +623,10 @@ function buildContact(row, mappings, useAdvOptions) {
     const isPhone = ['cell','workPhone','homePhone','fax'].includes(m.field);
     if (isPhone) {
       val = cleanPhone(val, doClean);
-      if (addCC && val && !val.startsWith('55')) val = '55' + val;
+      const ccVal = useAdvOptions
+  ? ($('adv-country-code-val')?.value.trim() || '55')
+  : ($('opt-country-code-val')?.value.trim() || '55');
+if (addCC && val && !val.startsWith(ccVal)) val = ccVal + val;
       if (val) val = '+' + val;
     }
     // Concatenate if field already set
@@ -573,6 +682,7 @@ function generateFullVCF(mappings, useAdvOptions) {
   const skipEmpty = useAdvOptions ? $('adv-skip-empty').checked : $('opt-skip-empty').checked;
   const vcards = [];
   const missingPhonesList = [];
+  state.exportedContacts = [];
   
   state.rows.forEach((row, idx) => {
     const c = buildContact(row, mappings, useAdvOptions);
@@ -583,7 +693,26 @@ function generateFullVCF(mappings, useAdvOptions) {
       missingPhonesList.push({ line: idx + 2, name: fn || 'Desconhecido' });
       if (skipEmpty) return;
     }
-    if (fn || hasPhone) vcards.push(generateVCard(c));
+    if (fn || hasPhone) {
+      vcards.push(generateVCard(c));
+      
+      // Save for XLSX export
+      state.exportedContacts.push({
+        'Nome Completo': fn,
+        'Celular': c.cell || '',
+        'Tel. Comercial': c.workPhone || '',
+        'Tel. Residencial': c.homePhone || '',
+        'Fax': c.fax || '',
+        'Email': c.email || '',
+        'Empresa': c.company || '',
+        'Site': c.site || '',
+        'Endereço': c.address || '',
+        'Anotações': c.description || '',
+        'Aniversário': c.bday || '',
+        'GPS': c.geo || '',
+        'Grupo': c.group || ''
+      });
+    }
   });
   
   const warnDiv = $('missing-phones-warning');
@@ -670,21 +799,61 @@ function finishExport(vcards) {
 
 // --- Download ---
 $('btn-download').addEventListener('click', () => {
-  if (!state.vcfBlob) return;
-  const url = URL.createObjectURL(state.vcfBlob);
-  const a = document.createElement('a');
-  a.href = url; a.download = state.vcfFileName;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const format = document.querySelector('input[name="export-format"]:checked').value;
+  if (format === 'vcf') {
+    if (!state.vcfBlob) return;
+    const url = URL.createObjectURL(state.vcfBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = state.vcfFileName;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    if (!state.exportedContacts || state.exportedContacts.length === 0) return;
+    const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+    const xlsxFileName = state.vcfFileName.replace(/\.vcf$/, '.xlsx');
+    XLSX.writeFile(wb, xlsxFileName);
+  }
+});
+
+// Format selector styling
+document.querySelectorAll('input[name="export-format"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    document.querySelectorAll('.format-label').forEach(label => {
+      label.style.borderColor = 'var(--border)';
+      label.style.background = 'var(--bg-card)';
+    });
+    const activeLabel = e.target.closest('.format-label');
+    activeLabel.style.borderColor = 'var(--primary)';
+    activeLabel.style.background = 'rgba(37,99,235,0.05)';
+  });
 });
 
 // --- Share via Web Share API ---
 function shareFile() {
-  if (!state.vcfBlob || !navigator.canShare) { alert('Compartilhamento não suportado neste navegador. Use o botão de download.'); return; }
-  const file = new File([state.vcfBlob], state.vcfFileName, {type:'text/vcard'});
-  if (!navigator.canShare({files:[file]})) { alert('Seu navegador não suporta compartilhar este tipo de arquivo.'); return; }
-  navigator.share({files:[file], title:'Contatos VCF', text:'Arquivo de contatos para importar'}).catch(()=>{});
+  const format = document.querySelector('input[name="export-format"]:checked').value;
+  
+  if (format === 'vcf') {
+    if (!state.vcfBlob || !navigator.canShare) { alert('Compartilhamento não suportado neste navegador. Use o botão de download.'); return; }
+    const file = new File([state.vcfBlob], state.vcfFileName, {type:'text/vcard'});
+    if (!navigator.canShare({files:[file]})) { alert('Seu navegador não suporta compartilhar este tipo de arquivo.'); return; }
+    navigator.share({files:[file], title:'Contatos VCF', text:'Arquivo de contatos para importar'}).catch(()=>{});
+  } else {
+    if (!state.exportedContacts || state.exportedContacts.length === 0 || !navigator.canShare) { alert('Compartilhamento não suportado neste navegador. Use o botão de download.'); return; }
+    const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+    
+    // Convert to Blob for sharing
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type: 'application/octet-stream'});
+    const file = new File([blob], state.vcfFileName.replace(/\.vcf$/, '.xlsx'), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    
+    if (!navigator.canShare({files:[file]})) { alert('Seu navegador não suporta compartilhar este tipo de arquivo.'); return; }
+    navigator.share({files:[file], title:'Contatos XLSX', text:'Planilha de contatos'}).catch(()=>{});
+  }
 }
 
 $('btn-share-telegram').addEventListener('click', shareFile);
