@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Jogo da Velha Bros</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
+        
+        body { 
+            font-family: 'Nunito', sans-serif; 
+            background-color: #5C94FC;
+            background-image: radial-gradient(circle, #ffffff33 10%, transparent 10%), radial-gradient(circle, #ffffff33 10%, transparent 10%);
+            background-size: 50px 50px;
+            background-position: 0 0, 25px 25px;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        .mario-block {
+            background-color: #F8B800;
+            border: 4px solid #000;
+            box-shadow: inset -4px -4px 0px 0px #D87000, inset 4px 4px 0px 0px #FFD840, 4px 4px 0px rgba(0,0,0,0.3);
+            position: relative;
+            transition: all 0.1s;
+        }
+        
+        .mario-block::after {
+            content: '?';
+            font-size: 3.5rem;
+            color: #D87000;
+            text-shadow: 3px 3px 0px #FFF;
+            animation: pulseQuestion 1.5s infinite;
+        }
+
+        @keyframes pulseQuestion {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); color: #FFF; text-shadow: 3px 3px 0px #D87000; }
+        }
+
+        .used-block {
+            background-color: #C84C0C;
+            box-shadow: inset -4px -4px 0px 0px #882000, inset 4px 4px 0px 0px #F87800, 4px 4px 0px rgba(0,0,0,0.3);
+        }
+        .used-block::after { content: ''; display: none; }
+
+        @keyframes blockBump {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0); }
+        }
+        .bump { animation: blockBump 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        @keyframes coinPop {
+            0% { opacity: 1; transform: translateY(0) scale(0.5) rotateY(0deg); }
+            50% { transform: translateY(-70px) scale(1.2) rotateY(180deg); }
+            100% { opacity: 0; transform: translateY(-90px) scale(0.5) rotateY(360deg); }
+        }
+        .coin-anim {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background-color: #F8B800;
+            border: 3px solid #FFF;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #FFD840, inset 0 0 10px #D87000;
+            pointer-events: none;
+            z-index: 20;
+            animation: coinPop 0.6s ease-out forwards;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #FFF;
+            font-size: 1.5rem;
+        }
+        .coin-anim::before { content: '$'; }
+
+        @keyframes characterPop {
+            0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+            70% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        .character-img {
+            width: 85%;
+            height: 85%;
+            object-fit: contain;
+            animation: characterPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            filter: drop-shadow(3px 5px 5px rgba(0,0,0,0.4));
+        }
+
+        .cell-win { 
+            animation: pulseWin 0.8s infinite alternate;
+            z-index: 10;
+        }
+        @keyframes pulseWin {
+            from { filter: brightness(1); transform: scale(1); }
+            to { filter: brightness(1.4); transform: scale(1.1); box-shadow: 0 0 40px #FFD840; }
+        }
+
+        .mario-panel {
+            background-color: #FFF;
+            border: 4px solid #000;
+            border-radius: 16px;
+            box-shadow: 10px 10px 0px rgba(0,0,0,0.3);
+        }
+
+        .btn-mario {
+            background-color: #E52521;
+            color: white;
+            border: 4px solid #000;
+            box-shadow: inset -4px -4px 0px rgba(0,0,0,0.2), 4px 4px 0px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .btn-mario:active {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px rgba(0,0,0,0.3);
+        }
+
+        .hidden-panel { display: none; opacity: 0; }
+        .visible-panel { display: block; opacity: 1; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .cloud { position: absolute; background: #FFF; border-radius: 100px; opacity: 0.9; z-index: -1; box-shadow: 4px 4px 0 rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 text-slate-900 relative">
+
+    <div class="cloud w-32 h-12 top-10 left-10"></div>
+    <div class="cloud w-48 h-16 top-20 right-20"></div>
+    <div class="cloud w-24 h-10 bottom-20 left-1/4"></div>
+
+    <div class="mario-panel w-full max-w-5xl overflow-hidden flex flex-col lg:flex-row min-h-[600px] z-10 relative">
+        
+        <!-- LADO ESQUERDO: O JOGO -->
+        <div class="w-full lg:w-1/2 p-6 flex flex-col items-center justify-between border-b-4 lg:border-b-0 lg:border-r-4 border-black bg-[#FFDCA8]">
+            
+            <div class="w-full text-center mb-4">
+                <h1 class="text-4xl font-black text-[#E52521] tracking-tight mb-4" style="text-shadow: 2px 2px 0 #000, -1px -1px 0 #FFF;">SUPER JOGO DA VELHA</h1>
+                
+                <div class="flex justify-center gap-6 mb-2">
+                    <div class="bg-white rounded-xl p-3 border-4 border-black w-32 relative">
+                        <img src="https://upload.wikimedia.org/wikipedia/en/a/a9/MarioPortrait.png" alt="Mario" class="absolute -top-6 -left-4 w-14 h-14 drop-shadow-md">
+                        <div class="text-xs font-black text-slate-500 uppercase mt-4">Você</div>
+                        <div id="score-player" class="text-3xl font-black text-[#E52521]">0</div>
+                    </div>
+                    <div class="flex items-center text-black font-black text-3xl drop-shadow-md">VS</div>
+                    <div class="bg-white rounded-xl p-3 border-4 border-black w-32 relative">
+                        <img src="https://upload.wikimedia.org/wikipedia/en/f/f1/Bowser.png" alt="Bowser" class="absolute -top-8 -right-4 w-16 h-16 drop-shadow-md">
+                        <div class="text-xs font-black text-slate-500 uppercase mt-4">Bowser</div>
+                        <div id="score-ai" class="text-3xl font-black text-[#00A859]">0</div>
+                    </div>
+                </div>
+                <div id="status" class="h-6 text-base font-black text-black mt-2 uppercase animate-pulse">Sua vez, Mario!</div>
+            </div>
+
+            <div class="relative group mt-4">
+                <div class="grid grid-cols-3 gap-4 mx-auto mb-6" style="width: 320px; height: 320px;">
+                    <div data-index="0" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="1" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="2" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="3" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="4" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="5" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="6" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="7" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                    <div data-index="8" class="cell mario-block rounded-xl flex items-center justify-center cursor-pointer"></div>
+                </div>
+            </div>
+
+            <div class="w-full flex gap-3">
+                <select id="difficulty" class="flex-1 bg-white border-4 border-black text-black rounded-lg px-4 py-3 text-sm font-black outline-none cursor-pointer shadow-[4px_4px_0_rgba(0,0,0,0.3)]">
+                    <option value="easy">Nível: Toad (Fácil)</option>
+                    <option value="medium">Nível: Luigi (Médio)</option>
+                    <option value="hard">Nível: Bowser (Imbatível)</option>
+                </select>
+                <button onclick="resetGame()" class="btn-mario px-6 py-3 rounded-lg text-sm font-black">
+                    Reiniciar
+                </button>
+            </div>
+            
+            <button onclick="toggleHints()" id="btn-toggle-hint" class="mt-4 text-black hover:text-[#E52521] text-sm font-black underline decoration-dotted">
+                🍄 Ver Dicas Secretas
+            </button>
+        </div>
+
+        <!-- LADO DIREITO: TUTORIAL -->
+        <div id="hints-panel" class="hidden-panel w-full lg:w-1/2 bg-[#2038EC] p-8 text-white relative overflow-y-auto">
+            <button onclick="toggleHints()" class="absolute top-4 right-4 text-white hover:text-yellow-400 font-black text-2xl drop-shadow-md">✕</button>
+            
+            <h2 class="text-3xl font-black mb-6 flex items-center text-yellow-400" style="text-shadow: 2px 2px 0 #000;">
+                <span class="mr-2 animate-spin-slow">⭐</span> Guia da Estrela
+            </h2>
+
+            <div class="space-y-6">
+                <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+                    <button onclick="showTutorial('corner')" class="bg-[#E52521] border-2 border-black px-4 py-2 rounded-lg text-xs font-black whitespace-nowrap transition-transform hover:scale-105 shadow-[2px_2px_0_#000]">1. O Pulo no Canto</button>
+                    <button onclick="showTutorial('fork')" class="bg-[#00A859] border-2 border-black px-4 py-2 rounded-lg text-xs font-black whitespace-nowrap transition-transform hover:scale-105 shadow-[2px_2px_0_#000]">2. Ataque Duplo</button>
+                    <button onclick="showTutorial('draw')" class="bg-[#F8B800] text-black border-2 border-black px-4 py-2 rounded-lg text-xs font-black whitespace-nowrap transition-transform hover:scale-105 shadow-[2px_2px_0_#000]">3. Defesa do Casco</button>
+                </div>
+
+                <div id="tutorial-content" class="bg-black/40 border-4 border-white border-dashed p-6 rounded-2xl min-h-[250px]"></div>
+
+                <div class="bg-white/10 p-4 rounded-xl border-2 border-yellow-400 shadow-inner">
+                    <h3 class="font-black text-yellow-400 mb-1 text-sm uppercase">Dica do Toad:</h3>
+                    <p id="realtime-hint" class="text-sm font-bold text-white">Quebre os blocos dos cantos para iniciar com vantagem!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FIM DE JOGO -->
+    <div id="game-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-300">
+        <div class="mario-panel p-8 transform scale-100 transition-transform max-w-sm w-full text-center relative overflow-hidden">
+            <div id="modal-icon" class="text-8xl mb-4 animate-bounce drop-shadow-xl">⭐</div>
+            <h2 id="modal-title" class="text-4xl font-black text-[#E52521] mb-2 uppercase tracking-tight" style="text-shadow: 2px 2px 0 #000;">Nível Concluído!</h2>
+            <p id="modal-message" class="text-slate-800 mb-8 font-black text-lg">O Reino Cogumelo está a salvo.</p>
+            
+            <button onclick="closeModalAndRestart()" id="btn-restart-modal" class="w-full btn-mario py-4 px-6 rounded-xl text-xl font-black outline-none shadow-[4px_4px_0_rgba(0,0,0,0.5)]">
+                Jogar Novamente 🎮
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- MOTOR DE ÁUDIO (Web Audio API - Sem links externos) ---
+        const SoundEngine = {
+            ctx: null,
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            playTone(freq, type, duration, vol = 0.1) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            coin() {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(987.77, this.ctx.currentTime); // B5
+                osc.frequency.setValueAtTime(1318.51, this.ctx.currentTime + 0.1); // E6
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            },
+            bump() {
+                this.init();
+                this.playTone(150, 'square', 0.1, 0.15); // Som grave de impacto
+            },
+            enemyBump() {
+                this.init();
+                this.playTone(100, 'sawtooth', 0.15, 0.15); // Som mais gutural para o Bowser
+            },
+            win() {
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51]; // Arpejo Maior
+                notes.forEach((freq, i) => setTimeout(() => this.playTone(freq, 'square', 0.15, 0.1), i * 120));
+            },
+            lose() {
+                this.init();
+                const notes = [311.13, 293.66, 277.18, 261.63]; // Descendente Triste
+                notes.forEach((freq, i) => setTimeout(() => this.playTone(freq, 'sawtooth', 0.3, 0.1), i * 250));
+            }
+        };
+
+        // --- ESTADO DO JOGO ---
+        let board = Array(9).fill(null);
+        let gameActive = true;
+        let scorePlayer = 0;
+        let scoreAI = 0;
+        const huPlayer = 'X';
+        const aiPlayer = 'O';
+        const winConditions = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+        // URLs Confiáveis da Wikimedia Commons
+        const imgMario = "https://upload.wikimedia.org/wikipedia/en/a/a9/MarioPortrait.png";
+        const imgBowser = "https://upload.wikimedia.org/wikipedia/en/f/f1/Bowser.png";
+
+        const cells = document.querySelectorAll('.cell');
+        const statusEl = document.getElementById('status');
+        const hintsPanel = document.getElementById('hints-panel');
+        const btnToggleHint = document.getElementById('btn-toggle-hint');
+
+        cells.forEach(cell => cell.addEventListener('click', () => handleCellClick(cell)));
+
+        function toggleHints() {
+            if (hintsPanel.classList.contains('visible-panel')) {
+                hintsPanel.classList.remove('visible-panel');
+                hintsPanel.classList.add('hidden-panel');
+                btnToggleHint.innerHTML = "🍄 Ver Dicas Secretas";
+            } else {
+                hintsPanel.classList.remove('hidden-panel');
+                hintsPanel.classList.add('visible-panel');
+                btnToggleHint.innerHTML = "👁️ Ocultar Dicas";
+            }
+        }
+
+        function handleCellClick(cell) {
+            const index = cell.getAttribute('data-index');
+            if (board[index] || !gameActive) return;
+
+            makeMove(index, huPlayer);
+            
+            if (!checkGameStatus(huPlayer)) {
+                gameActive = false;
+                statusEl.innerText = "Bowser pensando...";
+                statusEl.style.color = "#00A859";
+                setTimeout(aiTurn, 600 + Math.random() * 400); 
+            }
+        }
+
+        function spawnCoin(cellElement) {
+            const coin = document.createElement('div');
+            coin.classList.add('coin-anim');
+            cellElement.appendChild(coin);
+            setTimeout(() => coin.remove(), 600);
+        }
+
+        function makeMove(index, player) {
+            board[index] = player;
+            const cell = document.querySelector(`[data-index="${index}"]`);
+            
+            cell.classList.remove('mario-block');
+            cell.classList.add('used-block', 'bump');
+            
+            // Sons e Efeitos
+            if (player === 'X') {
+                SoundEngine.bump();
+                SoundEngine.coin();
+                spawnCoin(cell);
+            } else {
+                SoundEngine.enemyBump();
+            }
+
+            setTimeout(() => cell.classList.remove('bump'), 200);
+
+            const img = document.createElement('img');
+            img.src = player === 'X' ? imgMario : imgBowser;
+            img.className = 'character-img';
+            cell.appendChild(img);
+
+            updateRealtimeHint();
+        }
+
+        function aiTurn() {
+            const difficulty = document.getElementById('difficulty').value;
+            let move;
+            if (difficulty === 'easy') move = getRandomMove();
+            else if (difficulty === 'medium') move = getMediumMove();
+            else move = getBestMove();
+
+            makeMove(move, aiPlayer);
+            if (!checkGameStatus(aiPlayer)) {
+                gameActive = true;
+                statusEl.innerText = "Sua vez, Mario!";
+                statusEl.style.color = "#000";
+            }
+        }
+
+        function checkGameStatus(player) {
+            const win = findWin(board, player);
+            if (win) {
+                statusEl.innerHTML = player === 'X' 
+                    ? "<span class='text-[#E52521] font-black drop-shadow-md'>VOCÊ VENCEU! ⭐</span>" 
+                    : "<span class='text-[#00A859] font-black drop-shadow-md'>BOWSER DOMINOU. 🦖</span>";
+                
+                win.forEach(idx => document.querySelector(`[data-index="${idx}"]`).classList.add('cell-win'));
+                gameActive = false;
+                
+                if (player === 'X') {
+                    scorePlayer++;
+                    document.getElementById('score-player').innerText = scorePlayer;
+                    triggerWinConfetti();
+                    SoundEngine.win();
+                    setTimeout(() => showModal('win'), 1200);
+                } else {
+                    scoreAI++;
+                    document.getElementById('score-ai').innerText = scoreAI;
+                    SoundEngine.lose();
+                    setTimeout(() => showModal('lose'), 1200);
+                }
+                return true;
+            }
+            if (!board.includes(null)) {
+                statusEl.innerText = "Empate! 🤝";
+                gameActive = false;
+                SoundEngine.bump(); // Som surdo para empate
+                setTimeout(() => showModal('draw'), 800);
+                return true;
+            }
+            return false;
+        }
+
+        function triggerWinConfetti() {
+            var duration = 3 * 1000;
+            var end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0 }, colors: ['#F8B800', '#E52521', '#FFF'] });
+                confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1 }, colors: ['#F8B800', '#E52521', '#FFF'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        }
+
+        function showModal(type) {
+            const modal = document.getElementById('game-modal');
+            const title = document.getElementById('modal-title');
+            const msg = document.getElementById('modal-message');
+            const icon = document.getElementById('modal-icon');
+            
+            modal.classList.remove('hidden');
+            
+            if (type === 'win') {
+                title.innerText = "NÍVEL CONCLUÍDO!";
+                title.style.color = "#E52521";
+                msg.innerText = "O Reino Cogumelo está a salvo!";
+                icon.innerText = "⭐";
+            } else if (type === 'lose') {
+                title.innerText = "FIM DE JOGO";
+                title.style.color = "#00A859";
+                msg.innerText = "Bowser capturou o tabuleiro.";
+                icon.innerText = "🦖";
+            } else {
+                title.innerText = "EMPATE!";
+                title.style.color = "#F8B800";
+                msg.innerText = "Ninguém pegou a estrela!";
+                icon.innerText = "⏱️";
+            }
+            setTimeout(() => document.getElementById('btn-restart-modal').focus(), 100);
+        }
+
+        function closeModalAndRestart() {
+            document.getElementById('game-modal').classList.add('hidden');
+            resetGame();
+        }
+
+        function findWin(currentBoard, player) {
+            for (let condition of winConditions) {
+                if (condition.every(idx => currentBoard[idx] === player)) return condition;
+            }
+            return null;
+        }
+
+        function resetGame() {
+            board = Array(9).fill(null);
+            gameActive = true;
+            statusEl.innerText = "Sua vez, Mario!";
+            statusEl.style.color = "#000";
+            updateRealtimeHint();
+            cells.forEach(cell => {
+                cell.innerHTML = '';
+                cell.className = 'cell mario-block rounded-xl flex items-center justify-center cursor-pointer';
+            });
+        }
+
+        function getRandomMove() {
+            const available = board.map((v, i) => v === null ? i : null).filter(v => v !== null);
+            return available[Math.floor(Math.random() * available.length)];
+        }
+
+        function getMediumMove() {
+            for (let p of [aiPlayer, huPlayer]) {
+                for (let c of winConditions) {
+                    const vals = c.map(i => board[i]);
+                    if (vals.filter(v => v === p).length === 2 && vals.filter(v => v === null).length === 1) return c[vals.indexOf(null)];
+                }
+            }
+            if (board[4] === null) return 4;
+            return getRandomMove();
+        }
+
+        function getBestMove() { return minimax(board, aiPlayer).index; }
+
+        function minimax(newBoard, player) {
+            const availSpots = newBoard.map((v, i) => v === null ? i : null).filter(v => v !== null);
+            if (findWin(newBoard, huPlayer)) return {score: -10};
+            if (findWin(newBoard, aiPlayer)) return {score: 10};
+            if (availSpots.length === 0) return {score: 0};
+
+            const moves = [];
+            for (let spot of availSpots) {
+                const move = { index: spot };
+                newBoard[spot] = player;
+                move.score = minimax(newBoard, player === aiPlayer ? huPlayer : aiPlayer).score;
+                newBoard[spot] = null;
+                moves.push(move);
+            }
+
+            let bestMove;
+            if (player === aiPlayer) {
+                let bestScore = -Infinity;
+                moves.forEach((m, i) => { if (m.score > bestScore) { bestScore = m.score; bestMove = i; } });
+            } else {
+                let bestScore = Infinity;
+                moves.forEach((m, i) => { if (m.score < bestScore) { bestScore = m.score; bestMove = i; } });
+            }
+            return moves[bestMove];
+        }
+
+        const tutorials = {
+            corner: `
+                <h4 class="font-black text-yellow-400 mb-2 text-xl">Estratégia: O Pulo no Canto</h4>
+                <div class="flex flex-col gap-4">
+                    <p class="text-base text-white leading-relaxed font-bold">
+                        Bata nos blocos dos cantos primeiro! Eles oferecem 3 rotas para a vitória.
+                    </p>
+                    <div class="grid grid-cols-3 gap-1 bg-black p-2 w-32 h-32 rounded self-center border-4 border-white shadow-[4px_4px_0_rgba(0,0,0,0.5)]">
+                        <div class="bg-[#E52521] border-2 border-white rounded flex items-center justify-center font-black text-xl text-white">M</div>
+                        <div class="bg-gray-800 rounded"></div><div class="bg-gray-800 rounded"></div>
+                        <div class="bg-gray-800 rounded"></div><div class="bg-gray-800 rounded"></div><div class="bg-gray-800 rounded"></div>
+                        <div class="bg-gray-800 rounded"></div><div class="bg-gray-800 rounded"></div><div class="bg-gray-800 rounded"></div>
+                    </div>
+                </div>
+            `,
+            fork: `
+                <h4 class="font-black text-yellow-400 mb-2 text-xl">Estratégia: Ataque Duplo</h4>
+                <div class="flex flex-col gap-4">
+                    <p class="text-base text-white leading-relaxed font-bold">
+                        Crie duas linhas de ataque ao mesmo tempo. Bowser só poderá defender uma!
+                    </p>
+                </div>
+            `,
+            draw: `
+                <h4 class="font-black text-yellow-400 mb-2 text-xl">Defesa do Casco</h4>
+                <div class="flex flex-col gap-4">
+                    <p class="text-base text-white leading-relaxed font-bold">
+                        Contra o Bowser Imbatível, se ele pegar um canto, o bloco central é sua única defesa segura.
+                    </p>
+                </div>
+            `
+        };
+
+        function showTutorial(key) { document.getElementById('tutorial-content').innerHTML = tutorials[key]; }
+
+        function updateRealtimeHint() {
+            const h = document.getElementById('realtime-hint');
+            const diff = document.getElementById('difficulty').value;
+            const xCount = board.filter(v => v === 'X').length;
+
+            if (diff === 'hard') h.innerText = "Bowser não erra! Foque em defender o centro ou os cantos.";
+            else if (xCount === 0) h.innerText = "Os blocos dos cantos escondem as melhores vantagens.";
+            else if (xCount === 1 && board[4] === null) h.innerText = "O bloco central está livre! Pegue-o!";
+            else h.innerText = "Fique de olho nos movimentos do Bowser para bloqueá-lo.";
+        }
+
+        showTutorial('corner');
+    </script>
+</body>
+</html>
