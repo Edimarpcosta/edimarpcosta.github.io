@@ -832,31 +832,59 @@ document.querySelectorAll('input[name="export-format"]').forEach(radio => {
 });
 
 // --- Share via Web Share API ---
-function shareFile() {
+async function shareFile(e, type = 'native') {
   const format = document.querySelector('input[name="export-format"]:checked').value;
-  
-  if (format === 'vcf') {
-    if (!state.vcfBlob || !navigator.canShare) { alert('Compartilhamento não suportado neste navegador. Use o botão de download.'); return; }
-    const file = new File([state.vcfBlob], state.vcfFileName, {type:'text/vcard'});
-    if (!navigator.canShare({files:[file]})) { alert('Seu navegador não suporta compartilhar este tipo de arquivo.'); return; }
-    navigator.share({files:[file], title:'Contatos VCF', text:'Arquivo de contatos para importar'}).catch(()=>{});
-  } else {
-    if (!state.exportedContacts || state.exportedContacts.length === 0 || !navigator.canShare) { alert('Compartilhamento não suportado neste navegador. Use o botão de download.'); return; }
-    const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
-    
-    // Convert to Blob for sharing
-    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-    const blob = new Blob([wbout], {type: 'application/octet-stream'});
-    const file = new File([blob], state.vcfFileName.replace(/\.vcf$/, '.xlsx'), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    
-    if (!navigator.canShare({files:[file]})) { alert('Seu navegador não suporta compartilhar este tipo de arquivo.'); return; }
-    navigator.share({files:[file], title:'Contatos XLSX', text:'Planilha de contatos'}).catch(()=>{});
+  const btn = e.currentTarget;
+  const originalHtml = btn.innerHTML;
+
+  // Check if we are in a secure context (HTTPS)
+  if (!window.isSecureContext) {
+    alert('O compartilhamento direto só funciona em conexões seguras (HTTPS). Por favor, use o botão "Baixar Arquivo" ou acesse via HTTPS.');
+    return;
+  }
+
+  if (!navigator.share) {
+    alert('Seu navegador não suporta o compartilhamento direto. Por favor, use o botão "Baixar Arquivo" e envie manualmente.');
+    return;
+  }
+
+  try {
+    let file;
+    if (format === 'vcf') {
+      if (!state.vcfBlob) return;
+      file = new File([state.vcfBlob], state.vcfFileName, {type:'text/vcard'});
+    } else {
+      if (!state.exportedContacts || state.exportedContacts.length === 0) return;
+      const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+      const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+      const blob = new Blob([wbout], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      file = new File([blob], state.vcfFileName.replace(/\.vcf$/, '.xlsx'), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    }
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      btn.innerHTML = '<span>⏳ Abrindo...</span>';
+      await navigator.share({
+        files: [file],
+        title: format === 'vcf' ? 'Contatos VCF' : 'Contatos XLSX',
+        text: 'Arquivo enviado via VCF Convert'
+      });
+      setTimeout(() => { btn.innerHTML = originalHtml; }, 1000);
+    } else {
+      alert('Seu navegador não permite compartilhar este tipo de arquivo diretamente. Por favor, use o botão de download.');
+    }
+  } catch (err) {
+    btn.innerHTML = originalHtml;
+    if (err.name === 'NotAllowedError') {
+      alert('⚠️ Ação Bloqueada pelo Navegador\n\nO compartilhamento foi impedido por restrições de segurança ou permissão. \n\nIsso é comum em janelas de "Preview" ou se o site não estiver em HTTPS.\n\nSOLUÇÃO: Use o botão azul "Baixar Arquivo" para salvar e enviar manualmente.');
+    } else if (err.name !== 'AbortError') {
+      console.error('Erro ao compartilhar:', err);
+      alert('Não foi possível compartilhar o arquivo. Tente baixar e enviar manualmente.');
+    }
   }
 }
-
-$('btn-share-telegram').addEventListener('click', shareFile);
-$('btn-share-email').addEventListener('click', shareFile);
-$('btn-share-bluetooth').addEventListener('click', shareFile);
-$('btn-share-native').addEventListener('click', shareFile);
+$('btn-share-telegram').addEventListener('click', (e) => shareFile(e, 'telegram'));
+$('btn-share-email').addEventListener('click', (e) => shareFile(e, 'email'));
+$('btn-share-bluetooth').addEventListener('click', (e) => shareFile(e, 'bluetooth'));
+$('btn-share-native').addEventListener('click', (e) => shareFile(e, 'native'));
