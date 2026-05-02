@@ -34,7 +34,7 @@ const VCF_FIELDS = [
 ];
 
 // --- State ---
-let state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, siteCol:null, phoneCols:[], vcfBlob:null, vcfFileName:'contatos.vcf', exportedContacts:[]};
+let state = {headers:[], rows:[], mode:'easy', nameCol:null, phoneCol:null, companyCol:null, emailCol:null, addressCol:null, siteCol:null, phoneCols:[], vcfBlob:null, xlsxBlob:null, vcfFileName:'contatos.vcf', exportedContacts:[]};
 
 // --- DOM refs ---
 const $ = id => document.getElementById(id);
@@ -678,42 +678,62 @@ function generateVCard(c) {
 }
 
 // --- Generate VCF ---
-function generateFullVCF(mappings, useAdvOptions) {
+async function generateFullVCF(mappings, useAdvOptions) {
   const skipEmpty = useAdvOptions ? $('adv-skip-empty').checked : $('opt-skip-empty').checked;
   const vcards = [];
   const missingPhonesList = [];
   state.exportedContacts = [];
+  state.vcfBlob = null;
+  state.xlsxBlob = null;
   
-  state.rows.forEach((row, idx) => {
+  const progContainer = useAdvOptions ? $('adv-progress-container') : $('progress-container');
+  const progBar = useAdvOptions ? $('adv-progress-bar') : $('progress-bar');
+  const progText = useAdvOptions ? $('adv-progress-text') : $('progress-text');
+  const btn = useAdvOptions ? $('btn-adv-generate') : $('btn-easy-generate');
+
+  progContainer.classList.remove('hidden');
+  btn.disabled = true;
+
+  const total = state.rows.length;
+  const chunkSize = 100;
+
+  for (let i = 0; i < total; i++) {
+    const row = state.rows[i];
     const c = buildContact(row, mappings, useAdvOptions);
     const fn = c.fn || [c.firstName, c.lastName].filter(Boolean).join(' ');
     const hasPhone = !!(c.cell || c.workPhone || c.homePhone || c.fax);
     
     if (!hasPhone) {
-      missingPhonesList.push({ line: idx + 2, name: fn || 'Desconhecido' });
-      if (skipEmpty) return;
-    }
-    if (fn || hasPhone) {
+      missingPhonesList.push({ line: i + 2, name: fn || 'Desconhecido' });
+      if (!skipEmpty) {
+        vcards.push(generateVCard(c));
+        state.exportedContacts.push(formatForXlsx(c, fn));
+      }
+    } else {
       vcards.push(generateVCard(c));
-      
-      // Save for XLSX export
-      state.exportedContacts.push({
-        'Nome Completo': fn,
-        'Celular': c.cell || '',
-        'Tel. Comercial': c.workPhone || '',
-        'Tel. Residencial': c.homePhone || '',
-        'Fax': c.fax || '',
-        'Email': c.email || '',
-        'Empresa': c.company || '',
-        'Site': c.site || '',
-        'Endereço': c.address || '',
-        'Anotações': c.description || '',
-        'Aniversário': c.bday || '',
-        'GPS': c.geo || '',
-        'Grupo': c.group || ''
-      });
+      state.exportedContacts.push(formatForXlsx(c, fn));
     }
-  });
+
+    if (i % chunkSize === 0 || i === total - 1) {
+      const percent = Math.round(((i + 1) / total) * 100);
+      progBar.style.width = percent + '%';
+      progText.textContent = `Processando: ${percent}% (${i + 1}/${total})`;
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+
+  // Finalize Blobs
+  const vcfContent = vcards.join('\r\n');
+  state.vcfBlob = new Blob([vcfContent], {type: 'text/vcard;charset=utf-8'});
+  
+  // Pre-generate XLSX Blob
+  if (state.exportedContacts.length > 0) {
+    const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    state.xlsxBlob = new Blob([wbout], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
   
   const warnDiv = $('missing-phones-warning');
   const ul = $('missing-phones-list');
@@ -725,11 +745,31 @@ function generateFullVCF(mappings, useAdvOptions) {
     ul.innerHTML = '';
   }
   
+  btn.disabled = false;
+  progContainer.classList.add('hidden');
   return vcards;
 }
 
+function formatForXlsx(c, fn) {
+  return {
+    'Nome Completo': fn,
+    'Celular': c.cell || '',
+    'Tel. Comercial': c.workPhone || '',
+    'Tel. Residencial': c.homePhone || '',
+    'Fax': c.fax || '',
+    'Email': c.email || '',
+    'Empresa': c.company || '',
+    'Site': c.site || '',
+    'Endereço': c.address || '',
+    'Anotações': c.description || '',
+    'Aniversário': c.bday || '',
+    'GPS': c.geo || '',
+    'Grupo': c.group || ''
+  };
+}
+
 // --- Easy Generate ---
-$('btn-easy-generate').addEventListener('click', () => {
+$('btn-easy-generate').addEventListener('click', async () => {
   const ns = $('easy-name-select').value;
   const nPref = $('easy-name-prefix')?.value || '';
   const nSuff = $('easy-name-suffix')?.value || '';
@@ -750,8 +790,8 @@ $('btn-easy-generate').addEventListener('click', () => {
   if (as !== '') mappings.push({colIndex: parseInt(as), field: 'address', prefix: '', suffix: ''});
   if (cs !== '') mappings.push({colIndex: parseInt(cs), field: 'company', prefix: '', suffix: ''});
   
-  const vcards = generateFullVCF(mappings, false);
-  finishExport(vcards);
+  await generateFullVCF(mappings, false);
+  finishExport();
 });
 
 function saveConfig() {
@@ -779,22 +819,25 @@ function saveConfig() {
 }
 
 // --- Advanced Generate ---
-$('btn-adv-generate').addEventListener('click', () => {
+$('btn-adv-generate').addEventListener('click', async () => {
   const mappings = getAdvMappings();
   if (!mappings.length) { alert('Mapeie pelo menos uma coluna.'); return; }
   saveConfig();
-  const vcards = generateFullVCF(mappings, true);
-  finishExport(vcards);
+  await generateFullVCF(mappings, true);
+  finishExport();
 });
 
 // --- Export ---
-function finishExport(vcards) {
-  if (!vcards.length) { alert('Nenhum contato válido encontrado.'); return; }
-  const vcfContent = vcards.join('\r\n');
-  state.vcfBlob = new Blob([vcfContent], {type: 'text/vcard;charset=utf-8'});
-  $('export-stats').textContent = `${vcards.length} contato${vcards.length > 1 ? 's' : ''} pronto${vcards.length > 1 ? 's' : ''} para importar`;
+function finishExport() {
+  if (!state.vcfBlob) { alert('Erro ao gerar contatos.'); return; }
+  $('export-stats').textContent = `${state.exportedContacts.length} contato${state.exportedContacts.length > 1 ? 's' : ''} pronto${state.exportedContacts.length > 1 ? 's' : ''} para importar`;
   $('export-section').classList.remove('hidden');
   $('export-section').scrollIntoView({behavior:'smooth', block:'center'});
+  
+  // Check sharing support for example-like behavior
+  if (navigator.share) {
+    document.querySelectorAll('.share-btn').forEach(btn => btn.style.display = 'flex');
+  }
 }
 
 // --- Download ---
@@ -809,12 +852,13 @@ $('btn-download').addEventListener('click', () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } else {
-    if (!state.exportedContacts || state.exportedContacts.length === 0) return;
-    const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
-    const xlsxFileName = state.vcfFileName.replace(/\.vcf$/, '.xlsx');
-    XLSX.writeFile(wb, xlsxFileName);
+    if (!state.xlsxBlob) return;
+    const url = URL.createObjectURL(state.xlsxBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = state.vcfFileName.replace(/\.vcf$/, '.xlsx');
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 });
 
@@ -837,50 +881,44 @@ async function shareFile(e, type = 'native') {
   const btn = e.currentTarget;
   const originalHtml = btn.innerHTML;
 
-  // Check if we are in a secure context (HTTPS)
-  if (!window.isSecureContext) {
-    alert('O compartilhamento direto só funciona em conexões seguras (HTTPS). Por favor, use o botão "Baixar Arquivo" ou acesse via HTTPS.');
-    return;
-  }
-
   if (!navigator.share) {
-    alert('Seu navegador não suporta o compartilhamento direto. Por favor, use o botão "Baixar Arquivo" e envie manualmente.');
+    alert('Compartilhamento não disponível neste navegador.');
     return;
   }
 
   try {
     let file;
+    let fileName = state.vcfFileName;
+
     if (format === 'vcf') {
-      if (!state.vcfBlob) return;
-      file = new File([state.vcfBlob], state.vcfFileName, {type:'text/vcard'});
+      if (!state.vcfBlob) { alert('Gere os contatos primeiro!'); return; }
+      // Use application/octet-stream for broader compatibility on desktop
+      file = new File([state.vcfBlob], fileName, { type: 'application/octet-stream' });
     } else {
-      if (!state.exportedContacts || state.exportedContacts.length === 0) return;
-      const ws = XLSX.utils.json_to_sheet(state.exportedContacts);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Contatos");
-      const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-      const blob = new Blob([wbout], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-      file = new File([blob], state.vcfFileName.replace(/\.vcf$/, '.xlsx'), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      if (!state.xlsxBlob) { alert('Gere os contatos primeiro!'); return; }
+      fileName = fileName.replace(/\.vcf$/, '.xlsx');
+      file = new File([state.xlsxBlob], fileName, { type: 'application/octet-stream' });
     }
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      btn.innerHTML = '<span>⏳ Abrindo...</span>';
-      await navigator.share({
-        files: [file],
-        title: format === 'vcf' ? 'Contatos VCF' : 'Contatos XLSX',
-        text: 'Arquivo enviado via VCF Convert'
-      });
-      setTimeout(() => { btn.innerHTML = originalHtml; }, 1000);
-    } else {
-      alert('Seu navegador não permite compartilhar este tipo de arquivo diretamente. Por favor, use o botão de download.');
-    }
+    const shareData = {
+      files: [file],
+      title: 'VCF Convert - ' + fileName,
+      text: 'Arquivo enviado via VCF Convert'
+    };
+
+    // Chrome Windows often fails canShare for non-media files, so we try anyway
+    btn.innerHTML = '<span>⏳ Abrindo...</span>';
+    
+    await navigator.share(shareData);
+    
+    setTimeout(() => { btn.innerHTML = originalHtml; }, 1000);
   } catch (err) {
     btn.innerHTML = originalHtml;
     if (err.name === 'NotAllowedError') {
-      alert('⚠️ Ação Bloqueada pelo Navegador\n\nO compartilhamento foi impedido por restrições de segurança ou permissão. \n\nIsso é comum em janelas de "Preview" ou se o site não estiver em HTTPS.\n\nSOLUÇÃO: Use o botão azul "Baixar Arquivo" para salvar e enviar manualmente.');
+      alert('O compartilhamento foi bloqueado. Isso é comum no Chrome Desktop para este tipo de arquivo. \n\nSOLUÇÃO: Use o botão azul "Baixar Arquivo" para salvar e enviar manualmente.');
     } else if (err.name !== 'AbortError') {
-      console.error('Erro ao compartilhar:', err);
-      alert('Não foi possível compartilhar o arquivo. Tente baixar e enviar manualmente.');
+      console.error('Erro:', err);
+      alert('Erro ao compartilhar. Tente baixar o arquivo.');
     }
   }
 }
