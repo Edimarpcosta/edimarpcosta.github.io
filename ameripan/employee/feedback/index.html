@@ -1496,144 +1496,21 @@
 <script>
 (function() {
   // ─── CONFIGURAÇÃO ───
+  // URL DO SEU APP DA WEB (Substitua se necessário)
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjGJhcAvXJ4G8yFhdFmVp8uDtaGHhAfBQykrdpj4Ti3P-C7u65jh07yp30mbWH46OG/exec";
 
-  // Captura parâmetros da URL
+  // ─── CAPTURA E VALIDAÇÃO EXTERNA ───
   const urlParams = new URLSearchParams(window.location.search);
-  const type = urlParams.get('type');
-  const code = urlParams.get('code');
+  const extType = urlParams.get('type') || '';
+  const extCode = urlParams.get('code') || '';
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!type || !code) {
-        showFatalError('Acesso Negado: Link incompleto ou inválido.');
-        return;
-    }
-    
-    // Valida o código no servidor ao carregar
-    validateCodeOnLoad();
-    
-    // Mostra a seção correta baseada no tipo
-    setupView();
-  });
+  // Determina as variáveis a serem usadas no resto do script
+  // Tentamos pegar primeiro da URL (GitHub), se falhar o HTML original lidava de outra forma
+  // Mudança: usamos const para não redeclarar, e nomes únicos.
+  const evalType = extType.toLowerCase();
+  const evalCode = extCode;
 
-  async function validateCodeOnLoad() {
-    try {
-      const resp = await fetch(`${SCRIPT_URL}?action=validate&type=${type}&code=${code}`);
-      const result = await resp.json();
-      if (!result.valid) {
-        showFatalError(result.message || 'Código expirado ou inválido.');
-      }
-    } catch (e) {
-      console.error("Erro validação:", e);
-    }
-  }
-
-  function setupView() {
-    const section = document.getElementById('section-' + type);
-    if (section) {
-      section.style.display = 'block';
-      document.getElementById('submit-wrap').style.display = 'block';
-    } else {
-      document.getElementById('section-invalid').style.display = 'block';
-    }
-  }
-
-  // Envio do Formulário
-  document.getElementById('evaluationForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const btn = e.target.querySelector('button[type="submit"]');
-    const originalText = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = 'Enviando dados...';
-
-    const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
-    
-    // Adiciona o código e tipo ocultos
-    data._code = code;
-    data._type = type;
-
-    try {
-      const response = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Necessário para Apps Script em alguns casos, mas impede ler o JSON
-        body: JSON.stringify(data)
-      });
-      
-      // Como o Apps Script pode retornar erro de CORS no fetch POST mesmo funcionando,
-      // em modo 'no-cors' não conseguimos ler o result.success. 
-      // Mas podemos assumir sucesso se não cair no catch, ou usar fetch normal se o CORS estiver OK.
-      
-      // Tentativa de fetch normal para ler resposta:
-      const normalResp = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(data) });
-      const result = await normalResp.json();
-
-      if (result.success) {
-        document.getElementById('evaluationForm').style.display = 'none';
-        document.getElementById('success').style.display = 'block';
-        window.scrollTo(0, 0);
-      } else {
-        alert("Erro: " + result.message);
-        btn.disabled = false;
-        btn.innerText = originalText;
-      }
-    } catch (err) {
-      // Se cair aqui, pode ser que o envio funcionou mas o CORS bloqueou a leitura
-      // Verificamos se houve sucesso via redirecionamento visual
-      document.getElementById('evaluationForm').style.display = 'none';
-      document.getElementById('success').style.display = 'block';
-      window.scrollTo(0, 0);
-    }
-  });
-
-  function showFatalError(msg) {
-    document.body.innerHTML = `<div style="text-align:center; padding:100px 20px; font-family:sans-serif;">
-        <h1 style="color:#d32f2f; font-size:48px;">⚠️</h1>
-        <h2 style="color:#333;">Acesso Não Autorizado</h2>
-        <p style="color:#666; max-width:400px; margin: 20px auto;">${msg}</p>
-        <a href="https://ameripan.com.br" style="color:var(--primary); text-decoration:none; font-weight:600;">Voltar para o site</a>
-    </div>`;
-  }
-
-
-  // ─── Detecção de Ambiente e Variáveis ───
-  let type = "<?!= type ?>"; 
-  let code = "<?!= code ?>";
-  const isGAS = !type.startsWith("<%="); // Se não começar com a tag, foi injetado pelo GAS
-
-  if (!isGAS) {
-    // Estamos no GitHub ou Localhost
-    const params = new URLSearchParams(window.location.search);
-    type = (params.get('type') || '').toLowerCase();
-    code = (params.get('code') || '').toUpperCase();
-    
-    // Validação inicial se estiver fora do GAS
-    if (type && code) {
-      validateExternalCode(type, code);
-    }
-  }
-
-  async function validateExternalCode(t, c) {
-    try {
-      const res = await fetch(`${SCRIPT_URL}?action=validate&type=${t}&code=${c}`);
-      const json = await res.json();
-      if (!json.valid) {
-        showError(json.message || 'Código inválido');
-      }
-    } catch (e) {
-      console.error('Erro na validação:', e);
-    }
-  }
-
-  function showError(msg) {
-    document.getElementById('form').style.display = 'none';
-    document.getElementById('hdr-badge').textContent = 'Erro';
-    document.getElementById('hdr-title').textContent = 'Link Inválido';
-    document.getElementById('hdr-desc').textContent = msg;
-    document.getElementById('section-invalid').style.display = 'block';
-  }
-
+  // Lógica de UI do @old.html
   const configs = {
     new: {
       badge: 'Recém Contratado(a)',
@@ -1661,17 +1538,48 @@
     }
   };
 
-  const cfg = configs[type];
-  if (cfg) {
-    document.getElementById('hdr-badge').textContent = cfg.badge;
-    document.getElementById('hdr-badge').className = 'badge ' + cfg.badgeClass;
-    document.getElementById('hdr-title').textContent = cfg.title;
-    document.getElementById('hdr-desc').textContent = cfg.desc;
-    document.getElementById('section-' + type).style.display = 'block';
-    document.getElementById('submit-wrap').style.display = 'block';
-  } else if (isGAS) {
-    // Só mostra erro imediato se estiver no GAS (onde as variáveis já deveriam estar lá)
-    showError('Tipo de avaliação não reconhecido.');
+  document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Configura UI based on evalType
+    const cfg = configs[evalType];
+    if (cfg && evalCode) {
+      document.getElementById('hdr-badge').textContent = cfg.badge;
+      document.getElementById('hdr-badge').className = 'badge ' + cfg.badgeClass;
+      document.getElementById('hdr-title').textContent = cfg.title;
+      document.getElementById('hdr-desc').textContent = cfg.desc;
+      document.getElementById('section-' + evalType).style.display = 'block';
+      document.getElementById('submit-wrap').style.display = 'block';
+
+      // 2. Valida o código no backend
+      try {
+        const resp = await fetch(`${SCRIPT_URL}?action=validate&type=${evalType}&code=${evalCode}`);
+        const result = await resp.json();
+        if (!result.valid) {
+          showError(result.message || 'Código expirado ou inválido.');
+        }
+      } catch (err) {
+        console.error('Erro de validação:', err);
+      }
+
+    } else {
+      showError('Link incompleto ou tipo de avaliação não reconhecido.');
+    }
+  });
+
+  function showError(msg) {
+    document.getElementById('form').style.display = 'none';
+    document.getElementById('hdr-badge').textContent = 'Erro';
+    document.getElementById('hdr-badge').className = 'badge fired';
+    document.getElementById('hdr-title').textContent = 'Acesso Negado';
+    document.getElementById('hdr-desc').textContent = msg;
+    document.getElementById('section-invalid').style.display = 'block';
+    
+    // Oculta todas as sections caso alguma tenha aparecido
+    const sections = ['new', 'active', 'fired', 'leader'];
+    sections.forEach(s => {
+      const el = document.getElementById('section-' + s);
+      if(el) el.style.display = 'none';
+    });
+    document.getElementById('submit-wrap').style.display = 'none';
   }
 
   // ─── Cria botões de rating 0-10 ───
@@ -1940,30 +1848,22 @@
         obj[k] = v;
       }
     }
-    obj._type = type;
-    obj._code = code;
+    obj._type = evalType;
+    obj._code = evalCode;
     
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      // Método Interno (GAS)
-      google.script.run
-        .withSuccessHandler(showSuccess)
-        .withFailureHandler((err) => handleError(err.message, btn, originalText))
-        .processForm(obj);
-    } else {
-      // Método Externo (GitHub / fetch)
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors', // Necessário para burlar CORS em redirecionamentos do Google
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(obj)
-        });
-        // Como o modo é 'no-cors', não conseguimos ler o JSON da resposta,
-        // mas o Google costuma gravar os dados corretamente.
-        showSuccess();
-      } catch (err) {
-        handleError(err.message, btn, originalText);
-      }
+    // Método Externo (GitHub / fetch)
+    try {
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Necessário para burlar CORS
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(obj)
+      });
+      // Como o modo é 'no-cors', não conseguimos ler o JSON da resposta,
+      // mas o Google costuma gravar os dados corretamente.
+      showSuccess();
+    } catch (err) {
+      handleError(err.message, btn, originalText);
     }
   });
 
