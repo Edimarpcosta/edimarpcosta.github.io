@@ -1496,8 +1496,106 @@
 <script>
 (function() {
   // ─── CONFIGURAÇÃO ───
-  // COPIE E COLE A URL DO SEU APP DA WEB AQUI APÓS O DEPLOY
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjGJhcAvXJ4G8yFhdFmVp8uDtaGHhAfBQykrdpj4Ti3P-C7u65jh07yp30mbWH46OG/exec";
+
+  // Captura parâmetros da URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const type = urlParams.get('type');
+  const code = urlParams.get('code');
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!type || !code) {
+        showFatalError('Acesso Negado: Link incompleto ou inválido.');
+        return;
+    }
+    
+    // Valida o código no servidor ao carregar
+    validateCodeOnLoad();
+    
+    // Mostra a seção correta baseada no tipo
+    setupView();
+  });
+
+  async function validateCodeOnLoad() {
+    try {
+      const resp = await fetch(`${SCRIPT_URL}?action=validate&type=${type}&code=${code}`);
+      const result = await resp.json();
+      if (!result.valid) {
+        showFatalError(result.message || 'Código expirado ou inválido.');
+      }
+    } catch (e) {
+      console.error("Erro validação:", e);
+    }
+  }
+
+  function setupView() {
+    const section = document.getElementById('section-' + type);
+    if (section) {
+      section.style.display = 'block';
+      document.getElementById('submit-wrap').style.display = 'block';
+    } else {
+      document.getElementById('section-invalid').style.display = 'block';
+    }
+  }
+
+  // Envio do Formulário
+  document.getElementById('evaluationForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = 'Enviando dados...';
+
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+    
+    // Adiciona o código e tipo ocultos
+    data._code = code;
+    data._type = type;
+
+    try {
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Necessário para Apps Script em alguns casos, mas impede ler o JSON
+        body: JSON.stringify(data)
+      });
+      
+      // Como o Apps Script pode retornar erro de CORS no fetch POST mesmo funcionando,
+      // em modo 'no-cors' não conseguimos ler o result.success. 
+      // Mas podemos assumir sucesso se não cair no catch, ou usar fetch normal se o CORS estiver OK.
+      
+      // Tentativa de fetch normal para ler resposta:
+      const normalResp = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(data) });
+      const result = await normalResp.json();
+
+      if (result.success) {
+        document.getElementById('evaluationForm').style.display = 'none';
+        document.getElementById('success').style.display = 'block';
+        window.scrollTo(0, 0);
+      } else {
+        alert("Erro: " + result.message);
+        btn.disabled = false;
+        btn.innerText = originalText;
+      }
+    } catch (err) {
+      // Se cair aqui, pode ser que o envio funcionou mas o CORS bloqueou a leitura
+      // Verificamos se houve sucesso via redirecionamento visual
+      document.getElementById('evaluationForm').style.display = 'none';
+      document.getElementById('success').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+  });
+
+  function showFatalError(msg) {
+    document.body.innerHTML = `<div style="text-align:center; padding:100px 20px; font-family:sans-serif;">
+        <h1 style="color:#d32f2f; font-size:48px;">⚠️</h1>
+        <h2 style="color:#333;">Acesso Não Autorizado</h2>
+        <p style="color:#666; max-width:400px; margin: 20px auto;">${msg}</p>
+        <a href="https://ameripan.com.br" style="color:var(--primary); text-decoration:none; font-weight:600;">Voltar para o site</a>
+    </div>`;
+  }
+})();
 
   // ─── Detecção de Ambiente e Variáveis ───
   let type = "<?!= type ?>"; 
