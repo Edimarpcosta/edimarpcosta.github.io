@@ -1495,9 +1495,46 @@
 
 <script>
 (function() {
-  // ─── Lê o parâmetro ?type= da URL ───
-  const params = new URLSearchParams(window.location.search);
-  const type = (params.get('type') || '').toLowerCase();
+  // ─── CONFIGURAÇÃO ───
+  // COPIE E COLE A URL DO SEU APP DA WEB AQUI APÓS O DEPLOY
+  const SCRIPT_URL = "https://script.google.com/macros/s/SUA_URL_AQUI/exec";
+
+  // ─── Detecção de Ambiente e Variáveis ───
+  let type = "<?!= type ?>"; 
+  let code = "<?!= code ?>";
+  const isGAS = !type.startsWith("<%="); // Se não começar com a tag, foi injetado pelo GAS
+
+  if (!isGAS) {
+    // Estamos no GitHub ou Localhost
+    const params = new URLSearchParams(window.location.search);
+    type = (params.get('type') || '').toLowerCase();
+    code = (params.get('code') || '').toUpperCase();
+    
+    // Validação inicial se estiver fora do GAS
+    if (type && code) {
+      validateExternalCode(type, code);
+    }
+  }
+
+  async function validateExternalCode(t, c) {
+    try {
+      const res = await fetch(`${SCRIPT_URL}?action=validate&type=${t}&code=${c}`);
+      const json = await res.json();
+      if (!json.valid) {
+        showError(json.message || 'Código inválido');
+      }
+    } catch (e) {
+      console.error('Erro na validação:', e);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('form').style.display = 'none';
+    document.getElementById('hdr-badge').textContent = 'Erro';
+    document.getElementById('hdr-title').textContent = 'Link Inválido';
+    document.getElementById('hdr-desc').textContent = msg;
+    document.getElementById('section-invalid').style.display = 'block';
+  }
 
   const configs = {
     new: {
@@ -1534,11 +1571,9 @@
     document.getElementById('hdr-desc').textContent = cfg.desc;
     document.getElementById('section-' + type).style.display = 'block';
     document.getElementById('submit-wrap').style.display = 'block';
-  } else {
-    document.getElementById('hdr-badge').textContent = 'Erro';
-    document.getElementById('hdr-title').textContent = 'Link não reconhecido';
-    document.getElementById('hdr-desc').textContent = '';
-    document.getElementById('section-invalid').style.display = 'block';
+  } else if (isGAS) {
+    // Só mostra erro imediato se estiver no GAS (onde as variáveis já deveriam estar lá)
+    showError('Tipo de avaliação não reconhecido.');
   }
 
   // ─── Cria botões de rating 0-10 ───
@@ -1790,8 +1825,14 @@
   });
 
   // ─── Submit ───
-  document.getElementById('form').addEventListener('submit', function(e) {
+  document.getElementById('form').addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    const btn = this.querySelector('button[type=submit]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
     const data = new FormData(this);
     const obj = {};
     for (const [k, v] of data.entries()) {
@@ -1802,15 +1843,43 @@
       }
     }
     obj._type = type;
-    obj._timestamp = new Date().toISOString();
-    // ── Aqui você pode enviar para seu backend, ex:
-    // fetch('/api/avaliacao', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) })
-    console.log('📋 Dados do formulário:', obj);
+    obj._code = code;
+    
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      // Método Interno (GAS)
+      google.script.run
+        .withSuccessHandler(showSuccess)
+        .withFailureHandler((err) => handleError(err.message, btn, originalText))
+        .processForm(obj);
+    } else {
+      // Método Externo (GitHub / fetch)
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors', // Necessário para burlar CORS em redirecionamentos do Google
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(obj)
+        });
+        // Como o modo é 'no-cors', não conseguimos ler o JSON da resposta,
+        // mas o Google costuma gravar os dados corretamente.
+        showSuccess();
+      } catch (err) {
+        handleError(err.message, btn, originalText);
+      }
+    }
+  });
 
+  function showSuccess() {
     document.getElementById('form').style.display = 'none';
     document.getElementById('success').style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
+  }
+
+  function handleError(msg, btn, txt) {
+    alert('Erro ao enviar: ' + msg);
+    btn.disabled = false;
+    btn.textContent = txt;
+  }
 
 })();
 </script>
