@@ -658,10 +658,15 @@ function generateVCard(c) {
   const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
   const fnRaw = c.fn || [c.firstName, c.lastName].filter(Boolean).join(' ');
   const fn = vcfEscape(fnRaw);
-  const nLastName = vcfEscape(c.lastName || fnRaw);
-  const nFirstName = vcfEscape(c.firstName || '');
+  
+  let nLastName = vcfEscape(c.lastName || '');
+  let nFirstName = vcfEscape(c.firstName || '');
+  if (!c.lastName && !c.firstName && fnRaw) {
+    nFirstName = vcfEscape(fnRaw); // Coloca o nome completo no campo de "Nome" (Given Name) ao invés de "Sobrenome" (Family Name)
+  }
+
   if (fn) { lines.push('FN:' + fn); lines.push('N:' + nLastName + ';' + nFirstName + ';;;'); }
-  if (c.cell) lines.push('TEL;TYPE=CELL:' + c.cell);
+  if (c.cell) lines.push('TEL;TYPE=CELL;TYPE=pref:' + c.cell);
   if (c.workPhone) lines.push('TEL;TYPE=WORK:' + c.workPhone);
   if (c.homePhone) lines.push('TEL;TYPE=HOME:' + c.homePhone);
   if (c.fax) lines.push('TEL;TYPE=FAX:' + c.fax);
@@ -669,7 +674,7 @@ function generateVCard(c) {
   if (c.company) lines.push('ORG:' + vcfEscape(c.company));
   if (c.site) lines.push('URL:' + c.site);
   if (c.description) lines.push('NOTE:' + vcfEscape(c.description));
-  if (c.address) lines.push('ADR;TYPE=HOME:;;' + vcfEscape(c.address) + ';;;;');
+  if (c.address) lines.push('ADR;TYPE=WORK:;;' + vcfEscape(c.address) + ';;;;');
   if (c.geo) lines.push('GEO:' + c.geo.replace(/,/g, ';'));
   if (c.bday) lines.push('BDAY:' + c.bday);
   if (c.group) lines.push('X-ANDROID-CUSTOM:vnd.android.cursor.item/group_membership;' + vcfEscape(c.group) + ';;;;;;;;;;;;;');
