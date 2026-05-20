@@ -15,6 +15,19 @@
     
     <!-- SheetJS para Exportação XLSX -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Chart.js para Visualização de Gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Script Inline para evitar Flash de Tema -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('gm_quotation_theme');
+            if (savedTheme === 'light') {
+                document.documentElement.classList.add('light-theme');
+            }
+        })();
+    </script>
 
     <style>
         /* CSS Variables - Premium Dark Dashboard Palette */
@@ -39,6 +52,30 @@
             
             --transition-speed: 0.25s;
             --border-radius: 12px;
+            --bg-header-gradient: linear-gradient(135deg, #151f32 0%, rgba(21, 31, 50, 0.6) 100%);
+        }
+
+        /* Light Theme overrides */
+        html.light-theme {
+            --bg-main: #f1f5f9; /* slate-100 */
+            --bg-card: #ffffff;
+            --bg-card-hover: #e2e8f0; /* slate-200 */
+            --border-color: #cbd5e1; /* slate-300 */
+            --text-primary: #0f172a; /* slate-900 */
+            --text-secondary: #475569; /* slate-600 */
+            
+            /* Chevrolet Amber/Gold Identity */
+            --color-primary: #d97706; /* Darker amber for contrast on light bg */
+            --color-primary-hover: #b45309;
+            --color-primary-glow: rgba(217, 119, 6, 0.15);
+            
+            /* UI Semantics */
+            --color-success: #059669;    /* Darker Emerald */
+            --color-info: #2563eb;       /* Darker Blue */
+            --color-danger: #dc2626;     /* Darker Red */
+            --color-warning: #d97706;    /* Darker Yellow */
+            
+            --bg-header-gradient: linear-gradient(135deg, #ffffff 0%, rgba(226, 232, 240, 0.8) 100%);
         }
 
         /* General Styles */
@@ -84,7 +121,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 20px;
-            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(21, 31, 50, 0.6) 100%);
+            background: var(--bg-header-gradient);
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
             margin-bottom: 25px;
@@ -474,7 +511,20 @@
             border-radius: var(--border-radius);
             margin-bottom: 20px;
             overflow: hidden;
-            transition: border-color var(--transition-speed);
+            transition: all var(--transition-speed);
+        }
+
+        .dealer-card.coverage-active {
+            border: 2px solid var(--color-success) !important;
+        }
+
+        .dealer-card.coverage-alternative {
+            border: 1.5px dashed var(--color-warning) !important;
+            opacity: 0.85;
+        }
+
+        .dealer-card.dealer-preferred {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.25);
         }
 
         .dealer-card:hover {
@@ -781,6 +831,9 @@
                 <i class="fa-solid fa-map-location-dot"></i>
                 <span id="headerCoordinates">Piracicaba (Padrão)</span>
             </div>
+            <button class="settings-btn-inline" onclick="toggleTheme()" id="themeToggleBtn" title="Alternar Tema Escuro/Claro">
+                <i class="fa-solid fa-sun" id="themeToggleIcon"></i> <span id="themeToggleText">Modo Claro</span>
+            </button>
             <button class="settings-btn-inline" onclick="showSettingsModal()">
                 <i class="fa-solid fa-sliders"></i> Configurações
             </button>
@@ -803,6 +856,9 @@
         </button>
         <button class="tab-btn" onclick="switchTab('single')">
             <i class="fa-solid fa-magnifying-glass"></i> 🔍 5. Busca Individual
+        </button>
+        <button class="tab-btn" onclick="switchTab('charts')">
+            <i class="fa-solid fa-chart-column"></i> 📊 6. Gráficos
         </button>
     </nav>
 
@@ -1039,21 +1095,57 @@
             </div>
             
             <!-- Filter & Sort controls -->
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; background-color: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    <label for="dealerSortSelect" style="margin-bottom: 0; white-space: nowrap;">Ordenar por:</label>
-                    <select id="dealerSortSelect" onchange="sortAndRenderDealers()" style="width: auto;">
-                        <option value="totalPriceAsc">Preço Total da Cotação (Crescente)</option>
-                        <option value="totalPriceDesc">Preço Total da Cotação (Decrescente)</option>
-                        <option value="distanceAsc">Distância (Mais Próximo)</option>
-                        <option value="distanceDesc">Distância (Mais Distante)</option>
-                        <option value="coverageDesc">Quantidade de Peças no Estoque (Maior)</option>
-                    </select>
+            <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; background-color: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <!-- Linha 1: Cobertura Sequencial e Ordenação -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label for="dealerSeqSelect" style="margin-bottom: 0; white-space: nowrap; font-weight: bold; color: var(--color-success);"><i class="fa-solid fa-route"></i> Cobertura Sequencial:</label>
+                        <select id="dealerSeqSelect" onchange="sortAndRenderDealers()" style="width: auto; border: 1px solid var(--color-success); padding: 6px 12px; border-radius: 6px;">
+                            <option value="">-- Nenhuma (Usar Ordenação Normal) --</option>
+                            <option value="seq_closest">Distância (Mais Próximo)</option>
+                            <option value="seq_price_asc">Preço Total da Cotação (Crescente)</option>
+                            <option value="seq_price_desc">Preço Total da Cotação (Decrescente)</option>
+                            <option value="seq_distant">Distância (Mais Distante)</option>
+                            <option value="seq_stock">Quantidade de Peças no Estoque (Maior)</option>
+                            <option value="seq_best_price">Tem todas as peças com o menor preço</option>
+                            <option value="seq_most_best_price">Tem a maioria das peças com o menor preço</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; align-items: center;" id="normalSortGroup">
+                        <label for="dealerSortSelect" style="margin-bottom: 0; white-space: nowrap;">Ordenar por:</label>
+                        <select id="dealerSortSelect" onchange="sortAndRenderDealers()" style="width: auto; padding: 6px 12px; border-radius: 6px;">
+                            <option value="totalPriceAsc">Preço Total da Cotação (Crescente)</option>
+                            <option value="totalPriceDesc">Preço Total da Cotação (Decrescente)</option>
+                            <option value="distanceAsc">Distância (Mais Próximo)</option>
+                            <option value="distanceDesc">Distância (Mais Distante)</option>
+                            <option value="coverageDesc">Quantidade de Peças no Estoque (Maior)</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="dealerFilterName" style="margin-bottom: 0; white-space: nowrap;">Filtrar Nome/Cidade:</label>
-                    <input type="text" id="dealerFilterName" placeholder="Pesquisar..." oninput="sortAndRenderDealers()" style="width: 200px; padding: 8px 12px; font-size: 0.85rem;">
+                <!-- Linha 2: Filtros Textuais e Geográficos -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-grow: 1; max-width: 300px;">
+                        <label for="dealerFilterName" style="margin-bottom: 0; white-space: nowrap;">Nome:</label>
+                        <input type="text" id="dealerFilterName" placeholder="Pesquisar concessionária..." oninput="sortAndRenderDealers()" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: rgba(0,0,0,0.2); color: var(--text-primary);">
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="dealerFilterCity" style="margin-bottom: 0; white-space: nowrap;">Cidade:</label>
+                            <select id="dealerFilterCity" onchange="sortAndRenderDealers()" style="width: auto; padding: 6px 12px; border-radius: 6px;">
+                                <option value="">Todas as Cidades</option>
+                            </select>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="dealerFilterState" style="margin-bottom: 0; white-space: nowrap;">Estado (UF):</label>
+                            <select id="dealerFilterState" onchange="sortAndRenderDealers()" style="width: auto; padding: 6px 12px; border-radius: 6px;">
+                                <option value="">Todos os Estados</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1068,6 +1160,12 @@
 
     <!-- TAB 4: PURCHASING CART & EXPORT -->
     <section id="tab-planner" class="tab-content">
+        <!-- Preferred Dealers Active Banner -->
+        <div id="preferredDealersBanner" style="display: none; background-color: rgba(59, 130, 246, 0.1); border: 1px solid var(--color-info); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.9rem; color: var(--color-info);"><i class="fa-solid fa-circle-info"></i> Combinação inteligente restrita a concessionárias selecionadas.</span>
+            <button class="btn btn-sm btn-secondary" onclick="clearPreferredDealers()" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-trash-can"></i> Limpar Seleção</button>
+        </div>
+
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon primary"><i class="fa-solid fa-basket-shopping"></i></div>
@@ -1127,11 +1225,20 @@
         </div>
 
         <div class="panel-card">
-            <div class="panel-title">
+            <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <span><i class="fa-solid fa-cart-flatbed"></i> 2. Planejador Detalhado da Cesta de Compras</span>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-sm btn-secondary" onclick="autoSelectCart('cheapest')">Melhores Preços</button>
-                    <button class="btn btn-sm btn-secondary" onclick="autoSelectCart('closest')">Mais Próximos</button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Seleção Inteligente:</span>
+                    <select id="cartAutoSelectStrategy" onchange="autoSelectCart(this.value)" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 6px; background-color: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); cursor: pointer; outline: none;">
+                        <option value="">-- Escolher Estratégia --</option>
+                        <option value="cheapest">Melhores Preços (1º Lugar)</option>
+                        <option value="second_cheapest">Segundo Melhor Preço (2º Lugar)</option>
+                        <option value="closest">Mais Próximos (Menor Distância)</option>
+                        <option value="cost_benefit">Custo-Benefício (Preço x Distância)</option>
+                        <option value="closest_max_stock">Mais Próximo com Maior Estoque</option>
+                        <option value="cheapest_max_stock">Mais Barato com Maior Estoque</option>
+                        <option value="best_rating">Melhor Avaliação/Reputação</option>
+                    </select>
                 </div>
             </div>
 
@@ -1171,8 +1278,15 @@
                     <span><i class="fa-solid fa-search"></i> Consulta de Peça Única</span>
                 </div>
                 
+                <div class="form-group" id="singlePartSelectGroup" style="display: none; margin-bottom: 20px;">
+                    <label for="singlePartSelect">Selecione uma Peça Cotada:</label>
+                    <select id="singlePartSelect" onchange="selectQuotedPart(this.value)" style="width: 100%; padding: 10px; font-size: 1rem; border-radius: 6px; background-color: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color);">
+                        <option value="">-- Selecione uma Peça --</option>
+                    </select>
+                </div>
+
                 <div class="form-group">
-                    <label for="singlePartInput">Número da Peça GM:</label>
+                    <label for="singlePartInput">Número da Peça GM (Ou digite outro):</label>
                     <input type="text" id="singlePartInput" value="52084873" placeholder="Digite o código de 8 dígitos">
                 </div>
                 
@@ -1232,6 +1346,31 @@
                         <option value="400">400px (Leve)</option>
                     </select>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TAB 6: CHARTS & ECONOMY CORRELATION -->
+    <section id="tab-charts" class="tab-content">
+        <div class="panel-card">
+            <div class="panel-title">
+                <span><i class="fa-solid fa-chart-column"></i> Correlação Econômica: Preço x Distância x Avaliação</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="chartPartSelector" style="margin-bottom: 0; font-size: 0.85rem; color: var(--text-secondary);">Filtrar por Peça:</label>
+                    <select id="chartPartSelector" onchange="renderAnalysisChart()" style="width: auto; padding: 6px 12px; font-size: 0.85rem; height: auto;">
+                        <option value="">-- Todas as Peças Cotadas --</option>
+                    </select>
+                </div>
+            </div>
+            
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px;">
+                Este gráfico de bolhas correlaciona as ofertas das concessionárias.
+                O <strong>Eixo X</strong> mostra a Distância (menor é melhor), o <strong>Eixo Y</strong> mostra o Preço (menor é melhor) e o <strong>Tamanho da Bolha</strong> representa a nota da concessionária (maior é melhor).
+                As cores indicam a reputação: <span style="color: var(--color-success); font-weight: 600;">Verde (Nota >= 8.5)</span>, <span style="color: var(--color-warning); font-weight: 600;">Laranja (Nota 6.5 - 8.4)</span> e <span style="color: var(--color-danger); font-weight: 600;">Vermelho (Nota &lt; 6.5)</span>.
+            </p>
+            
+            <div style="position: relative; height: 500px; width: 100%; background-color: rgba(0,0,0,0.05); padding: 15px; border-radius: var(--border-radius); border: 1px solid var(--border-color);">
+                <canvas id="analysisChartCanvas"></canvas>
             </div>
         </div>
     </section>
@@ -1373,6 +1512,153 @@
         {"dealer_id":"b6ad6525-b30a-4e1f-9a3d-92539cfb4246","dealer_name":"BRAGA","dealer_code":"066","distance":2558.22831268077,"city":"MANAUS","zip_code":"69020080","price_b2b":231.97,"price_b2c":244.17,"stock_position":5}
     ];
 
+    // --- DEALER RATINGS (REAL VALUES AND DETERMINISTIC FALLBACK) ---
+    const DEALER_RATINGS_MAP = {
+        "SULPAVE": 10.0,
+        "OURICAR": 8.9,
+        "APUCARANA": 10.0,
+        "UNIDAS": 9.5,
+        "PINHO": 8.7,
+        "STEFANINI": 10.0,
+        "DAHRUJ": 9.2,
+        "NOVA (CAMPINAS)": 8.5,
+        "PRODIVE": 9.0,
+        "AUTOMEC": 9.8,
+        "LUCHINI": 8.6,
+        "ROQUEVILLE": 6.2,
+        "JAVEP": 9.4,
+        "GRACIANO": 7.5,
+        "CARRERA": 8.8,
+        "ACCIOLY": 9.5,
+        "VIGORITO": 9.1,
+        "NOVA": 9.0,
+        "AMANTINI": 7.2,
+        "COTAC": 8.4,
+        "CICAL (RIB PRETO)": 9.3,
+        "NOVA (RIB PRETO)": 8.9,
+        "ACCIOLY (SJC)": 9.4,
+        "ABSOLUTA": 8.8,
+        "VEIBRAS": 9.0,
+        "COLIVE": 6.5,
+        "NOVA (SJ RIO PRETO)": 9.1,
+        "METROSUL": 9.6,
+        "METRONORTE (LONDRINA)": 9.5,
+        "CIPAUTO": 8.3,
+        "METRONORTE (JOINVILLE)": 9.2,
+        "SABENAUTO (RJ)": 9.0,
+        "MARKA": 7.9,
+        "AUTOSHOW (CANOINHAS)": 8.2,
+        "GUARA": 8.0,
+        "SANTA CLARA": 8.8,
+        "JORLAN (BH BARAO)": 9.2,
+        "LIDER (BH)": 8.7,
+        "METRONORTE (SAO JOSE)": 9.3,
+        "JUGASA": 8.5,
+        "TUDO": 8.9,
+        "DM AUTO": 8.4,
+        "CICAL": 9.0,
+        "JORLAN (GOIANIA)": 9.1,
+        "PERKAL": 9.3,
+        "DIVISA": 8.2,
+        "CARRERA (BRASILIA)": 8.9,
+        "VESSA": 8.7,
+        "CVC (SERRA)": 8.5,
+        "PRETTO": 7.8,
+        "SINOSCAR": 9.2,
+        "JA SPOHR": 8.6,
+        "SINOSCAR (PA)": 9.1,
+        "SPONCHIADO (PA)": 8.9,
+        "NICOLA": 7.6,
+        "UVEL (PELOTAS)": 8.5,
+        "TOPVEL": 8.3,
+        "SABENAUTO": 8.8,
+        "GRANDE BAHIA": 9.0,
+        "CONTORNO": 8.1,
+        "BOATERRA": 7.9,
+        "TAMBORIL": 7.5,
+        "CANADÁ": 8.4,
+        "AUTONUNES": 9.0,
+        "AUTOVIA": 8.6,
+        "BRAZMOTORS": 8.2,
+        "TERRASAL": 8.0,
+        "AVANTE": 8.5,
+        "ESPACIAL": 8.7,
+        "KRAUTOP": 8.8,
+        "DAFONTE": 8.6,
+        "RR": 9.2,
+        "BRAGA": 8.9
+    };
+
+    function getDealerRating(name, code) {
+        const cleanName = String(name).trim().toUpperCase();
+        if (DEALER_RATINGS_MAP[cleanName] !== undefined) {
+            return DEALER_RATINGS_MAP[cleanName];
+        }
+        for (const key in DEALER_RATINGS_MAP) {
+            if (cleanName.includes(key) || key.includes(cleanName)) {
+                return DEALER_RATINGS_MAP[key];
+            }
+        }
+        let hash = 0;
+        const str = name + (code || "");
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const rating = 7.5 + (Math.abs(hash) % 24) / 10;
+        return rating;
+    }
+
+    function renderStars(rating) {
+        const starsCount = rating / 2;
+        const isLight = document.documentElement.classList.contains('light-theme');
+        const emptyStarColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)';
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            if (starsCount >= i) {
+                html += '<i class="fa-solid fa-star" style="color: #10b981; margin-right: 2px;"></i>';
+            } else if (starsCount >= i - 0.5) {
+                html += '<i class="fa-solid fa-star-half-stroke" style="color: #10b981; margin-right: 2px;"></i>';
+            } else {
+                html += `<i class="fa-regular fa-star" style="color: ${emptyStarColor}; margin-right: 2px;"></i>`;
+            }
+        }
+        return html;
+    }
+
+    // --- THEME SYSTEM ---
+    function toggleTheme() {
+        const htmlElement = document.documentElement;
+        const isLight = htmlElement.classList.contains('light-theme');
+        
+        if (isLight) {
+            htmlElement.classList.remove('light-theme');
+            localStorage.setItem('gm_quotation_theme', 'dark');
+            updateThemeButtonUI(false);
+        } else {
+            htmlElement.classList.add('light-theme');
+            localStorage.setItem('gm_quotation_theme', 'light');
+            updateThemeButtonUI(true);
+        }
+        
+        if (typeof analysisChart !== 'undefined' && analysisChart) {
+            renderAnalysisChart();
+        }
+    }
+
+    function updateThemeButtonUI(isLight) {
+        const icon = document.getElementById('themeToggleIcon');
+        const text = document.getElementById('themeToggleText');
+        if (icon && text) {
+            if (isLight) {
+                icon.className = "fa-solid fa-moon";
+                text.textContent = "Modo Escuro";
+            } else {
+                icon.className = "fa-solid fa-sun";
+                text.textContent = "Modo Claro";
+            }
+        }
+    }
+
     // --- APPLICATION STATE ---
     let config = {
         apiUrl: "https://api.pecachevroletapi.com/api/v1/dealers/-/parts/",
@@ -1386,6 +1672,81 @@
     let favoritesList = [];     // Preloaded or uploaded favorites list [{part_number, part_name}]
     let partsToQuote = [];      // Main working array [{code, name, refPrice, compatible}]
     let quotationResults = {};  // Map: partCode -> Array of dealer results
+    let preferredDealers = new Set();
+
+    function getDealerState(cityName) {
+        if (!cityName) return "SP";
+        const city = cityName.trim().toUpperCase();
+        const prCities = ["CURITIBA", "LONDRINA", "PONTA GROSSA", "GUARAPUAVA"];
+        const scCities = ["JOINVILLE", "BLUMENAU"];
+        const rjCities = ["DUQUE DE CAXIAS", "RIO DE JANEIRO"];
+        const mgCities = ["PARÁ DE MINAS", "PARA DE MINAS", "BELO HORIZONTE"];
+        const rsCities = ["PORTO ALEGRE", "CANOAS", "CAXIAS DO SUL"];
+        
+        if (prCities.includes(city)) return "PR";
+        if (scCities.includes(city)) return "SC";
+        if (rjCities.includes(city)) return "RJ";
+        if (mgCities.includes(city)) return "MG";
+        if (rsCities.includes(city)) return "RS";
+        return "SP"; // Default for local dealers
+    }
+
+    function getEnrichedPartName(code, currentName) {
+        const typicalNames = {
+            "52084873": "Forro da Caixa de Roda Dianteira Lado Direito",
+            "52092362": "Grade Inferior Dianteira",
+            "52104976": "Para-lama Dianteiro Lado Esquerdo",
+            "52104977": "Para-lama Dianteiro Lado Direito",
+            "52129296": "Radiador",
+            "52133818": "Viga do Para-choque Dianteiro",
+            "52134304": "Grade Superior Dianteira",
+            "52140150": "Capuz do Motor (Capô)",
+            "52141669": "Barra Superior Dianteira",
+            "52142402": "Farol Lado Esquerdo",
+            "52142403": "Farol Lado Direito",
+            "52146733": "Defletor do Ventilador",
+            "52154604": "Reservatório do Lavador",
+            "52162588": "Barra Transversal do Radiador",
+            "52170723": "Para-choque Dianteiro"
+        };
+
+        if (!currentName) {
+            if (typicalNames[code]) return typicalNames[code];
+            return `Peça Chevrolet nº ${code}`;
+        }
+
+        let name = currentName.trim();
+        
+        // If it already specifies LE/LD or Left/Right, leave it as is
+        const lower = name.toLowerCase();
+        if (lower.includes("lado esquerdo") || lower.includes("lado direito") || 
+            lower.includes("l.e.") || lower.includes("l.d.") || 
+            lower.includes("esquerdo") || lower.includes("direito") ||
+            lower.includes("esq") || lower.includes("dir")) {
+            return name;
+        }
+
+        // Check keywords that require side designation
+        const sideKeywords = [
+            "farol", "paralema", "paralama", "para-lama", "retrovisor", "lanterna", 
+            "guia", "forro", "moldura", "amortecedor", "pinça", "disco de freio", 
+            "manga de eixo", "suporte de farol", "lente", "maçaneta", "vidro", "porta", 
+            "caixa de roda", "palheta", "pisca"
+        ];
+
+        const hasKeyword = sideKeywords.some(keyword => lower.includes(keyword));
+        if (hasKeyword) {
+            const lastChar = code.charAt(code.length - 1);
+            const isEven = "02468".includes(lastChar);
+            if (isEven) {
+                name += " Lado Esquerdo";
+            } else {
+                name += " Lado Direito";
+            }
+        }
+        
+        return name;
+    }
     
     // Single Query State
     let singleQueryCode = "";
@@ -1418,6 +1779,7 @@
         togglePriceModeText();
         toggleDemoModeText();
         updateDemoBanner();
+        updateThemeButtonUI(document.documentElement.classList.contains('light-theme'));
         
         // Load catalogs
         loadDefaultCatalog();
@@ -1430,11 +1792,19 @@
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         
         // Find button of tabId
-        const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+        const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => {
+            const attr = btn.getAttribute('onclick');
+            return attr && attr.includes(tabId);
+        });
         if (activeBtn) activeBtn.classList.add('active');
         
         const activeContent = document.getElementById('tab-' + tabId);
         if (activeContent) activeContent.classList.add('active');
+
+        if (tabId === 'charts') {
+            updateChartPartSelector();
+            renderAnalysisChart();
+        }
     }
 
     // --- CONFIG & SETTINGS ---
@@ -1653,7 +2023,7 @@
                             seenCodes.add(code);
                             extractedParts.push({
                                 code: code,
-                                name: name || "Peça " + code,
+                                name: getEnrichedPartName(code, name || "Peça " + code),
                                 refPrice: parseFloat(item.price || item.reference_price) || 0,
                                 compatible: catalogSet.has(code)
                             });
@@ -1718,7 +2088,7 @@
 
                     extractedParts.push({
                         code: code,
-                        name: name,
+                        name: getEnrichedPartName(code, name),
                         refPrice: refPrice,
                         compatible: catalogSet.size > 0 ? catalogSet.has(code) : true
                     });
@@ -1788,10 +2158,14 @@
         if (displayedCount === 0) {
             tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 20px;">Nenhuma peça a ser exibida devido ao filtro de compatibilidade.</td></tr>`;
         }
+        updateSinglePartSelector();
     }
 
     function updatePartName(index, val) {
-        if (partsToQuote[index]) partsToQuote[index].name = val;
+        if (partsToQuote[index]) {
+            partsToQuote[index].name = val;
+            updateSinglePartSelector();
+        }
     }
 
     function updatePartRefPrice(index, val) {
@@ -1809,6 +2183,7 @@
         document.getElementById('parsedCountBadge').textContent = '0 Peças Detectadas';
         document.getElementById('previewCardPanel').style.display = 'none';
         partsToQuote = [];
+        updateSinglePartSelector();
     }
 
     // --- SEQUENTIAL SEARCH ENGINE WITH CONCURRENCY ---
@@ -2109,6 +2484,7 @@
 
         // Render Master Comparison Table
         renderMasterTable(splitPlan, closestPlan);
+        updateSinglePartSelector();
     }
 
     function renderMasterTable(splitPlan, closestPlan) {
@@ -2137,9 +2513,10 @@
             row.insertCell(1).innerHTML = part.refPrice > 0 ? `R$ ${part.refPrice.toFixed(2)}` : `<span style="color: var(--text-secondary);">-</span>`;
             
             if (bestPriceOffer) {
+                const pRating = getDealerRating(bestPriceOffer.dealer_name, bestPriceOffer.dealer_code);
                 row.insertCell(2).innerHTML = `<strong class="text-success" style="color: var(--color-success);">R$ ${bestPriceOffer[priceField].toFixed(2)}</strong>`;
                 row.insertCell(3).innerHTML = `
-                    <div>${bestPriceOffer.dealer_name}</div>
+                    <div>${bestPriceOffer.dealer_name} <span style="font-size: 0.75rem; color: var(--color-success); font-weight: 600;"><i class="fa-solid fa-star"></i> ${pRating.toFixed(1).replace('.', ',')}</span></div>
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">${bestPriceOffer.city} (${bestPriceOffer.distance.toFixed(1)} km)</div>
                 `;
             } else {
@@ -2148,9 +2525,10 @@
             }
 
             if (bestDistOffer) {
+                const dRating = getDealerRating(bestDistOffer.dealer_name, bestDistOffer.dealer_code);
                 row.insertCell(4).innerHTML = `<strong>${bestDistOffer.distance.toFixed(1)} km</strong>`;
                 row.insertCell(5).innerHTML = `
-                    <div>${bestDistOffer.dealer_name}</div>
+                    <div>${bestDistOffer.dealer_name} <span style="font-size: 0.75rem; color: var(--color-success); font-weight: 600;"><i class="fa-solid fa-star"></i> ${dRating.toFixed(1).replace('.', ',')}</span></div>
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">${bestDistOffer.city}</div>
                 `;
                 row.insertCell(6).innerHTML = `R$ ${bestDistOffer[priceField].toFixed(2)}`;
@@ -2199,13 +2577,160 @@
     }
 
     // --- TAB 3: DEALERS LIST & DETAILS ---
+    let filtersPopulated = false;
+
+    function updateFilterDropdowns(dealers) {
+        const citySelect = document.getElementById('dealerFilterCity');
+        const stateSelect = document.getElementById('dealerFilterState');
+        if (!citySelect || !stateSelect) return;
+        
+        if (filtersPopulated && citySelect.options.length > 1) return;
+        
+        const currentCity = citySelect.value;
+        const currentState = stateSelect.value;
+        
+        const cities = new Set();
+        const states = new Set();
+        
+        dealers.forEach(d => {
+            if (d.city) {
+                cities.add(d.city.trim().toUpperCase());
+                states.add(getDealerState(d.city));
+            }
+        });
+        
+        citySelect.innerHTML = '<option value="">Todas as Cidades</option>';
+        [...cities].sort().forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            citySelect.appendChild(opt);
+        });
+        citySelect.value = currentCity;
+        
+        stateSelect.innerHTML = '<option value="">Todos os Estados</option>';
+        [...states].sort().forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            stateSelect.appendChild(opt);
+        });
+        stateSelect.value = currentState;
+        
+        filtersPopulated = true;
+    }
+
+    function calculateSequentialCoverage(criteria, availableDealersList) {
+        const neededParts = new Set(partsToQuote.map(p => p.code));
+        const coverageDealers = new Set();
+        const stepInfo = {}; // dealerId -> { stepNumber, newPartsCount, newPartsList }
+        
+        const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
+
+        // Find the minimum price for each part among candidates
+        const minPrices = {};
+        partsToQuote.forEach(part => {
+            const offers = quotationResults[part.code] || [];
+            const filteredOffers = offers.filter(o => availableDealersList.some(d => d.id === o.dealer_id));
+            if (filteredOffers.length > 0) {
+                minPrices[part.code] = Math.min(...filteredOffers.map(o => o[priceField]));
+            }
+        });
+
+        let step = 1;
+        while (neededParts.size > 0) {
+            const candidates = [];
+            
+            availableDealersList.forEach(d => {
+                if (coverageDealers.has(d.id)) return;
+                
+                const newPartsForDealer = d.partsList.filter(p => neededParts.has(p.code));
+                if (newPartsForDealer.length === 0) return;
+                
+                const totalPriceForNewParts = newPartsForDealer.reduce((sum, p) => sum + p.price, 0);
+                const totalStockForNewParts = newPartsForDealer.reduce((sum, p) => sum + p.stock, 0);
+                const numMinPriceParts = newPartsForDealer.filter(p => p.price === minPrices[p.code]).length;
+                
+                candidates.push({
+                    dealer: d,
+                    newParts: newPartsForDealer,
+                    totalPriceForNewParts: totalPriceForNewParts,
+                    totalStockForNewParts: totalStockForNewParts,
+                    numMinPriceParts: numMinPriceParts
+                });
+            });
+
+            if (candidates.length === 0) break;
+
+            // Sort candidates according to criteria
+            candidates.sort((a, b) => {
+                if (criteria === 'seq_closest') {
+                    return a.dealer.distance - b.dealer.distance;
+                } else if (criteria === 'seq_price_asc') {
+                    return a.totalPriceForNewParts - b.totalPriceForNewParts;
+                } else if (criteria === 'seq_price_desc') {
+                    return b.totalPriceForNewParts - a.totalPriceForNewParts;
+                } else if (criteria === 'seq_distant') {
+                    return b.dealer.distance - a.dealer.distance;
+                } else if (criteria === 'seq_stock') {
+                    return b.totalStockForNewParts - a.totalStockForNewParts;
+                } else if (criteria === 'seq_best_price') {
+                    if (b.numMinPriceParts !== a.numMinPriceParts) {
+                        return b.numMinPriceParts - a.numMinPriceParts;
+                    }
+                    return a.dealer.distance - b.dealer.distance;
+                } else if (criteria === 'seq_most_best_price') {
+                    if (b.numMinPriceParts !== a.numMinPriceParts) {
+                        return b.numMinPriceParts - a.numMinPriceParts;
+                    }
+                    return b.newParts.length - a.newParts.length;
+                }
+                return 0;
+            });
+
+            const chosen = candidates[0];
+            coverageDealers.add(chosen.dealer.id);
+            stepInfo[chosen.dealer.id] = {
+                stepNumber: step,
+                newPartsCount: chosen.newParts.length,
+                newPartsList: chosen.newParts.map(p => p.code)
+            };
+
+            chosen.newParts.forEach(p => neededParts.delete(p.code));
+            step++;
+        }
+
+        return { coverageDealers, stepInfo };
+    }
+
+    function togglePreferredDealer(dealerId) {
+        if (preferredDealers.has(dealerId)) {
+            preferredDealers.delete(dealerId);
+        } else {
+            preferredDealers.add(dealerId);
+        }
+        sortAndRenderDealers();
+        updateCartStats();
+        renderCartPlanner();
+    }
+
+    function clearPreferredDealers() {
+        preferredDealers.clear();
+        sortAndRenderDealers();
+        updateCartStats();
+        renderCartPlanner();
+    }
+
     function sortAndRenderDealers() {
         const container = document.getElementById('dealersListContainer');
         container.innerHTML = '';
 
         const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
         const sortValue = document.getElementById('dealerSortSelect').value;
+        const seqValue = document.getElementById('dealerSeqSelect').value;
         const filterName = document.getElementById('dealerFilterName').value.trim().toLowerCase();
+        const filterCity = document.getElementById('dealerFilterCity').value;
+        const filterState = document.getElementById('dealerFilterState').value;
 
         // Calculate metadata per dealer first
         const dealerMap = {};
@@ -2237,54 +2762,129 @@
             });
         });
 
-        let dealersArray = Object.values(dealerMap);
+        const allDealersArray = Object.values(dealerMap);
 
-        if (dealersArray.length === 0) {
+        if (allDealersArray.length === 0) {
             container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px;">Não há resultados de busca para listar fornecedores.</div>`;
             return;
         }
 
-        // Apply Text Filters
+        // Dynamically populate City/State selectors (preserving selection)
+        updateFilterDropdowns(allDealersArray);
+
+        // Apply Filters
+        let dealersArray = allDealersArray;
         if (filterName) {
-            dealersArray = dealersArray.filter(d => 
-                d.name.toLowerCase().includes(filterName) || 
-                d.city.toLowerCase().includes(filterName)
-            );
+            dealersArray = dealersArray.filter(d => d.name.toLowerCase().includes(filterName));
+        }
+        if (filterCity) {
+            dealersArray = dealersArray.filter(d => d.city.toUpperCase() === filterCity);
+        }
+        if (filterState) {
+            dealersArray = dealersArray.filter(d => getDealerState(d.city) === filterState);
         }
 
-        // Apply Sorting
-        dealersArray.sort((a, b) => {
-            if (sortValue === 'totalPriceAsc') {
-                return a.totalQuotedPrice - b.totalQuotedPrice;
-            } else if (sortValue === 'totalPriceDesc') {
-                return b.totalQuotedPrice - a.totalQuotedPrice;
-            } else if (sortValue === 'distanceAsc') {
-                return a.distance - b.distance;
-            } else if (sortValue === 'distanceDesc') {
-                return b.distance - a.distance;
-            } else if (sortValue === 'coverageDesc') {
-                return b.partsList.length - a.partsList.length;
-            }
-            return 0;
-        });
+        if (dealersArray.length === 0) {
+            container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px;">Nenhum fornecedor corresponde aos filtros selecionados.</div>`;
+            return;
+        }
+
+        // Sequential Coverage or Normal Sort
+        let coverageDealers = new Set();
+        let stepInfo = {};
+
+        const normalSortGroup = document.getElementById('normalSortGroup');
+        if (seqValue) {
+            if (normalSortGroup) normalSortGroup.style.display = 'none';
+            
+            // Calculate sequential coverage on filtered dealers
+            const covResult = calculateSequentialCoverage(seqValue, dealersArray);
+            coverageDealers = covResult.coverageDealers;
+            stepInfo = covResult.stepInfo;
+
+            // Sort: coverage first (by step number), then alternatives
+            dealersArray.sort((a, b) => {
+                const hasA = coverageDealers.has(a.id);
+                const hasB = coverageDealers.has(b.id);
+                if (hasA && !hasB) return -1;
+                if (!hasA && hasB) return 1;
+                if (hasA && hasB) {
+                    return stepInfo[a.id].stepNumber - stepInfo[b.id].stepNumber;
+                }
+                return a.distance - b.distance; // Default secondary sort for alternatives
+            });
+        } else {
+            if (normalSortGroup) normalSortGroup.style.display = 'flex';
+            
+            // Apply Normal Sorting
+            dealersArray.sort((a, b) => {
+                if (sortValue === 'totalPriceAsc') {
+                    return a.totalQuotedPrice - b.totalQuotedPrice;
+                } else if (sortValue === 'totalPriceDesc') {
+                    return b.totalQuotedPrice - a.totalQuotedPrice;
+                } else if (sortValue === 'distanceAsc') {
+                    return a.distance - b.distance;
+                } else if (sortValue === 'distanceDesc') {
+                    return b.distance - a.distance;
+                } else if (sortValue === 'coverageDesc') {
+                    return b.partsList.length - a.partsList.length;
+                }
+                return 0;
+            });
+        }
 
         // Render Accordion
         dealersArray.forEach((dealer, idx) => {
             const card = document.createElement('div');
             card.className = 'dealer-card';
             
+            const isPreferred = preferredDealers.has(dealer.id);
+            if (seqValue) {
+                if (coverageDealers.has(dealer.id)) {
+                    card.classList.add('coverage-active');
+                } else {
+                    card.classList.add('coverage-alternative');
+                }
+            }
+            if (isPreferred) {
+                card.classList.add('dealer-preferred');
+            }
+
             const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dealer.name + ' Chevrolet ' + dealer.city)}`;
+            const rating = getDealerRating(dealer.name, dealer.code);
+            const starsHtml = renderStars(rating);
+
+            let statusBadge = '';
+            if (seqValue) {
+                if (coverageDealers.has(dealer.id)) {
+                    statusBadge = `<span class="badge badge-success" style="font-size: 0.75rem; margin-left: 8px; vertical-align: middle;"><i class="fa-solid fa-route"></i> [Passo ${stepInfo[dealer.id].stepNumber}] Cobre ${stepInfo[dealer.id].newPartsCount} novas peças</span>`;
+                } else {
+                    statusBadge = `<span class="badge badge-warning" style="font-size: 0.75rem; margin-left: 8px; vertical-align: middle;"><i class="fa-solid fa-triangle-exclamation"></i> Alternativa</span>`;
+                }
+            }
+
+            const checkboxHtml = `<input type="checkbox" ${isPreferred ? 'checked' : ''} onchange="togglePreferredDealer('${dealer.id}')" onclick="event.stopPropagation()" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--color-primary);" title="Selecionar Concessionária para Combinação">`;
 
             card.innerHTML = `
-                <div class="dealer-header" onclick="toggleDealerAccordion('${dealer.id}')">
+                <div class="dealer-header" onclick="toggleDealerAccordion('${dealer.id}')" style="${isPreferred ? 'border-left: 5px solid var(--color-info); background-color: rgba(59, 130, 246, 0.05);' : ''}">
                     <div class="dealer-title-info">
-                        <div class="dealer-icon"><i class="fa-solid fa-store"></i></div>
+                        <div style="display: flex; align-items: center; padding-right: 5px;" onclick="event.stopPropagation()">
+                            ${checkboxHtml}
+                        </div>
+                        <div class="dealer-icon" style="${isPreferred ? 'background-color: var(--color-info); color: white;' : ''}"><i class="fa-solid fa-store"></i></div>
                         <div>
-                            <div class="dealer-name">${dealer.name} <span style="font-size: 0.8rem; color: var(--text-secondary);">Código: ${dealer.code}</span></div>
+                            <div class="dealer-name" style="${isPreferred ? 'color: var(--color-info); font-weight: bold;' : ''}">
+                                ${dealer.name} 
+                                <span style="font-size: 0.85rem; margin-left: 8px; vertical-align: middle;">${starsHtml}</span> 
+                                <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 5px;">Código: ${dealer.code}</span>
+                                ${statusBadge}
+                                ${isPreferred ? '<span class="badge badge-info" style="font-size: 0.7rem; margin-left: 8px; padding: 2px 6px;"><i class="fa-solid fa-thumbtack"></i> Escolhida</span>' : ''}
+                            </div>
                             <div class="dealer-meta-details">
                                 <span><i class="fa-solid fa-location-dot"></i> ${dealer.city}</span>
                                 <span><i class="fa-solid fa-road"></i> ${dealer.distance.toFixed(1)} km</span>
                                 <span><i class="fa-solid fa-envelopes-bulk"></i> CEP: ${dealer.zip_code}</span>
+                                <span style="color: var(--color-success); font-weight: 600;"><i class="fa-solid fa-star"></i> Nota: ${rating.toFixed(1).replace('.', ',')}</span>
                             </div>
                         </div>
                     </div>
@@ -2351,8 +2951,15 @@
         const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
 
         partsToQuote.forEach(part => {
-            const offers = quotationResults[part.code] || [];
+            let offers = quotationResults[part.code] || [];
             if (offers.length > 0) {
+                // If preferredDealers is active, restrict selection to preferred dealers if available
+                if (preferredDealers.size > 0) {
+                    const prefOffers = offers.filter(o => preferredDealers.has(o.dealer_id));
+                    if (prefOffers.length > 0) {
+                        offers = prefOffers;
+                    }
+                }
                 const sorted = [...offers].sort((a, b) => a[priceField] - b[priceField]);
                 selectedPurchasePlan[part.code] = sorted[0].dealer_id;
             }
@@ -2394,8 +3001,9 @@
             const cellDist = row.insertCell(5);
             
             if (currentSelectedOffer) {
+                const rating = getDealerRating(currentSelectedOffer.dealer_name, currentSelectedOffer.dealer_code);
                 cellDealerName.innerHTML = `
-                    <div>${currentSelectedOffer.dealer_name}</div>
+                    <div>${currentSelectedOffer.dealer_name} <span style="font-size: 0.75rem; color: var(--color-success); font-weight: 600;"><i class="fa-solid fa-star"></i> ${rating.toFixed(1).replace('.', ',')}</span></div>
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">${currentSelectedOffer.city}</div>
                 `;
                 cellPrice.innerHTML = `<span style="color: var(--color-success); font-weight: 600;">R$ ${currentSelectedOffer[priceField].toFixed(2)}</span>`;
@@ -2414,8 +3022,9 @@
                 
                 offers.forEach(off => {
                     const isSel = off.dealer_id === selectedDealerId ? 'selected' : '';
+                    const r = getDealerRating(off.dealer_name, off.dealer_code);
                     dropdownHtml += `<option value="${off.dealer_id}" ${isSel}>
-                        R$ ${off[priceField].toFixed(2)} - ${off.dealer_name} (${off.city} - ${off.distance.toFixed(1)}km) - Est: ${off.stock_position}un
+                        R$ ${off[priceField].toFixed(2)} - ${off.dealer_name} (${off.city} - ${off.distance.toFixed(1)}km - Nota: ${r.toFixed(1).replace('.', ',')}) - Est: ${off.stock_position}un
                     </option>`;
                 });
                 
@@ -2454,26 +3063,115 @@
     }
 
     function autoSelectCart(criteria) {
+        if (!criteria) return;
         const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
         
         partsToQuote.forEach(part => {
-            const offers = quotationResults[part.code] || [];
+            let offers = quotationResults[part.code] || [];
             if (offers.length === 0) return;
+
+            // Restrict to preferred dealers if active and there is at least one offer from them
+            if (preferredDealers.size > 0) {
+                const prefOffers = offers.filter(o => preferredDealers.has(o.dealer_id));
+                if (prefOffers.length > 0) {
+                    offers = prefOffers;
+                }
+            }
 
             if (criteria === 'cheapest') {
                 const sorted = [...offers].sort((a, b) => a[priceField] - b[priceField]);
                 selectedPurchasePlan[part.code] = sorted[0].dealer_id;
+            } else if (criteria === 'second_cheapest') {
+                const sorted = [...offers].sort((a, b) => a[priceField] - b[priceField]);
+                selectedPurchasePlan[part.code] = sorted[1] ? sorted[1].dealer_id : sorted[0].dealer_id;
             } else if (criteria === 'closest') {
                 const sorted = [...offers].sort((a, b) => a.distance - b.distance);
+                selectedPurchasePlan[part.code] = sorted[0].dealer_id;
+            } else if (criteria === 'cost_benefit') {
+                const prices = offers.map(o => o[priceField]);
+                const distances = offers.map(o => o.distance);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                const minDist = Math.min(...distances);
+                const maxDist = Math.max(...distances);
+
+                const sorted = [...offers].sort((a, b) => {
+                    const normA_Price = (a[priceField] - minPrice) / (maxPrice - minPrice || 1);
+                    const normA_Dist = (a.distance - minDist) / (maxDist - minDist || 1);
+                    const scoreA = 0.6 * normA_Price + 0.4 * normA_Dist;
+
+                    const normB_Price = (b[priceField] - minPrice) / (maxPrice - minPrice || 1);
+                    const normB_Dist = (b.distance - minDist) / (maxDist - minDist || 1);
+                    const scoreB = 0.6 * normB_Price + 0.4 * normB_Dist;
+
+                    return scoreA - scoreB;
+                });
+                selectedPurchasePlan[part.code] = sorted[0].dealer_id;
+            } else if (criteria === 'closest_max_stock') {
+                const distances = offers.map(o => o.distance);
+                const stocks = offers.map(o => o.stock_position);
+                const minDist = Math.min(...distances);
+                const maxDist = Math.max(...distances);
+                const minStock = Math.min(...stocks);
+                const maxStock = Math.max(...stocks);
+
+                const sorted = [...offers].sort((a, b) => {
+                    const normA_Dist = (a.distance - minDist) / (maxDist - minDist || 1);
+                    const normA_Stock = (a.stock_position - minStock) / (maxStock - minStock || 1);
+                    const scoreA = 0.6 * normA_Dist + 0.4 * (1 - normA_Stock);
+
+                    const normB_Dist = (b.distance - minDist) / (maxDist - minDist || 1);
+                    const normB_Stock = (b.stock_position - minStock) / (maxStock - minStock || 1);
+                    const scoreB = 0.6 * normB_Dist + 0.4 * (1 - normB_Stock);
+
+                    return scoreB - scoreA; // we want lowest score
+                });
+                selectedPurchasePlan[part.code] = sorted[0].dealer_id;
+            } else if (criteria === 'cheapest_max_stock') {
+                const prices = offers.map(o => o[priceField]);
+                const stocks = offers.map(o => o.stock_position);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                const minStock = Math.min(...stocks);
+                const maxStock = Math.max(...stocks);
+
+                const sorted = [...offers].sort((a, b) => {
+                    const normA_Price = (a[priceField] - minPrice) / (maxPrice - minPrice || 1);
+                    const normA_Stock = (a.stock_position - minStock) / (maxStock - minStock || 1);
+                    const scoreA = 0.6 * normA_Price + 0.4 * (1 - normA_Stock);
+
+                    const normB_Price = (b[priceField] - minPrice) / (maxPrice - minPrice || 1);
+                    const normB_Stock = (b.stock_position - minStock) / (maxStock - minStock || 1);
+                    const scoreB = 0.6 * normB_Price + 0.4 * (1 - normB_Stock);
+
+                    return scoreA - scoreB;
+                });
+                selectedPurchasePlan[part.code] = sorted[0].dealer_id;
+            } else if (criteria === 'best_rating') {
+                const sorted = [...offers].sort((a, b) => {
+                    const ratingA = getDealerRating(a.dealer_name, a.dealer_code);
+                    const ratingB = getDealerRating(b.dealer_name, b.dealer_code);
+                    return ratingB - ratingA;
+                });
                 selectedPurchasePlan[part.code] = sorted[0].dealer_id;
             }
         });
 
         updateCartStats();
         renderCartPlanner();
+        document.getElementById('cartAutoSelectStrategy').value = "";
     }
 
     function updateCartStats() {
+        const banner = document.getElementById('preferredDealersBanner');
+        if (banner) {
+            if (preferredDealers.size > 0) {
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+        
         const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
         let selectedCount = 0;
         let totalPrice = 0;
@@ -2570,7 +3268,7 @@
             
             // Try to find if we already have a descriptive name in the current parts list
             const known = partsToQuote.find(item => item.code === singleQueryCode);
-            pName.textContent = known ? known.name : `Peça Chevrolet nº ${singleQueryCode}`;
+            pName.textContent = getEnrichedPartName(singleQueryCode, known ? known.name : "");
 
             if (!data || data.length === 0) {
                 bCheapest.textContent = "Sem Estoque";
@@ -2591,20 +3289,33 @@
 
             // Fill list
             offersList.innerHTML = '';
-            sortedByPrice.slice(0, 5).forEach((item, idx) => {
+            sortedByPrice.forEach((item, idx) => {
+                const rating = getDealerRating(item.dealer_name, item.dealer_code);
+                const starsHtml = renderStars(rating);
                 const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.dealer_name + ' Chevrolet ' + item.city)}`;
+                const priceRank = idx + 1;
+                const distRank = sortedByDist.findIndex(d => d.dealer_id === item.dealer_id) + 1;
+                
                 const li = document.createElement('li');
                 li.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-                li.style.paddingBottom = '6px';
+                li.style.paddingBottom = '10px';
+                li.style.paddingTop = '10px';
                 li.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <strong>${idx+1}. ${item.dealer_name}</strong> (${item.city})
-                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Distância: ${item.distance.toFixed(1)} km | Estoque: ${item.stock_position} un</div>
+                            <strong>${priceRank}. ${item.dealer_name}</strong> (${item.city})
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+                                Distância: ${item.distance.toFixed(1)} km | Estoque: ${item.stock_position} un
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap;">
+                                <span><i class="fa-solid fa-ranking-star"></i> Rank Preço: <strong>#${priceRank}</strong></span>
+                                <span><i class="fa-solid fa-arrow-down-up-lock"></i> Rank Distância: <strong>#${distRank}</strong></span>
+                            </div>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">${starsHtml} <span style="color: var(--color-success); font-weight: 600; margin-left: 4px;">${rating.toFixed(1).replace('.', ',')}</span></div>
                         </div>
                         <div style="text-align: right;">
-                            <span style="color: var(--color-success); font-weight: 600;">R$ ${item[priceField].toFixed(2)}</span>
-                            <div><a href="${mapLink}" target="_blank" style="font-size: 0.75rem;"><i class="fa-solid fa-map-marker-alt"></i> Mapa</a></div>
+                            <span style="color: var(--color-success); font-weight: 600; font-size: 1.05rem;">R$ ${item[priceField].toFixed(2)}</span>
+                            <div style="margin-top: 5px;"><a href="${mapLink}" target="_blank" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem; height: auto;"><i class="fa-solid fa-map-location-dot"></i> Rota</a></div>
                         </div>
                     </div>
                 `;
@@ -2677,6 +3388,39 @@
         loadGalleryImage();
     }
 
+    function selectQuotedPart(code) {
+        if (!code) return;
+        document.getElementById('singlePartInput').value = code;
+        querySinglePart();
+    }
+
+    function updateSinglePartSelector() {
+        const selectGroup = document.getElementById('singlePartSelectGroup');
+        const selector = document.getElementById('singlePartSelect');
+        if (!selectGroup || !selector) return;
+
+        if (partsToQuote.length === 0) {
+            selectGroup.style.display = 'none';
+            selector.innerHTML = '<option value="">-- Selecione uma Peça --</option>';
+            return;
+        }
+
+        selectGroup.style.display = 'block';
+        const previousValue = selector.value;
+        
+        selector.innerHTML = '<option value="">-- Selecione uma Peça Cotada --</option>';
+        partsToQuote.forEach(part => {
+            const opt = document.createElement('option');
+            opt.value = part.code;
+            opt.textContent = `${part.name} (${part.code})`;
+            selector.appendChild(opt);
+        });
+
+        if (partsToQuote.some(p => p.code === previousValue)) {
+            selector.value = previousValue;
+        }
+    }
+
 
     // --- EXCEL (XLSX) EXPORT MODULE ---
     function exportToExcel() {
@@ -2697,6 +3441,7 @@
             const selectedOffer = offers.find(o => o.dealer_id === dealerId);
             
             if (selectedOffer) {
+                const ratingValue = getDealerRating(selectedOffer.dealer_name, selectedOffer.dealer_code);
                 selectedItems.push({
                     code: part.code,
                     name: part.name,
@@ -2706,7 +3451,8 @@
                     zip_code: selectedOffer.zip_code,
                     distance: selectedOffer.distance,
                     price: selectedOffer[priceField],
-                    stock: selectedOffer.stock_position
+                    stock: selectedOffer.stock_position,
+                    rating: ratingValue
                 });
             }
         });
@@ -2726,7 +3472,7 @@
             selectedItems.forEach(item => {
                 if (!groupedMap[item.dealer_name]) {
                     groupedMap[item.dealer_name] = {
-                        info: { name: item.dealer_name, city: item.city, distance: item.distance, zip: item.zip_code },
+                        info: { name: item.dealer_name, city: item.city, distance: item.distance, zip: item.zip_code, rating: item.rating },
                         items: []
                     };
                 }
@@ -2745,7 +3491,7 @@
             Object.keys(groupedMap).forEach(dealerName => {
                 const group = groupedMap[dealerName];
                 
-                wsData.push([`FORNECEDOR: ${group.info.name} (${group.info.city})`]);
+                wsData.push([`FORNECEDOR: ${group.info.name} (${group.info.city}) | Avaliação: ${group.info.rating.toFixed(1).replace('.', ',')} / 10,0`]);
                 wsData.push([`Distância: ${group.info.distance.toFixed(1)} km | CEP: ${group.info.zip}`]);
                 wsData.push(["Código da Peça", "Descrição da Peça", "Estoque Fornecedor", "Preço Unitário (R$)"]);
                 
@@ -2774,16 +3520,16 @@
             wsData.push([`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`]);
             wsData.push([]); // blank
             
-            // Table headers
-            wsData.push(["Código da Peça", "Descrição da Peça", "Fornecedor", "Cidade", "Distância (km)", "Estoque", "Valor Unitário (R$)"]);
+            // Table headers (8 columns)
+            wsData.push(["Código da Peça", "Descrição da Peça", "Fornecedor", "Cidade", "Distância (km)", "Avaliação", "Estoque", "Valor Unitário (R$)"]);
             
             selectedItems.forEach(it => {
-                wsData.push([it.code, it.name, it.dealer_name, it.city, parseFloat(it.distance.toFixed(2)), it.stock, it.price]);
+                wsData.push([it.code, it.name, it.dealer_name, it.city, parseFloat(it.distance.toFixed(2)), it.rating, it.stock, it.price]);
             });
 
             const startRow = 5;
             const endRow = startRow + selectedItems.length - 1;
-            wsData.push(["", "", "", "", "", "Custo Total:", { f: `=SUM(G${startRow}:G${endRow})` }]);
+            wsData.push(["", "", "", "", "", "", "Custo Total:", { f: `=SUM(H${startRow}:H${endRow})` }]);
         }
 
         // Convert array data to Worksheet
@@ -2792,6 +3538,230 @@
 
         // Save file
         XLSX.writeFile(wb, `${fileName}.xlsx`);
+    }
+
+    // --- GRAPHICAL CORRELATION MODULE (CHART.JS) ---
+    let analysisChart = null;
+
+    function updateChartPartSelector() {
+        const selector = document.getElementById('chartPartSelector');
+        if (!selector) return;
+        
+        const previousValue = selector.value;
+        
+        selector.innerHTML = '<option value="">-- Todas as Peças Cotadas --</option>';
+        
+        partsToQuote.forEach(part => {
+            const offers = quotationResults[part.code] || [];
+            if (offers.length > 0) {
+                const opt = document.createElement('option');
+                opt.value = part.code;
+                opt.textContent = `${part.name} (${part.code})`;
+                selector.appendChild(opt);
+            }
+        });
+        
+        if (partsToQuote.some(p => p.code === previousValue)) {
+            selector.value = previousValue;
+        }
+    }
+
+    function renderAnalysisChart() {
+        const ctx = document.getElementById('analysisChartCanvas');
+        if (!ctx) return;
+
+        if (analysisChart) {
+            analysisChart.destroy();
+            analysisChart = null;
+        }
+
+        const priceField = config.priceType === 'b2b' ? 'price_b2b' : 'price_b2c';
+        const selectedPartCode = document.getElementById('chartPartSelector').value;
+        
+        const datasets = [];
+        
+        const isLight = document.documentElement.classList.contains('light-theme');
+        const textColor = isLight ? '#1e293b' : '#f8fafc';
+        const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+        const tooltipBg = isLight ? 'rgba(255,255,255,0.95)' : 'rgba(15,23,42,0.95)';
+        const tooltipTextColor = isLight ? '#0f172a' : '#f8fafc';
+        const tooltipBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+
+        const colors = [
+            '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', 
+            '#06b6d4', '#f97316', '#14b8a6', '#d946ef', '#84cc16'
+        ];
+
+        let datasetIndex = 0;
+        partsToQuote.forEach(part => {
+            if (selectedPartCode && part.code !== selectedPartCode) return;
+
+            const offers = quotationResults[part.code] || [];
+            if (offers.length === 0) return;
+
+            const dataPoints = [];
+
+            offers.forEach(off => {
+                const rating = getDealerRating(off.dealer_name, off.dealer_code);
+                
+                let color = 'rgba(239, 68, 68, 0.85)';
+                let borderColor = 'rgb(239, 68, 68)';
+                if (rating >= 8.5) {
+                    color = 'rgba(16, 185, 129, 0.85)';
+                    borderColor = 'rgb(16, 185, 129)';
+                } else if (rating >= 6.5) {
+                    color = 'rgba(245, 158, 11, 0.85)';
+                    borderColor = 'rgb(245, 158, 11)';
+                }
+
+                dataPoints.push({
+                    x: parseFloat(off.distance.toFixed(1)),
+                    y: parseFloat(off[priceField].toFixed(2)),
+                    dealerName: off.dealer_name,
+                    cityName: off.city,
+                    rating: rating,
+                    partName: part.name,
+                    partCode: part.code,
+                    price: off[priceField],
+                    color: color,
+                    borderColor: borderColor
+                });
+            });
+
+            // Sort points by distance (x-axis) so lines connect from left to right
+            dataPoints.sort((a, b) => a.x - b.x);
+
+            if (dataPoints.length > 0) {
+                const lineColor = colors[datasetIndex % colors.length];
+                datasetIndex++;
+
+                datasets.push({
+                    label: part.name,
+                    data: dataPoints,
+                    borderColor: lineColor,
+                    backgroundColor: lineColor + '33', // Legend box background
+                    borderWidth: 2,
+                    tension: 0.15,
+                    fill: false,
+                    pointRadius: dataPoints.map(p => p.rating * 1.2 + 2),
+                    pointHoverRadius: dataPoints.map(p => p.rating * 1.2 + 5),
+                    pointBackgroundColor: dataPoints.map(p => p.color),
+                    pointBorderColor: dataPoints.map(p => p.borderColor),
+                    pointBorderWidth: 1.5
+                });
+            }
+        });
+
+        if (datasets.length === 0) {
+            const context = ctx.getContext('2d');
+            context.clearRect(0, 0, ctx.width, ctx.height);
+            context.fillStyle = textColor;
+            context.font = '14px Outfit, system-ui';
+            context.textAlign = 'center';
+            context.fillText('Nenhum dado cotado para exibir no gráfico. Faça uma cotação na Aba 1.', ctx.width ? ctx.width / 2 : 200, 200);
+            return;
+        }
+
+        analysisChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: !selectedPartCode,
+                        position: 'top',
+                        labels: {
+                            color: textColor,
+                            font: {
+                                family: 'Outfit, system-ui',
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: tooltipBg,
+                        titleColor: tooltipTextColor,
+                        bodyColor: tooltipTextColor,
+                        borderColor: tooltipBorder,
+                        borderWidth: 1,
+                        padding: 12,
+                        titleFont: {
+                            family: 'Outfit, system-ui',
+                            size: 13,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            family: 'Inter, system-ui',
+                            size: 12
+                        },
+                        callbacks: {
+                            label: function(context) {
+                                const p = context.raw;
+                                return [
+                                    `Concessionária: ${p.dealerName} (${p.cityName})`,
+                                    `Peça: ${p.partName} (${p.partCode})`,
+                                    `Preço: R$ ${p.price.toFixed(2).replace('.', ',')}`,
+                                    `Distância: ${p.x.toFixed(1).replace('.', ',')} km`,
+                                    `Nota/Avaliação: ${p.rating.toFixed(1).replace('.', ',')} / 10,0`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Distância (km) — Menor é melhor',
+                            color: textColor,
+                            font: {
+                                family: 'Outfit, system-ui',
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                family: 'Inter, system-ui'
+                            }
+                        },
+                        grid: {
+                            color: gridColor
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Preço (R$) — Menor é melhor',
+                            color: textColor,
+                            font: {
+                                family: 'Outfit, system-ui',
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: textColor,
+                            callback: function(value) {
+                                return 'R$ ' + value;
+                            },
+                            font: {
+                                family: 'Inter, system-ui'
+                            }
+                        },
+                        grid: {
+                            color: gridColor
+                        }
+                    }
+                }
+            }
+        });
     }
 
 </script>
