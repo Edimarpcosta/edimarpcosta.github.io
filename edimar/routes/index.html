@@ -146,6 +146,10 @@
             border-left: 6px solid #28a745 !important;
             background-color: #f7fbf8;
         }
+        .card-client.absent-card {
+            border-left: 6px solid #ffc107 !important;
+            background-color: #fffdf5;
+        }
         /* CORREÇÃO DO BUG: O card-client não escala mais ao clicar, evitando deslocamento de botões */
         .card-client:hover {
             transform: translateY(-2px);
@@ -158,6 +162,7 @@
         .ordem-badge { background: #e0f2f1; color: var(--primary); font-weight: 800; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
         .ordem-whats { background: #fff8e1; color: #f57c00; }
         .visitado-badge { background: #d4edda; color: #155724; font-weight: 800; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
+        .visitado-badge.absent-badge { background: #fff3cd; color: #856404; }
 
         .client-fantasia { font-size: 1.1rem; font-weight: 700; color: var(--primary); line-height: 1.2; }
         .client-razao { font-size: 0.8rem; color: #718096; margin-bottom: 10px; font-style: italic; display: block; }
@@ -194,6 +199,7 @@
         /* Checklist View Styles */
         .chk-card { border-left-color: #4a5568; }
         .chk-card.visited { border-left-color: #25d366; background-color: #f0fdf4; }
+        .chk-card.absent { border-left-color: #ffc107; background-color: #fffdf5; }
         .chk-btn { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid; transition: var(--transition); background: none; }
         
         /* Dashboard View Styles */
@@ -654,30 +660,35 @@
         return new Date(NaN);
     }
 
-    // Verifica se o cliente foi visitado hoje
-    function isVisitedToday(clientId) {
-        if (!clientId) return false;
-        const todayStr = new Date().toDateString();
-        return visitsDb.some(v => {
-            if (!v || !v.ID || !v.Data) return false;
-            const d = parseDate(v.Data);
-            return v.ID.toString().trim() === clientId.toString().trim() && !isNaN(d.getTime()) && d.toDateString() === todayStr;
-        });
-    }
-
-    // Verifica se o cliente foi visitado em uma data específica ('YYYY-MM-DD')
-    function isVisitedOnDate(clientId, dateStr) {
-        if (!clientId) return false;
-        if (!dateStr) return isVisitedToday(clientId);
+    // Retorna o status da visita em uma data específica ('Visita', 'Não Encontrado' ou null)
+    function getVisitStatusOnDate(clientId, dateStr) {
+        if (!clientId) return null;
+        if (!dateStr) dateStr = getLocalDateStr();
         const parts = dateStr.split('-');
         const targetDate = new Date(parts[0], parts[1] - 1, parts[2]);
-        if (isNaN(targetDate.getTime())) return false;
+        if (isNaN(targetDate.getTime())) return null;
         const targetDateStr = targetDate.toDateString();
-        return visitsDb.some(v => {
+        
+        const dayVisits = visitsDb.filter(v => {
             if (!v || !v.ID || !v.Data) return false;
             const d = parseDate(v.Data);
             return v.ID.toString().trim() === clientId.toString().trim() && !isNaN(d.getTime()) && d.toDateString() === targetDateStr;
         });
+        
+        if (dayVisits.length === 0) return null;
+        
+        dayVisits.sort((a, b) => parseDate(b.Data) - parseDate(a.Data));
+        return dayVisits[0].Status || 'Visita';
+    }
+
+    // Verifica se o cliente foi visitado hoje (com status 'Visita')
+    function isVisitedToday(clientId) {
+        return getVisitStatusOnDate(clientId, getLocalDateStr()) === 'Visita';
+    }
+
+    // Verifica se o cliente foi visitado ou marcado como não encontrado em uma data específica ('YYYY-MM-DD')
+    function isVisitedOnDate(clientId, dateStr) {
+        return getVisitStatusOnDate(clientId, dateStr) !== null;
     }
 
     // Retorna o código do dia ('SEG', 'TER', etc.) para uma data 'YYYY-MM-DD'
@@ -752,7 +763,7 @@
     function getLastVisitDateStr(clientId) {
         if (!clientId) return 'Nunca visitado';
         const clientVisits = visitsDb
-            .filter(v => v && v.ID && v.Data && v.ID.toString().trim() === clientId.toString().trim())
+            .filter(v => v && v.ID && v.Data && v.ID.toString().trim() === clientId.toString().trim() && (!v.Status || v.Status === 'Visita'))
             .map(v => parseDate(v.Data))
             .filter(d => d && !isNaN(d.getTime()))
             .sort((a, b) => b - a);
@@ -1390,37 +1401,66 @@
         customAlert("As preferências do WhatsApp e GPS foram redefinidas! Você poderá escolher os aplicativos novamente.");
     }
 
-    // Registrar Visita via Checklist
-    async function toggleVisita(id, event, customDateStr = null) {
+    // Registrar ou Remover Visita
+    async function toggleVisita(id, event, customDateStr = null, targetStatus = 'Visita') {
         if (event) event.stopPropagation();
         
         const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
         if (!c) return;
         
         const targetDate = customDateStr || document.getElementById('roteiroDate').value || getLocalDateStr();
-        const visited = isVisitedOnDate(id, targetDate);
-        
-        if (visited) {
-            customAlert("Este cliente já foi visitado na data selecionada!");
-            return;
-        }
+        const visitStatus = getVisitStatusOnDate(id, targetDate);
         
         const parts = targetDate.split('-');
         const formattedDateForConfirm = `${parts[2]}/${parts[1]}/${parts[0]}`;
         
-        const confirmed = await customConfirm(`Confirmar que você visitou "${c.Fantasia || c.Cliente}" em ${formattedDateForConfirm}?`);
+        if (targetStatus === 'delete') {
+            const confirmed = await customConfirm(`Remover a marcação de visita/ausência de "${c.Fantasia || c.Cliente}" em ${formattedDateForConfirm}?`);
+            if (confirmed) {
+                toggleLoader(true);
+                try {
+                    await apiPost('delete_visit', { ID: id }, { date: targetDate });
+                    
+                    // Remove do banco de dados local
+                    visitsDb = visitsDb.filter(v => {
+                        if (!v || !v.ID || !v.Data) return true;
+                        const d = parseDate(v.Data);
+                        const targetParts = targetDate.split('-');
+                        const targetDateObj = new Date(targetParts[0], targetParts[1] - 1, targetParts[2]);
+                        const isMatch = v.ID.toString().trim() === id.toString().trim() && 
+                                        !isNaN(d.getTime()) && 
+                                        d.toDateString() === targetDateObj.toDateString();
+                        return !isMatch;
+                    });
+                    
+                    render();
+                } catch (e) {
+                    console.error(e);
+                    customAlert("Erro ao excluir visita na planilha.");
+                }
+                toggleLoader(false);
+            }
+            return;
+        }
+        
+        const msg = targetStatus === 'Não Encontrado' 
+            ? `Confirmar que o cliente "${c.Fantasia || c.Cliente}" NÃO foi encontrado em ${formattedDateForConfirm}?`
+            : `Confirmar que você visitou "${c.Fantasia || c.Cliente}" em ${formattedDateForConfirm}?`;
+            
+        const confirmed = await customConfirm(msg);
         if (confirmed) {
             toggleLoader(true);
             try {
                 const now = new Date();
                 const dateStr = `${parts[2]}/${parts[1]}/${parts[0]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
                 
-                await apiPost('record_visit', { ID: id }, { date: dateStr });
+                await apiPost('record_visit', { ID: id }, { date: dateStr, status: targetStatus });
                 
                 // Grava localmente para atualizar o estado em tempo real
-                visitsDb.push({ ID: id, Data: dateStr });
+                visitsDb.push({ ID: id, Data: dateStr, Status: targetStatus });
                 render();
             } catch (e) {
+                console.error(e);
                 customAlert("Erro ao salvar visita na planilha.");
             }
             toggleLoader(false);
@@ -1459,15 +1499,19 @@
             container.innerHTML = filtered.map(i => {
                 const cnpj = formatCnpj(i.CNPJ);
                 const ordLabel = i.Ordem == 99 ? "📱 Whats" : `ORD: ${i.Ordem}`;
-                const visited = isVisitedOnDate(i.ID, targetDate);
+                const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
+                const visited = visitStatus !== null;
+                const isAbsent = visitStatus === 'Não Encontrado';
                 
                 return `
-                <div class="card card-client ${visited ? 'visited-card' : ''}">
+                <div class="card card-client ${visitStatus === 'Visita' ? 'visited-card' : isAbsent ? 'absent-card' : ''}">
                     <div class="card-body">
                         <div class="client-header">
                             <span class="id-badge">#${i.ID}</span>
-                            ${visited ? 
+                            ${visitStatus === 'Visita' ? 
                                 `<span class="visitado-badge"><i class="fas fa-check-double me-1"></i>Visitado</span>` : 
+                              isAbsent ?
+                                `<span class="visitado-badge absent-badge"><i class="fas fa-user-slash me-1"></i>Não Encontrado</span>` :
                                 `<span class="ordem-badge ${i.Ordem == 99 ? 'ordem-whats' : ''}">${ordLabel}</span>`
                             }
                         </div>
@@ -1499,9 +1543,14 @@
                         </div>
                         
                         <div class="mt-3">
-                            ${visited ? 
-                                `<button class="btn btn-sm btn-success w-100 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event)" title="Registrar outra visita"><i class="fas fa-check-double me-2"></i>Visitado</button>` : 
-                                `<button class="btn btn-sm btn-outline-success w-100 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event)" title="Marcar como visitado"><i class="far fa-check-circle me-2"></i>Marcar Visita</button>`
+                            ${visitStatus === 'Visita' ? 
+                                `<button class="btn btn-sm btn-success w-100 py-2 rounded-pill fw-bold text-white" onclick="toggleVisita('${i.ID}', event, null, 'delete')" title="Remover Visita"><i class="fas fa-check-double me-2"></i>Visitado (Excluir)</button>` : 
+                              isAbsent ?
+                                `<button class="btn btn-sm btn-warning w-100 py-2 rounded-pill fw-bold text-white" onclick="toggleVisita('${i.ID}', event, null, 'delete')" style="background-color: #ffc107; border-color: #ffc107;" title="Remover status de não encontrado"><i class="fas fa-user-slash me-2"></i>Não Encontrado (Excluir)</button>` :
+                                `<div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-success flex-grow-1 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event, null, 'Visita')" title="Marcar como visitado"><i class="far fa-check-circle me-1"></i>Visitar</button>
+                                    <button class="btn btn-sm btn-outline-warning flex-grow-1 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event, null, 'Não Encontrado')" style="color: #b58100; border-color: #ffc107;" title="Marcar como não encontrado"><i class="fas fa-user-slash me-1"></i>Ausente</button>
+                                 </div>`
                             }
                         </div>
                     </div>
@@ -1559,22 +1608,39 @@
             }
             
             html += filtered.map(i => {
-                const visited = isVisitedOnDate(i.ID, selectedChecklistDate);
+                const visitStatus = getVisitStatusOnDate(i.ID, selectedChecklistDate);
+                const visited = visitStatus !== null;
+                const isAbsent = visitStatus === 'Não Encontrado';
                 const lastVisit = getLastVisitDateStr(i.ID);
                 
+                let chkClass = '';
+                if (visitStatus === 'Visita') chkClass = 'visited';
+                else if (visitStatus === 'Não Encontrado') chkClass = 'absent';
+                
                 return `
-                <div class="card card-client chk-card ${visited ? 'visited' : ''}" style="margin-bottom:10px;">
+                <div class="card card-client chk-card ${chkClass}" style="margin-bottom:10px;">
                     <div class="card-body py-3 d-flex justify-content-between align-items-center">
-                        <div style="max-width: 80%;">
+                        <div style="max-width: 70%;">
                             <div class="fw-bold text-dark" style="font-size:1.05rem;">${i.Fantasia || i.Cliente}</div>
                             <div class="small text-muted" style="font-size:0.75rem;">
                                 Cód: #${i.ID} | Ordem: ${i.Ordem} | Cidade: ${i.Cidade}<br>
                                 <i class="far fa-clock me-1 mt-1"></i>Última: ${lastVisit}
+                                ${isAbsent ? '<br><b class="text-warning"><i class="fas fa-user-slash me-1"></i>Não Encontrado</b>' : ''}
                             </div>
                         </div>
-                        <button class="chk-btn ${visited ? 'btn-success text-white border-success' : 'btn-outline-secondary border-secondary text-secondary'}" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate)">
-                            <i class="fas ${visited ? 'fa-check-double' : 'fa-check'}"></i>
-                        </button>
+                        <div class="d-flex gap-2">
+                            ${visited ?
+                                `<button class="chk-btn ${isAbsent ? 'btn-warning text-white border-warning' : 'btn-success text-white border-success'}" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'delete')" style="${isAbsent ? 'background-color: #ffc107;' : ''}">
+                                    <i class="fas fa-trash-alt"></i>
+                                 </button>` :
+                                `<button class="chk-btn btn-outline-success border-success text-success" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'Visita')" title="Marcar Visita">
+                                    <i class="fas fa-check"></i>
+                                 </button>
+                                 <button class="chk-btn btn-outline-warning border-warning text-warning" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'Não Encontrado')" title="Marcar como Ausente" style="color: #b58100; border-color: #ffc107;">
+                                    <i class="fas fa-user-slash"></i>
+                                 </button>`
+                            }
+                        </div>
                     </div>
                 </div>`;
             }).join('') + '<div style="height: 100px;"></div>';
@@ -1610,10 +1676,11 @@
                 return { ...c, count: visitCounts[c.ID.toString().trim()] || 0 };
             }).sort((a,b) => a.count - b.count);
             
-            // Sugestões para Hoje: Agendados para hoje, não visitados hoje, ordenados por menor número de visitas total ou data mais antiga
+            // Sugestões para Hoje: Agendados para hoje, não visitados hoje (ou marcados como ausentes), ordenados por menor número de visitas total ou data mais antiga
             const suggestions = scheduledToday
                 .filter(i => !isVisitedToday(i.ID))
                 .map(i => {
+                    const status = getVisitStatusOnDate(i.ID, getLocalDateStr());
                     const clientVisits = visitsDb
                         .filter(v => v && v.ID && v.Data && v.ID.toString().trim() === i.ID.toString().trim())
                         .map(v => parseDate(v.Data))
@@ -1621,6 +1688,7 @@
                         .sort((a,b) => b - a);
                     return {
                         ...i,
+                        todayStatus: status,
                         totalVisits: visitCounts[i.ID.toString().trim()] || 0,
                         lastVisitDate: clientVisits.length > 0 ? clientVisits[0] : new Date(0)
                     };
@@ -1655,10 +1723,12 @@
                 <div class="text-center text-muted small py-2"><i class="fas fa-check-circle me-1 text-success"></i>Tudo em dia! Nenhuma sugestão pendente para hoje.</div>
                 ` : suggestions.map(i => {
                     const lastVisitStr = i.totalVisits > 0 ? i.lastVisitDate.toLocaleDateString('pt-BR') : 'Nunca visitado';
+                    const isAbsentToday = i.todayStatus === 'Não Encontrado';
                     return `
-                    <div class="dash-list-item">
+                    <div class="dash-list-item" style="${isAbsentToday ? 'background: #fffdf5; border-left: 4px solid #ffc107; padding-left: 8px;' : ''}">
                         <div>
-                            <span class="fw-bold">${i.Fantasia || i.Cliente}</span><br>
+                            <span class="fw-bold">${i.Fantasia || i.Cliente}</span>
+                            ${isAbsentToday ? ' <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;"><i class="fas fa-user-slash me-1"></i>Ausente hoje</span>' : ''}<br>
                             <span class="small text-muted">Última visita: ${lastVisitStr} (${i.totalVisits} visitas no total)</span>
                         </div>
                         <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="toggleVisita('${i.ID}', event)">
