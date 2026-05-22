@@ -638,7 +638,7 @@
         <!-- Quantidade -->
         <div class="form-group">
           <label for="quantidade">Quantidade</label>
-          <input type="text" id="quantidade" name="quantidade" placeholder="ex: 10" required>
+          <input type="number" id="quantidade" name="quantidade" value="1" min="1" required>
         </div>
 
         <!-- Preço Tabela -->
@@ -786,10 +786,9 @@
         });
       });
 
-      // Configura listener de alteração para quantidade (apenas números)
+      // Configura listener de alteração para quantidade
       const inputQtd = document.getElementById("quantidade");
       inputQtd.addEventListener("input", function() {
-        this.value = this.value.replace(/\D/g, "");
         calculateDifference();
       });
 
@@ -834,55 +833,72 @@
       return parseFloat(cleanStr) / 100;
     }
 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwZbgAXJJ7FxDnBr8w7cHgoIGOpd1HARkhS8axqbqqNEwRDkh-NSGVVSxAoNvumPIKD/exec";
+
+    async function callBackend(action, data = null) {
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({ action, data })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Erro na comunicação com o backend:", error);
+        return { success: false, message: error.toString() };
+      }
+    }
+
     // Carrega a base de produtos
     function loadProductsDatabase() {
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler((response) => {
-            if (response.success) {
-              productsDatabase = response.products;
-              setupAutocompletes();
-            } else {
-              console.warn("Erro ao buscar produtos da planilha:", response.message);
-              productsDatabase = response.products || [];
-              setupAutocompletes();
-            }
-          })
-          .withFailureHandler((error) => {
-            console.error("Falha ao comunicar com Apps Script:", error);
-            productsDatabase = [];
+      callBackend("getProducts")
+        .then((response) => {
+          if (response && response.success) {
+            productsDatabase = response.products;
             setupAutocompletes();
-          })
-          .getProducts();
-      } else {
-        // Fallback local offline para desenvolvimento
-        productsDatabase = [
-          { "COD": "1354", "DESCRICAO": "CALDA P/ MOLHAR BOLO PP EASY RICHS 1L" },
-          { "COD": "2848", "DESCRICAO": "CALDA XAROPE PP RICHS 907G" },
-          { "COD": "1991", "DESCRICAO": "CALDA XAROPE TRES RICHS - TP 907 G" },
-          { "COD": "265", "DESCRICAO": "CREME AMERICA TOPPING - TP 907 G RICHS" },
-          { "COD": "1675", "DESCRICAO": "CREME AMERICA TOPPING CHOCOLATE - TP 907 G RICHS" },
-          { "COD": "269", "DESCRICAO": "CREME BETTERCREME BAUNILHA - TP 907 G RICHS" },
-          { "COD": "122", "DESCRICAO": "CREME BETTERCREME CHOCOLATE - TP 907 G RICHS" },
-          { "COD": "272", "DESCRICAO": "CREME BETTERCREME NATA - TP 907 G RICHS" },
-          { "COD": "2901", "DESCRICAO": "CREME CHANT. GRAND AMERICAN RICHS 1L" },
-          { "COD": "2334", "DESCRICAO": "CREME CHANT. NIAGARA FARMS - TP 907 G RICHS" },
-          { "COD": "329", "DESCRICAO": "CREME CHANT. PP BASIC- TP 907 G RICHS" },
-          { "COD": "394", "DESCRICAO": "CREME CHANT. PP BAUNILHA - TP 907 G RICHS" },
-          { "COD": "387", "DESCRICAO": "CREME CHANT. PP CHOCOLATE - TP 907 G RICHS" },
-          { "COD": "2565", "DESCRICAO": "CREME CHANT. PP EASY CHOCOLATE RICHS 1L" },
-          { "COD": "1078", "DESCRICAO": "CREME CHANT. PP EASY RICHS 1L" },
-          { "COD": "377", "DESCRICAO": "CREME CHANT. PP SUAVE - TP 907 G RICHS" },
-          { "COD": "3255", "DESCRICAO": "CREME CHANT. SPRAY ON TOP RICHS 250G" },
-          { "COD": "1080", "DESCRICAO": "CREME CULINARIO RICHS 1KG" },
-          { "COD": "2829", "DESCRICAO": "CREME CULINARIO UHT PP EASY RICHS 1KG" },
-          { "COD": "3188", "DESCRICAO": "CREME GANACHE RICHS CHOC. BRANCO - BD 2,05 KG" },
-          { "COD": "3187", "DESCRICAO": "CREME GANACHE RICHS CHOC. M. AMARGO - BD 2,05 KG" },
-          { "COD": "267", "DESCRICAO": "CREME WHIP TOPPING BASE - TP 907 G RICHS" },
-          { "COD": "2674", "DESCRICAO": "GANACHE RICHS TOFFEE - BD 4 KG" }
-        ];
-        setupAutocompletes();
-      }
+          } else {
+            console.warn("Erro ao buscar produtos da planilha, usando fallback:", response ? response.message : "Sem resposta");
+            loadFallbackProducts();
+          }
+        })
+        .catch((error) => {
+          console.error("Falha ao comunicar com Apps Script, usando fallback:", error);
+          loadFallbackProducts();
+        });
+    }
+
+    function loadFallbackProducts() {
+      productsDatabase = [
+        { "COD": "1354", "DESCRICAO": "CALDA P/ MOLHAR BOLO PP EASY RICHS 1L" },
+        { "COD": "2848", "DESCRICAO": "CALDA XAROPE PP RICHS 907G" },
+        { "COD": "1991", "DESCRICAO": "CALDA XAROPE TRES RICHS - TP 907 G" },
+        { "COD": "265", "DESCRICAO": "CREME AMERICA TOPPING - TP 907 G RICHS" },
+        { "COD": "1675", "DESCRICAO": "CREME AMERICA TOPPING CHOCOLATE - TP 907 G RICHS" },
+        { "COD": "269", "DESCRICAO": "CREME BETTERCREME BAUNILHA - TP 907 G RICHS" },
+        { "COD": "122", "DESCRICAO": "CREME BETTERCREME CHOCOLATE - TP 907 G RICHS" },
+        { "COD": "272", "DESCRICAO": "CREME BETTERCREME NATA - TP 907 G RICHS" },
+        { "COD": "2901", "DESCRICAO": "CREME CHANT. GRAND AMERICAN RICHS 1L" },
+        { "COD": "2334", "DESCRICAO": "CREME CHANT. NIAGARA FARMS - TP 907 G RICHS" },
+        { "COD": "329", "DESCRICAO": "CREME CHANT. PP BASIC- TP 907 G RICHS" },
+        { "COD": "394", "DESCRICAO": "CREME CHANT. PP BAUNILHA - TP 907 G RICHS" },
+        { "COD": "387", "DESCRICAO": "CREME CHANT. PP CHOCOLATE - TP 907 G RICHS" },
+        { "COD": "2565", "DESCRICAO": "CREME CHANT. PP EASY CHOCOLATE RICHS 1L" },
+        { "COD": "1078", "DESCRICAO": "CREME CHANT. PP EASY RICHS 1L" },
+        { "COD": "377", "DESCRICAO": "CREME CHANT. PP SUAVE - TP 907 G RICHS" },
+        { "COD": "3255", "DESCRICAO": "CREME CHANT. SPRAY ON TOP RICHS 250G" },
+        { "COD": "1080", "DESCRICAO": "CREME CULINARIO RICHS 1KG" },
+        { "COD": "2829", "DESCRICAO": "CREME CULINARIO UHT PP EASY RICHS 1KG" },
+        { "COD": "3188", "DESCRICAO": "CREME GANACHE RICHS CHOC. BRANCO - BD 2,05 KG" },
+        { "COD": "3187", "DESCRICAO": "CREME GANACHE RICHS CHOC. M. AMARGO - BD 2,05 KG" },
+        { "COD": "267", "DESCRICAO": "CREME WHIP TOPPING BASE - TP 907 G RICHS" },
+        { "COD": "2674", "DESCRICAO": "GANACHE RICHS TOFFEE - BD 4 KG" }
+      ];
+      setupAutocompletes();
     }
 
     function setupAutocompletes() {
@@ -1245,53 +1261,29 @@
         comentarios: document.getElementById("comentarios").value
       };
 
-      // Verifica se está rodando no ambiente Google Apps Script
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler((response) => {
-            resetButton();
-            if (response.success) {
-              showToast("Sucesso!", response.message, "success");
-              document.getElementById("priceForm").reset();
-              userSelectedBase = null;
-              
-              // Reinicia a data para hoje
-              const hoje = new Date();
-              const ano = hoje.getFullYear();
-              const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-              const dia = String(hoje.getDate()).padStart(2, '0');
-              document.getElementById("data").value = `${ano}-${mes}-${dia}`;
-              calculateDifference();
-            } else {
-              showToast("Erro", response.message, "danger");
-            }
-          })
-          .withFailureHandler((error) => {
-            resetButton();
-            showToast("Falha crítica", error.message || "Erro desconhecido ao tentar salvar.", "danger");
-          })
-          .saveRecord(formData);
-      } else {
-        // Mock local para testes offline
-        setTimeout(() => {
+      callBackend("saveRecord", formData)
+        .then((response) => {
           resetButton();
-          showToast(
-            "Modo Local", 
-            "Formulário validado! Se estivesse no Apps Script, os dados teriam sido enviados.", 
-            "success"
-          );
-          console.log("Dados enviados para gravação (mock):", formData);
-          document.getElementById("priceForm").reset();
-          
-          // Reinicia a data para hoje
-          const hoje = new Date();
-          const ano = hoje.getFullYear();
-          const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-          const dia = String(hoje.getDate()).padStart(2, '0');
-          document.getElementById("data").value = `${ano}-${mes}-${dia}`;
-          calculateDifference();
-        }, 1500);
-      }
+          if (response && response.success) {
+            showToast("Sucesso!", response.message, "success");
+            document.getElementById("priceForm").reset();
+            userSelectedBase = null;
+            
+            // Reinicia a data para hoje
+            const hoje = new Date();
+            const ano = hoje.getFullYear();
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            document.getElementById("data").value = `${ano}-${mes}-${dia}`;
+            calculateDifference();
+          } else {
+            showToast("Erro", response ? response.message : "Erro desconhecido ao salvar.", "danger");
+          }
+        })
+        .catch((error) => {
+          resetButton();
+          showToast("Falha crítica", error.message || "Erro desconhecido ao tentar salvar.", "danger");
+        });
     }
 
     function resetButton() {
