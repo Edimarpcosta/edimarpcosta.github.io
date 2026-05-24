@@ -14,8 +14,8 @@ let appState = {
   selectedClient: null,
   vendedoresList: [],
   cardapioList: [],
-  experimentouList: [],
-  feedbacksList: [],
+  experimentouList: JSON.parse(localStorage.getItem("local_experimentou_list") || "[]"),
+  feedbacksList: JSON.parse(localStorage.getItem("local_feedbacks_list") || "[]"),
   clientesAtendidosList: [],
   cartItems: [], // Carrinho local ativo do cliente
   tastedSessionItems: [] // Sabores servidos nesta sessão aguardando feedback
@@ -24,8 +24,9 @@ let appState = {
 // Banco de Dados IndexedDB para Persistência do Carrinho
 let db = null;
 const DB_NAME = "FispalCartDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "carts";
+const CLIENT_STORE_NAME = "clients";
 
 // Inicializa IndexedDB
 function initDB(callback) {
@@ -46,6 +47,9 @@ function initDB(callback) {
     const dbInstance = event.target.result;
     if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
       dbInstance.createObjectStore(STORE_NAME, { keyPath: "clientCode" });
+    }
+    if (!dbInstance.objectStoreNames.contains(CLIENT_STORE_NAME)) {
+      dbInstance.createObjectStore(CLIENT_STORE_NAME, { keyPath: "codigo" });
     }
   };
 }
@@ -87,6 +91,193 @@ function deleteCartFromDB(clientCode) {
   const transaction = db.transaction([STORE_NAME], "readwrite");
   const store = transaction.objectStore(STORE_NAME);
   store.delete(clientCode);
+}
+
+// Salva a lista de clientes no IndexedDB
+function cacheClientsToDB(clients, callback) {
+  if (!db) {
+    if (callback) callback();
+    return;
+  }
+  const transaction = db.transaction([CLIENT_STORE_NAME], "readwrite");
+  const store = transaction.objectStore(CLIENT_STORE_NAME);
+  
+  // Limpa os clientes antigos primeiro
+  const clearRequest = store.clear();
+  clearRequest.onsuccess = function() {
+    if (clients.length === 0) {
+      if (callback) callback();
+      return;
+    }
+    
+    let count = 0;
+    clients.forEach(c => {
+      if (!c.codigo) {
+        c.codigo = "FISPAL-TEMP-" + Math.floor(10000 + Math.random() * 90000);
+      }
+      const req = store.put(c);
+      req.onsuccess = function() {
+        count++;
+        if (count === clients.length) {
+          if (callback) callback();
+        }
+      };
+      req.onerror = function() {
+        count++;
+        if (count === clients.length) {
+          if (callback) callback();
+        }
+      };
+    });
+  };
+  clearRequest.onerror = function() {
+    if (callback) callback();
+  };
+}
+
+// Busca clientes no banco local
+function searchClientsInDB(query, callback) {
+  if (!db) {
+    if (callback) callback([]);
+    return;
+  }
+  const transaction = db.transaction([CLIENT_STORE_NAME], "readonly");
+  const store = transaction.objectStore(CLIENT_STORE_NAME);
+  const request = store.getAll();
+  
+  request.onsuccess = function(event) {
+    const allClients = event.target.result || [];
+    const queryClean = query.toLowerCase().trim();
+    const results = allClients.filter(c => 
+      c.codigo.toLowerCase().includes(queryClean) ||
+      c.razao_social.toLowerCase().includes(queryClean) ||
+      c.fantasia.toLowerCase().includes(queryClean)
+    );
+    callback(results);
+  };
+  request.onerror = function() {
+    callback([]);
+  };
+}
+
+// Baixa os clientes do vendedor do Apps Script e atualiza o IndexedDB
+function downloadAndCacheClients(vendedor, callback) {
+  if (!CONFIG.gasUrl || !vendedor) {
+    if (callback) callback();
+    return;
+  }
+  
+  const url = `${CONFIG.gasUrl}?action=get_seller_clients&vendedor=${encodeURIComponent(vendedor)}`;
+  fetch(url)
+    .then(res => res.json())
+    .then(clients => {
+      cacheClientsToDB(clients, () => {
+        console.log(`Cached ${clients.length} clients for seller ${vendedor}`);
+        if (callback) callback();
+      });
+    })
+    .catch(err => {
+      console.error("Error fetching seller clients:", err);
+      if (callback) callback();
+    });
+}
+
+// Funções auxiliares para persistência e mesclagem local
+function saveLocalExperimentou(codCliente, idFispal, codsLancamentos) {
+  let localList = JSON.parse(localStorage.getItem("local_experimentou_list") || "[]");
+  const exists = localList.some(item => 
+    item.cod_cliente.toString() === codCliente.toString() &&
+    item.ID_FISPAL.toString() === idFispal.toString()
+  );
+  if (!exists) {
+    localList.push({
+      cod_cliente: codCliente,
+      ID_FISPAL: idFispal,
+      cod_produto_lancamento: codsLancamentos
+    });
+    localStorage.setItem("local_experimentou_list", JSON.stringify(localList));
+  }
+}
+
+function loadAndMergeExperimentou(serverList) {
+  let localList = JSON.parse(localStorage.getItem("local_experimentou_list") || "[]");
+  const merged = [...localList];
+  serverList.forEach(srvItem => {
+    const exists = merged.some(locItem => 
+      locItem.cod_cliente.toString() === srvItem.cod_cliente.toString() &&
+      locItem.ID_FISPAL.toString() === srvItem.ID_FISPAL.toString()
+    );
+    if (!exists) {
+      merged.push({
+        cod_cliente: srvItem.cod_cliente,
+        ID_FISPAL: srvItem.ID_FISPAL,
+        cod_produto_lancamento: srvItem.cod_produto_lancamento
+      });
+    }
+  });
+  localStorage.setItem("local_experimentou_list", JSON.stringify(merged));
+  return merged;
+}
+
+function loadAndMergeFeedbacks(serverList) {
+  let localList = JSON.parse(localStorage.getItem("local_feedbacks_list") || "[]");
+  const merged = [...localList];
+  serverList.forEach(srvItem => {
+    const exists = merged.some(locItem => 
+      locItem["Código Cliente"]?.toString() === srvItem["Código Cliente"]?.toString() &&
+      locItem["ID FISPAL"]?.toString() === srvItem["ID FISPAL"]?.toString() &&
+      locItem["Timestamp"] === srvItem["Timestamp"]
+    );
+    if (!exists) {
+      merged.push(srvItem);
+    }
+  });
+  
+  // Ordena por data decrescente de timestamp
+  merged.sort((a, b) => {
+    try {
+      const parseDate = (s) => {
+        // Converte DD/MM/AAAA HH:MM:SS para formato interpretável
+        const parts = s.split(', ');
+        if (parts.length === 2) {
+          const d = parts[0].split('/');
+          const t = parts[1].split(':');
+          return new Date(d[2], d[1] - 1, d[0], t[0], t[1], t[2]);
+        }
+        return new Date(s);
+      };
+      return parseDate(b.Timestamp) - parseDate(a.Timestamp);
+    } catch(e) {
+      return 0;
+    }
+  });
+  
+  localStorage.setItem("local_feedbacks_list", JSON.stringify(merged));
+  return merged;
+}
+
+function moveCartToTastedSession(client, itemsServed) {
+  const clientKey = client.codigo || client.razao_social;
+  
+  // 1. Adiciona aos pendentes de feedback da sessão
+  appState.tastedSessionItems = [...appState.tastedSessionItems, ...itemsServed];
+  localStorage.setItem("pending_tastings_" + clientKey, JSON.stringify(appState.tastedSessionItems));
+  
+  // 2. Adiciona ao histórico de experimentados local imediatamente
+  itemsServed.forEach(item => {
+    const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
+    saveLocalExperimentou(client.codigo, item.ID_FISPAL, listCods.join(", "));
+  });
+  
+  // 3. Limpa o carrinho ativo na tela e no banco de dados local
+  appState.cartItems = [];
+  deleteCartFromDB(clientKey);
+}
+
+function clearTastedSession(client) {
+  const clientKey = client.codigo || client.razao_social;
+  appState.tastedSessionItems = [];
+  localStorage.removeItem("pending_tastings_" + clientKey);
 }
 
 
@@ -144,6 +335,28 @@ function saveSettings() {
   fetchInitialData();
 }
 
+function atualizarDados(btn) {
+  if (btn) {
+    btn.classList.add("spinning");
+  }
+  
+  // Recarrega todos os dados do sheets
+  fetchInitialData();
+  
+  // Recarrega cache de clientes do vendedor ativo
+  if (appState.selectedVendedor) {
+    downloadAndCacheClients(appState.selectedVendedor, () => {
+      if (btn) {
+        btn.classList.remove("spinning");
+      }
+    });
+  } else {
+    if (btn) {
+      btn.classList.remove("spinning");
+    }
+  }
+}
+
 // ==========================================
 // LOGIN E VENDEDOR
 // ==========================================
@@ -161,8 +374,11 @@ function loginVendedor() {
   updateUserBranding();
   document.getElementById("vendedor-screen").classList.add("hidden");
   
-  // Atualiza dashboard se os dados já estiverem carregados
-  updateDashboard();
+  showLoading(true);
+  downloadAndCacheClients(value, () => {
+    showLoading(false);
+    updateDashboard();
+  });
 }
 
 function logoutVendedor() {
@@ -247,13 +463,18 @@ function fetchInitialData() {
       if (data.success) {
         appState.vendedoresList = data.vendedores || [];
         appState.cardapioList = data.cardapio || [];
-        appState.experimentouList = data.experimentou || [];
-        appState.feedbacksList = data.feedbacks || [];
+        appState.experimentouList = loadAndMergeExperimentou(data.experimentou || []);
+        appState.feedbacksList = loadAndMergeFeedbacks(data.feedbacks || []);
         appState.clientesAtendidosList = data.clientes_atendidos || [];
         
         populateVendedorSelects(appState.vendedoresList);
         renderCardapio();
         updateDashboard();
+        
+        // Em segundo plano, atualiza o cache dos clientes do vendedor ativo
+        if (appState.selectedVendedor) {
+          downloadAndCacheClients(appState.selectedVendedor);
+        }
       } else {
         console.error("Erro no retorno do Apps Script:", data.error);
         alert("Erro no backend: " + data.error);
@@ -424,29 +645,35 @@ function handleClientSearch(val) {
     return;
   }
   
-  searchTimeout = setTimeout(() => {
-    if (!CONFIG.gasUrl) {
-      // Busca mock estática na base de fallback caso esteja sem GAS configurado
-      const results = [
-        { codigo: "1001", cidade: "Americana", razao_social: "Sorvetes Americana Ltda", fantasia: "Sorvetes Americana", vendedor: "EDIMAR PINHEIRO COSTA" },
-        { codigo: "1002", cidade: "Campinas", razao_social: "Gelateria Bella Italia", fantasia: "Gelateria Bella Italia", vendedor: "EMANUEL RUFINO DA SILVA" }
-      ].filter(c => c.razao_social.toLowerCase().includes(val.toLowerCase()) || c.codigo.includes(val));
-      
-      renderSearchDropdown(results);
-      return;
+  // Primeiro tenta buscar no banco local (IndexedDB)
+  searchClientsInDB(val, (localResults) => {
+    if (localResults.length > 0) {
+      renderSearchDropdown(localResults);
+    } else {
+      // Se não encontrar nada localmente, busca via API (fallback) com delay
+      searchTimeout = setTimeout(() => {
+        if (!CONFIG.gasUrl) {
+          const results = [
+            { codigo: "1001", cidade: "Americana", razao_social: "Sorvetes Americana Ltda", fantasia: "Sorvetes Americana", vendedor: "EDIMAR PINHEIRO COSTA" },
+            { codigo: "1002", cidade: "Campinas", razao_social: "Gelateria Bella Italia", fantasia: "Gelateria Bella Italia", vendedor: "EMANUEL RUFINO DA SILVA" }
+          ].filter(c => c.razao_social.toLowerCase().includes(val.toLowerCase()) || c.codigo.includes(val));
+          
+          renderSearchDropdown(results);
+          return;
+        }
+        
+        const url = `${CONFIG.gasUrl}?action=buscar_cliente&query=${encodeURIComponent(val)}`;
+        fetch(url)
+          .then(res => res.json())
+          .then(results => {
+            renderSearchDropdown(results);
+          })
+          .catch(err => {
+            console.error("Erro ao buscar cliente:", err);
+          });
+      }, 350);
     }
-    
-    // Busca real via GAS
-    const url = `${CONFIG.gasUrl}?action=buscar_cliente&query=${encodeURIComponent(val)}`;
-    fetch(url)
-      .then(res => res.json())
-      .then(results => {
-        renderSearchDropdown(results);
-      })
-      .catch(err => {
-        console.error("Erro ao buscar cliente:", err);
-      });
-  }, 350);
+  });
 }
 
 function renderSearchDropdown(results) {
@@ -477,6 +704,9 @@ function renderSearchDropdown(results) {
 
 function selectClient(client) {
   appState.selectedClient = client;
+  appState.cartItems = []; // CLEAR active cart immediately to avoid showing previous client's selections
+  renderCardapio();        // Update cardapio immediately to clear checkboxes
+  updateCartUI();          // Hide/reset the cart bar immediately
   
   // Atualiza Cabeçalho
   document.getElementById("no-client-selected").classList.add("hidden");
@@ -494,6 +724,10 @@ function selectClient(client) {
   
   // Carrega carrinho do IndexedDB correspondente ao cliente
   const clientKey = client.codigo || client.razao_social;
+  
+  // Carrega degustações pendentes de feedback da sessão
+  appState.tastedSessionItems = JSON.parse(localStorage.getItem("pending_tastings_" + clientKey) || "[]");
+  
   loadCartFromDB(clientKey, (items) => {
     appState.cartItems = items;
     renderCardapio();
@@ -527,13 +761,14 @@ function registrarAtendimentoNoGAS(client) {
 
 function clearSelectedClient() {
   if (appState.cartItems.length > 0) {
-    if (!confirm("O cliente selecionado possui itens no carrinho de degustação. Mudar de cliente esvaziará o carrinho na tela. Continuar?")) {
+    if (!confirm("Deseja mudar de cliente? O carrinho atual ficará salvo no histórico deste cliente.")) {
       return;
     }
   }
   
   appState.selectedClient = null;
   appState.cartItems = [];
+  appState.tastedSessionItems = [];
   
   document.getElementById("client-selected-display").classList.add("hidden");
   document.getElementById("no-client-selected").classList.remove("hidden");
@@ -590,6 +825,9 @@ function renderCardapio() {
   const container = document.getElementById("cardapio-grid");
   container.innerHTML = "";
   
+  // Troca a classe do container para o estilo de lista de checkbox
+  container.className = "cardapio-checkbox-container";
+  
   if (appState.cardapioList.length === 0) {
     container.innerHTML = `
       <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
@@ -625,52 +863,67 @@ function renderCardapio() {
     const mainCod = listCods[0];
     const prodRef = PRODUCTS_DATA.find(p => p.cod === mainCod);
     
-    const card = document.createElement("div");
-    card.className = `product-card receita-card ${jaTastouNoPassado ? 'ja-experimentou' : ''}`;
-    
-    // Selo de status
-    let statusStamp = "";
-    if (jaTastouNoPassado) {
-      statusStamp = `<span class="tasted-stamp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Já Experimentou</span>`;
-    } else if (degustouNestaSessao) {
-      statusStamp = `<span class="pending-stamp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Feedback Pendente</span>`;
-    }
-    
-    // Imagem da receita (usando a foto do produto estrela)
-    const imgUrl = prodRef ? prodRef.foto_url : "PICTURES/codigos.jpg";
-    
     // Nome do produto estrela associado
     const prodStarName = prodRef ? prodRef.nome : `Lançamento ${mainCod}`;
     
-    card.innerHTML = `
-      ${statusStamp}
-      <div class="product-img-container">
-        <img src="${imgUrl}" alt="${nome}" onerror="this.src='PICTURES/codigos.jpg'">
-        <span class="line-badge">ID: ${id}</span>
-      </div>
-      <div class="product-card-body">
-        <h3>${nome}</h3>
-        <p class="product-short-desc">${desc}</p>
-        
-        <div class="receita-details">
-          <strong>Estrela da receita:</strong>
-          <span>${prodStarName} (Cód: ${mainCod})</span>
+    // Cria o item da lista
+    const row = document.createElement("div");
+    
+    // Define as classes conforme o estado
+    let itemClasses = "cardapio-checkbox-item";
+    if (jaTastouNoPassado) itemClasses += " ja-experimentou";
+    else if (degustouNestaSessao) itemClasses += " feedback-pendente";
+    else if (noCarrinho) itemClasses += " checked";
+    
+    row.className = itemClasses;
+    
+    // Configura o evento de clique
+    if (jaTastouNoPassado) {
+      row.onclick = null;
+    } else if (degustouNestaSessao) {
+      row.onclick = () => goToFeedbackTab();
+    } else {
+      row.onclick = () => {
+        toggleCardapioItem(id, noCarrinho);
+      };
+    }
+    
+    // Selo de status
+    let statusBadge = "";
+    if (jaTastouNoPassado) {
+      statusBadge = `<span class="cardapio-status-badge badge-tasted">Degustado</span>`;
+    } else if (degustouNestaSessao) {
+      statusBadge = `<span class="cardapio-status-badge badge-pending">Avaliar</span>`;
+    }
+    
+    row.innerHTML = `
+      <div class="custom-checkbox-wrapper">
+        <div class="custom-checkbox">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
-        
-        <div class="product-card-footer">
-          ${jaTastouNoPassado 
-            ? `<button class="btn btn-secondary btn-block" disabled>Já Degustado</button>`
-            : degustouNestaSessao
-              ? `<button class="btn btn-outline btn-block" onclick="goToFeedbackTab()">Avaliar Agora</button>`
-              : noCarrinho
-                ? `<button class="btn btn-secondary btn-block" onclick="removeFromCart('${id}')">Remover do Pedido</button>`
-                : `<button class="btn btn-primary btn-block" onclick="addToCart('${id}')">Adicionar à Degustação</button>`
-          }
+      </div>
+      <div class="cardapio-item-info">
+        <div class="cardapio-item-title-row">
+          <h3 class="cardapio-item-title"><span class="cardapio-item-id">${id}</span>${nome}</h3>
+          ${statusBadge}
+        </div>
+        <p class="cardapio-item-desc">${desc}</p>
+        <div class="cardapio-item-meta">
+          Estrela: <strong>${prodStarName}</strong> (Cód: ${mainCod})
         </div>
       </div>
     `;
-    container.appendChild(card);
+    
+    container.appendChild(row);
   });
+}
+
+function toggleCardapioItem(id, isCurrentlyChecked) {
+  if (isCurrentlyChecked) {
+    removeFromCart(id);
+  } else {
+    addToCart(id);
+  }
 }
 
 function addToCart(recipeId) {
@@ -739,16 +992,36 @@ function openWaiterModal() {
   const container = document.getElementById("waiter-list-items");
   container.innerHTML = "";
   
+  // 1. Exibe itens que já foram entregues nesta sessão (marcados de verde e travados)
+  appState.tastedSessionItems.forEach(item => {
+    const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
+    const mainCod = listCods[0];
+    
+    const card = document.createElement("div");
+    card.className = "waiter-item-card checked already-delivered";
+    card.innerHTML = `
+      <div class="waiter-item-info">
+        <h4><span class="cardapio-item-id" style="color:var(--error); font-weight:800; margin-right:8px;">${item.ID_FISPAL}</span>${item.nome}</h4>
+        <p>Lançamento base: Cód ${mainCod} (Já Entregue)</p>
+      </div>
+      <div class="waiter-check-indicator">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+  
+  // 2. Exibe itens do carrinho ativo (pendentes, clicáveis)
   appState.cartItems.forEach(item => {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     const mainCod = listCods[0];
     
     const card = document.createElement("div");
-    card.className = "waiter-item-card";
+    card.className = "waiter-item-card pending-delivery";
     card.setAttribute("data-id", item.ID_FISPAL);
     card.innerHTML = `
       <div class="waiter-item-info">
-        <h4>${item.nome}</h4>
+        <h4><span class="cardapio-item-id" style="color:var(--error); font-weight:800; margin-right:8px;">${item.ID_FISPAL}</span>${item.nome}</h4>
         <p>Lançamento base: Cód ${mainCod}</p>
       </div>
       <div class="waiter-check-indicator">
@@ -774,12 +1047,11 @@ function closeWaiterModal() {
 }
 
 function checkWaiterFormCompletion() {
-  const cards = document.querySelectorAll(".waiter-item-card");
-  const checkedCards = document.querySelectorAll(".waiter-item-card.checked");
+  const pendingCheckedCards = document.querySelectorAll(".waiter-item-card.pending-delivery.checked");
   const btn = document.getElementById("btn-finalizar-garcom");
   
-  // Habilita finalizar apenas se TODOS estiverem marcados
-  if (cards.length > 0 && cards.length === checkedCards.length) {
+  // Habilita o botão de finalizar se pelo menos um item novo foi marcado
+  if (pendingCheckedCards.length > 0) {
     btn.removeAttribute("disabled");
   } else {
     btn.setAttribute("disabled", "true");
@@ -790,7 +1062,16 @@ function finalizarPedidoGarcom() {
   if (!appState.selectedClient) return;
   
   const clientKey = appState.selectedClient.codigo || appState.selectedClient.razao_social;
-  const itemsServed = [...appState.cartItems];
+  
+  // Pega apenas as receitas que foram marcadas de fato pelo garçom nesta ação
+  const checkedCards = document.querySelectorAll(".waiter-item-card.pending-delivery.checked");
+  if (checkedCards.length === 0) return;
+  
+  const idsServed = Array.from(checkedCards).map(card => card.getAttribute("data-id").toString());
+  
+  // Separa o que foi servido do que permaneceu pendente no carrinho
+  const itemsServed = appState.cartItems.filter(item => idsServed.includes(item.ID_FISPAL.toString()));
+  const itemsRemaining = appState.cartItems.filter(item => !idsServed.includes(item.ID_FISPAL.toString()));
   
   showLoading(true);
   
@@ -799,7 +1080,7 @@ function finalizarPedidoGarcom() {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     return {
       ID_FISPAL: item.ID_FISPAL,
-      cod_produto_lancamento: listCods.join(", ") // lista completa de lançamentos atrelados
+      cod_produto_lancamento: listCods.join(", ")
     };
   });
   
@@ -809,16 +1090,37 @@ function finalizarPedidoGarcom() {
     itens: itensPayload
   };
   
-  if (!CONFIG.gasUrl) {
-    // Sincronização offline mock
+  const handleSuccess = () => {
     showLoading(false);
+    
+    // Atualiza estado local de experimentados da sessão (tastedSessionItems)
     appState.tastedSessionItems = [...appState.tastedSessionItems, ...itemsServed];
-    appState.cartItems = [];
-    deleteCartFromDB(clientKey);
+    localStorage.setItem("pending_tastings_" + clientKey, JSON.stringify(appState.tastedSessionItems));
+    
+    // Insere no histórico de experimentados cacheado local
+    itemsServed.forEach(item => {
+      const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
+      saveLocalExperimentou(appState.selectedClient.codigo, item.ID_FISPAL, listCods.join(", "));
+    });
+    
+    // Atualiza o carrinho com o que sobrou
+    appState.cartItems = itemsRemaining;
+    if (itemsRemaining.length > 0) {
+      saveCartToDB(clientKey, itemsRemaining);
+    } else {
+      deleteCartFromDB(clientKey);
+    }
+    
     updateCartUI();
     closeWaiterModal();
     renderCardapio();
+    
+    // Vai para a aba de feedbacks avaliar apenas o que foi servido
     goToFeedbackTab();
+  };
+  
+  if (!CONFIG.gasUrl) {
+    handleSuccess();
     return;
   }
   
@@ -829,33 +1131,7 @@ function finalizarPedidoGarcom() {
     body: JSON.stringify(payload)
   })
   .then(() => {
-    // Como usamos 'no-cors' para Apps Script redirecionar sem falha de segurança,
-    // assumimos sucesso imediato se a requisição não falhar no catch.
-    showLoading(false);
-    
-    // Atualiza estado local de experimentados da sessão
-    appState.tastedSessionItems = [...appState.tastedSessionItems, ...itemsServed];
-    
-    // Insere no histórico de experimentados cacheado para que a UI marque na hora
-    itemsServed.forEach(item => {
-      const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
-      appState.experimentouList.push({
-        cod_cliente: appState.selectedClient.codigo,
-        ID_FISPAL: item.ID_FISPAL,
-        cod_produto_lancamento: listCods.join(", ")
-      });
-    });
-    
-    // Limpa carrinho ativo
-    appState.cartItems = [];
-    deleteCartFromDB(clientKey);
-    
-    updateCartUI();
-    closeWaiterModal();
-    renderCardapio();
-    
-    // Redireciona e monta tela de Feedback automaticamente
-    goToFeedbackTab();
+    handleSuccess();
   })
   .catch(err => {
     showLoading(false);
@@ -1109,7 +1385,8 @@ function submitFeedbacks() {
       });
     });
     
-    appState.tastedSessionItems = [];
+    localStorage.setItem("local_feedbacks_list", JSON.stringify(appState.feedbacksList));
+    clearTastedSession(appState.selectedClient);
     renderFeedbackForm();
     updateDashboard();
     
@@ -1130,7 +1407,7 @@ function submitFeedbacks() {
     alert("Feedbacks gravados com sucesso na planilha!");
     
     // Limpa estado local de experimentados na sessão
-    appState.tastedSessionItems = [];
+    clearTastedSession(appState.selectedClient);
     
     // Recarrega todos os dados para sincronizar os feedbacks gravados
     fetchInitialData();
