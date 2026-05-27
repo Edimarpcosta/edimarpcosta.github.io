@@ -17,16 +17,86 @@ let appState = {
   experimentouList: JSON.parse(localStorage.getItem("local_experimentou_list") || "[]"),
   feedbacksList: JSON.parse(localStorage.getItem("local_feedbacks_list") || "[]"),
   clientesAtendidosList: [],
-  cartItems: [], // Carrinho local ativo do cliente
-  tastedSessionItems: [] // Sabores servidos nesta sessão aguardando feedback
+  cartItems: [], 
+  tastedSessionItems: [] 
 };
 
-// Banco de Dados IndexedDB para Persistência do Carrinho
+// Banco de Dados IndexedDB para Persistência
 let db = null;
 const DB_NAME = "FispalCartDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3; 
 const STORE_NAME = "carts";
 const CLIENT_STORE_NAME = "clients";
+const SYNC_STORE_NAME = "sync_queue";
+
+// ==========================================
+// FEEDBACK SONORO (WEB AUDIO API)
+// ==========================================
+const SoundFX = {
+  ctx: null,
+
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  },
+
+  playClick() {
+    this.init();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1500, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.05);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.05);
+  },
+
+  playSuccess() {
+    this.init();
+    const t = this.ctx.currentTime;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.06, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    gain.connect(this.ctx.destination);
+
+    // Acorde ascendente (880Hz -> 1320Hz)
+    const osc1 = this.ctx.createOscillator();
+    osc1.type = "triangle";
+    osc1.frequency.setValueAtTime(880, t);
+    osc1.connect(gain);
+    osc1.start(t);
+    osc1.stop(t + 0.2);
+
+    const osc2 = this.ctx.createOscillator();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(1320, t + 0.08);
+    osc2.connect(gain);
+    osc2.start(t + 0.08);
+    osc2.stop(t + 0.3);
+  },
+
+  playSwoosh() {
+    this.init();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.0001, this.ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.15);
+  }
+};
 
 // Inicializa IndexedDB
 function initDB(callback) {
@@ -51,10 +121,314 @@ function initDB(callback) {
     if (!dbInstance.objectStoreNames.contains(CLIENT_STORE_NAME)) {
       dbInstance.createObjectStore(CLIENT_STORE_NAME, { keyPath: "codigo" });
     }
+    if (!dbInstance.objectStoreNames.contains(SYNC_STORE_NAME)) {
+      dbInstance.createObjectStore(SYNC_STORE_NAME, { keyPath: "id", autoIncrement: true });
+    }
   };
 }
 
-// Salva carrinho no IndexedDB
+// ==========================================
+// FUNÇÕES DE FILA OFFline & TEMA CLARO/ESCURO
+// ==========================================
+
+function toggleTheme() {
+  SoundFX.playSwoosh();
+  const body = document.body;
+  const isLight = body.classList.toggle("light-theme");
+  localStorage.setItem("theme_preference", isLight ? "light" : "dark");
+  updateThemeIcon(isLight);
+}
+
+function updateThemeIcon(isLight) {
+  const icon = document.getElementById("theme-icon");
+  if (!icon) return;
+  if (isLight) {
+    icon.innerHTML = `
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    `;
+  } else {
+    icon.innerHTML = `
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    `;
+  }
+}
+
+function toggleOfflineMode() {
+  SoundFX.playClick();
+  appState.offlineMode = !appState.offlineMode;
+  localStorage.setItem("offline_mode", appState.offlineMode);
+  updateOfflineUI();
+  updateAlertBar();
+  if (!appState.offlineMode) {
+    checkSyncQueueCount();
+  }
+}
+
+function updateOfflineUI() {
+  const btn = document.getElementById("offline-toggle-btn");
+  if (!btn) return;
+  
+  if (appState.offlineMode) {
+    btn.classList.add("is-offline");
+    btn.title = "Modo Conexão (Forçado Offline)";
+  } else {
+    btn.classList.remove("is-offline");
+    btn.title = "Modo Conexão (Online)";
+  }
+}
+
+function updateAlertBar() {
+  const bar = document.getElementById("offline-alert-bar");
+  if (!bar) return;
+  if (appState.offlineMode) {
+    bar.classList.remove("hidden");
+    document.body.classList.add("has-offline-bar");
+  } else {
+    bar.classList.add("hidden");
+    document.body.classList.remove("has-offline-bar");
+  }
+}
+
+window.addEventListener("online", () => {
+  console.log("Internet conectada.");
+  if (!appState.offlineMode) {
+    checkSyncQueueCount();
+  }
+});
+
+function addToSyncQueue(action, payload, callback) {
+  if (!db) {
+    if (callback) callback();
+    return;
+  }
+  const transaction = db.transaction([SYNC_STORE_NAME], "readwrite");
+  const store = transaction.objectStore(SYNC_STORE_NAME);
+  
+  const item = {
+    action: action,
+    payload: payload,
+    timestamp: new Date().toISOString()
+  };
+  
+  const req = store.add(item);
+  req.onsuccess = function() {
+    console.log("Enfileirado para sync offline:", action);
+    checkSyncQueueCount();
+    if (callback) callback();
+  };
+  req.onerror = function(e) {
+    console.error("Erro ao enfileirar:", e);
+    if (callback) callback();
+  };
+}
+
+function checkSyncQueueCount(callback) {
+  if (!db) {
+    if (callback) callback(0);
+    return;
+  }
+  try {
+    const transaction = db.transaction([SYNC_STORE_NAME], "readonly");
+    const store = transaction.objectStore(SYNC_STORE_NAME);
+    const req = store.count();
+    
+    req.onsuccess = function(event) {
+      const count = event.target.result;
+      updateSyncBadge(count);
+      renderSyncQueueDiagnostics();
+      if (callback) callback(count);
+    };
+    req.onerror = function() {
+      if (callback) callback(0);
+    };
+  } catch(e) {
+    if (callback) callback(0);
+  }
+}
+
+function updateSyncBadge(count) {
+  const btn = document.getElementById("sync-queue-btn");
+  const badge = document.getElementById("sync-badge");
+  if (!btn || !badge) return;
+  
+  if (count > 0) {
+    btn.classList.remove("hidden");
+    badge.textContent = count;
+  } else {
+    btn.classList.add("hidden");
+  }
+}
+
+// INSPEÇÃO DETALHADA E OPERACIONAL DA FILA OFFLINE
+function renderSyncQueueDiagnostics() {
+  const container = document.getElementById("sync-queue-diagnostics");
+  const countBadge = document.getElementById("diag-queue-count");
+  if (!container || !db) return;
+
+  try {
+    const transaction = db.transaction([SYNC_STORE_NAME], "readonly");
+    const store = transaction.objectStore(SYNC_STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = function(event) {
+      const list = event.target.result || [];
+      
+      if (countBadge) {
+        countBadge.textContent = `${list.length} pendentes`;
+        if (list.length > 0) countBadge.classList.add("has-items");
+        else countBadge.classList.remove("has-items");
+      }
+
+      if (list.length === 0) {
+        container.innerHTML = `<p class="diag-empty">✅ Nenhum dado pendente de envio.</p>`;
+        return;
+      }
+
+      container.innerHTML = "";
+      list.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "diag-item";
+        
+        let label = "Ação Desconhecida";
+        let detail = "";
+        let typeClass = "diag-type-atendimento";
+
+        if (item.action === "registrar_atendimento") {
+          label = "Atendimento";
+          detail = item.payload.razao_social || `Cód: ${item.payload.codigo}`;
+          typeClass = "diag-type-atendimento";
+        } else if (item.action === "registrar_experimentou") {
+          label = "Degustação";
+          detail = `Cód Cliente: ${item.payload.cod_cliente}`;
+          typeClass = "diag-type-experimentou";
+        } else if (item.action === "salvar_feedback") {
+          label = "Feedback";
+          detail = item.payload.razao_social || `Cliente: ${item.payload.cod_cliente}`;
+          typeClass = "diag-type-feedback";
+        }
+
+        const date = new Date(item.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+
+        div.innerHTML = `
+          <span class="diag-item-type ${typeClass}">${label}</span>
+          <div class="diag-item-info">
+            <strong>${detail}</strong>
+            <small>Capturado às ${date}</small>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    };
+  } catch(e) {
+    console.error("Erro ao renderizar diagnóstico da fila:", e);
+  }
+}
+
+let isSyncing = false;
+function syncOfflineQueue() {
+  if (isSyncing) return;
+  if (appState.offlineMode) {
+    alert("Desative o Modo Offline (clicando no ícone do sinal de Wi-Fi) para poder sincronizar os dados.");
+    return;
+  }
+  if (!navigator.onLine) {
+    alert("Você não possui conexão com a internet no momento. Verifique sua rede e tente novamente.");
+    return;
+  }
+  
+  isSyncing = true;
+  const btn = document.getElementById("sync-queue-btn");
+  if (btn) btn.classList.add("pulsing");
+  
+  showLoading(true);
+  
+  const transaction = db.transaction([SYNC_STORE_NAME], "readonly");
+  const store = transaction.objectStore(SYNC_STORE_NAME);
+  const req = store.getAll();
+  
+  req.onsuccess = function(event) {
+    const queue = event.target.result || [];
+    if (queue.length === 0) {
+      isSyncing = false;
+      if (btn) btn.classList.remove("pulsing");
+      showLoading(false);
+      return;
+    }
+    
+    let index = 0;
+    function syncNext() {
+      if (index >= queue.length) {
+        isSyncing = false;
+        if (btn) btn.classList.remove("pulsing");
+        showLoading(false);
+        checkSyncQueueCount(() => {
+          SoundFX.playSuccess();
+          alert("Sincronização concluída com sucesso! Todos os dados pendentes foram gravados na planilha.");
+          fetchInitialData();
+        });
+        return;
+      }
+      
+      const item = queue[index];
+      sendRequestToServer(item.action, item.payload, (success) => {
+        if (success) {
+          const delTx = db.transaction([SYNC_STORE_NAME], "readwrite");
+          const delStore = delTx.objectStore(SYNC_STORE_NAME);
+          delStore.delete(item.id);
+          delTx.oncomplete = function() {
+            index++;
+            syncNext();
+          };
+        } else {
+          isSyncing = false;
+          if (btn) btn.classList.remove("pulsing");
+          showLoading(false);
+          checkSyncQueueCount();
+          alert("Houve uma falha ao sincronizar o item " + (index + 1) + ". Sincronização interrompida.");
+        }
+      });
+    }
+    
+    syncNext();
+  };
+  
+  req.onerror = function() {
+    isSyncing = false;
+    if (btn) btn.classList.remove("pulsing");
+    showLoading(false);
+    alert("Erro ao ler fila do banco local.");
+  };
+}
+
+function sendRequestToServer(action, payload, callback) {
+  if (!CONFIG.gasUrl) {
+    if (callback) callback(false);
+    return;
+  }
+  
+  fetch(CONFIG.gasUrl, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+  .then(() => {
+    if (callback) callback(true);
+  })
+  .catch(err => {
+    console.error("Erro no envio offline:", err);
+    if (callback) callback(false);
+  });
+}
+
 function saveCartToDB(clientCode, items) {
   if (!db) return;
   const transaction = db.transaction([STORE_NAME], "readwrite");
@@ -62,7 +436,6 @@ function saveCartToDB(clientCode, items) {
   store.put({ clientCode: clientCode, items: items });
 }
 
-// Carrega carrinho do IndexedDB
 function loadCartFromDB(clientCode, callback) {
   if (!db) {
     if (callback) callback([]);
@@ -85,7 +458,6 @@ function loadCartFromDB(clientCode, callback) {
   };
 }
 
-// Limpa carrinho do IndexedDB
 function deleteCartFromDB(clientCode) {
   if (!db) return;
   const transaction = db.transaction([STORE_NAME], "readwrite");
@@ -93,7 +465,6 @@ function deleteCartFromDB(clientCode) {
   store.delete(clientCode);
 }
 
-// Salva a lista de clientes no IndexedDB
 function cacheClientsToDB(clients, callback) {
   if (!db) {
     if (callback) callback();
@@ -102,7 +473,6 @@ function cacheClientsToDB(clients, callback) {
   const transaction = db.transaction([CLIENT_STORE_NAME], "readwrite");
   const store = transaction.objectStore(CLIENT_STORE_NAME);
   
-  // Limpa os clientes antigos primeiro
   const clearRequest = store.clear();
   clearRequest.onsuccess = function() {
     if (clients.length === 0) {
@@ -135,7 +505,6 @@ function cacheClientsToDB(clients, callback) {
   };
 }
 
-// Busca clientes no banco local
 function searchClientsInDB(query, callback) {
   if (!db) {
     if (callback) callback([]);
@@ -160,7 +529,6 @@ function searchClientsInDB(query, callback) {
   };
 }
 
-// Baixa os clientes do vendedor do Apps Script e atualiza o IndexedDB
 function downloadAndCacheClients(vendedor, callback) {
   if (!CONFIG.gasUrl || !vendedor) {
     if (callback) callback();
@@ -182,7 +550,6 @@ function downloadAndCacheClients(vendedor, callback) {
     });
 }
 
-// Funções auxiliares para persistência e mesclagem local
 function saveLocalExperimentou(codCliente, idFispal, codsLancamentos) {
   let localList = JSON.parse(localStorage.getItem("local_experimentou_list") || "[]");
   const exists = localList.some(item => 
@@ -233,11 +600,9 @@ function loadAndMergeFeedbacks(serverList) {
     }
   });
   
-  // Ordena por data decrescente de timestamp
   merged.sort((a, b) => {
     try {
       const parseDate = (s) => {
-        // Converte DD/MM/AAAA HH:MM:SS para formato interpretável
         const parts = s.split(', ');
         if (parts.length === 2) {
           const d = parts[0].split('/');
@@ -259,17 +624,14 @@ function loadAndMergeFeedbacks(serverList) {
 function moveCartToTastedSession(client, itemsServed) {
   const clientKey = client.codigo || client.razao_social;
   
-  // 1. Adiciona aos pendentes de feedback da sessão
   appState.tastedSessionItems = [...appState.tastedSessionItems, ...itemsServed];
   localStorage.setItem("pending_tastings_" + clientKey, JSON.stringify(appState.tastedSessionItems));
   
-  // 2. Adiciona ao histórico de experimentados local imediatamente
   itemsServed.forEach(item => {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     saveLocalExperimentou(client.codigo, item.ID_FISPAL, listCods.join(", "));
   });
   
-  // 3. Limpa o carrinho ativo na tela e no banco de dados local
   appState.cartItems = [];
   deleteCartFromDB(clientKey);
 }
@@ -280,30 +642,33 @@ function clearTastedSession(client) {
   localStorage.removeItem("pending_tastings_" + clientKey);
 }
 
-
-// ==========================================
-// INICIALIZAÇÃO DA APLICAÇÃO
-// ==========================================
 window.addEventListener("DOMContentLoaded", () => {
-  // Inicializa DB local
+  const savedTheme = localStorage.getItem("theme_preference");
+  if (savedTheme === "light") {
+    document.body.classList.add("light-theme");
+    updateThemeIcon(true);
+  } else {
+    updateThemeIcon(false);
+  }
+
   initDB(() => {
-    // Tenta carregar login do vendedor
+    appState.offlineMode = localStorage.getItem("offline_mode") === "true";
+    updateOfflineUI();
+    updateAlertBar();
+    
+    checkSyncQueueCount();
+
     if (appState.selectedVendedor) {
       document.getElementById("vendedor-screen").classList.add("hidden");
     }
     updateUserBranding();
     
-    // Configura URL no input do settings modal
     document.getElementById("gas-url-input").value = CONFIG.gasUrl;
     
-    // Renderiza catálogo estático de lançamentos
     renderCatalog();
-    
-    // Busca dados do backend
     fetchInitialData();
   });
   
-  // Event listener para fechar dropdown ao clicar fora
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".search-input-wrapper")) {
       document.getElementById("search-results-dropdown").classList.remove("active");
@@ -311,9 +676,6 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// ==========================================
-// CONFIGURAÇÕES (API URL DO GAS)
-// ==========================================
 function openSettings() {
   document.getElementById("settings-modal").classList.add("active");
 }
@@ -340,10 +702,8 @@ function atualizarDados(btn) {
     btn.classList.add("spinning");
   }
   
-  // Recarrega todos os dados do sheets
   fetchInitialData();
   
-  // Recarrega cache de clientes do vendedor ativo
   if (appState.selectedVendedor) {
     downloadAndCacheClients(appState.selectedVendedor, () => {
       if (btn) {
@@ -357,9 +717,6 @@ function atualizarDados(btn) {
   }
 }
 
-// ==========================================
-// LOGIN E VENDEDOR
-// ==========================================
 function loginVendedor() {
   const select = document.getElementById("vendedor-select");
   const value = select.value;
@@ -402,7 +759,6 @@ function updateUserBranding() {
     vendedorTag.innerHTML = `👑 EDIMAR (Gestor)`;
     vendedorTag.className = "vendedor-badge admin-badge";
     
-    // Gestor vê tudo por padrão e tem acesso ao seletor
     if (filterDropdown) {
       filterDropdown.style.display = "block";
       if (!filterDropdown.getAttribute("data-initialized")) {
@@ -423,10 +779,9 @@ function updateUserBranding() {
     vendedorTag.textContent = "Vendedor: " + appState.selectedVendedor;
     vendedorTag.className = "vendedor-badge";
     
-    // Vendedor comum vê apenas seus atendimentos por padrão e não altera o filtro
     if (filterDropdown) {
       filterDropdown.value = "MEUS";
-      filterDropdown.style.display = "none"; // Oculta o seletor para vendedores comuns
+      filterDropdown.style.display = "none";
     }
     if (adminSection) {
       adminSection.classList.add("hidden");
@@ -440,15 +795,11 @@ function updateUserBranding() {
   }
 }
 
-// ==========================================
-// COMUNICAÇÃO COM O BACKEND (API CALLS)
-// ==========================================
 function fetchInitialData() {
   if (!CONFIG.gasUrl) {
-    // Se não tiver URL configurada, abre modal de configuração e usa backup estático
     showLoading(false);
     openSettings();
-    populateVendedorSelects([]); // carrega fallback
+    populateVendedorSelects([]); 
     renderCardapio();
     return;
   }
@@ -471,21 +822,19 @@ function fetchInitialData() {
         renderCardapio();
         updateDashboard();
         
-        // Em segundo plano, atualiza o cache dos clientes do vendedor ativo
         if (appState.selectedVendedor) {
           downloadAndCacheClients(appState.selectedVendedor);
         }
       } else {
         console.error("Erro no retorno do Apps Script:", data.error);
         alert("Erro no backend: " + data.error);
-        populateVendedorSelects([]); // Fallback
+        populateVendedorSelects([]); 
         renderCardapio();
       }
     })
     .catch(error => {
       showLoading(false);
       console.error("Falha ao comunicar com o Google Apps Script:", error);
-      // Fallback para lista padrão de vendedores
       populateVendedorSelects([]);
       renderCardapio();
     });
@@ -501,7 +850,6 @@ function showLoading(show) {
 }
 
 function populateVendedorSelects(vendedores) {
-  // Lista padrão caso esteja sem rede ou planilha vazia
   const defaultList = [
     "EDIMAR PINHEIRO COSTA",
     "EMANUEL RUFINO DA SILVA",
@@ -514,7 +862,6 @@ function populateVendedorSelects(vendedores) {
   
   const list = vendedores.length > 0 ? vendedores : defaultList;
   
-  // Preenche select do login
   const selectLogin = document.getElementById("vendedor-select");
   const curValLogin = selectLogin.value;
   selectLogin.innerHTML = '<option value="" disabled selected>Escolha um vendedor...</option>';
@@ -526,7 +873,6 @@ function populateVendedorSelects(vendedores) {
   });
   if (curValLogin) selectLogin.value = curValLogin;
   
-  // Preenche select do cadastro de novo cliente
   const selectNewCli = document.getElementById("new-cli-vendedor");
   selectNewCli.innerHTML = '<option value="" disabled selected>Selecione o vendedor...</option>';
   list.forEach(v => {
@@ -537,9 +883,6 @@ function populateVendedorSelects(vendedores) {
   });
 }
 
-// ==========================================
-// RENDERIZAÇÃO DO CATÁLOGO DE LANÇAMENTOS
-// ==========================================
 function renderCatalog() {
   const container = document.getElementById("catalog-container");
   container.innerHTML = "";
@@ -565,7 +908,6 @@ function renderCatalog() {
   });
 }
 
-// Filtro do catálogo
 function filterCatalog(query) {
   const cleanQuery = query.toLowerCase().trim();
   const cards = document.querySelectorAll("#catalog-container .product-card");
@@ -582,7 +924,6 @@ function filterCatalog(query) {
   });
 }
 
-// Modal de detalhes
 function openProductDetailModal(cod) {
   const p = PRODUCTS_DATA.find(item => item.cod === cod);
   if (!p) return;
@@ -597,7 +938,6 @@ function openProductDetailModal(cod) {
   document.getElementById("detail-product-dosagem").textContent = p.dosagem || "Não informada";
   document.getElementById("detail-product-base").textContent = p.degustacao_base || "Puro";
   
-  // Harmonizações
   const harmList = document.getElementById("detail-product-harmonizacoes");
   harmList.innerHTML = "";
   if (p.harmonizacoes.length > 0) {
@@ -610,7 +950,6 @@ function openProductDetailModal(cod) {
     harmList.innerHTML = "<li>Nenhuma recomendação</li>";
   }
   
-  // Combinações Inovadoras
   const combList = document.getElementById("detail-product-combinacoes");
   combList.innerHTML = "";
   if (p.combinacoes_inovadoras.length > 0) {
@@ -630,9 +969,6 @@ function closeProductDetailModal() {
   document.getElementById("product-detail-modal").classList.remove("active");
 }
 
-// ==========================================
-// BUSCA E CADASTRO DE CLIENTES
-// ==========================================
 let searchTimeout = null;
 
 function handleClientSearch(val) {
@@ -645,12 +981,10 @@ function handleClientSearch(val) {
     return;
   }
   
-  // Primeiro tenta buscar no banco local (IndexedDB)
   searchClientsInDB(val, (localResults) => {
     if (localResults.length > 0) {
       renderSearchDropdown(localResults);
     } else {
-      // Se não encontrar nada localmente, busca via API (fallback) com delay
       searchTimeout = setTimeout(() => {
         if (!CONFIG.gasUrl) {
           const results = [
@@ -704,11 +1038,10 @@ function renderSearchDropdown(results) {
 
 function selectClient(client) {
   appState.selectedClient = client;
-  appState.cartItems = []; // CLEAR active cart immediately to avoid showing previous client's selections
-  renderCardapio();        // Update cardapio immediately to clear checkboxes
-  updateCartUI();          // Hide/reset the cart bar immediately
+  appState.cartItems = []; 
+  renderCardapio();        
+  updateCartUI();          
   
-  // Atualiza Cabeçalho
   document.getElementById("no-client-selected").classList.add("hidden");
   const display = document.getElementById("client-selected-display");
   display.classList.remove("hidden");
@@ -718,14 +1051,10 @@ function selectClient(client) {
   document.getElementById("selected-client-city").textContent = `Cidade: ${client.cidade}`;
   document.getElementById("selected-client-vendedor").textContent = `Carteira: ${client.vendedor || 'Sem Vendedor'}`;
   
-  // Remove alerta do cardápio
   document.getElementById("cardapio-alert-no-client").classList.add("hidden");
   document.getElementById("cardapio-container-wrapper").classList.remove("hidden");
   
-  // Carrega carrinho do IndexedDB correspondente ao cliente
   const clientKey = client.codigo || client.razao_social;
-  
-  // Carrega degustações pendentes de feedback da sessão
   appState.tastedSessionItems = JSON.parse(localStorage.getItem("pending_tastings_" + clientKey) || "[]");
   
   loadCartFromDB(clientKey, (items) => {
@@ -734,13 +1063,10 @@ function selectClient(client) {
     updateCartUI();
   });
   
-  // Registra o atendimento no banco de dados (Sheets) de forma assíncrona
   registrarAtendimentoNoGAS(client);
 }
 
 function registrarAtendimentoNoGAS(client) {
-  if (!CONFIG.gasUrl) return;
-  
   const payload = {
     action: "registrar_atendimento",
     codigo: client.codigo,
@@ -751,12 +1077,22 @@ function registrarAtendimentoNoGAS(client) {
     vendedor_atendeu: appState.selectedVendedor
   };
   
+  if (appState.offlineMode) {
+    addToSyncQueue("registrar_atendimento", payload);
+    return;
+  }
+  
+  if (!CONFIG.gasUrl) return;
+  
   fetch(CONFIG.gasUrl, {
     method: "POST",
-    mode: "no-cors", // Apps Script Web App exige POST via redirect/no-cors
+    mode: "no-cors",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  }).catch(err => console.error("Erro ao gravar registro de atendimento:", err));
+  }).catch(err => {
+    console.error("Erro ao gravar registro de atendimento, enfileirando offline:", err);
+    addToSyncQueue("registrar_atendimento", payload);
+  });
 }
 
 function clearSelectedClient() {
@@ -774,7 +1110,6 @@ function clearSelectedClient() {
   document.getElementById("no-client-selected").classList.remove("hidden");
   document.getElementById("client-search-input").value = "";
   
-  // Mostra alerta do cardápio
   document.getElementById("cardapio-alert-no-client").classList.remove("hidden");
   document.getElementById("cardapio-container-wrapper").classList.add("hidden");
   
@@ -782,7 +1117,6 @@ function clearSelectedClient() {
   renderCardapio();
 }
 
-// Modal Cadastro Novo
 function openNewClientModal() {
   document.getElementById("new-client-modal").classList.add("active");
 }
@@ -801,7 +1135,6 @@ function handleCreateClient(e) {
   const fantasia = document.getElementById("new-cli-fantasia").value.trim();
   const vendedor = document.getElementById("new-cli-vendedor").value;
   
-  // Se não informar código, gera um código temporário de feira
   if (cod === "") {
     cod = "FISPAL-" + Math.floor(1000 + Math.random() * 9000);
   }
@@ -818,14 +1151,9 @@ function handleCreateClient(e) {
   closeNewClientModal();
 }
 
-// ==========================================
-// CARDÁPIO E CARRINHO
-// ==========================================
 function renderCardapio() {
   const container = document.getElementById("cardapio-grid");
   container.innerHTML = "";
-  
-  // Troca a classe do container para o estilo de lista de checkbox
   container.className = "cardapio-checkbox-container";
   
   if (appState.cardapioList.length === 0) {
@@ -844,32 +1172,23 @@ function renderCardapio() {
     const id = item.ID_FISPAL;
     const nome = item.nome;
     const desc = item.descrição;
-    const cods = item.cods_lançamentos; // "3349, 1298"
+    const cods = item.cods_lançamentos; 
     
-    // Verifica histórico na planilha: se já experimentou no passado
     const jaTastouNoPassado = appState.experimentouList.some(exp => 
       exp.cod_cliente.toString() === clientCode.toString() && 
       exp.ID_FISPAL.toString() === id.toString()
     );
     
-    // Verifica se já experimentou NESTA sessão (aguardando feedback)
     const degustouNestaSessao = appState.tastedSessionItems.some(t => t.ID_FISPAL.toString() === id.toString());
-    
-    // Verifica se já está no carrinho ativo
     const noCarrinho = appState.cartItems.some(cart => cart.ID_FISPAL.toString() === id.toString());
     
-    // Pega o código da estrela do lançamento (primeiro código na lista de códigos do cardápio)
     const listCods = cods.toString().split(',').map(c => c.trim());
     const mainCod = listCods[0];
     const prodRef = PRODUCTS_DATA.find(p => p.cod === mainCod);
-    
-    // Nome do produto estrela associado
     const prodStarName = prodRef ? prodRef.nome : `Lançamento ${mainCod}`;
     
-    // Cria o item da lista
     const row = document.createElement("div");
     
-    // Define as classes conforme o estado
     let itemClasses = "cardapio-checkbox-item";
     if (jaTastouNoPassado) itemClasses += " ja-experimentou";
     else if (degustouNestaSessao) itemClasses += " feedback-pendente";
@@ -877,7 +1196,6 @@ function renderCardapio() {
     
     row.className = itemClasses;
     
-    // Configura o evento de clique
     if (jaTastouNoPassado) {
       row.onclick = null;
     } else if (degustouNestaSessao) {
@@ -888,7 +1206,6 @@ function renderCardapio() {
       };
     }
     
-    // Selo de status
     let statusBadge = "";
     if (jaTastouNoPassado) {
       statusBadge = `<span class="cardapio-status-badge badge-tasted">Degustado</span>`;
@@ -919,6 +1236,7 @@ function renderCardapio() {
 }
 
 function toggleCardapioItem(id, isCurrentlyChecked) {
+  SoundFX.playClick();
   if (isCurrentlyChecked) {
     removeFromCart(id);
   } else {
@@ -934,13 +1252,10 @@ function addToCart(recipeId) {
   
   const recipe = appState.cardapioList.find(r => r.ID_FISPAL.toString() === recipeId.toString());
   if (!recipe) return;
-  
-  // Evita duplicados
   if (appState.cartItems.some(item => item.ID_FISPAL.toString() === recipeId.toString())) return;
   
   appState.cartItems.push(recipe);
   
-  // Persiste no IndexedDB
   const clientKey = appState.selectedClient.codigo || appState.selectedClient.razao_social;
   saveCartToDB(clientKey, appState.cartItems);
   
@@ -953,7 +1268,6 @@ function removeFromCart(recipeId) {
   
   appState.cartItems = appState.cartItems.filter(item => item.ID_FISPAL.toString() !== recipeId.toString());
   
-  // Atualiza no IndexedDB
   const clientKey = appState.selectedClient.codigo || appState.selectedClient.razao_social;
   saveCartToDB(clientKey, appState.cartItems);
   
@@ -980,9 +1294,6 @@ function updateCartUI() {
   }
 }
 
-// ==========================================
-// TELA DO GARÇOM (MESA DE PREPARO / CHECKOUT)
-// ==========================================
 function openWaiterModal() {
   if (!appState.selectedClient) return;
   
@@ -992,7 +1303,6 @@ function openWaiterModal() {
   const container = document.getElementById("waiter-list-items");
   container.innerHTML = "";
   
-  // 1. Exibe itens que já foram entregues nesta sessão (marcados de verde e travados)
   appState.tastedSessionItems.forEach(item => {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     const mainCod = listCods[0];
@@ -1011,7 +1321,6 @@ function openWaiterModal() {
     container.appendChild(card);
   });
   
-  // 2. Exibe itens do carrinho ativo (pendentes, clicáveis)
   appState.cartItems.forEach(item => {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     const mainCod = listCods[0];
@@ -1029,8 +1338,8 @@ function openWaiterModal() {
       </div>
     `;
     
-    // Evento de clique para o garçom marcar que preparou
     card.addEventListener("click", () => {
+      SoundFX.playClick();
       card.classList.toggle("checked");
       checkWaiterFormCompletion();
     });
@@ -1050,7 +1359,6 @@ function checkWaiterFormCompletion() {
   const pendingCheckedCards = document.querySelectorAll(".waiter-item-card.pending-delivery.checked");
   const btn = document.getElementById("btn-finalizar-garcom");
   
-  // Habilita o botão de finalizar se pelo menos um item novo foi marcado
   if (pendingCheckedCards.length > 0) {
     btn.removeAttribute("disabled");
   } else {
@@ -1063,19 +1371,16 @@ function finalizarPedidoGarcom() {
   
   const clientKey = appState.selectedClient.codigo || appState.selectedClient.razao_social;
   
-  // Pega apenas as receitas que foram marcadas de fato pelo garçom nesta ação
   const checkedCards = document.querySelectorAll(".waiter-item-card.pending-delivery.checked");
   if (checkedCards.length === 0) return;
   
   const idsServed = Array.from(checkedCards).map(card => card.getAttribute("data-id").toString());
   
-  // Separa o que foi servido do que permaneceu pendente no carrinho
   const itemsServed = appState.cartItems.filter(item => idsServed.includes(item.ID_FISPAL.toString()));
   const itemsRemaining = appState.cartItems.filter(item => !idsServed.includes(item.ID_FISPAL.toString()));
   
   showLoading(true);
   
-  // Constrói payload para o backend registrar no Sheets (aba experimentou)
   const itensPayload = itemsServed.map(item => {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     return {
@@ -1090,20 +1395,18 @@ function finalizarPedidoGarcom() {
     itens: itensPayload
   };
   
-  const handleSuccess = () => {
+  const handleSuccess = (isOffline = false) => {
     showLoading(false);
+    SoundFX.playSuccess();
     
-    // Atualiza estado local de experimentados da sessão (tastedSessionItems)
     appState.tastedSessionItems = [...appState.tastedSessionItems, ...itemsServed];
     localStorage.setItem("pending_tastings_" + clientKey, JSON.stringify(appState.tastedSessionItems));
     
-    // Insere no histórico de experimentados cacheado local
     itemsServed.forEach(item => {
       const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
       saveLocalExperimentou(appState.selectedClient.codigo, item.ID_FISPAL, listCods.join(", "));
     });
     
-    // Atualiza o carrinho com o que sobrou
     appState.cartItems = itemsRemaining;
     if (itemsRemaining.length > 0) {
       saveCartToDB(clientKey, itemsRemaining);
@@ -1115,10 +1418,20 @@ function finalizarPedidoGarcom() {
     closeWaiterModal();
     renderCardapio();
     
-    // Vai para a aba de feedbacks avaliar apenas o que foi servido
     goToFeedbackTab();
+
+    if (isOffline) {
+      alert("Degustação salva localmente (Modo Offline). Os dados serão enviados à planilha quando a conexão for restabelecida.");
+    }
   };
   
+  if (appState.offlineMode) {
+    addToSyncQueue("registrar_experimentou", payload, () => {
+      handleSuccess(true);
+    });
+    return;
+  }
+
   if (!CONFIG.gasUrl) {
     handleSuccess();
     return;
@@ -1134,9 +1447,10 @@ function finalizarPedidoGarcom() {
     handleSuccess();
   })
   .catch(err => {
-    showLoading(false);
-    console.error("Erro ao registrar degustação no Sheets:", err);
-    alert("Erro de rede. A degustação foi salva no celular, mas pode não ter subido para a planilha.");
+    console.error("Erro ao registrar degustação no Sheets, enfileirando offline:", err);
+    addToSyncQueue("registrar_experimentou", payload, () => {
+      handleSuccess(true);
+    });
   });
 }
 
@@ -1145,9 +1459,6 @@ function goToFeedbackTab() {
   switchTab("tab-feedback", feedbackTabBtn);
 }
 
-// ==========================================
-// TELA E FORMULÁRIO DE FEEDBACK (CLIENTE)
-// ==========================================
 function renderFeedbackForm() {
   const alertNoClient = document.getElementById("feedback-alert-no-client");
   const formContainer = document.getElementById("feedback-form-container");
@@ -1166,7 +1477,6 @@ function renderFeedbackForm() {
   const container = document.getElementById("feedback-items-container");
   container.innerHTML = "";
   
-  // Se não houver itens experimentados na sessão, avisa
   if (appState.tastedSessionItems.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); background-color: var(--bg-secondary); border-radius: 16px; border: 1px dashed var(--border-color);">
@@ -1189,7 +1499,6 @@ function renderFeedbackForm() {
     const listCods = item.cods_lançamentos.toString().split(',').map(c => c.trim());
     const mainCod = listCods[0];
     
-    // Busca informações de harmonização do lançamento estrela para sugerir
     const prodRef = PRODUCTS_DATA.find(p => p.cod === mainCod);
     const sugeridos = prodRef ? [...prodRef.harmonizacoes, ...prodRef.combinacoes_inovadoras] : [];
     const chipsSugeridos = sugeridos.map(s => s.replace(';', '').trim()).filter((v, i, self) => self.indexOf(v) === i && v !== "");
@@ -1201,7 +1510,6 @@ function renderFeedbackForm() {
     formItem.setAttribute("data-id", id);
     formItem.setAttribute("data-name", nome);
     
-    // Monta HTML do formulário por item
     let chipsHtml = "";
     if (chipsSugeridos.length > 0) {
       chipsHtml = `
@@ -1231,7 +1539,6 @@ function renderFeedbackForm() {
         </div>
       </div>
       
-      <!-- Escala de Nota de 1 a 10 Clicável -->
       <div class="rating-section">
         <h4>Nota de avaliação (1 a 10)</h4>
         <div class="rating-scale">
@@ -1241,7 +1548,6 @@ function renderFeedbackForm() {
         </div>
       </div>
       
-      <!-- Reações Emojis (Odiei, Gostou, Amei) -->
       <div class="reaction-section">
         <h4>O que achou do sabor?</h4>
         <div class="reaction-options">
@@ -1260,10 +1566,8 @@ function renderFeedbackForm() {
         </div>
       </div>
       
-      <!-- Combinações -->
       ${chipsHtml}
       
-      <!-- Comentários Adicionais -->
       <div class="comments-section">
         <h4>Comentários adicionais</h4>
         <textarea placeholder="Opcional: Deixe aqui considerações, opiniões ou ideias sobre o produto..."></textarea>
@@ -1275,6 +1579,7 @@ function renderFeedbackForm() {
 }
 
 function selectRating(btn, rating) {
+  SoundFX.playClick();
   const container = btn.closest(".rating-scale");
   container.querySelectorAll(".rating-btn").forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
@@ -1282,6 +1587,7 @@ function selectRating(btn, rating) {
 }
 
 function selectReaction(btn) {
+  SoundFX.playClick();
   const container = btn.closest(".reaction-options");
   container.querySelectorAll(".reaction-btn").forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
@@ -1289,6 +1595,7 @@ function selectReaction(btn) {
 }
 
 function toggleCombinationChip(chip) {
+  SoundFX.playClick();
   chip.classList.toggle("selected");
 }
 
@@ -1297,33 +1604,22 @@ function submitFeedbacks() {
   
   const forms = document.querySelectorAll("#feedback-items-container .feedback-item-form");
   const feedbacksPayload = [];
-  let valid = true;
+  let missingAssessments = false;
   
   forms.forEach(form => {
     const id = form.getAttribute("data-id");
     const nome = form.getAttribute("data-name");
     
-    // Obtém Nota
     const scale = form.querySelector(".rating-scale");
     const nota = scale.getAttribute("data-selected-rating");
     
-    // Obtém Reação
     const reactOpt = form.querySelector(".reaction-options");
     const reacao = reactOpt.getAttribute("data-selected-reaction");
     
-    if (!nota) {
-      alert(`Por favor, selecione uma nota de 1 a 10 para o sabor: ${nome}`);
-      valid = false;
-      return;
+    if (!nota || !reacao) {
+      missingAssessments = true;
     }
     
-    if (!reacao) {
-      alert(`Por favor, indique sua reação (Odiei, Gostou ou Amou) para o sabor: ${nome}`);
-      valid = false;
-      return;
-    }
-    
-    // Obtém combinações selecionadas (chips + input customizado)
     const selectedChips = [];
     form.querySelectorAll(".combination-chip.selected").forEach(chip => {
       selectedChips.push(chip.textContent);
@@ -1335,21 +1631,22 @@ function submitFeedbacks() {
     }
     
     const combinaCom = selectedChips.join(", ");
-    
-    // Comentário
     const comentarios = form.querySelector(".comments-section textarea").value.trim();
     
     feedbacksPayload.push({
       ID_FISPAL: id,
       nome_receita: nome,
-      nota: parseInt(nota),
-      reacao: reacao,
+      nota: nota ? parseInt(nota) : "",
+      reacao: reacao || "",
       combina_com: combinaCom,
       comentarios: comentarios
     });
   });
   
-  if (!valid) return;
+  if (missingAssessments) {
+    const proceed = confirm("Existem sabores que não foram avaliados com Nota ou Reação. Deseja gravar as informações assim mesmo?");
+    if (!proceed) return;
+  }
   
   showLoading(true);
   
@@ -1362,27 +1659,32 @@ function submitFeedbacks() {
     feedbacks: feedbacksPayload
   };
   
-  if (!CONFIG.gasUrl) {
-    // Sincronização offline mock
+  const handleSuccess = (isOffline = false) => {
     showLoading(false);
-    alert("Feedback salvo com sucesso localmente!");
+    SoundFX.playSuccess();
     
-    // Insere no dashboard local mock
     const dateStr = new Date().toLocaleString('pt-BR');
     feedbacksPayload.forEach(fb => {
-      appState.feedbacksList.unshift({
-        "Timestamp": dateStr,
-        "Código Cliente": appState.selectedClient.codigo,
-        "Razão Social": appState.selectedClient.razao_social,
-        "Vendedor Cliente": appState.selectedClient.vendedor,
-        "Vendedor Atendeu": appState.selectedVendedor,
-        "ID FISPAL": fb.ID_FISPAL,
-        "Nome Receita": fb.nome_receita,
-        "Nota": fb.nota,
-        "Reação": fb.reacao,
-        "Combina Com": fb.combina_com,
-        "Comentários": fb.comentarios
-      });
+      const exists = appState.feedbacksList.some(item => 
+        item["Código Cliente"]?.toString() === appState.selectedClient.codigo.toString() &&
+        item["ID FISPAL"]?.toString() === fb.ID_FISPAL.toString() &&
+        item["Nome Receita"] === fb.nome_receita
+      );
+      if (!exists) {
+        appState.feedbacksList.unshift({
+          "Timestamp": dateStr,
+          "Código Cliente": appState.selectedClient.codigo,
+          "Razão Social": appState.selectedClient.razao_social,
+          "Vendedor Cliente": appState.selectedClient.vendedor,
+          "Vendedor Atendeu": appState.selectedVendedor,
+          "ID FISPAL": fb.ID_FISPAL,
+          "Nome Receita": fb.nome_receita,
+          "Nota": fb.nota,
+          "Reação": fb.reacao,
+          "Combina Com": fb.combina_com,
+          "Comentários": fb.comentarios
+        });
+      }
     });
     
     localStorage.setItem("local_feedbacks_list", JSON.stringify(appState.feedbacksList));
@@ -1390,9 +1692,25 @@ function submitFeedbacks() {
     renderFeedbackForm();
     updateDashboard();
     
-    // Vai para Dashboard tab
     const dashTabBtn = document.querySelectorAll(".bottom-nav .nav-item")[3];
     switchTab("tab-relatorio", dashTabBtn);
+
+    if (isOffline) {
+      alert("Feedback gravado localmente (Modo Offline). Os dados serão enviados à planilha quando a conexão for restabelecida.");
+    } else {
+      alert("Feedbacks gravados com sucesso na planilha!");
+    }
+  };
+  
+  if (appState.offlineMode) {
+    addToSyncQueue("salvar_feedback", payload, () => {
+      handleSuccess(true);
+    });
+    return;
+  }
+
+  if (!CONFIG.gasUrl) {
+    handleSuccess(true);
     return;
   }
   
@@ -1403,66 +1721,45 @@ function submitFeedbacks() {
     body: JSON.stringify(payload)
   })
   .then(() => {
-    showLoading(false);
-    alert("Feedbacks gravados com sucesso na planilha!");
-    
-    // Limpa estado local de experimentados na sessão
-    clearTastedSession(appState.selectedClient);
-    
-    // Recarrega todos os dados para sincronizar os feedbacks gravados
     fetchInitialData();
-    
-    // Redireciona para aba do relatório
-    const dashTabBtn = document.querySelectorAll(".bottom-nav .nav-item")[3];
-    switchTab("tab-relatorio", dashTabBtn);
+    handleSuccess(false);
   })
   .catch(err => {
-    showLoading(false);
-    console.error("Erro ao salvar feedbacks:", err);
-    alert("Erro de rede. Verifique sua conexão.");
+    console.error("Erro ao salvar feedbacks, enfileirando offline:", err);
+    addToSyncQueue("salvar_feedback", payload, () => {
+      handleSuccess(true);
+    });
   });
 }
 
-// ==========================================
-// DASHBOARD / RELATÓRIOS DO VENDEDOR
-// ==========================================
 function updateDashboard() {
   const totalClientsEl = document.getElementById("stat-total-clients");
   const avgRatingEl = document.getElementById("stat-avg-rating");
   const totalFeedbacksEl = document.getElementById("stat-total-feedbacks");
   
-  // Decide qual lista de feedbacks usar para os cards
   let feedbacksForStats = appState.feedbacksList;
   
-  // Se for vendedor comum, calcula stats apenas dos seus atendimentos
   if (appState.selectedVendedor !== "EDIMAR PINHEIRO COSTA") {
     feedbacksForStats = appState.feedbacksList.filter(f => 
       f["Vendedor Atendeu"] === appState.selectedVendedor
     );
   } else {
-    // Se for o Edimar (Gestor), as estatísticas são globais!
     feedbacksForStats = appState.feedbacksList;
   }
   
-  // Clientes únicos atendidos
   const uniqueClients = [...new Set(feedbacksForStats.map(f => f["Código Cliente"]))];
   
-  // Calcula média de notas
   let sum = 0;
   feedbacksForStats.forEach(f => {
     sum += parseFloat(f["Nota"] || 0);
   });
   const avg = feedbacksForStats.length > 0 ? (sum / feedbacksForStats.length).toFixed(1) : "0.0";
   
-  // Atualiza cards de estatísticas
   totalClientsEl.textContent = uniqueClients.length;
   avgRatingEl.textContent = avg;
   totalFeedbacksEl.textContent = feedbacksForStats.length;
   
-  // Se for o Edimar, renderiza o quadro de desempenho dos vendedores
   renderAdminPerformancePanel();
-  
-  // Renderiza tabela filtrada
   filterDashboard();
 }
 
@@ -1473,10 +1770,8 @@ function renderAdminPerformancePanel() {
   if (!container) return;
   container.innerHTML = "";
   
-  // Agrupa dados por vendedor
   const performance = {};
   
-  // Inicializa com a lista oficial de vendedores
   const defaultList = appState.vendedoresList.length > 0 ? appState.vendedoresList : [
     "EDIMAR PINHEIRO COSTA",
     "EMANUEL RUFINO DA SILVA",
@@ -1491,7 +1786,6 @@ function renderAdminPerformancePanel() {
     performance[v] = { feedbacks: 0, sumNotes: 0, clients: new Set() };
   });
   
-  // Agrupa feedbacks
   appState.feedbacksList.forEach(f => {
     const v = f["Vendedor Atendeu"];
     if (v) {
@@ -1504,12 +1798,9 @@ function renderAdminPerformancePanel() {
     }
   });
   
-  // Renderiza cartões
   Object.keys(performance).forEach(v => {
     const stats = performance[v];
     const avg = stats.feedbacks > 0 ? (stats.sumNotes / stats.feedbacks).toFixed(1) : "0.0";
-    
-    // Pega primeiro nome para ficar mais curto no card
     const shortName = v.split(" ")[0] + " " + (v.split(" ")[1] || "");
     
     const card = document.createElement("div");
@@ -1540,13 +1831,11 @@ function filterDashboard() {
   const tbody = document.getElementById("dashboard-table-body");
   tbody.innerHTML = "";
   
-  // Filtra por vendedor ("MEUS" vs "TODOS")
   let list = appState.feedbacksList;
   if (filterType === "MEUS") {
     list = list.filter(f => f["Vendedor Atendeu"] === appState.selectedVendedor);
   }
   
-  // Filtra por busca textual
   if (searchVal !== "") {
     list = list.filter(f => {
       const client = (f["Razão Social"] || "").toString().toLowerCase();
@@ -1579,7 +1868,6 @@ function filterDashboard() {
   list.forEach(f => {
     const row = document.createElement("tr");
     
-    // formata reação em badge/emoji grande
     let reactEmoji = "😐";
     if (f["Reação"] === "Amou") reactEmoji = "❤️";
     else if (f["Reação"] === "Gostou") reactEmoji = "👍";
@@ -1607,7 +1895,6 @@ function exportFeedbacksToCSV() {
     return;
   }
   
-  // Decide qual lista exportar
   const filterDropdown = document.getElementById("dashboard-seller-filter");
   const filterType = filterDropdown ? filterDropdown.value : "MEUS";
   
@@ -1616,29 +1903,25 @@ function exportFeedbacksToCSV() {
     list = list.filter(f => f["Vendedor Atendeu"] === appState.selectedVendedor);
   }
   
-  // Cabeçalhos do CSV
   const headers = ["Timestamp", "Código Cliente", "Razão Social", "Vendedor Cliente", "Vendedor Atendeu", "ID FISPAL", "Nome Receita", "Nota", "Reação", "Combina Com", "Comentários"];
   
-  // Cria linhas
-  let csvContent = "\ufeff"; // BOM para abrir corretamente no Excel em português
+  let csvContent = "\ufeff"; 
   csvContent += headers.map(h => `"${h}"`).join(";") + "\n";
   
   list.forEach(f => {
     const row = headers.map(header => {
       let val = f[header] || "";
-      // Escapa aspas duplas
       val = val.toString().replace(/"/g, '""');
       return `"${val}"`;
     });
     csvContent += row.join(";") + "\n";
   });
   
-  // Força download do arquivo
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   
-  const vendedorNomeFormat = appState.selectedVendedor.replace(/\\s+/g, "_").toLowerCase();
+  const vendedorNomeFormat = appState.selectedVendedor.replace(/\s+/g, "_").toLowerCase();
   link.setAttribute("href", url);
   link.setAttribute("download", `feedbacks_fispal_2026_${vendedorNomeFormat}.csv`);
   link.style.visibility = "hidden";
@@ -1647,25 +1930,18 @@ function exportFeedbacksToCSV() {
   document.body.removeChild(link);
 }
 
-// ==========================================
-// TABS E NAVEGAÇÃO
-// ==========================================
 function switchTab(tabId, el) {
-  // Oculta todas as seções
   document.querySelectorAll(".tab-pane").forEach(pane => {
     pane.classList.remove("active");
   });
   
-  // Mostra a seção ativa
   document.getElementById(tabId).classList.add("active");
   
-  // Atualiza classe ativa no menu
   document.querySelectorAll(".bottom-nav .nav-item").forEach(item => {
     item.classList.remove("active");
   });
   el.classList.add("active");
   
-  // Ações específicas ao abrir a aba
   if (tabId === "tab-feedback") {
     renderFeedbackForm();
   } else if (tabId === "tab-relatorio") {
