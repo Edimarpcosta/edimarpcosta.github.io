@@ -27,7 +27,9 @@ const state = {
         { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
-        { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 }
+        { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
+        { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
+        { id: 'cnpja',           name: 'CNPJa',           url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 }
     ]
 };
 
@@ -180,14 +182,136 @@ const apiAdapters = {
         qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao, data_entrada_sociedade: s.data_entrada })) || [],
         cnaes_secundarios: data.atividades_secundarias?.map(a => ({ codigo: a.codigo, descricao: a.nome || a.descricao })) || [],
         api_origem: 'Invertexto'
-    })
+    }),
+    opencnpj: (data) => {
+        const principalCnaeObj = data.cnaes?.find(c => c.is_principal);
+        const secCnaes = data.cnaes?.filter(c => !c.is_principal).map(c => ({
+            codigo: c.codigo,
+            descricao: c.descricao
+        })) || [];
+        const formattedQsa = data.QSA?.map(s => ({
+            nome_socio: s.nome_socio,
+            qualificacao_socio: s.qualificacao_socio || ''
+        })) || [];
+        const ddd_tel1 = data.telefones?.[0] ? `${data.telefones[0].ddd || ''}${data.telefones[0].numero || ''}` : '';
+        const ddd_tel2 = data.telefones?.[1] ? `${data.telefones[1].ddd || ''}${data.telefones[1].numero || ''}` : '';
+
+        return {
+            cnpj: data.cnpj ? String(data.cnpj).replace(/\D/g, '') : '',
+            razao_social: data.razao_social || '',
+            nome_fantasia: data.nome_fantasia || '',
+            descricao_situacao_cadastral: data.situacao_cadastral || '',
+            data_inicio_atividade: data.data_inicio_atividade || '',
+            cnae_fiscal: data.cnae_principal || principalCnaeObj?.codigo || '',
+            cnae_fiscal_descricao: principalCnaeObj?.descricao || '',
+            natureza_juridica: data.natureza_juridica || '',
+            logradouro: ((data.tipo_logradouro || '') + ' ' + (data.logradouro || '')).trim(),
+            numero: data.numero || '',
+            complemento: data.complemento || '',
+            bairro: data.bairro || '',
+            municipio: data.municipio || '',
+            uf: data.uf || '',
+            cep: data.cep ? String(data.cep).replace(/\D/g, '') : '',
+            ddd_telefone_1: ddd_tel1,
+            ddd_telefone_2: ddd_tel2,
+            email: data.email || '',
+            capital_social: parseFloat(String(data.capital_social || '0').replace(/\./g, '').replace(',', '.')) || 0,
+            porte: data.porte_empresa || '',
+            qsa: formattedQsa,
+            cnaes_secundarios: secCnaes,
+            api_origem: 'OpenCNPJ'
+        };
+    },
+    cnpja: (data) => {
+        if (!data || !data.nodes) throw new Error('Invalid CNPJa response structure');
+        const dataNode = data.nodes.find(n => n && n.type === 'data' && Array.isArray(n.data));
+        if (!dataNode) throw new Error('CNPJa SvelteKit data node not found');
+        const flatList = dataNode.data;
+        
+        const cache = new Map();
+        function resolve(index) {
+            if (index === null || index === undefined) return null;
+            if (typeof index !== 'number') return index;
+            if (cache.has(index)) return cache.get(index);
+            
+            const val = flatList[index];
+            if (val === null || val === undefined) return val;
+            if (Array.isArray(val)) {
+                const arr = [];
+                cache.set(index, arr);
+                for (const item of val) {
+                    arr.push(resolve(item));
+                }
+                return arr;
+            }
+            if (typeof val === 'object') {
+                const obj = {};
+                cache.set(index, obj);
+                for (const key in val) {
+                    obj[key] = resolve(val[key]);
+                }
+                return obj;
+            }
+            return val;
+        }
+
+        const root = resolve(0);
+        const office = root?.office;
+        if (!office) throw new Error('CNPJa office details not resolved');
+        
+        const company = office.company || {};
+        
+        const principalCnae = office.mainActivity ? String(office.mainActivity.id || '').replace(/\D/g, '') : '';
+        const principalCnaeDesc = office.mainActivity ? office.mainActivity.text || '' : '';
+        
+        const secCnaes = office.sideActivities ? office.sideActivities.map(s => ({
+            codigo: s ? String(s.id || '').replace(/\D/g, '') : '',
+            descricao: s ? s.text || '' : ''
+        })).filter(c => c.codigo) : [];
+        
+        const formattedQsa = company.members ? company.members.map(m => ({
+            nome_socio: m?.person?.name || '',
+            qualificacao_socio: m?.role?.text || ''
+        })).filter(s => s.nome_socio) : [];
+        
+        const tel1 = office.phones && office.phones[0] ? `${office.phones[0].area || ''}${office.phones[0].number || ''}`.replace(/\D/g, '') : '';
+        const tel2 = office.phones && office.phones[1] ? `${office.phones[1].area || ''}${office.phones[1].number || ''}`.replace(/\D/g, '') : '';
+        const email = office.emails && office.emails[0] ? office.emails[0].address || '' : '';
+        
+        return {
+            cnpj: office.taxId ? String(office.taxId).replace(/\D/g, '') : '',
+            razao_social: company.name || '',
+            nome_fantasia: office.alias || company.name || '',
+            descricao_situacao_cadastral: office.status?.text || (typeof office.status === 'string' ? office.status : 'Ativa'),
+            data_inicio_atividade: office.founded || '',
+            cnae_fiscal: principalCnae,
+            cnae_fiscal_descricao: principalCnaeDesc,
+            natureza_juridica: company.nature?.text || '',
+            logradouro: office.address ? `${office.address.street || ''}`.trim() : '',
+            numero: office.address?.number || '',
+            complemento: office.address?.details || '',
+            bairro: office.address?.district || '',
+            municipio: office.address?.city || '',
+            uf: office.address?.state || '',
+            cep: office.address?.zip ? String(office.address.zip).replace(/\D/g, '') : '',
+            ddd_telefone_1: tel1,
+            ddd_telefone_2: tel2,
+            email: email,
+            capital_social: parseFloat(company.equity) || 0,
+            porte: company.size?.acronym || company.size?.text || '',
+            qsa: formattedQsa,
+            cnaes_secundarios: secCnaes,
+            api_origem: 'CNPJa'
+        };
+    }
 };
 
 // ========================= HANDLERS DE REQUISIÇÃO =========================
 const dataHandlers = {
     // Requisição individual a uma API específica
     async fetchWithApi(apiDef, formattedCnpj, signal) {
-        const url = apiDef.url.replace('{cnpj}', formattedCnpj);
+        const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
+        const url = apiDef.url.replace('{cnpj}', cleanCnpj);
         const response = await fetch(url, { signal });
 
         if (!response.ok) {
@@ -195,7 +319,7 @@ const dataHandlers = {
                 // Tenta ler body pra confirmar se é "não encontrado" real
                 try {
                     const text = await response.text();
-                    if (text.includes('não encontrado') || text.includes('CNPJ rejeitado') || text.includes('not found') || apiDef.id === 'minhareceita') {
+                    if (text.includes('não encontrado') || text.includes('CNPJ rejeitado') || text.includes('not found') || apiDef.id === 'minhareceita' || apiDef.id === 'cnpja') {
                         throw new Error('404_NOT_FOUND');
                     }
                 } catch (e) {
@@ -210,6 +334,23 @@ const dataHandlers = {
         if (data.status === 'ERROR') throw new Error(data.message || 'API_ERROR');
 
         return apiAdapters[apiDef.id](data);
+    },
+
+    async fetchCnoData(formattedCnpj) {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        try {
+            const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
+            const url = `https://api.opencnpj.org/${cleanCnpj}?dataset=cno`;
+            const response = await fetch(url, { signal: ctrl.signal });
+            clearTimeout(tid);
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (e) {
+            clearTimeout(tid);
+            console.warn(`[CNO] Erro ao buscar CNO para ${formattedCnpj}: ${e.message}`);
+            return null;
+        }
     },
 
     // §1.2 — Teste de conectividade "Ping" com CNPJ do Banco do Brasil
@@ -260,6 +401,7 @@ const dataHandlers = {
         let lastErrorMsg = '';
         let lastErrorType = 'generic';
         let notFoundCount = 0;
+        const failures = [];
 
         // §1.2 — Ordenação dinâmica: isFallback por último, quem tem mais falhas fica atrás
         const sortedApis = state.apis.filter(a => a.active).sort((a, b) => {
@@ -295,6 +437,12 @@ const dataHandlers = {
                 }
 
                 console.warn(`[✗] ${api.name} → ${cnpj}: ${error.message}`);
+                
+                let apiErrText = error.message;
+                if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {
+                    apiErrText = 'Erro de Conexão/CORS';
+                }
+                failures.push(`${api.name}: ${apiErrText}`);
 
                 if (error.message === '404_NOT_FOUND') {
                     notFoundCount++;
@@ -323,6 +471,17 @@ const dataHandlers = {
         state.pendingRequests = state.pendingRequests.filter(r => r !== requestEntry);
 
         if (successData) {
+            const cnoCheckbox = document.getElementById('cnoEnabled');
+            if (cnoCheckbox && cnoCheckbox.checked) {
+                try {
+                    const cnoResult = await this.fetchCnoData(formattedCnpj);
+                    if (cnoResult && cnoResult.cno) {
+                        successData.cno = cnoResult.cno;
+                    }
+                } catch (cnoErr) {
+                    console.warn(`[CNO] Falha silenciosa ao obter obras: ${cnoErr.message}`);
+                }
+            }
             state.cnpjCache[formattedCnpj] = successData;
             return successData;
         }
@@ -333,11 +492,11 @@ const dataHandlers = {
         }
         // Pelo menos alguma era 404 mas outras deram erro
         if (lastErrorType === '404') {
-            return { cnpj, error: true, errorMessage: 'CNPJ não encontrado', skipErrorPause: true };
+            return { cnpj, error: true, errorMessage: `CNPJ não encontrado. Detalhes: [${failures.join(' | ')}]`, skipErrorPause: true };
         }
 
-        // §2.3 — Pausa Real: todas as 5 falharam com erro de conexão/rate-limit
+        // §2.3 — Pausa Real: todas as falharam com erro de conexão/rate-limit
         state.consecutiveErrors++;
-        return { cnpj, error: true, errorMessage: lastErrorMsg, errorType: lastErrorType };
+        return { cnpj, error: true, errorMessage: `Falha nas APIs: [${failures.join(' | ')}]`, errorType: lastErrorType };
     }
 };

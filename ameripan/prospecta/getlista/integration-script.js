@@ -74,6 +74,16 @@ Object.assign(dataHandlers, {
         state.results.forEach(result => {
             if (!result) return;
 
+            // Filtro por CNO Obras Ativas
+            if (!result.error) {
+                const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
+                const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
+                if (cnoEnabled && cnoOnlyActive) {
+                    const hasActive = result.cno && result.cno.obras && result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+                    if (!hasActive) return;
+                }
+            }
+
             // Filtro por situação cadastral
             if (!result.error && !exportAll) {
                 const statusVal = (result.descricao_situacao_cadastral || '').toLowerCase();
@@ -165,7 +175,11 @@ Object.assign(dataHandlers, {
                     'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
                     'Email': result.email || '',
                     'Capital Social': result.capital_social || '',
-                    'Porte': result.porte || ''
+                    'Porte': result.porte || '',
+                    'Tem Obras': result.cno && result.cno.obras && result.cno.obras.length > 0 ? 'SIM' : 'NÃO',
+                    'Qtde Obras': result.cno && result.cno.obras ? result.cno.obras.length : 0,
+                    'Lista CNOs': result.cno && result.cno.obras ? result.cno.obras.map(o => `${o.cno} (${o.situacao?.descricao || ''})`).join(', ') : '',
+                    'Área Total Obras (m²)': result.cno && result.cno.obras ? result.cno.obras.reduce((acc, o) => acc + (parseFloat(o.area_total) || 0), 0) : 0
                 };
             });
 
@@ -250,7 +264,11 @@ Object.assign(dataHandlers, {
                     'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
                     'Capital Social': result.capital_social || '',
                     'Porte': result.porte || '',
-                    'API Origem': apiUsed
+                    'API Origem': apiUsed,
+                    'Tem Obras': result.cno && result.cno.obras && result.cno.obras.length > 0 ? 'SIM' : 'NÃO',
+                    'Qtde Obras': result.cno && result.cno.obras ? result.cno.obras.length : 0,
+                    'Lista CNOs': result.cno && result.cno.obras ? result.cno.obras.map(o => `${o.cno} (${o.situacao?.descricao || ''})`).join(', ') : '',
+                    'Área Total Obras (m²)': result.cno && result.cno.obras ? result.cno.obras.reduce((acc, o) => acc + (parseFloat(o.area_total) || 0), 0) : 0
                 });
 
                 // Sócios como colunas extras

@@ -73,6 +73,7 @@ const uiControllers = {
         elements.startBtn.classList.add('hidden');
         elements.pauseBtn.classList.remove('hidden');
         elements.resumeBtn.classList.add('hidden');
+        elements.stopBtn?.classList.remove('hidden');
 
         utils.showLoading();
 
@@ -105,9 +106,15 @@ const uiControllers = {
         if (a) a.style.display = 'none';
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.remove('hidden');
+        elements.stopBtn?.classList.remove('hidden');
         utils.hideLoading();
         const done = state.results.filter(r => r !== undefined).length;
         utils.updateStatus(`Pausado. ${done}/${state.cnpjList.length} processados.`);
+        if (done > 0) {
+            [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
+                if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
+            });
+        }
     },
 
     async resumeProcessing() {
@@ -122,6 +129,7 @@ const uiControllers = {
         state.consecutiveErrors = 0;
         elements.pauseBtn.classList.remove('hidden');
         elements.resumeBtn.classList.add('hidden');
+        elements.stopBtn?.classList.remove('hidden');
 
         utils.showLoading();
         utils.updateStatus('Retomando...');
@@ -139,6 +147,48 @@ const uiControllers = {
         }
     },
 
+    stopProcessing() {
+        state.isProcessing = false;
+        state.isPaused = false;
+        state.isAutoPaused = false;
+        
+        state.pendingRequests.forEach(r => { try { r.controller.abort(); } catch (e) { } });
+        state.pendingRequests = [];
+        state.requestsInProgress = 0;
+        
+        if (state.autoPauseTimer) { clearTimeout(state.autoPauseTimer); state.autoPauseTimer = null; }
+        if (countdownTimer.timerElement) countdownTimer.stop();
+        
+        const a = document.getElementById('autoPauseAlert');
+        if (a) { a.style.display = 'none'; a.classList.remove('pulse'); }
+        
+        state.currentIndex = 0;
+        state.results = new Array(state.cnpjList.length);
+        state.consecutiveErrors = 0;
+        state.cnpjCache = {}; // Limpa cache para começar do zero real
+        
+        elements.resultsBody.innerHTML = '';
+        const infoEl = document.getElementById('tableInfoRow');
+        if (infoEl) infoEl.classList.add('hidden');
+        
+        utils.updateProgressBar(0, state.cnpjList.length);
+        utils.updateStats();
+        utils.hideLoading();
+        utils.updateStatus('Processamento parado. Dados limpos.');
+        
+        elements.startBtn.classList.remove('hidden');
+        elements.pauseBtn.classList.add('hidden');
+        elements.resumeBtn.classList.add('hidden');
+        elements.stopBtn?.classList.add('hidden');
+        
+        [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
+            if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
+        });
+        
+        this.renderApiQueueStatus();
+        this.renderGroupedResults();
+    },
+
     // §2.3 — triggerAutoPause só dispara quando TODAS as 5 APIs falharam
     triggerAutoPause(errorMessage, errorType) {
         if (state.isPaused || !state.autoPauseEnabled) return;
@@ -152,7 +202,14 @@ const uiControllers = {
 
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.remove('hidden');
+        elements.stopBtn?.classList.remove('hidden');
         utils.hideLoading();
+        const done = state.results.filter(r => r !== undefined).length;
+        if (done > 0) {
+            [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
+                if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
+            });
+        }
 
         let delay = state.autoPauseDelay;
         if (errorType === 'rate_limit' && typeof backoffStrategy !== 'undefined') {
@@ -178,29 +235,29 @@ const uiControllers = {
         if (!state.isProcessing || state.isPaused) return;
 
         const processCnpj = async (index) => {
-            if (index >= state.cnpjList.length || state.isPaused) return;
+            if (index >= state.cnpjList.length || state.isPaused || !state.isProcessing) return;
             const cnpj = state.cnpjList[index];
             state.requestsInProgress++;
 
             try {
-                if (state.isPaused) { state.requestsInProgress--; return; }
+                if (state.isPaused || !state.isProcessing) { state.requestsInProgress--; return; }
 
                 const result = await dataHandlers.fetchCnpjData(cnpj);
-                if (result.aborted || state.isPaused) { state.requestsInProgress--; return; }
+                if (result.aborted || state.isPaused || !state.isProcessing) { state.requestsInProgress--; return; }
 
                 state.results[index] = result;
                 setTimeout(() => this.addResultToTable(result, index), 0);
 
                 const count = state.results.filter(r => r !== undefined).length;
-                if (!state.isPaused) {
+                if (!state.isPaused && state.isProcessing) {
                     utils.updateStatus(`Processados ${count} de ${state.cnpjList.length} CNPJs...`);
                     utils.updateProgressBar(count, state.cnpjList.length);
                     utils.updateStats();
                 }
-                if (count >= state.cnpjList.length) this.completeProcessing();
+                if (count >= state.cnpjList.length && state.isProcessing) this.completeProcessing();
 
             } catch (err) {
-                if (!state.isPaused) {
+                if (!state.isPaused && state.isProcessing) {
                     state.results[index] = { cnpj, error: true, errorMessage: err.message };
                     setTimeout(() => this.addResultToTable(state.results[index], index), 0);
                     if (err.message.includes('Nenhuma API')) this.triggerAutoPause(err.message, 'rate_limit');
@@ -208,7 +265,7 @@ const uiControllers = {
             } finally {
                 state.requestsInProgress--;
                 this.renderApiQueueStatus();
-                if (!state.isPaused) {
+                if (!state.isPaused && state.isProcessing) {
                     const next = state.currentIndex++;
                     if (next < state.cnpjList.length) {
                         setTimeout(() => processCnpj(next), state.apiDelay);
@@ -235,6 +292,7 @@ const uiControllers = {
         state.isProcessing = false;
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.add('hidden');
+        elements.stopBtn?.classList.add('hidden');
         elements.startBtn.classList.remove('hidden');
         utils.hideLoading();
 
@@ -258,6 +316,14 @@ const uiControllers = {
         // Limita renderização DOM a MAX_VISIBLE_ROWS linhas
         const MAX_VISIBLE_ROWS = 200;
         let row = document.querySelector(`.result-row-${index}`);
+
+        const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
+        const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
+        let shouldHide = false;
+        if (!result.error && cnoEnabled && cnoOnlyActive) {
+            const hasActive = result.cno && result.cno.obras && result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+            if (!hasActive) shouldHide = true;
+        }
 
         if (!row && elements.resultsBody.children.length >= MAX_VISIBLE_ROWS) {
             // Atualiza info mas não renderiza a linha
@@ -292,6 +358,35 @@ const uiControllers = {
                 <td><span class="api-badge ${result.api_origem === 'Invertexto' ? 'api-fallback' : 'api-active'}">${result.api_origem || '?'}</span></td>
                 <td><button class="details-btn" data-index="${index}">Ver</button></td>`;
         }
+
+        if (shouldHide) {
+            row.style.display = 'none';
+        } else {
+            row.style.display = '';
+        }
+    },
+
+    applyTableFilters() {
+        const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
+        const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
+        
+        state.results.forEach((result, index) => {
+            if (!result) return;
+            const row = document.querySelector(`.result-row-${index}`);
+            if (!row) return;
+
+            let show = true;
+            if (!result.error && cnoEnabled && cnoOnlyActive) {
+                const hasActive = result.cno && result.cno.obras && result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+                if (!hasActive) show = false;
+            }
+
+            if (show) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
     },
 
     // ===== §4.4 — RENDERIZAÇÃO DE GRUPOS (FASE 2) =====
@@ -314,8 +409,16 @@ const uiControllers = {
         
         const groups = new Map();
         
+        const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
+        const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
+
         state.results.forEach((r, idx) => {
             if (!r || r.error) return;
+            
+            if (cnoEnabled && cnoOnlyActive) {
+                const hasActive = r.cno && r.cno.obras && r.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+                if (!hasActive) return;
+            }
             
             let root = groupRoot ? String(r.cnpj).replace(/\D/g, '').substring(0, 8) : '';
             let city = groupCity ? (r.municipio || 'SEM CIDADE').toUpperCase() : '';
@@ -339,16 +442,21 @@ const uiControllers = {
         let html = '';
         let colorIndex = 0;
         
+        const expandDefault = document.getElementById('expandResultsDefault')?.checked ?? false;
+        const displayStyle = expandDefault ? 'block' : 'none';
+        const indicator = expandDefault ? '▼' : '▶';
+
         groups.forEach((groupData, key) => {
             const color = highContrastColors[colorIndex % highContrastColors.length];
             colorIndex++;
             
             html += `<div class="cnpj-group">
-                <div class="cnpj-group-header">
+                <div class="cnpj-group-header cursor-pointer select-none" onclick="const list = this.nextElementSibling; const ind = this.querySelector('.group-indicator'); if (list.style.display === 'none') { list.style.display = 'block'; ind.textContent = '▼'; } else { list.style.display = 'none'; ind.textContent = '▶'; }">
                     <span class="count" style="background-color: ${color};">${groupData.members.length}x</span>
                     <span>${key}</span>
+                    <span class="group-indicator ml-auto text-xs" style="color: #64748b;">${indicator}</span>
                 </div>
-                <ul class="cnpj-members-list">`;
+                <ul class="cnpj-members-list" style="display: ${displayStyle};">`;
                 
             groupData.members.forEach(member => {
                 const r = member.result;
@@ -398,8 +506,11 @@ const uiControllers = {
 
         let html = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <h3 class="font-medium text-indigo-300 mb-3">Informações Básicas</h3>
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-medium text-indigo-300">Informações Básicas</h3>
+                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                </div>
                 <div class="space-y-2 text-sm" style="color:#cbd5e1">
                     <p><span style="color:#94a3b8">CNPJ:</span> ${utils.formatCnpjForDisplay(result.cnpj)}</p>
                     <p><span style="color:#94a3b8">Razão Social:</span> ${result.razao_social || '-'}</p>
@@ -412,8 +523,11 @@ const uiControllers = {
                     <p><span style="color:#94a3b8">Fonte:</span> <span class="api-badge api-active">${result.api_origem || '?'}</span></p>
                 </div>
             </div>
-            <div>
-                <h3 class="font-medium text-indigo-300 mb-3">Endereço & Contato</h3>
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-medium text-indigo-300">Endereço & Contato</h3>
+                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                </div>
                 <div class="space-y-2 text-sm" style="color:#cbd5e1">
                     <p><span style="color:#94a3b8">Endereço:</span> ${result.logradouro || ''}, ${result.numero || 'S/N'}</p>
                     <p><span style="color:#94a3b8">Complemento:</span> ${result.complemento || '-'}</p>
@@ -430,8 +544,12 @@ const uiControllers = {
         </div>`;
 
         // Atividades Econômicas
-        html += `<div class="mt-6">
-            <h3 class="font-medium text-indigo-300 mb-3">Atividades Econômicas</h3>
+        html += `
+        <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+            <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                <h3 class="font-medium text-indigo-300">Atividades Econômicas</h3>
+                <span class="sec-ind text-xs text-gray-500">▼</span>
+            </div>
             <div class="text-sm" style="color:#cbd5e1">
                 <p><span style="color:#94a3b8">Principal:</span> ${result.cnae_fiscal || ''} — ${result.cnae_fiscal_descricao || '-'}</p>`;
         if (result.cnaes_secundarios && result.cnaes_secundarios.length > 0) {
@@ -445,16 +563,62 @@ const uiControllers = {
 
         // Quadro Societário
         if (result.qsa && result.qsa.length > 0) {
-            html += `<div class="mt-6">
-                <h3 class="font-medium text-indigo-300 mb-3">Quadro Societário</h3>
+            html += `
+            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-medium text-indigo-300">Quadro Societário</h3>
+                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                </div>
                 <div class="space-y-3">`;
             result.qsa.forEach(s => {
                 html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:0.75rem;" class="text-sm" >
-                    <p style="color:#e2e8f0; font-weight:500">${s.nome_socio || '-'}</p>
-                    <p style="color:#94a3b8">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
+                     <p style="color:#e2e8f0; font-weight:500">${s.nome_socio || '-'}</p>
+                     <p style="color:#94a3b8">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
                 </div>`;
             });
             html += `</div></div>`;
+        }
+
+        // Cadastro Nacional de Obras (CNO)
+        if (result.cno && result.cno.obras && result.cno.obras.length > 0) {
+            const hasActiveWorks = result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+            const statusColor = hasActiveWorks ? '#4ade80' : '#f87171';
+            html += `
+            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-medium text-indigo-300 flex items-center gap-2">
+                        🏗️ Cadastro Nacional de Obras (CNO)
+                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(255,255,255,0.08); color:${statusColor}">
+                            ${result.cno.obras.length} obra(s) (${hasActiveWorks ? 'Possui Obras Ativas' : 'Sem Obras Ativas'})
+                        </span>
+                    </h3>
+                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                </div>
+                <div class="space-y-3">`;
+            result.cno.obras.forEach(o => {
+                const isAct = o.situacao?.descricao?.toUpperCase() === 'ATIVA';
+                const sColor = isAct ? '#22c55e' : '#ef4444';
+                html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:0.75rem;" class="text-sm">
+                    <div class="flex justify-between items-start mb-1">
+                        <p style="color:#e2e8f0; font-weight:600">${o.nome || o.nome_empresarial || 'Obra sem nome'}</p>
+                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(0,0,0,0.3); color:${sColor}">
+                            ${o.situacao?.descricao || 'ATIVA'}
+                        </span>
+                    </div>
+                    <p style="color:#94a3b8">CNO: <span style="color:#cbd5e1">${o.cno || '-'}</span> • Início: <span style="color:#cbd5e1">${o.data_inicio || '-'}</span> • Área: <span style="color:#cbd5e1">${o.area_total || '0'} ${o.unidade_medida || 'm²'}</span></p>
+                    <p style="color:#94a3b8" class="text-xs mt-1">Endereço: ${o.tipo_logradouro || ''} ${o.logradouro || ''}, ${o.numero || ''} ${o.complemento ? '(' + o.complemento + ')' : ''} - ${o.bairro || ''}, ${o.municipio || ''}/${o.uf || ''}</p>
+                </div>`;
+            });
+            html += `</div></div>`;
+        } else if (document.getElementById('cnoEnabled')?.checked) {
+            html += `
+            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-medium text-indigo-300">🏗️ Cadastro Nacional de Obras (CNO)</h3>
+                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">Nenhuma obra localizada para este CNPJ.</div>
+            </div>`;
         }
 
         content.innerHTML = html;
@@ -484,6 +648,66 @@ const uiControllers = {
 
 // ========================= INICIALIZAÇÃO =========================
 function init() {
+    // Theme Switcher Logic
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeToggleIcon = document.getElementById('themeToggleIcon');
+    const themeToggleText = document.getElementById('themeToggleText');
+
+    function applyTheme(theme) {
+        if (theme === 'dark') {
+            document.body.classList.add('theme-dark');
+            document.body.classList.remove('theme-light');
+            if (themeToggleIcon) themeToggleIcon.textContent = '🌙';
+            if (themeToggleText) themeToggleText.textContent = 'Modo Escuro';
+        } else {
+            document.body.classList.remove('theme-dark');
+            document.body.classList.add('theme-light');
+            if (themeToggleIcon) themeToggleIcon.textContent = '☀️';
+            if (themeToggleText) themeToggleText.textContent = 'Modo Claro';
+        }
+    }
+
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    themeToggleBtn?.addEventListener('click', () => {
+        const isDark = document.body.classList.contains('theme-dark');
+        const nextTheme = isDark ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+    });
+
+    // CNO Checkboxes Logic
+    const cnoEnabledCheckbox = document.getElementById('cnoEnabled');
+    const cnoOnlyActiveWrapper = document.getElementById('cnoOnlyActiveWrapper');
+    const cnoOnlyActiveCheckbox = document.getElementById('cnoOnlyActive');
+
+    function toggleCnoSubFilter() {
+        if (cnoEnabledCheckbox && cnoEnabledCheckbox.checked) {
+            cnoOnlyActiveWrapper?.classList.remove('hidden');
+        } else {
+            cnoOnlyActiveWrapper?.classList.add('hidden');
+            if (cnoOnlyActiveCheckbox) cnoOnlyActiveCheckbox.checked = false;
+        }
+    }
+    cnoEnabledCheckbox?.addEventListener('change', toggleCnoSubFilter);
+    toggleCnoSubFilter();
+
+    // Preferência de Colapso/Expansão Default
+    const expandCheck = document.getElementById('expandResultsDefault');
+    if (expandCheck) {
+        const savedExpand = localStorage.getItem('expandResultsDefault');
+        if (savedExpand !== null) {
+            expandCheck.checked = savedExpand === 'true';
+        } else {
+            expandCheck.checked = false; // default is collapsed
+        }
+        expandCheck.addEventListener('change', () => {
+            localStorage.setItem('expandResultsDefault', expandCheck.checked);
+            uiControllers.renderGroupedResults();
+        });
+    }
+
     // Mapear todos os elementos DOM
     Object.assign(elements, {
         csvFile: document.getElementById('csvFile'),
@@ -498,6 +722,7 @@ function init() {
         startBtn: document.getElementById('startBtn'),
         pauseBtn: document.getElementById('pauseBtn'),
         resumeBtn: document.getElementById('resumeBtn'),
+        stopBtn: document.getElementById('stopBtn'),
         exportMaposcopeBtn: document.getElementById('exportMaposcopeBtn'),
         exportCompletoBtn: document.getElementById('exportCompletoBtn'),
         resultsTable: document.getElementById('resultsTable'),
@@ -514,6 +739,7 @@ function init() {
     elements.startBtn?.addEventListener('click', () => uiControllers.startProcessing());
     elements.pauseBtn?.addEventListener('click', () => uiControllers.pauseProcessing());
     elements.resumeBtn?.addEventListener('click', () => uiControllers.resumeProcessing());
+    elements.stopBtn?.addEventListener('click', () => uiControllers.stopProcessing());
     elements.exportMaposcopeBtn?.addEventListener('click', () => dataHandlers.exportMaposcope());
     elements.exportCompletoBtn?.addEventListener('click', () => dataHandlers.exportCompleto());
 

@@ -17,6 +17,7 @@ const MiningEngine = {
         pageTimes: [], // tempos de cada página para ETA
         seenCnpjs: new Set(), // deduplicação em tempo real
         duplicatesSkipped: 0,
+        tableExpanded: false,
     },
 
     // ===== FILTROS (gerenciados por chip system) =====
@@ -51,7 +52,7 @@ const MiningEngine = {
             "situacao_cadastral": situacao === '_todas' ? [] : [situacao],
             "codigo_atividade_principal": this.filters.cnaes,
             "codigo_natureza_juridica": this.filters.naturezaJuridica,
-            "incluir_atividade_secundaria": false,
+            "incluir_atividade_secundaria": document.getElementById('mineCnaeSecundariaCheck')?.checked || false,
             "uf": uf ? [uf] : [],
             "municipio": this.filters.cidades,
             "bairro": this.filters.bairros,
@@ -301,6 +302,22 @@ const MiningEngine = {
             // Salvar referência do refresh para syncEditorToFilters
             self._chipRefreshers[key] = refresh;
 
+            // Função para processar os valores digitados
+            const processValues = (rawText) => {
+                if (!rawText) return 0;
+                const parts = rawText.split(/[,;|]+/).map(p => p.trim().toUpperCase()).filter(p => p.length > 0);
+                let added = 0;
+                parts.forEach(v => {
+                    // Se for CNAE, higieniza mantendo apenas números (ex: 10.53-8/00 vira 1053800)
+                    const finalVal = (key === 'cnaes') ? v.replace(/\D/g, '') : v;
+                    if (finalVal && !self.filters[key].includes(finalVal)) {
+                        self.filters[key].push(finalVal);
+                        added++;
+                    }
+                });
+                return added;
+            };
+
             // Ao pressionar Enter: aceita valor único OU lista com vírgula
             input.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
@@ -308,20 +325,20 @@ const MiningEngine = {
                     const raw = input.value.trim();
                     if (!raw) return;
 
-                    // Splittar por vírgula, ponto-e-vírgula ou pipe
-                    const parts = raw.split(/[,;|]+/).map(p => p.trim().toUpperCase()).filter(p => p.length > 0);
-
-                    let added = 0;
-                    parts.forEach(v => {
-                        if (!self.filters[key].includes(v)) {
-                            self.filters[key].push(v);
-                            added++;
-                        }
-                    });
-
+                    const added = processValues(raw);
                     input.value = '';
                     if (added > 0) refresh();
                 }
+            });
+
+            // Ao perder o foco (blur): processa o que estiver digitado no campo
+            input.addEventListener('blur', e => {
+                const raw = input.value.trim();
+                if (!raw) return;
+
+                const added = processValues(raw);
+                input.value = '';
+                if (added > 0) refresh();
             });
 
             // Suporte a colar (Ctrl+V) com split automático
@@ -331,21 +348,9 @@ const MiningEngine = {
                     const raw = input.value.trim();
                     if (!raw) return;
 
-                    const parts = raw.split(/[,;|]+/).map(p => p.trim().toUpperCase()).filter(p => p.length > 0);
-
-                    // Se colou mais de 1 item, processa automaticamente
-                    if (parts.length > 1) {
-                        let added = 0;
-                        parts.forEach(v => {
-                            if (!self.filters[key].includes(v)) {
-                                self.filters[key].push(v);
-                                added++;
-                            }
-                        });
-                        input.value = '';
-                        if (added > 0) refresh();
-                    }
-                    // Se colou 1 item só, deixa o user dar Enter
+                    const added = processValues(raw);
+                    input.value = '';
+                    if (added > 0) refresh();
                 }, 50);
             });
 
@@ -451,6 +456,7 @@ const MiningEngine = {
             let totalPag = this.state.totalPages || pag; // fallback
 
             while (this.state.running && pag <= totalPag) {
+                const iterationStart = Date.now();
                 // Max pages limit
                 if (this.state.maxPages > 0 && pag > this.state.maxPages) {
                     this.log(`⚡ Limite de ${this.state.maxPages} páginas atingido. Extração parcial.`, 'warn');
@@ -567,12 +573,12 @@ const MiningEngine = {
                 
                 if (pag < totalPag && this.state.running) {
                     // Controla o tempo real vs delay desejado
-                    const elapsed = Date.now() - (this.state.pageTimes.length > 0 ? this.state.pageTimes[this.state.pageTimes.length - 1] : Date.now());
+                    const elapsed = Date.now() - iterationStart;
                     const remainingDelay = Math.max(0, this.state.delayBetweenPages - elapsed);
                     if (remainingDelay > 0) {
                         await new Promise(resolve => setTimeout(resolve, remainingDelay));
                     }
-                    this.state.pageTimes.push(Date.now() - (Date.now() - elapsed)); // armazena tempo real
+                    this.state.pageTimes.push(Date.now() - iterationStart); // armazena tempo real total da iteração
                     if (this.state.pageTimes.length > 5) this.state.pageTimes.shift(); // keep last 5
                 }
                 
@@ -741,6 +747,7 @@ const MiningEngine = {
                     badge.textContent = `✅ Válida (${(data.total || 0).toLocaleString()} empresas no universo)`;
                     badge.style.color = '#4ade80';
                 }
+                localStorage.setItem('casadosdados_api_key', key);
                 this.log('🔑 API Key válida!', 'succ');
             } else if (res.status === 401 || res.status === 403) {
                 if (badge) { badge.textContent = '❌ Inválida ou expirada'; badge.style.color = '#f87171'; }
@@ -1047,23 +1054,22 @@ const MiningEngine = {
 
     // ========================= TABELA PRÉVIA =========================
     toggleTableMode() {
-        const wrap = document.getElementById('mineResultsWrap');
         const btn = document.getElementById('toggleTableModeBtn');
-        if (!wrap || !btn) return;
+        if (!btn) return;
         
-        const isCompact = wrap.classList.toggle('mine-table-compact');
-        btn.textContent = isCompact ? 'Modo Padrão' : 'Modo Expandido';
-        this.log(`Tabela alterada para modo ${isCompact ? 'Compacto' : 'Expandido'}.`, 'info');
+        this.state.tableExpanded = !this.state.tableExpanded;
+        btn.textContent = this.state.tableExpanded ? 'Modo Padrão' : 'Modo Expandido';
+        this.renderMineTable();
+        this.log(`Tabela alterada para modo ${this.state.tableExpanded ? 'Expandido' : 'Padrão'}.`, 'info');
     },
 
     renderMineTable() {
         const body = this.els.mineTableBody;
         if (!body) return;
 
-        // Limita a 200 linhas no DOM para performance
-        const MAX = 200;
+        const maxRows = this.state.tableExpanded ? 50 : 3;
         const leads = this.state.leads;
-        const slice = leads.slice(0, MAX);
+        const slice = leads.slice(0, maxRows);
 
         body.innerHTML = slice.map((lead, i) => {
             const cnpjFmt = lead.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
@@ -1080,8 +1086,8 @@ const MiningEngine = {
 
         const info = this.els.mineTableInfo;
         if (info) {
-            if (leads.length > MAX) {
-                info.textContent = `Mostrando ${MAX} de ${leads.length} resultados. Todos serão transferidos.`;
+            if (leads.length > maxRows) {
+                info.textContent = `Mostrando ${maxRows} de ${leads.length} resultados. Todos serão transferidos/exportados.`;
                 info.classList.remove('hidden');
             } else {
                 info.classList.add('hidden');
@@ -1193,12 +1199,38 @@ const MiningEngine = {
             exportMineBtn: document.getElementById('exportMineBtn'),
             mineTableBody: document.getElementById('mineTableBody'),
             mineTableInfo: document.getElementById('mineTableInfo'),
+            ramosSelect: document.getElementById('mineRamosSelect'),
+            searchCitiesBtn: document.getElementById('mineSearchCitiesBtn'),
+            citiesPanel: document.getElementById('mineCitiesPanel'),
+            closeCitiesPanelBtn: document.getElementById('mineCloseCitiesPanelBtn'),
+            citiesFilterInput: document.getElementById('mineCitiesFilterInput'),
+            citiesList: document.getElementById('mineCitiesList'),
+            cnaeApiCheck: document.getElementById('mineCnaeApiCheck'),
+            cnaeSecundariaCheck: document.getElementById('mineCnaeSecundariaCheck'),
+            cnaePanel: document.getElementById('mineCnaePanel'),
+            closeCnaePanelBtn: document.getElementById('mineCloseCnaePanelBtn'),
+            cnaeFilterInput: document.getElementById('mineCnaeFilterInput'),
+            cnaeList: document.getElementById('mineCnaeList')
         };
 
         // Restaurar API Key do localStorage
         const savedKey = localStorage.getItem('casadosdados_api_key');
         if (savedKey && this.els.apiKeyInput) {
             this.els.apiKeyInput.value = savedKey;
+        } else if (this.els.apiKeyInput) {
+            fetch('chave_api_csa.txt')
+                .then(r => r.text())
+                .then(text => {
+                    const cleanKey = text.trim();
+                    if (cleanKey && cleanKey.length > 20) {
+                        this.els.apiKeyInput.value = cleanKey;
+                        localStorage.setItem('casadosdados_api_key', cleanKey);
+                        this.log('🔑 API Key carregada do arquivo local.', 'info');
+                    }
+                })
+                .catch(err => {
+                    console.warn('Erro ao carregar chave_api_csa.txt:', err);
+                });
         }
 
         // Inicializar chips
@@ -1216,7 +1248,13 @@ const MiningEngine = {
         document.getElementById('testApiKeyBtn')?.addEventListener('click', () => this.testApiKey());
 
         // Atualizar payload ao mudar UF ou Situação
-        this.els.ufInput?.addEventListener('input', () => this.buildPayload());
+        this.els.ufInput?.addEventListener('input', () => {
+            this.buildPayload();
+            // Se o painel de cidades estiver aberto, atualizar a lista para a nova UF
+            if (this.els.citiesPanel && !this.els.citiesPanel.classList.contains('hidden')) {
+                this.loadCitiesList();
+            }
+        });
         this.els.situacaoSelect?.addEventListener('change', () => this.buildPayload());
 
         // Filtros avançados — qualquer checkbox mine-filter
@@ -1255,12 +1293,23 @@ const MiningEngine = {
         document.querySelectorAll('.mine-clear-chips-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const key = btn.dataset.clearKey;
-                if (key) this.clearChips(key);
+                if (key) {
+                    this.clearChips(key);
+                    // Atualizar checklists se visíveis
+                    if (key === 'cidades') {
+                        document.querySelectorAll('.mine-city-cb').forEach(cb => cb.checked = false);
+                    } else if (key === 'cnaes') {
+                        document.querySelectorAll('.mine-cnae-cb').forEach(cb => cb.checked = false);
+                    }
+                }
             });
         });
 
         // Botão limpar todos
-        document.getElementById('clearAllChipsBtn')?.addEventListener('click', () => this.clearAllChips());
+        document.getElementById('clearAllChipsBtn')?.addEventListener('click', () => {
+            this.clearAllChips();
+            document.querySelectorAll('.mine-city-cb, .mine-cnae-cb').forEach(cb => cb.checked = false);
+        });
 
         // Presets
         document.getElementById('savePresetBtn')?.addEventListener('click', () => this.savePreset());
@@ -1281,6 +1330,107 @@ const MiningEngine = {
             });
         }
 
+        // === EVENT LISTENERS DAS NOVAS APIS (RAMOS, CIDADES, CNAES) ===
+
+        // Ramos Select
+        const RAMOS_PRESETS = {
+            gelados_atacado: {
+                termos: ['SORVETE', 'SORVETES', 'GELATO', 'GELADOS COMESTIVEIS', 'ACAI', 'AÇAI', 'PICOLE', 'PICOLÉ', 'PALETA', 'DISTRIBUIDORA DE SORVETE', 'FABRICA DE SORVETE', 'INDUSTRIA DE SORVETE', 'ATACADO DE ACAI', 'DISTRIBUIDORA DE ACAI']
+            },
+            gelados_varejo: {
+                termos: ['SORVETERIA', 'GELATERIA', 'MILK SHAKE', 'MILKSHAKE', 'FROZEN YOGURT', 'ACAITERIA', 'AÇAÍTERIA', 'QUIOSQUE', 'SORVETE EXPRESSO', 'SORVETE SOFT', 'PALETERIA', 'LOJA DE ACAI']
+            },
+            gelados_total: {
+                termos: ['SORVETE', 'SORVETES', 'GELATO', 'GELADOS COMESTIVEIS', 'ACAI', 'AÇAI', 'PICOLE', 'PICOLÉ', 'PALETA', 'DISTRIBUIDORA DE SORVETE', 'FABRICA DE SORVETE', 'INDUSTRIA DE SORVETE', 'ATACADO DE ACAI', 'DISTRIBUIDORA DE ACAI', 'SORVETERIA', 'GELATERIA', 'MILK SHAKE', 'MILKSHAKE', 'FROZEN YOGURT', 'ACAITERIA', 'AÇAÍTERIA', 'QUIOSQUE', 'SORVETE EXPRESSO', 'SORVETE SOFT', 'PALETERIA', 'LOJA DE ACAI']
+            },
+            panificacao_atacado: {
+                termos: ['PANIFICADORA', 'PAES', 'PÃES', 'MOINHO', 'DISTRIBUIDORA DE DOCES', 'CONFEITARIA ATACADISTA', 'INDUSTRIA DE ALIMENTOS', 'FABRICA DE PAES', 'DISTRIBUIDORA DE PAES']
+            },
+            panificacao_varejo: {
+                termos: ['PADARIA', 'CONFEITARIA', 'DOCERIA', 'BOLO', 'BOLOS', 'PATISSERIE', 'CHURROS', 'DOCES ARTESANAIS', 'BOUTIQUE DE PAES']
+            },
+            panificacao_total: {
+                termos: ['PANIFICADORA', 'PAES', 'PÃES', 'MOINHO', 'DISTRIBUIDORA DE DOCES', 'CONFEITARIA ATACADISTA', 'INDUSTRIA DE ALIMENTOS', 'FABRICA DE PAES', 'DISTRIBUIDORA DE PAES', 'PADARIA', 'CONFEITARIA', 'DOCERIA', 'BOLO', 'BOLOS', 'PATISSERIE', 'CHURROS', 'DOCES ARTESANAIS', 'BOUTIQUE DE PAES']
+            },
+            revenda_supermercados: {
+                termos: ['SUPERMERCADO', 'MERCADO', 'MINIMERCADO', 'ATACAREJO', 'MERCEARIA', 'EMPORIO', 'EMPÓRIO', 'ARMAZEM', 'DISTRIBUIDORA DE ALIMENTOS', 'HIPERMERCADO']
+            },
+            revenda_conveniencia: {
+                termos: ['CONVENIENCIA', 'CONVENIÊNCIA', 'POSTO', 'BUFFET INFANTIL', 'PARQUE', 'LANCHONETE', 'CANTINA', 'FAST FOOD', 'CAFETERIA', 'HAMBURGUERIA']
+            },
+            maquina_total: {
+                termos: ['SORVETE', 'SORVETERIA', 'ACAI', 'AÇAI', 'GELATO', 'GELATERIA', 'PICOLE', 'PICOLÉ', 'PALETA', 'MILK SHAKE', 'MILKSHAKE', 'GELADOS COMESTIVEIS', 'ACAITERIA', 'AÇAÍTERIA', 'FROZEN YOGURT', 'PADARIA', 'PANIFICADORA', 'CONFEITARIA', 'DOCERIA', 'PAES', 'PÃES', 'BOLO', 'BOLOS', 'CHURROS', 'CHOCOLATE', 'DOCES', 'SUPERMERCADO', 'MERCADO', 'MINIMERCADO', 'ATACAREJO', 'MERCEARIA', 'EMPORIO', 'EMPÓRIO', 'CONVENIENCIA', 'CONVENIÊNCIA', 'BUFFET', 'LANCHONETE']
+            }
+        };
+
+        this.els.ramosSelect?.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (!val || !RAMOS_PRESETS[val]) return;
+            const preset = RAMOS_PRESETS[val];
+            this.filters.termos = [...preset.termos];
+            // CNAEs permanecem intocados, como solicitado
+            if (this._chipRefreshers.termos) this._chipRefreshers.termos();
+            this.buildPayload();
+            this.log(`🏭 Ramo Ameripan carregado: ${val}. Termos atualizados, CNAEs mantidos opcionais.`, 'succ');
+        });
+
+        // Cidades Panel
+        this.els.searchCitiesBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            const panel = this.els.citiesPanel;
+            if (panel) {
+                const isHidden = panel.classList.contains('hidden');
+                if (isHidden) {
+                    panel.classList.remove('hidden');
+                    this.loadCitiesList();
+                } else {
+                    panel.classList.add('hidden');
+                }
+            }
+        });
+
+        this.els.closeCitiesPanelBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.els.citiesPanel?.classList.add('hidden');
+        });
+
+        this.els.citiesFilterInput?.addEventListener('input', (e) => {
+            this.filterCitiesList(e.target.value);
+        });
+
+        // CNAE API Search Toggle
+        this.els.cnaeApiCheck?.addEventListener('change', (e) => {
+            const panel = this.els.cnaePanel;
+            if (panel) {
+                if (e.target.checked) {
+                    panel.classList.remove('hidden');
+                    this.loadCnaeDatabase();
+                    this.searchCnaes(this.els.cnaeFilterInput?.value || '');
+                } else {
+                    panel.classList.add('hidden');
+                }
+            }
+        });
+
+        this.els.cnaeSecundariaCheck?.addEventListener('change', () => {
+            this.buildPayload();
+        });
+
+        this.els.closeCnaePanelBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.els.cnaePanel?.classList.add('hidden');
+            if (this.els.cnaeApiCheck) this.els.cnaeApiCheck.checked = false;
+        });
+
+        // Debounce para busca de CNAE
+        let cnaeSearchTimeout;
+        this.els.cnaeFilterInput?.addEventListener('input', (e) => {
+            clearTimeout(cnaeSearchTimeout);
+            cnaeSearchTimeout = setTimeout(() => {
+                this.searchCnaes(e.target.value);
+            }, 300);
+        });
+
         // Build inicial do payload
         this.buildPayload();
 
@@ -1288,6 +1438,179 @@ const MiningEngine = {
         this.checkSession();
 
         console.log('%c⛏️ Mining Engine carregado!', 'background:#f59e0b; color:#000; padding:4px 8px; border-radius:4px; font-weight:bold');
+    },
+
+    // ========================= MÉTODOS AUXILIARES NOVOS (CIDADES E CNAES) =========================
+    async loadCitiesList() {
+        const uf = (this.els.ufInput?.value || 'SP').toUpperCase().trim();
+        const listContainer = this.els.citiesList;
+        const ufLabel = document.getElementById('mineCitiesUfLabel');
+        if (ufLabel) ufLabel.textContent = uf;
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '<span class="text-xs text-blue-500 p-1">⏳ Carregando municípios...</span>';
+        try {
+            const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/municipio/${uf}`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            
+            let cities = [];
+            if (Array.isArray(data)) {
+                cities = data.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
+            } else if (data && typeof data === 'object') {
+                const list = data.data || data.municipios || data.results || [];
+                cities = list.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
+            }
+            cities = cities.filter(Boolean).map(c => c.toUpperCase()).sort();
+            this._allUfCities = cities; // Cache local
+            this.renderCitiesChecklist(cities);
+        } catch (e) {
+            listContainer.innerHTML = `<span class="text-xs text-red-500 p-1">❌ Erro: ${e.message}</span>`;
+            console.error(e);
+        }
+    },
+
+    renderCitiesChecklist(cities) {
+        const listContainer = this.els.citiesList;
+        if (!listContainer) return;
+        
+        if (cities.length === 0) {
+            listContainer.innerHTML = '<span class="text-xs text-gray-500 p-1">Nenhum município.</span>';
+            return;
+        }
+
+        listContainer.innerHTML = cities.map(city => {
+            const checked = this.filters.cidades.includes(city) ? 'checked' : '';
+            return `
+                <label class="flex items-center gap-2 cursor-pointer p-1 hover-row rounded transition-colors" style="user-select:none; color:var(--color-text); margin:0;">
+                    <input type="checkbox" value="${city}" class="mine-city-cb" ${checked} style="accent-color:#6366f1; width:14px; height:14px;">
+                    <span>${city}</span>
+                </label>
+            `;
+        }).join('');
+
+        // Listeners nos checkboxes
+        listContainer.querySelectorAll('.mine-city-cb').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const city = e.target.value;
+                if (e.target.checked) {
+                    if (!this.filters.cidades.includes(city)) {
+                        this.filters.cidades.push(city);
+                    }
+                } else {
+                    this.filters.cidades = this.filters.cidades.filter(c => c !== city);
+                }
+                if (this._chipRefreshers.cidades) this._chipRefreshers.cidades();
+                this.buildPayload();
+            });
+        });
+    },
+
+    filterCitiesList(query) {
+        if (!this._allUfCities) return;
+        const q = query.toUpperCase().trim();
+        const filtered = this._allUfCities.filter(c => c.includes(q));
+        this.renderCitiesChecklist(filtered);
+    },
+
+    async loadCnaeDatabase() {
+        if (this._localCnaeDb) return;
+        try {
+            const res = await fetch('cnae.json');
+            if (res.ok) {
+                this._localCnaeDb = await res.json();
+                console.log(`CNAE database loaded locally: ${this._localCnaeDb.length} items`);
+            }
+        } catch (e) {
+            console.error('Erro ao carregar cnae.json local:', e);
+        }
+    },
+
+    async searchCnaes(query) {
+        const listContainer = this.els.cnaeList;
+        if (!listContainer) return;
+
+        const q = query.trim().toUpperCase();
+        if (!q) {
+            listContainer.innerHTML = '<span class="text-xs text-gray-500 p-1">Digite algo para pesquisar...</span>';
+            return;
+        }
+
+        let results = [];
+        // 1. Tentar API da Casa dos Dados
+        try {
+            const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/cnae?q=${encodeURIComponent(q)}`);
+            if (res.ok) {
+                const data = await res.json();
+                let apiList = [];
+                if (Array.isArray(data)) {
+                    apiList = data;
+                } else if (data && typeof data === 'object') {
+                    apiList = data.data || data.results || data.cnaes || [];
+                }
+                
+                results = apiList.map(item => ({
+                    code: String(item.code || item.codigo || '').replace(/\D/g, ''),
+                    name: item.name || item.descricao || item.text || ''
+                })).filter(item => 
+                    String(item.code).includes(q) || 
+                    String(item.name).toUpperCase().includes(q)
+                );
+            }
+        } catch (e) {
+            console.warn('API de busca de CNAE offline. Usando fallback local:', e);
+        }
+
+        // 2. Fallback para banco local cnae.json (se API falhar ou retornar 0 resultados filtrados)
+        if (results.length === 0 && this._localCnaeDb) {
+            results = this._localCnaeDb.filter(c => 
+                String(c.code).includes(q) || 
+                String(c.name).toUpperCase().includes(q)
+            ).map(c => ({
+                code: String(c.code).replace(/\D/g, ''),
+                name: c.name
+            }));
+        }
+
+        // Limita a 50 resultados para manter a UI responsiva
+        results = results.slice(0, 50);
+
+        this.renderCnaeChecklist(results);
+    },
+
+    renderCnaeChecklist(cnaes) {
+        const listContainer = this.els.cnaeList;
+        if (!listContainer) return;
+
+        if (cnaes.length === 0) {
+            listContainer.innerHTML = '<span class="text-xs text-gray-500 p-1">Nenhum CNAE encontrado.</span>';
+            return;
+        }
+
+        listContainer.innerHTML = cnaes.map(c => {
+            const checked = this.filters.cnaes.includes(c.code) ? 'checked' : '';
+            return `
+                <label class="flex items-center gap-2 cursor-pointer p-1 hover-row rounded transition-colors" style="user-select:none; color:var(--color-text); margin:0;">
+                    <input type="checkbox" value="${c.code}" class="mine-cnae-cb" ${checked} style="accent-color:#6366f1; width:14px; height:14px;">
+                    <span><strong>${c.code}</strong> - ${c.name}</span>
+                </label>
+            `;
+        }).join('');
+
+        listContainer.querySelectorAll('.mine-cnae-cb').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const code = e.target.value;
+                if (e.target.checked) {
+                    if (!this.filters.cnaes.includes(code)) {
+                        this.filters.cnaes.push(code);
+                    }
+                } else {
+                    this.filters.cnaes = this.filters.cnaes.filter(c => c !== code);
+                }
+                if (this._chipRefreshers.cnaes) this._chipRefreshers.cnaes();
+                this.buildPayload();
+            });
+        });
     }
 };
 
