@@ -248,6 +248,9 @@ const uiControllers = {
         [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
             if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
         });
+
+        // Re-render groups if enabled
+        this.renderGroupedResults();
     },
 
     // ===== §4.3 — TABELA COM VIRTUALIZAÇÃO LEVE =====
@@ -289,6 +292,95 @@ const uiControllers = {
                 <td><span class="api-badge ${result.api_origem === 'Invertexto' ? 'api-fallback' : 'api-active'}">${result.api_origem || '?'}</span></td>
                 <td><button class="details-btn" data-index="${index}">Ver</button></td>`;
         }
+    },
+
+    // ===== §4.4 — RENDERIZAÇÃO DE GRUPOS (FASE 2) =====
+    renderGroupedResults() {
+        const groupRoot = document.getElementById('groupRoot')?.checked;
+        const groupCity = document.getElementById('groupCity')?.checked;
+        const container = document.getElementById('groupedResultsContainer');
+        const tableWrap = document.querySelector('.overflow-x-auto');
+
+        if (!groupRoot && !groupCity) {
+            if (container) container.classList.add('hidden');
+            if (tableWrap) tableWrap.classList.remove('hidden');
+            return;
+        }
+
+        if (container) container.classList.remove('hidden');
+        if (tableWrap) tableWrap.classList.add('hidden');
+
+        const highContrastColors = ['#FF4136', '#0074D9', '#2ECC40', '#FF851B', '#B10DC9', '#3D9970', '#FFDC00', '#F012BE', '#7FDBFF', '#39CCCC', '#FF6347', '#4682B4'];
+        
+        const groups = new Map();
+        
+        state.results.forEach((r, idx) => {
+            if (!r || r.error) return;
+            
+            let root = groupRoot ? String(r.cnpj).replace(/\D/g, '').substring(0, 8) : '';
+            let city = groupCity ? (r.municipio || 'SEM CIDADE').toUpperCase() : '';
+            
+            let keyParts = [];
+            if (groupRoot) keyParts.push(`Raiz: ${root}`);
+            if (groupCity) keyParts.push(`Cidade: ${city}`);
+            let key = keyParts.join(' | ');
+            
+            if (!groups.has(key)) {
+                groups.set(key, { root: root, members: [] });
+            }
+            groups.get(key).members.push({ result: r, index: idx });
+        });
+
+        if (groups.size === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-4">Nenhum resultado processado com sucesso para agrupar.</div>';
+            return;
+        }
+
+        let html = '';
+        let colorIndex = 0;
+        
+        groups.forEach((groupData, key) => {
+            const color = highContrastColors[colorIndex % highContrastColors.length];
+            colorIndex++;
+            
+            html += `<div class="cnpj-group">
+                <div class="cnpj-group-header">
+                    <span class="count" style="background-color: ${color};">${groupData.members.length}x</span>
+                    <span>${key}</span>
+                </div>
+                <ul class="cnpj-members-list">`;
+                
+            groupData.members.forEach(member => {
+                const r = member.result;
+                const cnpjFormatted = utils.formatCnpjForDisplay(r.cnpj);
+                let cnpjDisplay = cnpjFormatted;
+                
+                if (groupRoot && groupData.root && cnpjFormatted.length >= 10) {
+                    cnpjDisplay = `<mark style="background-color: ${color};">${cnpjFormatted.substring(0, 10)}</mark>${cnpjFormatted.substring(10)}`;
+                }
+                
+                html += `<li>
+                    <div>
+                        ${cnpjDisplay} - <span style="color:#e2e8f0">${r.razao_social || 'Sem Nome'}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs" style="color:#64748b">${r.municipio || ''}/${r.uf || ''}</span>
+                        <button class="details-btn px-2 py-1 text-xs rounded hover:bg-gray-600" style="background:rgba(255,255,255,0.1); border:none; color:white; cursor:pointer;" data-index="${member.index}">Ver</button>
+                    </div>
+                </li>`;
+            });
+            
+            html += `</ul></div>`;
+        });
+        
+        container.innerHTML = html;
+        
+        container.querySelectorAll('.details-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                if (!isNaN(idx)) uiControllers.showDetails(state.results[idx]);
+            });
+        });
     },
 
     // ===== MODAL DE DETALHES COMPLETO =====
@@ -424,6 +516,10 @@ function init() {
     elements.resumeBtn?.addEventListener('click', () => uiControllers.resumeProcessing());
     elements.exportMaposcopeBtn?.addEventListener('click', () => dataHandlers.exportMaposcope());
     elements.exportCompletoBtn?.addEventListener('click', () => dataHandlers.exportCompleto());
+
+    // Event Listeners — Agrupamento
+    document.getElementById('groupRoot')?.addEventListener('change', () => uiControllers.renderGroupedResults());
+    document.getElementById('groupCity')?.addEventListener('change', () => uiControllers.renderGroupedResults());
 
     // Botão "Testar Todas"
     document.getElementById('testAllApisBtn')?.addEventListener('click', async () => {

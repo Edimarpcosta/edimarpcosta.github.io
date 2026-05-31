@@ -194,11 +194,39 @@ Object.assign(dataHandlers, {
             const { successRows, errorRows, apiStats } = this._getFilteredResults();
             const workbook = XLSX.utils.book_new();
 
+            // Lógica de Agrupamento Fase 2
+            const groupRoot = document.getElementById('groupRoot')?.checked;
+            const groupCity = document.getElementById('groupCity')?.checked;
+
+            if (groupRoot || groupCity) {
+                successRows.sort((a, b) => {
+                    let cmp = 0;
+                    if (groupCity) {
+                        const cityA = (a.result.municipio || '').toLowerCase();
+                        const cityB = (b.result.municipio || '').toLowerCase();
+                        if (cityA < cityB) cmp = -1;
+                        if (cityA > cityB) cmp = 1;
+                    }
+                    if (cmp === 0 && groupRoot) {
+                        const rootA = String(a.result.cnpj).replace(/\D/g, '').substring(0, 8);
+                        const rootB = String(b.result.cnpj).replace(/\D/g, '').substring(0, 8);
+                        if (rootA < rootB) cmp = -1;
+                        if (rootA > rootB) cmp = 1;
+                    }
+                    return cmp;
+                });
+            }
+
             const rows = successRows.map(({ result, apiUsed }) => {
                 const tel1 = utils.cleanPhone(result.ddd_telefone_1);
                 const tel2 = utils.cleanPhone(result.ddd_telefone_2);
 
-                const row = {
+                const row = {};
+                if (groupRoot) {
+                    row['Raiz CNPJ'] = String(result.cnpj).replace(/\D/g, '').substring(0, 8);
+                }
+                
+                Object.assign(row, {
                     'CNPJ': result.cnpj,
                     'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
                     'Razão Social': result.razao_social || '',
@@ -223,7 +251,7 @@ Object.assign(dataHandlers, {
                     'Capital Social': result.capital_social || '',
                     'Porte': result.porte || '',
                     'API Origem': apiUsed
-                };
+                });
 
                 // Sócios como colunas extras
                 if (result.qsa && result.qsa.length > 0) {
