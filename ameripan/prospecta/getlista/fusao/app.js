@@ -87,6 +87,13 @@ function log(message, type = 'info') {
     DOM.consoleLogs.parentElement.scrollTop = DOM.consoleLogs.parentElement.scrollHeight;
 }
 
+function formatCnpjForDisplay(cnpj) {
+    if (!cnpj) return '-';
+    const c = String(cnpj).replace(/\D/g, '');
+    if (c.length !== 14) return cnpj;
+    return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
 // Limpar console
 DOM.btnClearConsole.addEventListener('click', () => {
     DOM.consoleLogs.innerHTML = '';
@@ -338,6 +345,277 @@ function parseSocialMedias(socialJson, platform) {
         return parsed[platform] || '';
     } catch (e) {
         return '';
+    }
+}
+
+// --- COMPONENTES DE ENRIQUECIMENTO DE ENDEREÇOS VIA API ---
+
+// Auxiliar para atualizar valores de colunas de forma robusta e case-insensitive
+function setColumnValue(row, headers, possibleNames, value) {
+    for (let name of possibleNames) {
+        let cleanTarget = removeAccents(name.toLowerCase());
+        for (let header of headers) {
+            let cleanHeader = removeAccents(header.toLowerCase());
+            if (cleanHeader === cleanTarget) {
+                row[header] = value;
+                return true;
+            }
+        }
+    }
+    // Caso a coluna não exista, adiciona sob o primeiro nome sugerido
+    if (possibleNames.length > 0) {
+        row[possibleNames[0]] = value;
+        return true;
+    }
+    return false;
+}
+
+// Resolvedor para decodificar o payload serializado complexo do SvelteKit retornado pela API cnpja.com
+function resolveCnpjaData(data) {
+    try {
+        if (!data || !data.nodes) return null;
+        const dataNode = data.nodes.find(n => n && n.type === 'data' && Array.isArray(n.data));
+        if (!dataNode) return null;
+        const flatList = dataNode.data;
+        
+        const cache = new Map();
+        function resolve(index) {
+            if (index === null || index === undefined) return null;
+            if (typeof index !== 'number') return index;
+            if (cache.has(index)) return cache.get(index);
+            
+            const val = flatList[index];
+            if (val === null || val === undefined) return val;
+            if (Array.isArray(val)) {
+                const arr = [];
+                cache.set(index, arr);
+                for (const item of val) {
+                    arr.push(resolve(item));
+                }
+                return arr;
+            }
+            if (typeof val === 'object') {
+                const obj = {};
+                cache.set(index, obj);
+                for (const key in val) {
+                    obj[key] = resolve(val[key]);
+                }
+                return obj;
+            }
+            return val;
+        }
+
+        const root = resolve(0);
+        const office = root?.office;
+        if (!office) return null;
+        
+        return {
+            logradouro: office.address ? `${office.address.street || ''}`.trim() : '',
+            numero: office.address?.number || '',
+            complemento: office.address?.details || '',
+            bairro: office.address?.district || '',
+            municipio: office.address?.city || '',
+            uf: office.address?.state || '',
+            cep: office.address?.zip ? String(office.address.zip).replace(/\D/g, '') : ''
+        };
+    } catch (e) {
+        console.warn('Erro ao decodificar dados CNPJa:', e);
+        return null;
+    }
+}
+
+// Realiza consultas de CNPJ utilizando a fila de APIs com fallbacks
+async function fetchCNPJAddress(cnpj) {
+    // API 1: ReceitaWS
+    try {
+        const response = await fetch(`https://www.receitaws.com.br/v1/cnpj/${cnpj}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.status !== 'ERROR' && data.logradouro) {
+                return {
+                    logradouro: data.logradouro,
+                    numero: data.numero || '',
+                    complemento: data.complemento || '',
+                    bairro: data.bairro || '',
+                    municipio: data.municipio || '',
+                    uf: data.uf || '',
+                    cep: data.cep ? data.cep.replace(/\D/g, '') : '',
+                    api: 'ReceitaWS'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`ReceitaWS falhou para o CNPJ ${cnpj}:`, e);
+    }
+
+    // API 2: Publica CNPJ WS
+    try {
+        const response = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`);
+        if (response.ok) {
+            const data = await response.json();
+            const est = data.estabelecimento;
+            if (est && est.logradouro) {
+                const streetType = est.tipo_logradouro ? est.tipo_logradouro + ' ' : '';
+                return {
+                    logradouro: streetType + est.logradouro,
+                    numero: est.numero || '',
+                    complemento: est.complemento || '',
+                    bairro: est.bairro || '',
+                    municipio: est.cidade ? est.cidade.nome : '',
+                    uf: est.estado ? est.estado.sigla : '',
+                    cep: est.cep ? est.cep.replace(/\D/g, '') : '',
+                    api: 'Publica CNPJ WS'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`Publica CNPJ WS falhou para o CNPJ ${cnpj}:`, e);
+    }
+
+    // API 3: CNPJa
+    try {
+        const response = await fetch(`https://cnpja.com/office/${cnpj}/__data.json?x-sveltekit-invalidated=001`);
+        if (response.ok) {
+            const data = await response.json();
+            const resolved = resolveCnpjaData(data);
+            if (resolved && resolved.logradouro) {
+                return {
+                    logradouro: resolved.logradouro,
+                    numero: resolved.numero || '',
+                    complemento: resolved.complemento || '',
+                    bairro: resolved.bairro || '',
+                    municipio: resolved.municipio || '',
+                    uf: resolved.uf || '',
+                    cep: resolved.cep || '',
+                    api: 'CNPJa'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`CNPJa falhou para o CNPJ ${cnpj}:`, e);
+    }
+
+    return null;
+}
+
+// Realiza consultas de CEP utilizando as APIs de fallback em último caso
+async function fetchCEPAddress(cep) {
+    if (!cep || cep.length < 8) return null;
+    
+    // API 4: BrasilAPI (CEP)
+    try {
+        const response = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.street) {
+                return {
+                    logradouro: data.street,
+                    numero: '',
+                    complemento: '',
+                    bairro: data.neighborhood || '',
+                    municipio: data.city || '',
+                    uf: data.state || '',
+                    cep: cep,
+                    api: 'BrasilAPI (CEP)'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`BrasilAPI (CEP) falhou para o CEP ${cep}:`, e);
+    }
+
+    // API 5: ViaCEP
+    try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.logradouro) {
+                return {
+                    logradouro: data.logradouro,
+                    numero: '',
+                    complemento: data.complemento || '',
+                    bairro: data.bairro || '',
+                    municipio: data.localidade || '',
+                    uf: data.uf || '',
+                    cep: cep,
+                    api: 'ViaCEP'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`ViaCEP falhou para o CEP ${cep}:`, e);
+    }
+
+    return null;
+}
+
+// Orquestrador assíncrono principal para higienizar endereços faltantes por CNPJ
+async function enrichIncompleteAddresses() {
+    const getlista = state.getlistaData;
+    const headers = state.getlistaHeaders;
+    
+    if (!getlista || getlista.length === 0) return;
+    
+    // Filtra apenas leads que não possuem endereço estruturado
+    const incompleteLeads = [];
+    getlista.forEach((row, idx) => {
+        const logradouro = getColumnValue(row, headers, ['Logradouro']).toString().trim();
+        const num = getColumnValue(row, headers, ['Número', 'Numero']).toString().trim();
+        
+        // Critério: Sem logradouro, ou apenas placeholder de vírgula
+        if (!logradouro || logradouro === ',' || logradouro === '') {
+            const cnpjRaw = getColumnValue(row, headers, ['CNPJ']);
+            const cleanCnpj = cnpjRaw ? cnpjRaw.toString().replace(/\D/g, '').padStart(14, '0') : '';
+            const cepRaw = getColumnValue(row, headers, ['CEP']);
+            const cleanCep = cepRaw ? cepRaw.toString().replace(/\D/g, '') : '';
+            const name = getColumnValue(row, headers, ['Razão Social', 'Razao Social']) || getColumnValue(row, headers, ['Nome Fantasia']) || `Lead #${idx + 1}`;
+            
+            if (cleanCnpj && cleanCnpj.length === 14) {
+                incompleteLeads.push({ row, cnpj: cleanCnpj, cep: cleanCep, name, index: idx });
+            }
+        }
+    });
+    
+    if (incompleteLeads.length === 0) {
+        log('Todos os leads GetLista possuem endereço preenchido. Pulando etapa de enriquecimento.', 'success');
+        return;
+    }
+    
+    log(`[ENRIQUECIMENTO] Encontrados <strong>${incompleteLeads.length} leads sem endereço</strong>. Iniciando consulta de enriquecimento...`, 'system');
+    
+    for (let i = 0; i < incompleteLeads.length; i++) {
+        const lead = incompleteLeads[i];
+        log(`[ENRIQUECIMENTO] (${i+1}/${incompleteLeads.length}) Consultando dados para <strong>${lead.name}</strong> (CNPJ: ${formatCnpjForDisplay(lead.cnpj)})...`, 'info');
+        
+        // 1. Tenta enriquecer por CNPJ
+        let result = await fetchCNPJAddress(lead.cnpj);
+        
+        // 2. Fallback: Se falhar, tenta por CEP (se CEP for válido)
+        if (!result && lead.cep && lead.cep.length === 8 && lead.cep !== '13400000') {
+            log(`[ENRIQUECIMENTO] Falha nas APIs de CNPJ para <strong>${lead.name}</strong>. Tentando CEP fallback (${lead.cep})...`, 'warning');
+            result = await fetchCEPAddress(lead.cep);
+        }
+        
+        // 3. Aplica o enriquecimento se houver resultado
+        if (result) {
+            setColumnValue(lead.row, headers, ['Logradouro'], result.logradouro);
+            setColumnValue(lead.row, headers, ['Número', 'Numero'], result.numero);
+            setColumnValue(lead.row, headers, ['Complemento'], result.complemento);
+            setColumnValue(lead.row, headers, ['Bairro'], result.bairro);
+            setColumnValue(lead.row, headers, ['Município', 'Municipio'], result.municipio);
+            setColumnValue(lead.row, headers, ['UF'], result.uf);
+            setColumnValue(lead.row, headers, ['CEP'], result.cep);
+            setColumnValue(lead.row, headers, ['API Origem', 'API_Origem'], result.api);
+            
+            log(`[ENRIQUECIMENTO] Lead <strong>${lead.name}</strong> enriquecido com sucesso via <strong>${result.api}</strong>: ${result.logradouro}, ${result.numero || '(s/n)'} - ${result.bairro} (${result.cep})`, 'success');
+        } else {
+            log(`[ENRIQUECIMENTO] ❌ Não foi possível obter o endereço para <strong>${lead.name}</strong> através das APIs públicas de CNPJ ou CEP.`, 'error');
+        }
+        
+        // Atraso de 1 segundo entre requisições para evitar rate-limit
+        if (i < incompleteLeads.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
     }
 }
 
@@ -602,10 +880,21 @@ function processMerge() {
 }
 
 // Vincula evento do botão principal de fusão
-DOM.btnProcess.addEventListener('click', () => {
+DOM.btnProcess.addEventListener('click', async () => {
     try {
         DOM.btnProcess.setAttribute('disabled', 'true');
-        DOM.btnProcess.querySelector('span').innerText = 'Processando...';
+        
+        const enrichEnabled = document.getElementById('chkEnrichAddress').checked;
+        if (enrichEnabled) {
+            DOM.btnProcess.querySelector('span').innerText = 'Enriquecendo Endereços...';
+            try {
+                await enrichIncompleteAddresses();
+            } catch (err) {
+                log(`[ENRIQUECIMENTO] Erro durante enriquecimento: ${err.message}`, 'error');
+            }
+        }
+        
+        DOM.btnProcess.querySelector('span').innerText = 'Mesclando...';
         
         // Simula pequena folga para a UI respirar antes de travar thread
         setTimeout(() => {
