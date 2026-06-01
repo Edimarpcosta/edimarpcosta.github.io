@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor de Fusão B2B - GetLista & Google Maps</title>
+    <meta name="description" content="Ferramenta premium de georeconciliação e enriquecimento de bases de prospecção comercial. Cruza dados do GetLista (Receita Federal) e Google Maps.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- SheetJS (XLSX) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="glow-bg"></div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon-wrapper">
+                    <i data-lucide="merge" class="logo-icon"></i>
+                </div>
+                <div>
+                    <h1>Motor de Fusão B2B</h1>
+                    <p class="subtitle">Georeconciliação e Enriquecimento de Leads • Ameripan</p>
+                </div>
+            </div>
+            <div class="app-status-badge">
+                <span class="pulse-indicator"></span>
+                <span>Processamento Local Seguro</span>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="dashboard-grid">
+            <!-- Dropzones Card -->
+            <section class="card glass upload-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="upload-cloud" class="title-icon text-cyan"></i>
+                        <h2>Upload de Planilhas</h2>
+                    </div>
+                    <p class="card-desc">Suba as planilhas para cruzamento. Os formatos aceitos são .xlsx ou .csv.</p>
+                </div>
+                
+                <div class="upload-zone-wrapper">
+                    <!-- GetLista Dropzone -->
+                    <div class="dropzone" id="dropzoneGetLista">
+                        <input type="file" id="fileGetLista" accept=".xlsx,.csv" class="file-input">
+                        <div class="dropzone-content">
+                            <div class="icon-circle bg-purple-glow">
+                                <i data-lucide="file-spreadsheet" class="text-purple"></i>
+                            </div>
+                            <h3>Planilha GetLista</h3>
+                            <p class="file-info">Arraste ou clique para selecionar</p>
+                            <span class="file-spec">Base Receita Federal / CNPJs</span>
+                            <div class="file-status" id="statusGetLista">Nenhum arquivo selecionado</div>
+                        </div>
+                    </div>
+
+                    <!-- Maps Dropzone -->
+                    <div class="dropzone" id="dropzoneMaps">
+                        <input type="file" id="fileMaps" accept=".xlsx,.csv" class="file-input">
+                        <div class="dropzone-content">
+                            <div class="icon-circle bg-cyan-glow">
+                                <i data-lucide="map-pin" class="text-cyan"></i>
+                            </div>
+                            <h3>Planilha Maps</h3>
+                            <p class="file-info">Arraste ou clique para selecionar</p>
+                            <span class="file-spec">Dados do Google Maps / Scraper</span>
+                            <div class="file-status" id="statusMaps">Nenhum arquivo selecionado</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-box">
+                    <div class="settings-title">
+                        <i data-lucide="sliders" class="small-icon"></i>
+                        <span>Configurações de Reconciliação</span>
+                    </div>
+                    <div class="settings-options">
+                        <label class="setting-control">
+                            <input type="checkbox" id="chkFallbackStreet" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="setting-label">
+                                <strong>Logradouro Fallback</strong>
+                                <span class="setting-desc">Se o CEP falhar ou for geral (13400-000), parear por Logradouro + Número</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-block" id="btnProcess" disabled>
+                    <i data-lucide="zap" class="btn-icon"></i>
+                    <span>Iniciar Fusão e Higienização</span>
+                </button>
+            </section>
+
+            <!-- Console Log Card -->
+            <section class="card glass console-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="terminal" class="title-icon text-purple"></i>
+                        <h2>Console de Operações</h2>
+                    </div>
+                    <div class="console-actions">
+                        <button class="btn-mini" id="btnClearConsole" title="Limpar Console">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="console-wrapper">
+                    <div class="console-content" id="consoleLogs">
+                        <div class="log-entry log-system">
+                            <span class="log-time">00:00:00</span>
+                            <span class="log-text">Aguardando upload das planilhas GetLista e Maps para iniciar...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Stats Section (Hidden initially) -->
+        <section class="stats-section glass" id="statsSection" style="display: none;">
+            <div class="section-title-wrapper">
+                <i data-lucide="bar-chart-3" class="title-icon text-emerald"></i>
+                <h2>Relatório de Reconciliação</h2>
+            </div>
+            
+            <div class="stats-grid">
+                <!-- Circular/Progress Metric -->
+                <div class="stat-card glass-light match-rate-card">
+                    <div class="radial-progress-wrapper">
+                        <svg class="radial-progress" viewBox="0 0 100 100">
+                            <circle class="bg" cx="50" cy="50" r="40"></circle>
+                            <circle class="progress" cx="50" cy="50" r="40" id="statRadialProgress"></circle>
+                        </svg>
+                        <div class="radial-value" id="statMatchRate">0%</div>
+                    </div>
+                    <div class="stat-label">Taxa de Matching Geográfico</div>
+                </div>
+
+                <!-- Detailed Counters -->
+                <div class="stat-counters">
+                    <div class="stat-counter-card glass-light">
+                        <div class="counter-header">
+                            <span class="counter-num text-purple" id="countGetListaTotal">0</span>
+                            <i data-lucide="file-spreadsheet" class="counter-icon text-purple"></i>
+                        </div>
+                        <div class="counter-label">Registros GetLista</div>
+                    </div>
+                    <div class="stat-counter-card glass-light">
+                        <div class="counter-header">
+                            <span class="counter-num text-cyan" id="countMapsTotal">0</span>
+                            <i data-lucide="map" class="counter-icon text-cyan"></i>
+                        </div>
+                        <div class="counter-label">Registros Maps</div>
+                    </div>
+                    <div class="stat-counter-card glass-light border-emerald">
+                        <div class="counter-header">
+                            <span class="counter-num text-emerald" id="countMatched">0</span>
+                            <i data-lucide="check-circle-2" class="counter-icon text-emerald"></i>
+                        </div>
+                        <div class="counter-label">Estudados Fundidos (Sucesso)</div>
+                    </div>
+                    <div class="stat-counter-card glass-light border-red">
+                        <div class="counter-header">
+                            <span class="counter-num text-red" id="countUnmatched">0</span>
+                            <i data-lucide="alert-triangle" class="counter-icon text-red"></i>
+                        </div>
+                        <div class="counter-label">Não Encontrados (GetLista + Maps)</div>
+                    </div>
+                </div>
+
+                <!-- Action Download & Refine Card -->
+                <div class="stat-card glass-light action-panel-card">
+                    <div class="panel-section">
+                        <div class="panel-section-title text-emerald">
+                            <i data-lucide="file-down" class="small-icon"></i>
+                            <span>Exportar Relatórios</span>
+                        </div>
+                        <button class="btn btn-success btn-block" id="btnDownload" style="padding: 10px 20px;">
+                            <i data-lucide="download" class="btn-icon"></i>
+                            <span>Pasta Multi-Abas (.XLSX)</span>
+                        </button>
+                        <div class="mini-download-grid">
+                            <button class="btn-mini-download" id="btnDownloadEnriched" title="Apenas Leads Enriquecidos com Sucesso">
+                                <i data-lucide="check-circle" class="mini-icon text-emerald"></i>
+                                <span>Enriquecida</span>
+                            </button>
+                            <button class="btn-mini-download" id="btnDownloadGL" title="Apenas Leads Não Encontrados GetLista">
+                                <i data-lucide="file-minus" class="mini-icon text-purple"></i>
+                                <span>Órfãos GetLista</span>
+                            </button>
+                            <button class="btn-mini-download" id="btnDownloadMaps" title="Apenas Estabelecimentos Não Encontrados Maps">
+                                <i data-lucide="map-pin-off" class="mini-icon text-cyan"></i>
+                                <span>Órfãos Maps</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="panel-divider"></div>
+
+                    <div class="panel-section">
+                        <div class="panel-section-title text-cyan">
+                            <i data-lucide="refresh-cw" class="small-icon"></i>
+                            <span>Emendar Novo Maps (Refinamento)</span>
+                        </div>
+                        <p class="section-desc">Gere novos dados no mapsscraper para os órfãos e suba o novo arquivo para refinar a base atual.</p>
+                        <div class="refine-dropzone" id="refineDropzone">
+                            <input type="file" id="fileRefineMaps" accept=".xlsx,.csv" class="refine-file-input">
+                            <div class="refine-content">
+                                <i data-lucide="plus-circle" class="refine-icon text-cyan"></i>
+                                <span id="refineStatus">Novo Maps</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Reconciler Section -->
+            <div class="manual-matching-container glass-light" id="manualMatchingContainer" style="display: none;">
+                <div class="manual-header">
+                    <div class="manual-title">
+                        <i data-lucide="hand" class="title-icon text-cyan"></i>
+                        <h3>Reconciliação Manual Assistida (Arraste & Solte)</h3>
+                    </div>
+                    <p class="manual-desc">Utilize os filtros de busca para encontrar registros semelhantes. Arraste o lead do <strong>GetLista (Esquerda)</strong> e solte-o no estabelecimento correspondente do <strong>Maps (Direita)</strong>.</p>
+                </div>
+                
+                <div class="manual-search-row">
+                    <div class="search-input-wrapper">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" id="searchManualGetLista" placeholder="Filtrar GetLista por nome, rua, bairro..." class="search-input">
+                    </div>
+                    <div class="manual-vs-badge">VS</div>
+                    <div class="search-input-wrapper">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" id="searchManualMaps" placeholder="Filtrar Maps por nome, endereço..." class="search-input">
+                    </div>
+                </div>
+
+                <div class="manual-columns-grid">
+                    <!-- GetLista Column -->
+                    <div class="manual-column">
+                        <div class="column-header-title text-purple">
+                            <span class="badge bg-purple-glow" id="lblGetListaUnmatchedCount">0</span>
+                            <span>Não Encontrados GetLista</span>
+                        </div>
+                        <div class="manual-cards-list" id="lstManualGetLista">
+                            <!-- Cards populating via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Maps Column -->
+                    <div class="manual-column">
+                        <div class="column-header-title text-cyan">
+                            <span class="badge bg-cyan-glow" id="lblMapsUnmatchedCount">0</span>
+                            <span>Não Encontrados Maps</span>
+                        </div>
+                        <div class="manual-cards-list" id="lstManualMaps">
+                            <!-- Cards populating via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History tag list for manual matched items -->
+                <div class="manual-matches-history" id="manualMatchesHistoryBox" style="display: none;">
+                    <h4>Pareamentos Manuais nesta Sessão</h4>
+                    <div class="history-tags-list" id="lstManualMatchesHistory">
+                        <!-- History tags populated via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Dashboard -->
+            <div class="preview-dashboard">
+                <div class="tab-header">
+                    <button class="tab-btn active" data-tab="tabEnriched">
+                        <i data-lucide="check-circle" class="tab-icon"></i>
+                        <span>Enriquecida (Sucesso)</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tabUnmatchedGetLista">
+                        <i data-lucide="file-minus" class="tab-icon"></i>
+                        <span>Não Encontrados - GetLista</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tabUnmatchedMaps">
+                        <i data-lucide="map-pin-off" class="tab-icon"></i>
+                        <span>Não Encontrados - Maps</span>
+                    </button>
+                </div>
+
+                <div class="tab-content-wrapper">
+                    <!-- Tab Enriched -->
+                    <div class="tab-panel active" id="tabEnriched">
+                        <div class="preview-summary">
+                            <span>Exibindo as primeiras 10 linhas da fusão enriquecida</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tblEnriched">
+                                <thead>
+                                    <tr id="tblEnrichedHeaders"></tr>
+                                </thead>
+                                <tbody id="tblEnrichedBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab Unmatched GetLista -->
+                    <div class="tab-panel" id="tabUnmatchedGetLista">
+                        <div class="preview-summary">
+                            <span>Leads do GetLista não encontrados no Google Maps (Aba 2 do Excel)</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tblUnmatchedGetLista">
+                                <thead>
+                                    <tr id="tblUnmatchedGetListaHeaders"></tr>
+                                </thead>
+                                <tbody id="tblUnmatchedGetListaBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab Unmatched Maps -->
+                    <div class="tab-panel" id="tabUnmatchedMaps">
+                        <div class="preview-summary">
+                            <span>Estabelecimentos do Maps não pareados com CNPJs (Aba 3 do Excel)</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tblUnmatchedMaps">
+                                <thead>
+                                    <tr id="tblUnmatchedMapsHeaders"></tr>
+                                </thead>
+                                <tbody id="tblUnmatchedMapsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Script principal -->
+    <script src="app.js"></script>
+    <script>
+        // Inicializa os ícones do Lucide
+        lucide.createIcons();
+    </script>
+</body>
+</html>
