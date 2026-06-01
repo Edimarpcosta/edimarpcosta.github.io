@@ -37,6 +37,7 @@ const DOM = {
     statusGetLista: document.getElementById('statusGetLista'),
     statusMaps: document.getElementById('statusMaps'),
     btnProcess: document.getElementById('btnProcess'),
+    btnRecheck: document.getElementById('btnRecheck'),
     btnClearConsole: document.getElementById('btnClearConsole'),
     consoleLogs: document.getElementById('consoleLogs'),
     
@@ -213,6 +214,8 @@ function getSheetHeaders(worksheet) {
 function checkProcessingReady() {
     if (state.getlistaData && state.mapsData) {
         DOM.btnProcess.removeAttribute('disabled');
+        state.manualMatchesHistory = [];
+        if (DOM.btnRecheck) DOM.btnRecheck.style.display = 'none';
         log('Ambas as planilhas foram carregadas. O motor de fusão está pronto para processar.', 'system');
     } else {
         DOM.btnProcess.setAttribute('disabled', 'true');
@@ -426,7 +429,30 @@ function resolveCnpjaData(data) {
 
 // Realiza consultas de CNPJ utilizando a fila de APIs com fallbacks
 async function fetchCNPJAddress(cnpj) {
-    // API 1: ReceitaWS
+    // API 1: OpenCNPJ
+    try {
+        const response = await fetch(`https://api.opencnpj.org/${cnpj}?dataset=receita`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.logradouro) {
+                const streetType = data.tipo_logradouro ? data.tipo_logradouro + ' ' : '';
+                return {
+                    logradouro: streetType + data.logradouro,
+                    numero: data.numero || '',
+                    complemento: data.complemento || '',
+                    bairro: data.bairro || '',
+                    municipio: data.municipio || '',
+                    uf: data.uf || '',
+                    cep: data.cep ? data.cep.replace(/\D/g, '') : '',
+                    api: 'OpenCNPJ'
+                };
+            }
+        }
+    } catch (e) {
+        console.warn(`OpenCNPJ falhou para o CNPJ ${cnpj}:`, e);
+    }
+
+    // API 2: ReceitaWS
     try {
         const response = await fetch(`https://www.receitaws.com.br/v1/cnpj/${cnpj}`);
         if (response.ok) {
@@ -448,7 +474,7 @@ async function fetchCNPJAddress(cnpj) {
         console.warn(`ReceitaWS falhou para o CNPJ ${cnpj}:`, e);
     }
 
-    // API 2: Publica CNPJ WS
+    // API 3: Publica CNPJ WS
     try {
         const response = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`);
         if (response.ok) {
@@ -472,7 +498,7 @@ async function fetchCNPJAddress(cnpj) {
         console.warn(`Publica CNPJ WS falhou para o CNPJ ${cnpj}:`, e);
     }
 
-    // API 3: CNPJa
+    // API 4: CNPJa
     try {
         const response = await fetch(`https://cnpja.com/office/${cnpj}/__data.json?x-sveltekit-invalidated=001`);
         if (response.ok) {
@@ -620,7 +646,7 @@ async function enrichIncompleteAddresses() {
 }
 
 // --- ALGORITMO PRINCIPAL DE RECONCILIAÇÃO ---
-function processMerge() {
+function processMerge(preserveManualMatches = false) {
     log('Iniciando reconciliação georeferenciada...', 'info');
     
     const getlista = state.getlistaData;
@@ -630,12 +656,15 @@ function processMerge() {
     
     const useFallback = document.getElementById('chkFallbackStreet').checked;
     
-    // Reinicializa histórico de matching manual
-    state.manualMatchesHistory = [];
+    // Reinicializa histórico de matching manual se não for para preservar
+    if (!preserveManualMatches) {
+        state.manualMatchesHistory = [];
+    }
     
     // Mapeamento e limpeza de dados do Maps em Dicionários
     const mapsByCepNum = {};
     const mapsByStreetNum = {};
+    const mapsRecords = [];
     
     log(`Preparando indexadores geográficos para ${maps.length} registros Maps...`, 'info');
     
@@ -665,6 +694,7 @@ function processMerge() {
             number_clean: cleanN,
             matched: false
         };
+        mapsRecords.push(record);
         
         // Indexa por CEP + Número
         if (cepVal && cleanN && cepVal !== '13400000') {
@@ -703,8 +733,19 @@ function processMerge() {
         let matchRecord = null;
         let matchMethod = '';
         
+        // Se houver histórico de match manual e devemos preservar, recupera-o
+        const manualMatch = preserveManualMatches ? state.manualMatchesHistory.find(h => h.glIdx === gIdx) : null;
+        if (manualMatch) {
+            const mapsIdx = manualMatch.mapsIdx;
+            const record = mapsRecords[mapsIdx];
+            if (record) {
+                matchRecord = record;
+                matchMethod = 'MANUAL';
+            }
+        }
+        
         // NÍVEL 1: Match por CEP + Número (se CEP válido e não genérico)
-        if (cepClean && numClean && cepClean !== '13400000') {
+        if (!matchRecord && cepClean && numClean && cepClean !== '13400000') {
             const key = `${cepClean}_${numClean}`;
             const candidates = mapsByCepNum[key];
             if (candidates && candidates.length > 0) {
@@ -782,8 +823,9 @@ function processMerge() {
             
             // Criação do objeto final com as 40 colunas mapeadas
             // Criação do objeto final com as 40 colunas mapeadas (Status_Fusao no início)
+            const statusFusaoVal = matchMethod.startsWith('MANUAL') ? "SUCESSO (MANUAL)" : "SUCESSO";
             const enrichedRow = {
-                "Status_Fusao": "SUCESSO",
+                "Status_Fusao": statusFusaoVal,
                 "CNPJ": getColumnValue(gRow, gHeaders, ['CNPJ']),
                 "Razão Social": getColumnValue(gRow, gHeaders, ['Razão Social', 'Razao Social']),
                 "Nome Fantasia": nomeFantasiaFinal,
@@ -883,6 +925,7 @@ function processMerge() {
 DOM.btnProcess.addEventListener('click', async () => {
     try {
         DOM.btnProcess.setAttribute('disabled', 'true');
+        if (DOM.btnRecheck) DOM.btnRecheck.setAttribute('disabled', 'true');
         
         const enrichEnabled = document.getElementById('chkEnrichAddress').checked;
         if (enrichEnabled) {
@@ -898,16 +941,52 @@ DOM.btnProcess.addEventListener('click', async () => {
         
         // Simula pequena folga para a UI respirar antes de travar thread
         setTimeout(() => {
-            processMerge();
+            processMerge(false); // preserveManualMatches = false (nova fusão limpa)
             DOM.btnProcess.removeAttribute('disabled');
+            if (DOM.btnRecheck) DOM.btnRecheck.removeAttribute('disabled');
             DOM.btnProcess.querySelector('span').innerText = 'Iniciar Fusão e Higienização';
         }, 100);
     } catch (e) {
         log(`Erro crítico no processador: ${e.message}`, 'error');
         DOM.btnProcess.removeAttribute('disabled');
+        if (DOM.btnRecheck) DOM.btnRecheck.removeAttribute('disabled');
         DOM.btnProcess.querySelector('span').innerText = 'Iniciar Fusão e Higienização';
     }
 });
+
+// Vincula evento do botão secundário de re-checagem/reprocessamento preservando matches manuais
+if (DOM.btnRecheck) {
+    DOM.btnRecheck.addEventListener('click', async () => {
+        try {
+            DOM.btnRecheck.setAttribute('disabled', 'true');
+            DOM.btnProcess.setAttribute('disabled', 'true');
+            
+            const enrichEnabled = document.getElementById('chkEnrichAddress').checked;
+            if (enrichEnabled) {
+                DOM.btnRecheck.querySelector('span').innerText = 'Enriquecendo Endereços...';
+                try {
+                    await enrichIncompleteAddresses();
+                } catch (err) {
+                    log(`[ENRIQUECIMENTO] Erro durante enriquecimento: ${err.message}`, 'error');
+                }
+            }
+            
+            DOM.btnRecheck.querySelector('span').innerText = 'Re-mesclando...';
+            
+            setTimeout(() => {
+                processMerge(true); // preserveManualMatches = true
+                DOM.btnRecheck.removeAttribute('disabled');
+                DOM.btnProcess.removeAttribute('disabled');
+                DOM.btnRecheck.querySelector('span').innerText = 'Checar Dados Novamente';
+            }, 100);
+        } catch (e) {
+            log(`Erro crítico no reprocessamento: ${e.message}`, 'error');
+            DOM.btnRecheck.removeAttribute('disabled');
+            DOM.btnProcess.removeAttribute('disabled');
+            DOM.btnRecheck.querySelector('span').innerText = 'Checar Dados Novamente';
+        }
+    });
+}
 
 // --- RENDERIZAR RESULTADOS E DASHBOARDS ---
 function renderResults() {
@@ -915,6 +994,11 @@ function renderResults() {
     
     // Exibe painel de estatísticas
     DOM.statsSection.style.display = 'block';
+    
+    // Exibe o botão de reprocessamento
+    if (DOM.btnRecheck) {
+        DOM.btnRecheck.style.display = 'inline-flex';
+    }
     
     // Anima taxa de match progressiva
     DOM.statMatchRate.innerText = `${stats.rate.toFixed(1)}%`;
@@ -1206,7 +1290,17 @@ function renderManualCards() {
         const logradouro = getColumnValue(row, state.getlistaHeaders, ['Logradouro'], '');
         const numero = getColumnValue(row, state.getlistaHeaders, ['Número', 'Numero'], '');
         const bairro = getColumnValue(row, state.getlistaHeaders, ['Bairro'], '');
+        const municipio = getColumnValue(row, state.getlistaHeaders, ['Município', 'Municipio'], '');
+        const uf = getColumnValue(row, state.getlistaHeaders, ['UF'], '');
+        const cep = getColumnValue(row, state.getlistaHeaders, ['CEP'], '');
         const telefone = getColumnValue(row, state.getlistaHeaders, ['Telefone'], '') || '(Sem Telefone)';
+
+        // Monta o endereço completo contendo o CEP
+        let enderecoCompleto = `${logradouro}, ${numero}`;
+        if (bairro) enderecoCompleto += ` - ${bairro}`;
+        if (municipio) enderecoCompleto += `, ${municipio}`;
+        if (uf) enderecoCompleto += ` - ${uf}`;
+        if (cep) enderecoCompleto += `, ${cep}`;
 
         const card = document.createElement('div');
         card.className = 'manual-card draggable';
@@ -1219,7 +1313,7 @@ function renderManualCards() {
             <div class="card-subtitle">${fantasia}</div>
             <div class="card-info-row">
                 <i data-lucide="map-pin" class="card-info-icon"></i>
-                <span class="card-info-text">${logradouro}, ${numero} - ${bairro}</span>
+                <span class="card-info-text">${enderecoCompleto}</span>
             </div>
             <div class="card-info-row">
                 <i data-lucide="phone" class="card-info-icon"></i>
