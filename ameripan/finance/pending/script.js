@@ -332,7 +332,9 @@ document.addEventListener("DOMContentLoaded", () => {
             DificuldadeAutoatendimento: row.DificuldadeAutoatendimento || "NÃO",
             TotalFaturas: parseInt(row.TotalFaturas) || 0,
             TotalAtrasos: parseInt(row.TotalAtrasos) || 0,
-            UltimaOcorrencia: row.UltimaOcorrencia || ""
+            UltimaOcorrencia: row.UltimaOcorrencia || "",
+            TelefonePlanilha1: row.TelefonePlanilha1 || "",
+            TelefonePlanilha2: row.TelefonePlanilha2 || ""
           };
         }
       });
@@ -343,6 +345,15 @@ document.addEventListener("DOMContentLoaded", () => {
       clientsData = res.cobrancas.map(row => {
         const lancoKey = String(row.Lancamento || row.ChaveUnica || "").trim();
         const clientCode = String(row.CodCliente || row.Codigo || "").trim();
+
+        // Tentar obter fones originais salvos no perfil do cliente
+        let planilhaFone1 = { valido: false, formatado: "" };
+        let planilhaFone2 = { valido: false, formatado: "" };
+        const perfil = clientCode ? clientesPerfilMap[clientCode] : null;
+        if (perfil) {
+          if (perfil.TelefonePlanilha1) planilhaFone1 = formatarTelefone(perfil.TelefonePlanilha1);
+          if (perfil.TelefonePlanilha2) planilhaFone2 = formatarTelefone(perfil.TelefonePlanilha2);
+        }
 
         let contato = null;
         if (clientCode) {
@@ -360,8 +371,8 @@ document.addEventListener("DOMContentLoaded", () => {
           contato = { Telefone1Correto: "", Telefone2Correto: "", Codigo: clientCode, NomeContato: "", Fone1Confirmado: "NÃO", Fone2Confirmado: "NÃO", CNPJ: "" };
         }
 
-        let fone1 = formatarTelefone(contato.Telefone1Correto || row.TelefoneCobrado);
-        let fone2 = formatarTelefone(contato.Telefone2Correto);
+        let fone1 = contato.Telefone1Correto ? formatarTelefone(contato.Telefone1Correto) : planilhaFone1;
+        let fone2 = contato.Telefone2Correto ? formatarTelefone(contato.Telefone2Correto) : planilhaFone2;
 
         return {
           ChaveUnica: lancoKey,
@@ -374,8 +385,13 @@ document.addEventListener("DOMContentLoaded", () => {
           Vencimento: formatarDataExcel(row.Vencimento),
           Valor: parseFloat(row.Valor) || 0,
           Parcela: String(row.Parcela || "1"),
+          PlanilhaFone1: planilhaFone1,
+          PlanilhaFone2: planilhaFone2,
           Fone1: fone1,
           Fone2: fone2,
+          Fone1Confirmado: contato.Fone1Confirmado || "NÃO",
+          Fone2Confirmado: contato.Fone2Confirmado || "NÃO",
+          NomeContato: contato.NomeContato || "",
           NF: "",
           Vendedor: "",
           Status: row.Status || "Pendente",
@@ -418,6 +434,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const totalFaturas = faturasCliente.length || 1;
     const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta").length;
 
+    const tPlan1 = (baseClientForContactAndPerfil.PlanilhaFone1 && baseClientForContactAndPerfil.PlanilhaFone1.valido) ? baseClientForContactAndPerfil.PlanilhaFone1.exibicao : (perfil.TelefonePlanilha1 || "");
+    const tPlan2 = (baseClientForContactAndPerfil.PlanilhaFone2 && baseClientForContactAndPerfil.PlanilhaFone2.valido) ? baseClientForContactAndPerfil.PlanilhaFone2.exibicao : (perfil.TelefonePlanilha2 || "");
+
     const payload = {
       token: CONFIG.PASSWORD,
       action: "salvar_ocorrencia",
@@ -451,7 +470,9 @@ document.addEventListener("DOMContentLoaded", () => {
         DificuldadeAutoatendimento: perfil.DificuldadeAutoatendimento || "NÃO",
         TotalFaturas: totalFaturas,
         TotalAtrasos: totalAtrasos,
-        UltimaOcorrencia: baseClientForContactAndPerfil.Status
+        UltimaOcorrencia: baseClientForContactAndPerfil.Status,
+        TelefonePlanilha1: tPlan1,
+        TelefonePlanilha2: tPlan2
       }
     };
 
@@ -484,7 +505,9 @@ document.addEventListener("DOMContentLoaded", () => {
         DificuldadeAutoatendimento: perfil.DificuldadeAutoatendimento || "NÃO",
         TotalFaturas: totalFaturas,
         TotalAtrasos: totalAtrasos,
-        UltimaOcorrencia: baseClientForContactAndPerfil.Status
+        UltimaOcorrencia: baseClientForContactAndPerfil.Status,
+        TelefonePlanilha1: tPlan1,
+        TelefonePlanilha2: tPlan2
       };
     }
 
@@ -753,12 +776,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let fone1 = { valido: false, formatado: "" };
         let fone2 = { valido: false, formatado: "" };
         
-        // Se existir contato corrigido salvo na nuvem por Codigo (ou CNPJ como fallback), use ele!
-        const contatoCorrigido = (code && contatosCorrigidosMap[code]) || contatosCorrigidosMap[cnpj];
-        if (contatoCorrigido) {
-          if (contatoCorrigido.Telefone1Correto) fone1 = formatarTelefone(contatoCorrigido.Telefone1Correto);
-          if (contatoCorrigido.Telefone2Correto) fone2 = formatarTelefone(contatoCorrigido.Telefone2Correto);
-        } else if (parts[2]) {
+        if (parts[2]) {
           const phoneString = parts[2].replace("Fone:", "").trim();
           const phoneParts = phoneString.split(/[\/|,]/).map(p => p.trim());
           if (phoneParts[0]) fone1 = formatarTelefone(phoneParts[0]);
@@ -807,6 +825,8 @@ document.addEventListener("DOMContentLoaded", () => {
             Vencimento: vencimento,
             Valor: valor,
             Parcela: parcela,
+            PlanilhaFone1: currentCustomer.fone1,
+            PlanilhaFone2: currentCustomer.fone2,
             Fone1: currentCustomer.fone1,
             Fone2: currentCustomer.fone2,
             NF: nf,
@@ -828,6 +848,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function mesclarStatusComExcel() {
     clientsData.forEach(client => {
+      // 1. Obter telefones originais da planilha se não estiverem preenchidos no objeto (ex: quando carregado da nuvem)
+      const clientKey = String(client.Codigo || client.CNPJ || "").trim();
+      const perfil = clientKey ? clientesPerfilMap[clientKey] : null;
+      if (perfil) {
+        if (perfil.TelefonePlanilha1 && (!client.PlanilhaFone1 || !client.PlanilhaFone1.valido)) {
+          client.PlanilhaFone1 = formatarTelefone(perfil.TelefonePlanilha1);
+        }
+        if (perfil.TelefonePlanilha2 && (!client.PlanilhaFone2 || !client.PlanilhaFone2.valido)) {
+          client.PlanilhaFone2 = formatarTelefone(perfil.TelefonePlanilha2);
+        }
+      }
+
+      // Inicializa Fone1 e Fone2 com os da planilha por padrão
+      client.Fone1 = client.PlanilhaFone1 || { valido: false, formatado: "" };
+      client.Fone2 = client.PlanilhaFone2 || { valido: false, formatado: "" };
+
       // Cruzar telefones corrigidos se houver
       const contatoCorrigido = (client.Codigo && contatosCorrigidosMap[client.Codigo]) || contatosCorrigidosMap[client.CNPJ];
       if (contatoCorrigido) {
@@ -837,6 +873,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (contatoCorrigido.NomeContato) client.NomeContato = contatoCorrigido.NomeContato;
         client.Fone1Confirmado = contatoCorrigido.Fone1Confirmado || "NÃO";
         client.Fone2Confirmado = contatoCorrigido.Fone2Confirmado || "NÃO";
+      } else {
+        client.Fone1Confirmado = "NÃO";
+        client.Fone2Confirmado = "NÃO";
       }
 
       const match = sheetStatusMap[client.ChaveUnica];
@@ -1039,8 +1078,77 @@ document.addEventListener("DOMContentLoaded", () => {
       obsText = lastCommentEvent.obs;
     }
 
-    const f1Confirm = client.Fone1Confirmado === "SIM";
-    const f2Confirm = client.Fone2Confirmado === "SIM";
+    // Identificar fones disponíveis (originais e corrigidos)
+    const fonesDisponiveis = [];
+    const contatoCorrigido = (client.Codigo && contatosCorrigidosMap[client.Codigo]) || contatosCorrigidosMap[client.CNPJ];
+    const f1Confirm = (contatoCorrigido && contatoCorrigido.Fone1Confirmado === "SIM") || client.Fone1Confirmado === "SIM";
+    const f2Confirm = (contatoCorrigido && contatoCorrigido.Fone2Confirmado === "SIM") || client.Fone2Confirmado === "SIM";
+
+    if (contatoCorrigido) {
+      if (contatoCorrigido.Telefone1Correto) {
+        const formatted = formatarTelefone(contatoCorrigido.Telefone1Correto);
+        if (formatted.valido) {
+          fonesDisponiveis.push({
+            id: "corrigido1",
+            numero: formatted,
+            label: "Fone 1 (Corrigido)",
+            confirmado: f1Confirm,
+            isCorrigido: true
+          });
+        }
+      }
+      if (contatoCorrigido.Telefone2Correto) {
+        const formatted = formatarTelefone(contatoCorrigido.Telefone2Correto);
+        if (formatted.valido) {
+          fonesDisponiveis.push({
+            id: "corrigido2",
+            numero: formatted,
+            label: "Fone 2 (Corrigido)",
+            confirmado: f2Confirm,
+            isCorrigido: true
+          });
+        }
+      }
+    }
+
+    if (client.PlanilhaFone1 && client.PlanilhaFone1.valido) {
+      const jaExiste = fonesDisponiveis.some(f => f.numero.formatado === client.PlanilhaFone1.formatado);
+      if (!jaExiste) {
+        fonesDisponiveis.push({
+          id: "planilha1",
+          numero: client.PlanilhaFone1,
+          label: "Fone 1 (Planilha)",
+          confirmado: false,
+          isCorrigido: false
+        });
+      }
+    }
+
+    if (client.PlanilhaFone2 && client.PlanilhaFone2.valido) {
+      const jaExiste = fonesDisponiveis.some(f => f.numero.formatado === client.PlanilhaFone2.formatado);
+      if (!jaExiste) {
+        fonesDisponiveis.push({
+          id: "planilha2",
+          numero: client.PlanilhaFone2,
+          label: "Fone 2 (Planilha)",
+          confirmado: false,
+          isCorrigido: false
+        });
+      }
+    }
+
+    // Seletor inteligente de fone prioritário inicial
+    let activeFone = fonesDisponiveis.find(f => f.isCorrigido && f.confirmado);
+    if (!activeFone) {
+      activeFone = fonesDisponiveis.find(f => f.isCorrigido);
+    }
+    if (!activeFone) {
+      activeFone = fonesDisponiveis[0];
+    }
+    selectedPhoneType = activeFone ? activeFone.id : "";
+
+    const f1CorrigidoVal = (contatoCorrigido && contatoCorrigido.Telefone1Correto) ? contatoCorrigido.Telefone1Correto : ((client.Fone1 && client.Fone1.valido) ? client.Fone1.exibicao : "");
+    const f2CorrigidoVal = (contatoCorrigido && contatoCorrigido.Telefone2Correto) ? contatoCorrigido.Telefone2Correto : ((client.Fone2 && client.Fone2.valido) ? client.Fone2.exibicao : "");
 
     inspectorContent.innerHTML = `
       <div class="space-y-4 flex flex-col justify-between h-full text-slate-200">
@@ -1055,7 +1163,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- LISTA DE DUPLICATAS DO CLIENTE -->
-          <div class="space-y-1.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-900">
+          <div class="inspector-faturas-box space-y-1.5 p-2.5 rounded-xl">
             <span class="text-[8.5px] text-slate-500 uppercase font-bold block">Duplicatas do Cliente</span>
             <div class="space-y-1.5 max-h-[140px] overflow-y-auto pr-1" id="inspector-faturas-list">
               <!-- Renderizado via script.js -->
@@ -1069,15 +1177,8 @@ document.addEventListener("DOMContentLoaded", () => {
           <!-- Seletor de Telefone (Verde se Confirmado/Responde) -->
           <div>
             <label class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Destinatário WhatsApp</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" id="phone-btn-1" class="phone-select-btn ${selectedPhoneType === "fone1" ? "active" : ""} ${f1Confirm ? "confirmed" : ""}" ${!client.Fone1.valido ? "disabled" : ""}>
-                <span class="text-[8.5px] font-bold uppercase text-slate-500">Telefone 1</span>
-                <span class="text-xs font-semibold truncate w-full">${client.Fone1.valido ? client.Fone1.exibicao : "Inválido"}</span>
-              </button>
-              <button type="button" id="phone-btn-2" class="phone-select-btn ${selectedPhoneType === "fone2" ? "active" : ""} ${f2Confirm ? "confirmed" : ""}" ${!client.Fone2.valido ? "disabled" : ""}>
-                <span class="text-[8.5px] font-bold uppercase text-slate-500">Telefone 2</span>
-                <span class="text-xs font-semibold truncate w-full">${client.Fone2.valido ? client.Fone2.exibicao : "N/A / Inválido"}</span>
-              </button>
+            <div class="grid grid-cols-2 gap-2" id="phone-buttons-container">
+              <!-- Renderizado dinamicamente -->
             </div>
           </div>
 
@@ -1085,11 +1186,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Corrigir Fone 1</label>
-              <input type="text" id="correct-fone-1" class="premium-input text-xs p-1.5" value="${(client.Fone1 && client.Fone1.valido) ? (client.Fone1.exibicao || client.Fone1.formatado) : ''}" placeholder="Ex: (19) 99999-9999">
+              <input type="text" id="correct-fone-1" class="premium-input text-xs p-1.5" value="${f1CorrigidoVal}" placeholder="Ex: (19) 99999-9999">
             </div>
             <div>
               <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Corrigir Fone 2</label>
-              <input type="text" id="correct-fone-2" class="premium-input text-xs p-1.5" value="${(client.Fone2 && client.Fone2.valido) ? (client.Fone2.exibicao || client.Fone2.formatado) : ''}" placeholder="Ex: (19) 99999-9999">
+              <input type="text" id="correct-fone-2" class="premium-input text-xs p-1.5" value="${f2CorrigidoVal}" placeholder="Ex: (19) 99999-9999">
             </div>
           </div>
 
@@ -1154,7 +1255,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
         <!-- Formulário de Atualização de Status -->
-        <div class="space-y-3 pt-3 border-t border-slate-900 bg-slate-900/10 p-2.5 rounded-xl">
+        <div class="inspector-status-box space-y-3 pt-3 border-t border-slate-900 p-2.5 rounded-xl">
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status Final</label>
@@ -1176,7 +1277,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Perfil Comportamental (Ameripan Insights) -->
-          <div class="space-y-1.5 p-2 bg-slate-950/40 rounded-lg border border-slate-900 mt-1">
+          <div class="inspector-profile-box space-y-1.5 p-2 rounded-lg mt-1">
             <span class="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">Perfil de Comportamento</span>
             <div class="flex flex-col gap-1.5">
               <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-350 hover:text-white transition">
@@ -1204,22 +1305,49 @@ document.addEventListener("DOMContentLoaded", () => {
 
     lucide.createIcons();
 
+    // Renderizar os botões de fones disponíveis dinamicamente
+    const phoneButtonsContainer = document.getElementById("phone-buttons-container");
+    if (phoneButtonsContainer) {
+      phoneButtonsContainer.innerHTML = fonesDisponiveis.map(f => {
+        const isActive = selectedPhoneType === f.id;
+        const activeClass = isActive ? "active" : "";
+        const confirmedClass = f.confirmado ? "confirmed" : "";
+        const star = f.confirmado ? "⭐ " : "";
+        return `
+          <button type="button" class="phone-select-btn ${activeClass} ${confirmedClass}" data-fone-id="${f.id}">
+            <span class="text-[8.5px] font-bold uppercase text-slate-500">${f.label}</span>
+            <span class="text-xs font-semibold truncate w-full">${star}${f.numero.exibicao}</span>
+          </button>
+        `;
+      }).join("") || `<span class="text-xs text-rose-400 font-bold col-span-2">Nenhum telefone válido encontrado</span>`;
+
+      // Ouvintes de clique para os botões de fones dinâmicos
+      phoneButtonsContainer.querySelectorAll(".phone-select-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          phoneButtonsContainer.querySelectorAll(".phone-select-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          selectedPhoneType = btn.getAttribute("data-fone-id");
+          atualizarPreviaMensagem();
+        });
+      });
+    }
+
     // Renderizar a lista de faturas com checkbox no painel lateral
     const faturasListContainer = document.getElementById("inspector-faturas-list");
     if (faturasListContainer) {
       faturasListContainer.innerHTML = faturasExibidas.map(f => {
         const isChecked = f.Status !== "Pago";
         return `
-          <div class="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition">
+          <div class="fatura-item flex items-center justify-between p-1.5 rounded-lg transition">
             <label class="flex items-center gap-2 cursor-pointer flex-1 mr-2">
               <input type="checkbox" class="fatura-check w-3.5 h-3.5 accent-cyan-500 rounded border-slate-700 bg-slate-900 cursor-pointer" data-chave="${f.ChaveUnica}" ${isChecked ? 'checked' : ''}>
               <div class="text-left">
-                <div class="text-[11px] font-semibold text-white">Parc. ${f.Parcela} ${f.NF ? `(NF ${f.NF})` : ''}</div>
+                <div class="text-[11px] font-semibold">Parc. ${f.Parcela} ${f.NF ? `(NF ${f.NF})` : ''}</div>
                 <div class="text-[9px] text-slate-400 font-mono">Venc: ${f.Vencimento}</div>
               </div>
             </label>
             <div class="text-right">
-              <div class="text-[11px] font-bold text-white font-mono">${formatarMoeda(f.Valor)}</div>
+              <div class="text-[11px] font-bold font-mono">${formatarMoeda(f.Valor)}</div>
               <div class="text-[8px] font-bold uppercase mt-0.5 text-slate-450">${f.Status}</div>
             </div>
           </div>
@@ -1269,37 +1397,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Ajustar o destinatário inicial selecionado
-    const phoneBtn1 = document.getElementById("phone-btn-1");
-    const phoneBtn2 = document.getElementById("phone-btn-2");
-    
-    if (selectedPhoneType === "fone1" && !client.Fone1.valido && client.Fone2.valido) {
-      selectedPhoneType = "fone2";
-      if (phoneBtn2) phoneBtn2.classList.add("active");
-    } else if (selectedPhoneType === "fone2" && !client.Fone2.valido && client.Fone1.valido) {
-      selectedPhoneType = "fone1";
-      if (phoneBtn1) phoneBtn1.classList.add("active");
-    }
-
-    if (phoneBtn1) {
-      phoneBtn1.addEventListener("click", () => {
-        selectedPhoneType = "fone1";
-        phoneBtn1.classList.add("active");
-        if (phoneBtn2) phoneBtn2.classList.remove("active");
-        atualizarPreviaMensagem();
-      });
-    }
-
-    if (phoneBtn2) {
-      phoneBtn2.addEventListener("click", () => {
-        selectedPhoneType = "fone2";
-        phoneBtn2.classList.add("active");
-        if (phoneBtn1) phoneBtn1.classList.remove("active");
-        atualizarPreviaMensagem();
-      });
-    }
-
-    // Escutas para correção de telefones em tempo real
+    // Ouvintes para correção de telefones em tempo real
     const correctFone1 = document.getElementById("correct-fone-1");
     const correctFone2 = document.getElementById("correct-fone-2");
     
@@ -1310,8 +1408,9 @@ document.addEventListener("DOMContentLoaded", () => {
           const formatted = formatarTelefone(f1Val);
           if (formatted.valido) {
             client.Fone1 = formatted;
-            const btn1Span = document.querySelector("#phone-btn-1 span.text-xs");
-            if (btn1Span) btn1Span.textContent = formatted.exibicao;
+            // Atualizar o botão se for correspondente
+            const activeBtn = phoneButtonsContainer ? phoneButtonsContainer.querySelector('[data-fone-id="corrigido1"] span.text-xs') : null;
+            if (activeBtn) activeBtn.textContent = formatted.exibicao;
           }
         }
       }
@@ -1321,8 +1420,8 @@ document.addEventListener("DOMContentLoaded", () => {
           const formatted = formatarTelefone(f2Val);
           if (formatted.valido) {
             client.Fone2 = formatted;
-            const btn2Span = document.querySelector("#phone-btn-2 span.text-xs");
-            if (btn2Span) btn2Span.textContent = formatted.exibicao;
+            const activeBtn = phoneButtonsContainer ? phoneButtonsContainer.querySelector('[data-fone-id="corrigido2"] span.text-xs') : null;
+            if (activeBtn) activeBtn.textContent = formatted.exibicao;
           }
         }
       }
@@ -1387,11 +1486,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Enviar WhatsApp (usando prévia editável)
     const sendWhatsappBtn = document.getElementById("send-whatsapp-btn");
     sendWhatsappBtn.addEventListener("click", () => {
-      const foneObj = selectedPhoneType === "fone1" ? client.Fone1 : client.Fone2;
-      if (!foneObj.valido) {
+      const foneAtivo = fonesDisponiveis.find(f => f.id === selectedPhoneType) || fonesDisponiveis[0];
+      if (!foneAtivo || !foneAtivo.numero.valido) {
         showToast("Selecione um telefone válido.", "danger");
         return;
       }
+      const foneObj = foneAtivo.numero;
 
       // Lê o texto editado diretamente do textarea de prévia
       const previewTextarea = document.getElementById("whatsapp-preview");
@@ -1509,11 +1609,14 @@ document.addEventListener("DOMContentLoaded", () => {
           DificuldadeAutoatendimento: checkDificuldade ? "SIM" : "NÃO",
           TotalFaturas: totalFaturas,
           TotalAtrasos: totalAtrasos,
-          UltimaOcorrencia: statusFinal
+          UltimaOcorrencia: statusFinal,
+          TelefonePlanilha1: (client.PlanilhaFone1 && client.PlanilhaFone1.valido) ? client.PlanilhaFone1.exibicao : "",
+          TelefonePlanilha2: (client.PlanilhaFone2 && client.PlanilhaFone2.valido) ? client.PlanilhaFone2.exibicao : ""
         };
       }
 
-      const foneObj = selectedPhoneType === "fone1" ? client.Fone1 : client.Fone2;
+      const foneAtivo = fonesDisponiveis.find(f => f.id === selectedPhoneType) || fonesDisponiveis[0];
+      const foneObj = foneAtivo ? foneAtivo.numero : { valido: false, formatado: "" };
       
       let anotacaoFinal = baseAnotacao;
       if (statusFinal === "Promessa" && promessaDateInput.value) {
@@ -2332,7 +2435,83 @@ O PDF será baixado automaticamente!`;
     
     updateConnectionState(null, "Exportando lote de faturas...");
     showToast("Iniciando exportação de lote...", "info");
-    
+
+    // Compilar perfis e contatos únicos de todos os clientes no lote
+    const clientesUnicos = {};
+    clientsData.forEach(c => {
+      const key = String(c.Codigo || c.CNPJ || "").trim();
+      if (!key) return;
+      if (!clientesUnicos[key]) {
+        clientesUnicos[key] = {
+          Codigo: c.Codigo || "",
+          CNPJ: c.CNPJ || "",
+          Cliente: c.Cliente,
+          PlanilhaFone1: c.PlanilhaFone1,
+          PlanilhaFone2: c.PlanilhaFone2,
+          Fone1: c.Fone1,
+          Fone2: c.Fone2,
+          Fone1Confirmado: c.Fone1Confirmado || "NÃO",
+          Fone2Confirmado: c.Fone2Confirmado || "NÃO",
+          NomeContato: c.NomeContato || "",
+          Status: c.Status
+        };
+      } else {
+        if (c.Status !== "Pago" && clientesUnicos[key].Status === "Pago") {
+          clientesUnicos[key].Status = c.Status;
+        }
+      }
+    });
+
+    const perfisList = [];
+    const contatosList = [];
+
+    Object.keys(clientesUnicos).forEach(key => {
+      const cu = clientesUnicos[key];
+      const perfilCached = clientesPerfilMap[key] || { EsqueceBoleto: "NÃO", DificuldadeAutoatendimento: "NÃO" };
+      const faturasCliente = clientsData.filter(c => {
+        if (cu.Codigo && c.Codigo === cu.Codigo) return true;
+        if (cu.CNPJ && c.CNPJ === cu.CNPJ) return true;
+        return false;
+      });
+      const totalFaturas = faturasCliente.length || 1;
+      const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta").length;
+
+      const tPlan1 = (cu.PlanilhaFone1 && cu.PlanilhaFone1.valido) ? cu.PlanilhaFone1.exibicao : (perfilCached.TelefonePlanilha1 || "");
+      const tPlan2 = (cu.PlanilhaFone2 && cu.PlanilhaFone2.valido) ? cu.PlanilhaFone2.exibicao : (perfilCached.TelefonePlanilha2 || "");
+
+      perfisList.push({
+        Codigo: cu.Codigo,
+        CNPJ: cu.CNPJ,
+        Cliente: cu.Cliente,
+        EsqueceBoleto: perfilCached.EsqueceBoleto || "NÃO",
+        DificuldadeAutoatendimento: perfilCached.DificuldadeAutoatendimento || "NÃO",
+        TotalFaturas: totalFaturas,
+        TotalAtrasos: totalAtrasos,
+        UltimaOcorrencia: cu.Status,
+        TelefonePlanilha1: tPlan1,
+        TelefonePlanilha2: tPlan2
+      });
+
+      // Também salvar o perfil localmente
+      clientesPerfilMap[key] = {
+        Codigo: cu.Codigo,
+        CNPJ: cu.CNPJ,
+        Cliente: cu.Cliente,
+        EsqueceBoleto: perfilCached.EsqueceBoleto || "NÃO",
+        DificuldadeAutoatendimento: perfilCached.DificuldadeAutoatendimento || "NÃO",
+        TotalFaturas: totalFaturas,
+        TotalAtrasos: totalAtrasos,
+        UltimaOcorrencia: cu.Status,
+        TelefonePlanilha1: tPlan1,
+        TelefonePlanilha2: tPlan2
+      };
+    });
+
+    // Enviar todas as correções de contato do cache
+    Object.keys(contatosCorrigidosMap).forEach(key => {
+      contatosList.push(contatosCorrigidosMap[key]);
+    });
+
     const payload = {
       token: CONFIG.PASSWORD,
       action: "salvar_ocorrencia",
@@ -2347,7 +2526,9 @@ O PDF será baixado automaticamente!`;
         TelefoneCobrado: client.TelefoneCobrado || "",
         Status: client.Status,
         Observacao: client.Observacao || "" 
-      }))
+      })),
+      perfis: perfisList,
+      contatos: contatosList
     };
     
     try {
