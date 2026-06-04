@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Portal de Cobrança Ameripan - Higienização de dados e integração WhatsApp/Sheets.">
+  <meta name="theme-color" content="#020617">
+  <title>Portal de Cobrança | Ameripan Distribuidora</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Tailwind CSS CDN for utility alignment classes -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              950: '#020617',
+              900: '#0f172a',
+            },
+            cyan: {
+              500: '#06b6d4',
+            },
+            indigo: {
+              500: '#6366f1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- SheetJS CDN (Biblioteca para ler arquivos XLS/XLSX completo client-side) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- CSS Customizado Premium -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="overflow-x-hidden">
+
+  <!-- BANNER DE ACESSO AO PORTAL COMPLETO -->
+  <div class="bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 border-b border-indigo-500/20 text-xs py-2 px-6 flex justify-between items-center text-slate-350">
+    <div class="flex items-center gap-2">
+      <span class="font-extrabold text-indigo-400 tracking-wider uppercase text-[10px]">Ameripan Express</span>
+      <span class="text-slate-500">|</span>
+      <span class="text-slate-400">Modo de Disparo Rápido</span>
+    </div>
+    <a href="https://edimarpcosta.github.io/ameripan/finance/pending/" target="_blank" class="hover:text-white transition flex items-center gap-1 font-semibold text-indigo-400">
+      Acessar Portal Completo (Relatórios & Configurações) <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+    </a>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container"></div>
+
+  <!-- ================= TELA DE BLOQUEIO (SENHA) ================= -->
+  <div id="lock-screen" class="lock-screen">
+    <div class="glass-panel p-8 w-full max-w-md relative">
+      <!-- Glow Background effects -->
+      <div class="absolute -top-12 -left-12 w-32 h-32 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none"></div>
+      <div class="absolute -bottom-12 -right-12 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+      <div class="text-center mb-6">
+        <div class="inline-flex p-3.5 rounded-2xl mb-3 bg-gradient-to-br from-cyan-500 to-indigo-500 text-white shadow-lg shadow-cyan-500/25">
+          <i data-lucide="lock" class="w-8 h-8 text-white"></i>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-white font-sans">Portal de Cobrança</h1>
+        <p class="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Ameripan Distribuidora</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div id="login-error" class="p-3 bg-rose-950/30 border border-rose-500/20 text-rose-350 rounded-xl text-xs hidden flex items-start gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+          <span class="font-medium">Senha incorreta. Tente novamente ou verifique as configurações.</span>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">Senha de Acesso</label>
+          <input type="password" id="login-password" placeholder="••••••••" class="premium-input text-center" required>
+        </div>
+
+        <button type="submit" class="w-full premium-button-primary mt-2">
+          Acessar Painel <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+      
+      <div class="mt-6 pt-4 border-t border-slate-900 text-center">
+        <p class="text-[9.5px] text-slate-550 leading-relaxed font-mono">
+          Sistema de uso interno restrito.<br>Conformidade com SLAs e saneamento.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TELA PRINCIPAL DO APLICATIVO ================= -->
+  <div id="app-container" class="hidden min-h-screen flex flex-col">
+    <!-- Cabeçalho -->
+    <header class="border-b border-slate-900 bg-slate-950/40 backdrop-blur-md px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-500 text-white flex items-center justify-center">
+          <i data-lucide="phone-call" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-md font-extrabold tracking-wide text-white font-sans">Ameripan Distribuidora</h1>
+            <span class="text-[8px] font-extrabold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded px-1.5 py-0.5 uppercase">Cobrança V1.1</span>
+          </div>
+          <p class="text-[10px] text-slate-450 font-mono mt-0.5">
+            Higienização e acompanhamento de recebíveis
+          </p>
+        </div>
+      </div>
+
+      <!-- Navegação de Abas -->
+      <div class="flex bg-slate-900/60 border border-slate-800 p-0.5 rounded-xl" id="tab-navigation">
+        <button class="nav-tab active" data-tab="cobrancas">
+          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i> Cobranças
+        </button>
+        <button class="nav-tab" data-tab="relatorios">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Relatórios
+        </button>
+        <button class="nav-tab" data-tab="config">
+          <i data-lucide="settings" class="w-3.5 h-3.5"></i> Configurações
+        </button>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="p-1 px-3 bg-slate-900 border border-slate-800 rounded-xl">
+          <div id="connection-status" class="text-xs flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <span class="text-slate-400 font-medium">Conectando...</span>
+          </div>
+        </div>
+
+        <button id="zen-toggle-btn" class="p-2.5 rounded-xl border border-slate-900 bg-slate-900/20 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 transition" title="Alternar Modo Zen (Disparo Rápido)">
+          <i data-lucide="zap" class="w-4 h-4" id="zen-toggle-icon"></i>
+        </button>
+
+        <button id="theme-toggle-btn" class="p-2.5 rounded-xl border border-slate-900 bg-slate-900/20 hover:bg-slate-800 text-slate-400 hover:text-cyan-400 transition" title="Alternar Tema (Modo Claro/Escuro)">
+          <i data-lucide="sun" class="w-4 h-4" id="theme-toggle-icon"></i>
+        </button>
+
+        <button id="logout-btn" class="p-2.5 rounded-xl border border-slate-900 bg-slate-900/20 hover:bg-rose-950/20 hover:border-rose-900/30 text-slate-400 hover:text-rose-400 transition" title="Sair do Portal">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Área Principal de Conteúdo -->
+    <main class="flex-1 p-6 overflow-y-auto">
+
+      <!-- ================= ABA 1: PAINEL DE COBRANÇAS ================= -->
+      <div id="tab-content-cobrancas" class="tab-content active grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Coluna Esquerda: Upload de Arquivos -->
+        <section id="cobrancas-left-section" class="lg:col-span-3 space-y-6">
+          <div class="glass-panel p-5 space-y-4">
+            <div>
+              <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Alimentar Dados</h2>
+              <p class="text-[10.5px] text-slate-500 mt-1">Carregue a planilha de recebíveis local.</p>
+            </div>
+
+            <!-- Zona de Upload de Planilha Física -->
+            <div id="upload-zone" class="upload-zone">
+              <i data-lucide="file-spreadsheet" class="w-8 h-8 text-cyan-400 mx-auto mb-2"></i>
+              <span class="text-xs font-bold text-white block">Selecionar Planilha</span>
+              <span class="text-[9.5px] text-slate-500 mt-1 block">Arraste ou clique para fazer upload (.xls ou .xlsx)</span>
+              <input type="file" id="excel-file-input" accept=".xls,.xlsx" class="hidden">
+            </div>
+
+            <div class="p-3 bg-slate-950/60 border border-slate-900 rounded-lg text-center flex flex-col gap-2">
+              <span id="file-info" class="text-[10.5px] font-mono text-slate-400">Nenhum arquivo carregado</span>
+              <!-- Botão de Push para Nuvem (Exibido apenas quando arquivo local é carregado) -->
+              <button id="cloud-push-btn" class="w-full premium-button-primary py-2 text-xs hidden flex items-center justify-center gap-1.5">
+                <i data-lucide="cloud-lightning" class="w-3.5 h-3.5 text-white"></i> Exportar Lote para Nuvem
+              </button>
+            </div>
+          </div>
+          
+          <div class="glass-panel p-4 bg-slate-900/10 space-y-2 text-xs">
+            <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5 mb-1">
+              <i data-lucide="info" class="w-3.5 h-3.5 text-cyan-400"></i> Informação do Operador & Carga
+            </span>
+            <div id="operator-info-container" class="operator-info-box space-y-1.5 p-2 rounded-lg">
+              <div class="flex justify-between text-[11px]">
+                <span class="text-slate-400 font-bold">Operador:</span>
+                <span id="operator-display-name" class="text-slate-200 font-semibold font-mono">ISABELA GIOVANNA DE OLIVEIRA</span>
+              </div>
+              <div class="flex flex-col gap-0.5 text-[10px] pt-1.5 border-t border-slate-900">
+                <span class="text-slate-400 font-bold block">Período Ativo:</span>
+                <span id="operator-display-period" class="text-cyan-400 font-mono text-[9.5px]">Não identificado</span>
+              </div>
+            </div>
+            <p class="text-[10px] text-slate-550 leading-relaxed mt-1">
+              Os registros de andamento serão gravados e serializados diretamente na coluna de Observações na nuvem, preservando a trilha de auditoria.
+            </p>
+          </div>
+        </section>
+
+        <!-- Coluna Central: Dashboard e Faturas -->
+        <section id="cobrancas-middle-section" class="lg:col-span-6 flex flex-col space-y-6">
+          <!-- Painel de Sincronização da Nuvem (Sempre Visível) -->
+          <div class="glass-panel p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="cloud" class="w-5 h-5 text-cyan-400"></i>
+              <div>
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider">Sincronização Nuvem</h3>
+                <p class="text-[9.5px] text-slate-500">Busque faturas por período de vencimento diretamente do banco de dados.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[9.5px] font-bold text-slate-450 uppercase">De:</span>
+                <input type="date" id="sync-start-date" class="premium-input text-xs p-1.5" style="max-width: 125px;">
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[9.5px] font-bold text-slate-450 uppercase">Até:</span>
+                <input type="date" id="sync-end-date" class="premium-input text-xs p-1.5" style="max-width: 125px;">
+              </div>
+              <button id="cloud-pull-btn" class="premium-button-secondary py-2 px-3 text-xs flex items-center gap-1.5 shrink-0">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-cyan-400"></i> Buscar
+              </button>
+            </div>
+          </div>
+
+          <!-- Indicadores Consolidados -->
+          <div id="stats-grid" class="grid grid-cols-4 gap-4">
+            <div class="stat-card">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Total</span>
+                <h3 id="stats-total" class="text-lg font-bold text-white mt-1">0</h3>
+              </div>
+              <i data-lucide="users" class="w-4 h-4 text-cyan-400"></i>
+            </div>
+            <div class="stat-card">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Pendentes</span>
+                <h3 id="stats-pendentes" class="text-lg font-bold text-amber-500 mt-1">0</h3>
+              </div>
+              <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+            </div>
+            <div class="stat-card">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Negociando</span>
+                <h3 id="stats-contatados" class="text-lg font-bold text-indigo-400 mt-1">0</h3>
+              </div>
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-400"></i>
+            </div>
+            <div class="stat-card">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Pagos</span>
+                <h3 id="stats-pago" class="text-lg font-bold text-emerald-400 mt-1">0</h3>
+              </div>
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+          </div>
+
+          <!-- Filtros de Busca -->
+          <div class="glass-panel p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="relative w-full md:w-3/5">
+              <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="search-input" placeholder="Pesquisar cliente, lanço, NF ou parcela..." class="premium-input pl-10 text-xs">
+            </div>
+            
+            <div class="w-full md:w-1/3 flex items-center gap-2">
+              <label class="text-[9.5px] font-bold text-slate-500 uppercase shrink-0">Status:</label>
+              <select id="status-filter" class="premium-input text-xs p-2">
+                <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="mensagem enviada">📤 Mensagem Enviada</option>
+                <option value="sem resposta">Sem Resposta</option>
+                <option value="incorreto">Número Incorreto</option>
+                <option value="negociando">Negociando</option>
+                <option value="promessa">Promessa Pagto</option>
+                <option value="não pago">Não Pago</option>
+                <option value="pago">Pago</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Container de Cartões de Clientes (Agrupado) -->
+          <div class="clients-table-container flex-1 overflow-y-auto">
+            <div id="clients-table-body" class="space-y-3 p-2">
+              <div class="text-center py-8 text-slate-550">
+                Aguardando importação de planilha de recebíveis...
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Coluna Direita: Painel de Ocorrências (WhatsApp + Timeline) -->
+        <section id="cobrancas-right-section" class="lg:col-span-3">
+          <div class="glass-panel p-5 h-full flex flex-col justify-between">
+            <div id="inspector-empty" class="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 my-auto">
+              <i data-lucide="user-check" class="w-10 h-10 text-slate-800 mb-3 animate-pulse"></i>
+              <h3 class="text-xs font-bold text-slate-400">Inspeção de Cobrança</h3>
+              <p class="text-[10px] text-slate-500 mt-1.5 leading-relaxed max-w-[200px]">
+                Selecione um lançamento na lista para gerar mensagens de WhatsApp, registrar ocorrências e ver o histórico de contatos.
+              </p>
+            </div>
+
+            <div id="inspector-content" class="hidden h-full">
+              <!-- Renderizado dinamicamente via script.js -->
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= ABA 2: PAINEL DE RELATÓRIOS MENSAL ================= -->
+      <div id="tab-content-relatorios" class="tab-content space-y-6">
+        
+        <!-- Cabeçalho do Relatório e Filtro Mensal -->
+        <div class="glass-panel p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="bar-chart-3" class="text-cyan-400 w-5 h-5"></i> Relatórios de Performance e Ocorrências
+            </h2>
+            <p class="text-xs text-slate-450 mt-0.5">Analise o andamento das cobranças e taxas de recebimento agrupadas por vencimento mensal.</p>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-1.5">
+              <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Mês:</label>
+              <select id="report-month-select" class="premium-input text-xs p-2 w-32 font-semibold">
+                <option value="">Nenhum dado</option>
+              </select>
+            </div>
+            
+            <div class="flex items-center gap-1.5">
+              <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Status:</label>
+              <select id="report-status-filter" class="premium-input text-xs p-2 w-36 font-semibold">
+                <option value="todos">Todos</option>
+                <option value="pago">Pago</option>
+                <option value="sem resposta">Sem Resposta</option>
+                <option value="não pago">Sem Interesse / Não Pago</option>
+                <option value="negociando">Negociando / Promessa</option>
+              </select>
+            </div>
+
+            <button id="export-xlsx-btn" class="premium-button-secondary py-2 px-3 text-xs flex items-center gap-1" title="Exportar para Excel (.xlsx)">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-cyan-400"></i> Excel
+            </button>
+
+            <button id="export-pdf-btn" class="premium-button-secondary py-2 px-3 text-xs flex items-center gap-1" title="Imprimir / PDF">
+              <i data-lucide="printer" class="w-3.5 h-3.5 text-cyan-400"></i> PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Indicadores Financeiros do Período -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div>
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Total Cobrado no Mês</span>
+              <h3 id="rep-total-cobrado" class="text-xl font-mono font-extrabold text-white mt-1">R$ 0,00</h3>
+            </div>
+            <i data-lucide="dollar-sign" class="w-4 h-4 text-cyan-400"></i>
+          </div>
+          <div class="stat-card">
+            <div>
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Total Recuperado (Pago)</span>
+              <h3 id="rep-total-recuperado" class="text-xl font-mono font-extrabold text-emerald-400 mt-1">R$ 0,00</h3>
+            </div>
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+          </div>
+          <div class="stat-card">
+            <div>
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Total em Negociação</span>
+              <h3 id="rep-total-negociando" class="text-xl font-mono font-extrabold text-indigo-400 mt-1">R$ 0,00</h3>
+            </div>
+            <i data-lucide="clock" class="w-4 h-4 text-indigo-400"></i>
+          </div>
+          <div class="stat-card">
+            <div>
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Prejuízo / Não Pago</span>
+              <h3 id="rep-total-perdas" class="text-xl font-mono font-extrabold text-rose-500 mt-1">R$ 0,00</h3>
+            </div>
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i>
+          </div>
+        </div>
+
+        <!-- Gráficos Minimais CSS e KPIs -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          <!-- KPI: Taxa de Recuperação -->
+          <div class="glass-panel p-5 space-y-4">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <i data-lucide="trending-up" class="text-emerald-400 w-4 h-4"></i> Eficiência de Recuperação de Caixa
+            </h3>
+            
+            <div class="py-4 space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-450">Taxa de Sucesso de Cobrança:</span>
+                <span id="rep-recovery-rate-label" class="font-mono font-bold text-white text-lg">0.0%</span>
+              </div>
+              
+              <div class="progress-bar-horizontal">
+                <div id="rep-recovery-rate-bar" class="progress-bar-fill" style="width: 0%;"></div>
+              </div>
+              
+              <p class="text-[10px] text-slate-500 leading-normal">
+                Indica o percentual financeiro recuperado em relação ao total cobrado. Contatos e ocorrências em negociação não somam como recuperados até a liquidação definitiva da fatura.
+              </p>
+            </div>
+          </div>
+
+          <!-- Distribuição dos Contatos / Ocorrências -->
+          <div class="glass-panel p-5 space-y-4">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <i data-lucide="pie-chart" class="text-indigo-400 w-4 h-4"></i> Distribuição dos Resultados no Mês
+            </h3>
+            
+            <div class="chart-container" id="rep-status-chart">
+              <!-- Renderizado via JS contendo linhas do tipo .chart-row -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel de Análise Comportamental -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Card: Piores Pagadores (Top 10) -->
+          <div class="glass-panel p-5 space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <i data-lucide="trending-down" class="text-rose-500 w-4 h-4"></i> Top 10 Piores Pagadores
+            </h3>
+            <p class="text-[10px] text-slate-500 leading-normal">Ordenado pelo Índice de Severidade (Volume inadimplente + recorrência de atrasos).</p>
+            <div class="clients-table-container max-h-[250px] overflow-y-auto">
+              <table class="clients-table text-xs">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th class="text-right w-24">Severidade</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-piores-table-body">
+                  <tr>
+                    <td colspan="2" class="text-center py-4 text-slate-500">Nenhum perfil comportamental registrado.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card: Melhores Pagadores (Top 10) -->
+          <div class="glass-panel p-5 space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <i data-lucide="trending-up" class="text-emerald-400 w-4 h-4"></i> Top 10 Melhores Pagadores
+            </h3>
+            <p class="text-[10px] text-slate-500 leading-normal">Ordenado por tempo médio de baixa (dias entre primeiro contato e pagamento).</p>
+            <div class="clients-table-container max-h-[250px] overflow-y-auto">
+              <table class="clients-table text-xs">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th class="text-right w-24">Média Baixa</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-melhores-table-body">
+                  <tr>
+                    <td colspan="2" class="text-center py-4 text-slate-500">Nenhum perfil comportamental registrado.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card: Dificuldade & Esquecimentos -->
+          <div class="glass-panel p-5 space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <i data-lucide="help-circle" class="text-amber-500 w-4 h-4"></i> Dificuldade & Esquecimentos
+            </h3>
+            <p class="text-[10px] text-slate-500 leading-normal">Clientes sinalizados com esquecimento recorrente ou dificuldade digital.</p>
+            <div class="clients-table-container max-h-[250px] overflow-y-auto">
+              <table class="clients-table text-xs">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th class="text-center w-28">Sinalizadores</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-dificuldades-table-body">
+                  <tr>
+                    <td colspan="2" class="text-center py-4 text-slate-500">Nenhum perfil comportamental registrado.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tabela Resumo do Mês -->
+        <div class="glass-panel p-5 space-y-3">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Listagem Consolidada do Período</h3>
+          <div class="clients-table-container">
+            <table class="clients-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Vencimento</th>
+                  <th>Valor</th>
+                  <th>Parcela</th>
+                  <th>Status</th>
+                  <th>Última Nota / Ocorrência</th>
+                </tr>
+              </thead>
+              <tbody id="rep-table-body">
+                <tr>
+                  <td colspan="6" class="text-center py-6 text-slate-500">Selecione um mês para carregar a listagem.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= ABA 3: PAINEL DE CONFIGURAÇÕES ================= -->
+      <div id="tab-content-config" class="tab-content max-w-xl mx-auto py-6">
+        <div class="glass-panel p-6 space-y-6">
+          <div class="flex items-center gap-3 border-b border-slate-900 pb-4">
+            <div class="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-500 text-white shadow-lg">
+              <i data-lucide="settings" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-md font-bold text-white">Configurações de Conexão</h2>
+              <p class="text-xs text-slate-400 font-sans">Cadastre e gerencie a comunicação com a sua planilha Google Sheets.</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex flex-col gap-1">
+              <label class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">URL do Web App do Google Apps Script</label>
+              <input type="password" id="config-script-url" placeholder="Cole a URL implantada..." class="premium-input font-mono text-xs p-3">
+              <p class="text-[9px] text-slate-500 font-sans">Ex: https://script.google.com/macros/s/AKfycb.../exec</p>
+            </div>
+
+            <button id="config-save-btn" class="w-full premium-button-primary py-3">
+              Salvar Configurações <i data-lucide="save" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= MODAL DE ALERTA DE DUPLICIDADE ================= -->
+  <div id="import-alert-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
+    <div class="glass-panel p-6 w-full max-w-lg relative space-y-4">
+      <div class="flex items-center gap-3 border-b border-slate-900 pb-3">
+        <div class="p-2.5 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-slate-950"></i>
+        </div>
+        <div>
+          <h2 class="text-md font-bold text-white">Lançamentos já no Sistema</h2>
+          <p class="text-xs text-slate-400">Alguns registros desta planilha já estão cadastrados.</p>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-xs leading-relaxed text-slate-300">
+        <p>Identificamos que <span id="modal-dup-count" class="font-extrabold text-amber-400 text-sm">0</span> de <span id="modal-total-count" class="font-bold">0</span> lançamentos já constam no banco de dados do Google Sheets.</p>
+        <p class="p-2 bg-slate-900/50 border border-slate-800 rounded-lg">
+          <span class="text-slate-400 font-bold">Período da Planilha:</span> <span id="modal-period" class="font-mono text-cyan-400">--</span>
+        </p>
+        <p>Você pode optar por buscar os dados que já estão salvos na nuvem para este período ou prosseguir com a carga da planilha local.</p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 pt-2">
+        <button id="modal-btn-cloud" class="flex-1 premium-button-primary py-2.5 gap-1.5 text-xs">
+          <i data-lucide="cloud-lightning" class="w-4 h-4"></i> Buscar da Nuvem (Recomendado)
+        </button>
+        <button id="modal-btn-local" class="flex-1 premium-button-secondary py-2.5 gap-1.5 text-xs">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Prosseguir Local
+        </button>
+        <button id="modal-btn-cancel" class="premium-button-secondary py-2.5 text-xs bg-transparent hover:bg-slate-900 border-none text-slate-400 hover:text-white">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configurações Locais Iniciais -->
+  <script src="config.js"></script>
+  <!-- Lógica Principal -->
+  <script src="script.js"></script>
+</body>
+</html>
