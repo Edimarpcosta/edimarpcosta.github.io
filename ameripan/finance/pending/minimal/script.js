@@ -79,6 +79,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const zenToggleBtn = document.getElementById("zen-toggle-btn");
   const zenToggleIcon = document.getElementById("zen-toggle-icon");
 
+  // --- Modal de Ajuda ---
+  const helpBtn         = document.getElementById("help-btn");
+  const helpModal       = document.getElementById("help-modal");
+  const helpModalClose  = document.getElementById("help-modal-close");
+  const helpModalOk     = document.getElementById("help-modal-ok");
+  const helpModalBack   = document.getElementById("help-modal-backdrop");
+
+  function openHelpModal() {
+    if (!helpModal) return;
+    helpModal.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    lucide.createIcons();
+  }
+  function closeHelpModal() {
+    if (!helpModal) return;
+    helpModal.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+
+  if (helpBtn)       helpBtn.addEventListener("click", openHelpModal);
+  if (helpModalClose) helpModalClose.addEventListener("click", closeHelpModal);
+  if (helpModalOk)   helpModalOk.addEventListener("click", closeHelpModal);
+  if (helpModalBack)  helpModalBack.addEventListener("click", closeHelpModal);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelpModal(); });
+
   function setZenMode(isZen) {
     const sendWhatsappBtn = document.getElementById("send-whatsapp-btn");
     if (isZen) {
