@@ -75,10 +75,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- CONTROLE DE MODO ZEN (DISPARO RÁPIDO) ---
-  const zenToggleBtn = document.getElementById("zen-toggle-btn");
-  const zenToggleIcon = document.getElementById("zen-toggle-icon");
-
   // --- Modal de Ajuda ---
   const helpBtn         = document.getElementById("help-btn");
   const helpModal       = document.getElementById("help-modal");
@@ -98,70 +94,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.style.overflow = "";
   }
 
-  if (helpBtn)       helpBtn.addEventListener("click", openHelpModal);
+  if (helpBtn)        helpBtn.addEventListener("click", openHelpModal);
   if (helpModalClose) helpModalClose.addEventListener("click", closeHelpModal);
-  if (helpModalOk)   helpModalOk.addEventListener("click", closeHelpModal);
+  if (helpModalOk)    helpModalOk.addEventListener("click", closeHelpModal);
   if (helpModalBack)  helpModalBack.addEventListener("click", closeHelpModal);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelpModal(); });
 
-  function setZenMode(isZen) {
-    const sendWhatsappBtn = document.getElementById("send-whatsapp-btn");
-    if (isZen) {
-      document.body.classList.add("zen-mode-active");
-      if (zenToggleIcon) {
-        zenToggleIcon.setAttribute("data-lucide", "zap-off");
-      }
-      localStorage.setItem("cobranca_zen_mode", "active");
-    } else {
-      document.body.classList.remove("zen-mode-active");
-      if (zenToggleIcon) {
-        zenToggleIcon.setAttribute("data-lucide", "zap");
-      }
-      localStorage.setItem("cobranca_zen_mode", "inactive");
-      
-      // Limpar estilos fixos do botão de whatsapp se voltar ao modo normal
-      if (sendWhatsappBtn) {
-        sendWhatsappBtn.classList.remove("ready-to-send");
-        sendWhatsappBtn.removeAttribute("style");
-      }
-    }
-    lucide.createIcons();
-    atualizarBotoesZenWhatsApp();
-  }
-
-  function atualizarBotoesZenWhatsApp() {
-    const sendWhatsappBtn = document.getElementById("send-whatsapp-btn");
-    if (!sendWhatsappBtn) return;
-    
-    const isZen = document.body.classList.contains("zen-mode-active");
-    if (!isZen) {
-      sendWhatsappBtn.classList.remove("ready-to-send");
-      sendWhatsappBtn.disabled = false; // Normal mode controls it dynamically
-      return;
-    }
-    
-    if (selectedClientIndex !== null) {
-      sendWhatsappBtn.classList.add("ready-to-send");
-      sendWhatsappBtn.disabled = false;
-    } else {
-      sendWhatsappBtn.classList.remove("ready-to-send");
-      sendWhatsappBtn.disabled = true;
-    }
-  }
-
-  // Carregar estado Zen salvo
-  const zenSalvo = localStorage.getItem("cobranca_zen_mode") || "active";
-  setZenMode(zenSalvo === "active");
-
-  if (zenToggleBtn) {
-    zenToggleBtn.addEventListener("click", () => {
-      const isZenNow = document.body.classList.contains("zen-mode-active");
-      setZenMode(!isZenNow);
-    });
-  }
-
-  // Elementos do Relatório
-  const reportMonthSelect = document.getElementById("report-month-select");
+  // Elementos do Relatório (Novos filtros por data)
+  const reportStartDateInput = document.getElementById("report-start-date");
+  const reportEndDateInput = document.getElementById("report-end-date");
   const repTotalCobrado = document.getElementById("rep-total-cobrado");
   const repTotalRecuperado = document.getElementById("rep-total-recuperado");
   const repTotalNegociando = document.getElementById("rep-total-negociando");
@@ -180,6 +121,63 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedPhoneType = "fone1"; 
   let selectedTemplateType = "lembrete"; 
   let selectedIncluirPassoPasso = false;
+
+  // --- Botão Flutuante Global de WhatsApp ---
+  const globalWaBtnContainer = document.getElementById("global-wa-btn-container");
+  const globalWaBtn = document.getElementById("global-wa-btn");
+  const globalWaBtnLabel = document.getElementById("global-wa-btn-label");
+
+  function atualizarBotaoWaGlobal() {
+    if (!globalWaBtnContainer) return;
+    if (selectedClientIndex === null || selectedClientIndex === undefined) {
+      globalWaBtnContainer.classList.add("hidden");
+      return;
+    }
+    const client = clientsData[selectedClientIndex];
+    if (!client) { globalWaBtnContainer.classList.add("hidden"); return; }
+    const nomeAbrev = client.Cliente ? (client.Cliente.split(" ")[0] + (client.Cliente.split(" ").length > 1 ? " " + client.Cliente.split(" ")[1] : "")) : "cliente";
+    if (globalWaBtnLabel) globalWaBtnLabel.textContent = `WhatsApp — ${nomeAbrev}`;
+    globalWaBtnContainer.classList.remove("hidden");
+    lucide.createIcons();
+  }
+
+  if (globalWaBtn) {
+    globalWaBtn.addEventListener("click", () => {
+      if (selectedClientIndex === null) return;
+      const clientObj = clientsData[selectedClientIndex];
+      if (!clientObj) return;
+      const melhorTel = obterMelhorTelefone(clientObj);
+      if (!melhorTel || !melhorTel.phone.valido) {
+        showToast("Nenhum telefone válido para o cliente selecionado.", "danger");
+        return;
+      }
+      const faturasSelecionadas = clientsData.filter(f => {
+        if (clientObj.CNPJ && f.CNPJ === clientObj.CNPJ) return f.Status !== "Pago";
+        if (clientObj.Codigo && f.Codigo === clientObj.Codigo) return f.Status !== "Pago";
+        return f.Cliente === clientObj.Cliente && f.Status !== "Pago";
+      });
+      if (faturasSelecionadas.length === 0) faturasSelecionadas.push(clientObj);
+      const text = gerarMensagemWhatsApp(clientObj, faturasSelecionadas, selectedTemplateType || "lembrete", clientObj.NomeContato || "", false);
+      const url = `https://api.whatsapp.com/send?phone=${melhorTel.phone.formatado}&text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank");
+      const dataHora = new Date().toLocaleDateString("pt-BR") + " " + new Date().toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
+      const msgEvent = { data: dataHora, status: "Mensagem Enviada", fone: melhorTel.phone.exibicao, obs: "Mensagem WhatsApp enviada via botão flutuante" };
+      faturasSelecionadas.forEach(fat => {
+        if (fat.Status !== "Pago") {
+          fat.Status = "Mensagem Enviada";
+          fat.TelefoneCobrado = melhorTel.phone.exibicao;
+          if (!fat.Historico) fat.Historico = [];
+          fat.Historico.push(msgEvent);
+          fat.Observacao = JSON.stringify(fat.Historico);
+        }
+      });
+      salvarStatusSheetsMultiplos(faturasSelecionadas, clientObj);
+      renderClientsTable();
+      updateStats();
+      inspecionarCliente(selectedClientIndex);
+      showToast(`WhatsApp enviado para ${clientObj.Cliente}!`, "success");
+    });
+  }
 
   // --- 1. CONTROLE DE AUTENTICAÇÃO ---
   
@@ -283,6 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function inicializarApp() {
     configScriptUrl.value = CONFIG.APPS_SCRIPT_URL;
 
+    // Sincronização da Nuvem por padrão carrega faturas dos últimos 15 dias até hoje
     if (syncStartDateInput && syncEndDateInput) {
       const today = new Date();
       const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000);
@@ -296,6 +295,34 @@ document.addEventListener("DOMContentLoaded", () => {
       
       syncStartDateInput.value = formatDateForInput(fifteenDaysAgo);
       syncEndDateInput.value = formatDateForInput(today);
+    }
+
+    // Intervalo de Relatório inicial: se dia <= 10, últimos 30 dias. Caso contrário, mês corrente
+    if (reportStartDateInput && reportEndDateInput) {
+      const today = new Date();
+      const day = today.getDate();
+      let startDate, endDate;
+      
+      if (day <= 10) {
+        startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+        endDate = today;
+      } else {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // último dia do mês
+      }
+      
+      const formatDateForInput = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      reportStartDateInput.value = formatDateForInput(startDate);
+      reportEndDateInput.value = formatDateForInput(endDate);
+
+      reportStartDateInput.addEventListener("change", gerarRelatoriosMensais);
+      reportEndDateInput.addEventListener("change", gerarRelatoriosMensais);
     }
 
     buscarHistoricoSheets();
@@ -496,7 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateConnectionState(true, "Planilha sincronizada!");
     
-    // Filtrar dados locais pelo intervalo de datas definido na UI
+    // Filtrar dados locais pelo intervalo de datas de vencimento definido na UI
     if (clientsData.length > 0) {
       const startVal = syncStartDateInput ? syncStartDateInput.value : "";
       const endVal   = syncEndDateInput   ? syncEndDateInput.value   : "";
@@ -505,6 +532,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const parseDBR = (s) => { if (!s) return null; const [d,m,y] = s.split("/"); return new Date(y, m-1, d); };
         const startDate = parseYMD(startVal);
         const endDate   = parseYMD(endVal);
+        
+        if (startDate) startDate.setHours(0, 0, 0, 0);
+        if (endDate) endDate.setHours(23, 59, 59, 999);
+        
         if (startDate || endDate) {
           clientsData = clientsData.filter(c => {
             const venc = parseDBR(c.Vencimento);
@@ -518,7 +549,6 @@ document.addEventListener("DOMContentLoaded", () => {
       mesclarStatusComExcel();
       renderClientsTable();
       updateStats();
-      carregarOpcoesMesesRelatorio();
       if (selectedClientIndex !== null) {
         inspecionarCliente(selectedClientIndex);
       }
@@ -534,7 +564,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     });
     const totalFaturas = faturasCliente.length || 1;
-    const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta").length;
+    const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta" || c.Status === "Mensagem Enviada").length;
 
     const tPlan1 = (baseClientForContactAndPerfil.PlanilhaFone1 && baseClientForContactAndPerfil.PlanilhaFone1.valido) ? baseClientForContactAndPerfil.PlanilhaFone1.exibicao : (perfil.TelefonePlanilha1 || "");
     const tPlan2 = (baseClientForContactAndPerfil.PlanilhaFone2 && baseClientForContactAndPerfil.PlanilhaFone2.valido) ? baseClientForContactAndPerfil.PlanilhaFone2.exibicao : (perfil.TelefonePlanilha2 || "");
@@ -766,135 +796,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (opSpan) opSpan.textContent = operator;
         if (perSpan) perSpan.textContent = period;
 
-        // Pré-analisar duplicidades e períodos
-        let totalFaturasPlanilha = 0;
-        let faturasJaNoBancoCount = 0;
-        let currentCustomerForCheck = null;
-        let minDateStr = null;
-        let maxDateStr = null;
+        mapearEParsarLinhas(rawRows);
+        fileInfo.textContent = `${file.name} (${clientsData.length} faturas)`;
+        showToast("Dados processados com sucesso!", "success");
 
-        for (let r = 0; r < rawRows.length; r++) {
-          const row = rawRows[r];
-          if (!row || row.length === 0) continue;
-          const cell0 = row[0] !== undefined && row[0] !== null ? String(row[0]).trim() : "";
-          
-          if (cell0.includes("CNPJ / CPF:") && cell0.includes("Fone:")) {
-            const parts = cell0.split("|").map(p => p.trim());
-            let originalName = parts[0] || "";
-            let code = "";
-            const dashIndex = originalName.indexOf("-");
-            if (dashIndex !== -1) {
-              code = originalName.split("-")[0].trim().replace(/\s+/g, "");
-            }
-            currentCustomerForCheck = { code };
-            continue;
-          }
-
-          const lanco = parseFloat(cell0);
-          if (currentCustomerForCheck && !isNaN(lanco) && lanco > 1000) {
-            const vencimentoRaw = row[2];
-            if (vencimentoRaw) {
-              let vencimento = formatarDataExcel(vencimentoRaw);
-              if (vencimento) {
-                const parts = vencimento.split("/");
-                const date = new Date(parts[2], parts[1] - 1, parts[0]);
-                if (!isNaN(date.getTime())) {
-                  if (!minDateStr || date < minDateStr) minDateStr = date;
-                  if (!maxDateStr || date > maxDateStr) maxDateStr = date;
-                }
-              }
-            }
-            
-            let chaveUnica = String(Math.round(lanco));
-            totalFaturasPlanilha++;
-            if (sheetStatusMap[chaveUnica]) {
-              faturasJaNoBancoCount++;
-            }
-          }
-        }
-
-        let periodStart = minDateStr;
-        let periodEnd = maxDateStr;
-
-        if (period && period.includes("PERÍODO:")) {
-          const matchDates = period.match(/(\d{2})\/(\d{2})\/(\d{4})/g);
-          if (matchDates && matchDates.length >= 2) {
-            const p1 = matchDates[0].split("/");
-            const p2 = matchDates[1].split("/");
-            const d1 = new Date(p1[2], p1[1] - 1, p1[0]);
-            const d2 = new Date(p2[2], p2[1] - 1, p2[0]);
-            if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-              periodStart = d1;
-              periodEnd = d2;
-            }
-          }
-        }
-
-        const aplicarCargaLocal = () => {
-          mapearEParsarLinhas(rawRows);
-          fileInfo.textContent = `${file.name} (${clientsData.length} faturas)`;
-          showToast("Dados processados com sucesso!", "success");
-          const totalValor = clientsData.reduce((acc, c) => acc + c.Valor, 0);
-          salvarLogImportacao(file.name, clientsData.length, totalValor, operator, period);
-        };
-
-        if (faturasJaNoBancoCount > 0) {
-          const importAlertModal = document.getElementById("import-alert-modal");
-          const modalDupCount = document.getElementById("modal-dup-count");
-          const modalTotalCount = document.getElementById("modal-total-count");
-          const modalPeriod = document.getElementById("modal-period");
-          const modalBtnCloud = document.getElementById("modal-btn-cloud");
-          const modalBtnLocal = document.getElementById("modal-btn-local");
-          const modalBtnCancel = document.getElementById("modal-btn-cancel");
-
-          if (importAlertModal) {
-            modalDupCount.textContent = faturasJaNoBancoCount;
-            modalTotalCount.textContent = totalFaturasPlanilha;
-            modalPeriod.textContent = period || (periodStart && periodEnd ? `${periodStart.toLocaleDateString("pt-BR")} A ${periodEnd.toLocaleDateString("pt-BR")}` : "Não identificado");
-            
-            importAlertModal.classList.remove("hidden");
-
-            // Substituir botões por clones para limpar ouvintes de eventos antigos
-            const newCloudBtn = modalBtnCloud.cloneNode(true);
-            const newLocalBtn = modalBtnLocal.cloneNode(true);
-            const newCancelBtn = modalBtnCancel.cloneNode(true);
-
-            modalBtnCloud.parentNode.replaceChild(newCloudBtn, modalBtnCloud);
-            modalBtnLocal.parentNode.replaceChild(newLocalBtn, modalBtnLocal);
-            modalBtnCancel.parentNode.replaceChild(newCancelBtn, modalBtnCancel);
-
-            newCloudBtn.addEventListener("click", () => {
-              importAlertModal.classList.add("hidden");
-              if (periodStart && periodEnd) {
-                const formatDate = (d) => {
-                  const y = d.getFullYear();
-                  const m = String(d.getMonth() + 1).padStart(2, '0');
-                  const day = String(d.getDate()).padStart(2, '0');
-                  return `${y}-${m}-${day}`;
-                };
-                syncStartDateInput.value = formatDate(periodStart);
-                syncEndDateInput.value = formatDate(periodEnd);
-              }
-              buscarHistoricoSheets();
-            });
-
-            newLocalBtn.addEventListener("click", () => {
-              importAlertModal.classList.add("hidden");
-              aplicarCargaLocal();
-            });
-
-            newCancelBtn.addEventListener("click", () => {
-              importAlertModal.classList.add("hidden");
-              fileInfo.textContent = "Importação cancelada";
-              localFileLoaded = false;
-              if (cloudPushBtn) cloudPushBtn.classList.add("hidden");
-            });
-          } else {
-            aplicarCargaLocal();
-          }
-        } else {
-          aplicarCargaLocal();
-        }
+        // Envia o Log de Importação para a aba Logs_Importacao
+        const totalValor = clientsData.reduce((acc, c) => acc + c.Valor, 0);
+        salvarLogImportacao(file.name, clientsData.length, totalValor, operator, period);
 
       } catch (err) {
         console.error(err);
@@ -1067,12 +975,10 @@ document.addEventListener("DOMContentLoaded", () => {
     mesclarStatusComExcel();
     renderClientsTable();
     updateStats();
-    carregarOpcoesMesesRelatorio();
   }
 
   function mesclarStatusComExcel() {
     clientsData.forEach(client => {
-      // 1. Obter telefones originais da planilha se não estiverem preenchidos no objeto (ex: quando carregado da nuvem)
       const clientKey = String(client.Codigo || client.CNPJ || "").trim();
       const perfil = clientKey ? clientesPerfilMap[clientKey] : null;
       if (perfil) {
@@ -1084,11 +990,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Inicializa Fone1 e Fone2 com os da planilha por padrão
       client.Fone1 = client.PlanilhaFone1 || { valido: false, formatado: "" };
       client.Fone2 = client.PlanilhaFone2 || { valido: false, formatado: "" };
 
-      // Cruzar telefones corrigidos se houver
       const contatoCorrigido = (client.Codigo && contatosCorrigidosMap[client.Codigo]) || contatosCorrigidosMap[client.CNPJ];
       if (contatoCorrigido) {
         if (contatoCorrigido.Telefone1Correto) client.Fone1 = formatarTelefone(contatoCorrigido.Telefone1Correto);
@@ -1133,7 +1037,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- 6. TABELA, FILTROS E CONTADORES ---
+  // --- 6. TABELA DE RECEBÍVEIS BASEADA EM CARDS E SEUS AUXILIARES ---
 
   function agruparFaturasPorCliente(faturasRaw) {
     const statusPriority = {
@@ -1231,7 +1135,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return { type: "planilha2", phone: client.PlanilhaFone2, confirmed: false };
     }
 
-    // Fallback: Check Fone1/Fone2 properties on client directly
     if (client.Fone1 && client.Fone1.valido) {
       return { type: "fone1", phone: client.Fone1, confirmed: client.Fone1Confirmado === "SIM" };
     }
@@ -1281,7 +1184,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  
   function renderClientsTable() {
     clientsTableBody.innerHTML = "";
     
@@ -1327,6 +1229,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
     };
 
+    // Ordenar devedores pelo vencimento mais atrasado primeiro (mais antigo primeiro)
     grouped.sort((a, b) => {
       const fatA = obterFaturaMaisAntiga(a);
       const fatB = obterFaturaMaisAntiga(b);
@@ -1335,7 +1238,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!fatB) return -1;
       return parseDate(fatA.Vencimento) - parseDate(fatB.Vencimento);
     });
-
 
     grouped.forEach((c) => {
       const realIndex = clientsData.findIndex(orig => orig.ChaveUnica === c.Titulos[0].ChaveUnica);
@@ -1413,7 +1315,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="client-card-details hidden p-2.5 border-t border-slate-900/50 mt-2 bg-slate-950/20 rounded-lg">
           <div class="space-y-2">
             ${ordenarFaturasPorStatus(c.Titulos).map(t => {
- 
               const diffDays = calcularDiasAtraso(t.Vencimento);
               let delayText = "";
               if (diffDays > 0) {
@@ -1456,7 +1357,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="mt-3 pt-3 border-t border-slate-900/60 flex flex-col sm:flex-row items-end gap-2 text-slate-200">
             <div class="flex-1 w-full min-w-0 grid grid-cols-2 gap-2">
               <div>
-                <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider block mb-1">Status em Lote</label>
+                <label class="text-[9px] font-bold text-slate-455 uppercase tracking-wider block mb-1">Status em Lote</label>
                 <select class="accordion-status-select premium-input text-[11px] p-1.5">
                   <option value="Pendente">Pendente</option>
                   <option value="Mensagem Enviada">📤 Mensagem Enviada</option>
@@ -1469,7 +1370,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </select>
               </div>
               <div>
-                <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider block mb-1">Anotações do Lote</label>
+                <label class="text-[9px] font-bold text-slate-455 uppercase tracking-wider block mb-1">Anotações do Lote</label>
                 <input type="text" class="accordion-obs-input premium-input text-[11px] p-1.5" placeholder="Motivo/Acordo...">
               </div>
             </div>
@@ -1494,7 +1395,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (radio) radio.checked = true;
         
         inspecionarCliente(realIndex);
-        atualizarBotoesZenWhatsApp();
+        atualizarBotaoWaGlobal();
       });
  
       const directWpBtn = card.querySelector(".direct-whatsapp-btn");
@@ -1526,14 +1427,14 @@ document.addEventListener("DOMContentLoaded", () => {
           const dataHora = new Date().toLocaleDateString("pt-BR") + " " + new Date().toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
           const msgEvent = {
             data: dataHora,
-            status: "Sem Resposta",
+            status: "Mensagem Enviada",
             fone: melhorTel.phone.exibicao,
             obs: "Mensagem WhatsApp enviada diretamente do atalho do card"
           };
           
           faturasSelecionadas.forEach(fat => {
             if (fat.Status !== "Pago") {
-              fat.Status = "Sem Resposta";
+              fat.Status = "Mensagem Enviada";
               fat.TelefoneCobrado = melhorTel.phone.exibicao;
               if (!fat.Historico) fat.Historico = [];
               fat.Historico.push(msgEvent);
@@ -1780,7 +1681,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Seletor inteligente de fone prioritário inicial (Contatos_Corrigidos whitelist primeiro)
     const melhorTel = obterMelhorTelefone(client);
     if (melhorTel) {
       const matching = fonesDisponiveis.find(f => f.numero.formatado === melhorTel.phone.formatado);
@@ -1818,7 +1718,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
 
             <div class="flex justify-between items-center pt-1.5 border-t border-slate-900 mt-1 text-xs">
-              <span class="font-bold text-slate-450">Total Selecionado:</span>
+              <span class="font-bold text-slate-455">Total Selecionado:</span>
               <span class="font-bold text-white font-mono" id="inspector-selected-total">R$ 0,00</span>
             </div>
           </div>
@@ -1832,7 +1732,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Correção de Telefones -->
-          <div class="grid grid-cols-2 gap-2 zen-hide">
+          <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Corrigir Fone 1</label>
               <input type="text" id="correct-fone-1" class="premium-input text-xs p-1.5" value="${f1CorrigidoVal}" placeholder="Ex: (19) 99999-9999">
@@ -1844,19 +1744,19 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Sinalizadores de Telefones que Respondem -->
-          <div class="grid grid-cols-2 gap-2 mt-1 zen-hide">
-            <label class="flex items-center gap-1.5 text-[9.5px] cursor-pointer text-slate-350 hover:text-white transition">
+          <div class="grid grid-cols-2 gap-2 mt-1">
+            <label class="flex items-center gap-1.5 text-[9.5px] cursor-pointer text-slate-355 hover:text-white transition">
               <input type="checkbox" id="check-fone1-ok" class="w-3 h-3 accent-emerald-500 cursor-pointer" ${f1Confirm ? "checked" : ""}>
               <span>Fone 1 Responde (OK)</span>
             </label>
-            <label class="flex items-center gap-1.5 text-[9.5px] cursor-pointer text-slate-350 hover:text-white transition">
+            <label class="flex items-center gap-1.5 text-[9.5px] cursor-pointer text-slate-355 hover:text-white transition">
               <input type="checkbox" id="check-fone2-ok" class="w-3 h-3 accent-emerald-500 cursor-pointer" ${f2Confirm ? "checked" : ""}>
               <span>Fone 2 Responde (OK)</span>
             </label>
           </div>
 
           <!-- Nome de Contato customizado -->
-          <div class="zen-hide">
+          <div>
             <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome do Contato (Falar com)</label>
             <input type="text" id="correct-nome-contato" class="premium-input text-xs p-1.5" value="${client.NomeContato || ''}" placeholder="Ex: José, Maria...">
           </div>
@@ -1876,8 +1776,8 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Checkbox Passo a Passo Autoatendimento -->
-          <div class="mt-1 zen-hide">
-            <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-350 hover:text-white transition">
+          <div class="mt-1">
+            <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-355 hover:text-white transition">
               <input type="checkbox" id="check-incluir-passo-passo" class="w-3.5 h-3.5 accent-cyan-500 rounded border-slate-700 bg-slate-900 cursor-pointer" ${selectedIncluirPassoPasso ? "checked" : ""}>
               <span>Incluir passo a passo do autoatendimento</span>
             </label>
@@ -1895,7 +1795,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Timeline do Histórico -->
-          <div class="space-y-1 pt-1.5 border-t border-slate-900 zen-hide">
+          <div class="space-y-1 pt-1.5 border-t border-slate-900">
             <span class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Linha do Tempo Unificada</span>
             <div class="timeline-container">
               ${timelineHtml}
@@ -1927,14 +1827,14 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <!-- Perfil Comportamental (Ameripan Insights) -->
-          <div class="inspector-profile-box space-y-1.5 p-2 rounded-lg mt-1 zen-hide">
+          <div class="inspector-profile-box space-y-1.5 p-2 rounded-lg mt-1">
             <span class="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">Perfil de Comportamento</span>
             <div class="flex flex-col gap-1.5">
-              <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-350 hover:text-white transition">
+              <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-355 hover:text-white transition">
                 <input type="checkbox" id="check-esquece-boleto" class="w-3.5 h-3.5 accent-cyan-500 rounded border-slate-700 bg-slate-900 cursor-pointer" ${perfil.EsqueceBoleto === "SIM" ? "checked" : ""}>
                 <span>Costuma esquecer vencimento</span>
               </label>
-              <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-350 hover:text-white transition">
+              <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-355 hover:text-white transition">
                 <input type="checkbox" id="check-dificuldade-auto" class="w-3.5 h-3.5 accent-cyan-500 rounded border-slate-700 bg-slate-900 cursor-pointer" ${perfil.DificuldadeAutoatendimento === "SIM" ? "checked" : ""}>
                 <span>Dificuldade com autoatendimento</span>
               </label>
@@ -1989,9 +1889,12 @@ document.addEventListener("DOMContentLoaded", () => {
       faturasListContainer.innerHTML = faturasOrdenadas.map(f => {
         const query = searchInput.value.toLowerCase().trim();
         let isChecked = f.Status !== "Pago";
+        
+        // Se a busca principal for por número do título/lançamento, mantém marcado somente o buscado
         if (query && (f.Lanco.includes(query) || f.NF.includes(query))) {
           isChecked = f.Lanco.toLowerCase() === query || f.NF.toLowerCase() === query || f.Lanco.includes(query) || f.NF.includes(query);
         }
+        
         return `
           <div class="fatura-item flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 rounded-lg transition gap-1.5 sm:gap-3">
             <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
@@ -2124,7 +2027,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (correctFone1) correctFone1.addEventListener("input", updateFonesMemory);
     if (correctFone2) correctFone2.addEventListener("input", updateFonesMemory);
 
-    // Escuta para alteração de Nome de Contato em tempo real
     const correctNomeContato = document.getElementById("correct-nome-contato");
     if (correctNomeContato) {
       correctNomeContato.addEventListener("input", () => {
@@ -2283,7 +2185,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return false;
         });
         const totalFaturas = faturasCliente.length || 1;
-        const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta").length;
+        const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta" || c.Status === "Mensagem Enviada").length;
 
         clientesPerfilMap[clientKey] = {
           Codigo: client.Codigo || "",
@@ -2349,8 +2251,6 @@ document.addEventListener("DOMContentLoaded", () => {
       updateStats();
       inspecionarCliente(index);
     });
-
-    atualizarBotoesZenWhatsApp();
   }
 
   function gerarMensagemWhatsApp(client, faturasSelecionadas, templateType, nomeContato, incluirPassoPasso) {
@@ -2370,7 +2270,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const saudacao = nomeContato ? `Olá, ${nomeContato} (representante de ${client.Cliente}).` : `Olá, ${client.Cliente}.`;
     const assinatura = `Aqui é do Financeiro da Ameripan Distribuidora.`;
     
-    // Introdução da listagem (Mensagem de desconsiderar logo abaixo da introdução)
     let intro = "";
     if (templateType === "lembrete") {
       intro = `${saudacao} Tudo bem? ${assinatura} 😊
@@ -2430,7 +2329,6 @@ Identificamos em nosso sistema os seguintes títulos pendentes de regularizaçã
 
     const listBlock = `${faturasTexto.trim()}\n\nValor Total Acumulado: ${totalFormatado}`;
 
-    // 4. DIRETRIZES FINANCEIRAS E COMERCIAIS RESUMIDAS
     const notaEncargos = `Valores válidos para hoje. No dia seguinte, os juros são calculados automaticamente pelo banco no ato da leitura do código de barras.`;
 
     let alertaRestricaoText = "";
@@ -2440,7 +2338,6 @@ Identificamos em nosso sistema os seguintes títulos pendentes de regularizaçã
 
     const rodape = `Não tem o boleto em mãos? Solicite a segunda via no nosso autoatendimento clicando aqui: wa.me/551934064070 ou adicione aos contatos (19) 3406-4070`;
 
-    // 5. FORMATAÇÃO WHATSAPP (SEPARADOS POR LINHA EM BRANCO DUPLA "\n\n\n")
     const paragraphs = [intro, listBlock, notaEncargos];
     if (exibirAlertaRestricao) {
       paragraphs.push(alertaRestricaoText);
@@ -2467,63 +2364,8 @@ O PDF será baixado automaticamente!`;
     return gerarMensagemWhatsApp(client, [client], selectedTemplateType, client.NomeContato || "", incluirPassoPasso);
   }
 
-  // --- 8. LÓGICA DE RELATÓRIOS MENSAIS E DE PERFORMANCE ---
+  // --- 8. LÓGICA DE RELATÓRIOS POR INTERVALO DE DATA ---
   
-  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-  function carregarOpcoesMesesRelatorio() {
-    reportMonthSelect.innerHTML = "";
-    
-    if (clientsData.length === 0) {
-      reportMonthSelect.innerHTML = `<option value="">Nenhum dado lido</option>`;
-      return;
-    }
-
-    // Identifica todos os meses/anos únicos a partir do Vencimento
-    const mesesUnicos = new Set();
-    clientsData.forEach(c => {
-      if (c.Vencimento && c.Vencimento.includes("/")) {
-        const parts = c.Vencimento.split("/");
-        if (parts[1] && parts[2]) {
-          mesesUnicos.add(`${parts[1]}/${parts[2]}`);
-        }
-      }
-    });
-
-    const arrMeses = Array.from(mesesUnicos).sort((a, b) => {
-      const partsA = a.split("/");
-      const partsB = b.split("/");
-      // Ordena por ano e depois por mês
-      return new Date(partsA[1], partsA[0]-1) - new Date(partsB[1], partsB[0]-1);
-    });
-
-    if (arrMeses.length === 0) {
-      reportMonthSelect.innerHTML = `<option value="">Nenhum mês válido</option>`;
-      return;
-    }
-
-    arrMeses.forEach(m => {
-      const parts = m.split("/");
-      const idxMes = parseInt(parts[0]) - 1;
-      const nomeMes = `${monthNames[idxMes]}/${parts[1]}`;
-      
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.textContent = nomeMes;
-      reportMonthSelect.appendChild(opt);
-    });
-
-    // Auto-seleciona o último mês disponível
-    reportMonthSelect.value = arrMeses[arrMeses.length - 1];
-    
-    // Se a aba de relatórios estiver visível, atualiza
-    if (document.getElementById("tab-content-relatorios").classList.contains("active")) {
-      gerarRelatoriosMensais();
-    }
-  }
-
-  reportMonthSelect.addEventListener("change", gerarRelatoriosMensais);
-
   function parseTimelineDate(dateStr) {
     if (!dateStr) return 0;
     if (dateStr instanceof Date) return dateStr.getTime();
@@ -2540,36 +2382,53 @@ O PDF será baixado automaticamente!`;
   }
 
   function gerarRelatoriosMensais() {
-    const selectedMonth = reportMonthSelect.value;
+    const startVal = reportStartDateInput ? reportStartDateInput.value : "";
+    const endVal = reportEndDateInput ? reportEndDateInput.value : "";
     const statusFilterVal = reportStatusFilter ? reportStatusFilter.value : "todos";
+    
     repTableBody.innerHTML = "";
     
-    if (!selectedMonth) {
-      repTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">Selecione um mês para carregar a listagem.</td></tr>`;
+    if (!startVal || !endVal) {
+      repTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">Selecione um período para carregar a listagem.</td></tr>`;
       resetarKPIsRelatorio();
       return;
     }
 
-    // Filtra faturas do mês selecionado e status
+    const parseYMD = (s) => { if (!s) return null; const [y,m,d] = s.split("-"); return new Date(y, m-1, d); };
+    const parseDBR = (s) => { if (!s) return null; const [d,m,y] = s.split("/"); return new Date(y, m-1, d); };
+    
+    const startDate = parseYMD(startVal);
+    const endDate = parseYMD(endVal);
+    if (startDate) startDate.setHours(0, 0, 0, 0);
+    if (endDate) endDate.setHours(23, 59, 59, 999);
+
+    // Filtrar faturas pelo intervalo e status selecionados
     const faturasMes = clientsData.filter(c => {
-      if (c.Vencimento && c.Vencimento.includes("/")) {
-        const parts = c.Vencimento.split("/");
-        const matchMonth = `${parts[1]}/${parts[2]}` === selectedMonth;
-        if (!matchMonth) return false;
-        
-        if (statusFilterVal === "todos") return true;
-        if (statusFilterVal === "não pago") return c.Status === "Não Pago" || c.Status === "Sem Interesse";
-        if (statusFilterVal === "negociando") return c.Status === "Negociando" || c.Status === "Promessa";
-        return c.Status.toLowerCase() === statusFilterVal;
-      }
-      return false;
+      const venc = parseDBR(c.Vencimento);
+      if (!venc) return false;
+      
+      if (startDate && venc < startDate) return false;
+      if (endDate && venc > endDate) return false;
+      
+      if (statusFilterVal === "todos") return true;
+      return c.Status.toLowerCase() === statusFilterVal.toLowerCase();
     });
 
     if (faturasMes.length === 0) {
-      repTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">Nenhuma fatura encontrada com estes critérios.</td></tr>`;
+      repTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-555">Nenhuma fatura encontrada com estes critérios.</td></tr>`;
       resetarKPIsRelatorio();
       return;
     }
+
+    // Ordenação cronológica dos títulos de relatório (do mais antigo para o mais novo)
+    faturasMes.sort((a, b) => {
+      const dA = parseDBR(a.Vencimento);
+      const dB = parseDBR(b.Vencimento);
+      if (!dA && !dB) return 0;
+      if (!dA) return 1;
+      if (!dB) return -1;
+      return dA.getTime() - dB.getTime();
+    });
 
     // 1. Cálculos Financeiros
     let cobradoVal = 0;
@@ -2577,9 +2436,9 @@ O PDF será baixado automaticamente!`;
     let negociandoVal = 0;
     let perdasVal = 0;
 
-    // Contadores para o gráfico
     const statusCounts = {
       "Pendente": { count: 0, valor: 0, class: "pendente" },
+      "Mensagem Enviada": { count: 0, valor: 0, class: "nao-pago" },
       "Pago": { count: 0, valor: 0, class: "pago" },
       "Sem Resposta": { count: 0, valor: 0, class: "sem-resposta" },
       "Incorreto": { count: 0, valor: 0, class: "incorreto" },
@@ -2596,6 +2455,16 @@ O PDF será baixado automaticamente!`;
       if (statusCounts[status]) {
         statusCounts[status].count++;
         statusCounts[status].valor += valor;
+      } else {
+        // Fallback genérico para contagem
+        const lowerStatus = status.toLowerCase();
+        if (lowerStatus.includes("mensagem")) {
+          statusCounts["Mensagem Enviada"].count++;
+          statusCounts["Mensagem Enviada"].valor += valor;
+        } else {
+          statusCounts["Pendente"].count++;
+          statusCounts["Pendente"].valor += valor;
+        }
       }
 
       if (status === "Pago") {
@@ -2607,7 +2476,6 @@ O PDF será baixado automaticamente!`;
       }
     });
 
-    // Atualiza os cartões financeiros
     repTotalCobrado.textContent = formatarMoeda(cobradoVal);
     repTotalRecuperado.textContent = formatarMoeda(recuperadoVal);
     repTotalNegociando.textContent = formatarMoeda(negociandoVal);
@@ -2643,12 +2511,11 @@ O PDF será baixado automaticamente!`;
       }
     });
 
-    // 4. Preencher a tabela detalhada do período
+    // 4. Preencher a tabela detalhada do período com cálculo de dias vencidos
     faturasMes.forEach(c => {
       const tr = document.createElement("tr");
       const statusClass = c.Status.toLowerCase().replace(/\s+/g, "-");
       
-      // Resgata o último log do histórico para exibir como observação do relatório
       let ultimaOcorrencia = "--";
       if (c.Historico && c.Historico.length > 0) {
         const ultimo = c.Historico[c.Historico.length - 1];
@@ -2657,13 +2524,29 @@ O PDF será baixado automaticamente!`;
         ultimaOcorrencia = c.Observacao;
       }
 
+      // Dias vencidos
+      const diffDays = calcularDiasAtraso(c.Vencimento);
+      let delayText = "";
+      if (c.Status === "Pago") {
+        delayText = `<div class="text-[9.5px] text-emerald-450 font-bold">Pago</div>`;
+      } else if (diffDays > 0) {
+        delayText = `<div class="text-[9.5px] text-rose-500 font-bold">Vencido há ${diffDays} d</div>`;
+      } else if (diffDays === 0) {
+        delayText = `<div class="text-[9.5px] text-amber-500 font-bold">Hoje</div>`;
+      } else {
+        delayText = `<div class="text-[9.5px] text-slate-500">Em ${Math.abs(diffDays)} d</div>`;
+      }
+
       tr.innerHTML = `
         <td class="font-semibold text-white">
           <div><span class="text-cyan-400 font-mono text-[9px] mr-1.5">[${c.Codigo || '--'}]</span>${c.Cliente}</div>
           <div class="text-[9px] text-slate-500 font-mono">Lanço: ${c.Lanco} | NF: ${c.NF || '--'}</div>
         </td>
-        <td class="font-mono text-xs text-slate-400">${c.Vencimento}</td>
-        <td class="font-mono font-semibold">${formatarMoeda(c.Valor)}</td>
+        <td class="font-mono text-xs text-slate-400">
+          <div>${c.Vencimento}</div>
+          ${delayText}
+        </td>
+        <td class="font-mono text-xs text-white font-semibold">${formatarMoeda(c.Valor)}</td>
         <td class="text-xs text-slate-400">${c.Parcela}</td>
         <td>
           <span class="badge-status ${statusClass}">
@@ -2821,26 +2704,30 @@ O PDF será baixado automaticamente!`;
   }
 
   function exportarExcel() {
-    const selectedMonth = reportMonthSelect.value;
-    if (!selectedMonth) {
+    const startVal = reportStartDateInput ? reportStartDateInput.value : "";
+    const endVal = reportEndDateInput ? reportEndDateInput.value : "";
+    
+    if (!startVal || !endVal) {
       showToast("Nenhum dado para exportar.", "warning");
       return;
     }
 
     const statusFilterVal = reportStatusFilter ? reportStatusFilter.value : "todos";
+    const parseYMD = (s) => { if (!s) return null; const [y,m,d] = s.split("-"); return new Date(y, m-1, d); };
+    const parseDBR = (s) => { if (!s) return null; const [d,m,y] = s.split("/"); return new Date(y, m-1, d); };
     
+    const startDate = parseYMD(startVal);
+    const endDate = parseYMD(endVal);
+    if (startDate) startDate.setHours(0, 0, 0, 0);
+    if (endDate) endDate.setHours(23, 59, 59, 999);
+
     const faturasMes = clientsData.filter(c => {
-      if (c.Vencimento && c.Vencimento.includes("/")) {
-        const parts = c.Vencimento.split("/");
-        const matchMonth = `${parts[1]}/${parts[2]}` === selectedMonth;
-        if (!matchMonth) return false;
-        
-        if (statusFilterVal === "todos") return true;
-        if (statusFilterVal === "não pago") return c.Status === "Não Pago" || c.Status === "Sem Interesse";
-        if (statusFilterVal === "negociando") return c.Status === "Negociando" || c.Status === "Promessa";
-        return c.Status.toLowerCase() === statusFilterVal;
-      }
-      return false;
+      const venc = parseDBR(c.Vencimento);
+      if (!venc) return false;
+      if (startDate && venc < startDate) return false;
+      if (endDate && venc > endDate) return false;
+      if (statusFilterVal === "todos") return true;
+      return c.Status.toLowerCase() === statusFilterVal.toLowerCase();
     });
 
     if (faturasMes.length === 0) {
@@ -2887,42 +2774,48 @@ O PDF será baixado automaticamente!`;
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
     
-    const monthName = reportMonthSelect.options[reportMonthSelect.selectedIndex]?.text.replace("/", "-") || selectedMonth;
-    const fileName = `cobrancas_ameripan_${monthName}_${statusFilterVal}.xlsx`;
+    const startTxt = startVal.split("-").reverse().join("-");
+    const endTxt = endVal.split("-").reverse().join("-");
+    const fileName = `cobrancas_ameripan_${startTxt}_a_${endTxt}_${statusFilterVal}.xlsx`;
     
     XLSX.writeFile(workbook, fileName);
     showToast("Excel exportado com sucesso!", "success");
   }
 
   function exportarPDF() {
-    const selectedMonth = reportMonthSelect.value;
-    if (!selectedMonth) {
+    const startVal = reportStartDateInput ? reportStartDateInput.value : "";
+    const endVal = reportEndDateInput ? reportEndDateInput.value : "";
+    
+    if (!startVal || !endVal) {
       showToast("Nenhum dado para exportar.", "warning");
       return;
     }
 
     const statusFilterVal = reportStatusFilter ? reportStatusFilter.value : "todos";
+    const parseYMD = (s) => { if (!s) return null; const [y,m,d] = s.split("-"); return new Date(y, m-1, d); };
+    const parseDBR = (s) => { if (!s) return null; const [d,m,y] = s.split("/"); return new Date(y, m-1, d); };
     
+    const startDate = parseYMD(startVal);
+    const endDate = parseYMD(endVal);
+    if (startDate) startDate.setHours(0, 0, 0, 0);
+    if (endDate) endDate.setHours(23, 59, 59, 999);
+
     const faturasMes = clientsData.filter(c => {
-      if (c.Vencimento && c.Vencimento.includes("/")) {
-        const parts = c.Vencimento.split("/");
-        const matchMonth = `${parts[1]}/${parts[2]}` === selectedMonth;
-        if (!matchMonth) return false;
-        
-        if (statusFilterVal === "todos") return true;
-        if (statusFilterVal === "não pago") return c.Status === "Não Pago" || c.Status === "Sem Interesse";
-        if (statusFilterVal === "negociando") return c.Status === "Negociando" || c.Status === "Promessa";
-        return c.Status.toLowerCase() === statusFilterVal;
-      }
-      return false;
+      const venc = parseDBR(c.Vencimento);
+      if (!venc) return false;
+      if (startDate && venc < startDate) return false;
+      if (endDate && venc > endDate) return false;
+      if (statusFilterVal === "todos") return true;
+      return c.Status.toLowerCase() === statusFilterVal.toLowerCase();
     });
 
     if (faturasMes.length === 0) {
-      showToast("Nenhum dado para imprimir.", "warning");
+      showToast("Nenhum data para imprimir.", "warning");
       return;
     }
 
-    const monthText = reportMonthSelect.options[reportMonthSelect.selectedIndex]?.text || selectedMonth;
+    const startTxt = startVal.split("-").reverse().join("/");
+    const endTxt = endVal.split("-").reverse().join("/");
     const statusText = reportStatusFilter.options[reportStatusFilter.selectedIndex]?.text || "Todos";
 
     const printWindow = window.open("", "_blank");
@@ -2940,13 +2833,25 @@ O PDF será baixado automaticamente!`;
         ultimaOcorrencia = c.Observacao;
       }
       
+      const diffDays = calcularDiasAtraso(c.Vencimento);
+      let delayText = "";
+      if (c.Status === "Pago") {
+        delayText = `<span style="font-size:9px;color:#166534;font-weight:bold;">(Pago)</span>`;
+      } else if (diffDays > 0) {
+        delayText = `<span style="font-size:9px;color:#b91c1c;font-weight:bold;">(Vencido há ${diffDays} d)</span>`;
+      } else if (diffDays === 0) {
+        delayText = `<span style="font-size:9px;color:#d97706;font-weight:bold;">(Vence hoje)</span>`;
+      } else {
+        delayText = `<span style="font-size:9px;color:#555;">(Em ${Math.abs(diffDays)} d)</span>`;
+      }
+
       return `
         <tr>
           <td>
             <strong>[${c.Codigo || '--'}] ${c.Cliente}</strong><br>
             <span style="font-size: 9px; color: #555;">CNPJ: ${c.CNPJ || 'N/A'} | Lanço: ${c.Lanco} | NF: ${c.NF || '--'}</span>
           </td>
-          <td>${c.Vencimento}</td>
+          <td>${c.Vencimento} ${delayText}</td>
           <td>${formatarMoeda(c.Valor)}</td>
           <td>${c.Parcela}</td>
           <td><span class="status-text ${c.Status.toLowerCase().replace(/\s+/g, '-')}">${c.Status}</span></td>
@@ -3054,7 +2959,7 @@ O PDF será baixado automaticamente!`;
         <div class="header">
           <h1>Ameripan Distribuidora - Relatório de Cobrança</h1>
           <p>
-            <strong>Mês de Vencimento:</strong> ${monthText} | 
+            <strong>Intervalo:</strong> ${startTxt} a ${endTxt} | 
             <strong>Filtro de Status:</strong> ${statusText} | 
             <strong>Data de Emissão:</strong> ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'})}
           </p>
@@ -3121,7 +3026,6 @@ O PDF será baixado automaticamente!`;
     updateConnectionState(null, "Exportando lote de faturas...");
     showToast("Iniciando exportação de lote...", "info");
 
-    // Compilar perfis e contatos únicos de todos os clientes no lote
     const clientesUnicos = {};
     clientsData.forEach(c => {
       const key = String(c.Codigo || c.CNPJ || "").trim();
@@ -3159,7 +3063,7 @@ O PDF será baixado automaticamente!`;
         return false;
       });
       const totalFaturas = faturasCliente.length || 1;
-      const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta").length;
+      const totalAtrasos = faturasCliente.filter(c => c.Status === "Pendente" || c.Status === "Não Pago" || c.Status === "Sem Resposta" || c.Status === "Mensagem Enviada").length;
 
       const tPlan1 = (cu.PlanilhaFone1 && cu.PlanilhaFone1.valido) ? cu.PlanilhaFone1.exibicao : (perfilCached.TelefonePlanilha1 || "");
       const tPlan2 = (cu.PlanilhaFone2 && cu.PlanilhaFone2.valido) ? cu.PlanilhaFone2.exibicao : (perfilCached.TelefonePlanilha2 || "");
@@ -3177,7 +3081,6 @@ O PDF será baixado automaticamente!`;
         TelefonePlanilha2: tPlan2
       });
 
-      // Também salvar o perfil localmente
       clientesPerfilMap[key] = {
         Codigo: cu.Codigo,
         CNPJ: cu.CNPJ,
@@ -3192,7 +3095,6 @@ O PDF será baixado automaticamente!`;
       };
     });
 
-    // Enviar todas as correções de contato do cache
     Object.keys(contatosCorrigidosMap).forEach(key => {
       contatosList.push(contatosCorrigidosMap[key]);
     });
