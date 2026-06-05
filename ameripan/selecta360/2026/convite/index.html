@@ -610,6 +610,29 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    /* TAB LINKS */
+    .tab-link {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-link:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .tab-link.active {
+      color: #fff;
+      background: var(--primary-gradient);
+    }
   </style>
 </head>
 <body>
@@ -635,47 +658,42 @@
       </button>
     </div>
 
-    <!-- PASSO 2: SELEÇÃO DE VENDEDOR -->
-    <div class="step-section" id="secVendor">
-      <div class="form-group">
-        <label for="selectVendor" class="form-label">Selecione seu Nome (Vendedor)</label>
-        <select id="selectVendor" class="input-field">
-          <option value="">Carregando vendedores...</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" id="btnConfirmVendor" disabled>
-        <span>Acessar Painel de Clientes</span>
-      </button>
-    </div>
-
     <!-- PASSO 3: PAINEL DE CONVITES -->
     <div class="step-section" id="secDashboard">
       
-      <!-- Informações do Vendedor e Botão Voltar -->
+      <!-- Informações do Operador e Botão Voltar -->
       <div class="vendor-info-bar">
-        <div class="vendor-badge" id="lblVendedorName">Vendedor: Selecionado</div>
-        <button class="btn-secondary" id="btnChangeVendor" style="padding: 6px 12px; font-size: 11px; border-radius: 8px; font-weight: 600; cursor: pointer;">Trocar Vendedor</button>
+        <div class="vendor-badge" id="lblVendedorName">Gestão de Convites: Lista Completa</div>
+        <button class="btn-secondary" id="btnChangeVendor" style="padding: 6px 12px; font-size: 11px; border-radius: 8px; font-weight: 600; cursor: pointer;">Sair</button>
       </div>
 
       <!-- Métricas -->
       <div class="metrics-container">
         <div class="metric-card">
-          <div class="metric-value" id="valTotal">0</div>
-          <div class="metric-label">Clientes</div>
+          <div class="metric-value" id="valPending">0</div>
+          <div class="metric-label">Falta Enviar</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" id="valInvited" style="color: #60a5fa;">0</div>
-          <div class="metric-label">Convidados</div>
+          <div class="metric-value" id="valSent" style="color: #f59e0b;">0</div>
+          <div class="metric-label">Mensagem Enviada</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" id="valChecked" style="color: #34d399;">0</div>
-          <div class="metric-label">Compareceram</div>
+          <div class="metric-value" id="valConfirmed" style="color: #10b981;">0</div>
+          <div class="metric-label">Confirmaram</div>
         </div>
+      </div>
+
+      <!-- Abas de Status -->
+      <div class="status-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; overflow-x: auto;">
+        <button class="tab-link active" onclick="filterStatusTab('PENDENTE')" id="tabPend">Falta Enviar (<span id="cntPend">0</span>)</button>
+        <button class="tab-link" onclick="filterStatusTab('ENVIADO')" id="tabSent">Mensagem Enviada (<span id="cntSent">0</span>)</button>
+        <button class="tab-link" onclick="filterStatusTab('CONFIRMADO')" id="tabConf">Confirmou (<span id="cntConf">0</span>)</button>
+        <button class="tab-link" onclick="filterStatusTab('TODOS')" id="tabAll">Todos (<span id="cntAll">0</span>)</button>
       </div>
 
       <!-- Barra de Pesquisa -->
       <div class="form-group search-filter-wrapper">
-        <input type="text" id="inputSearch" class="input-field" placeholder="Pesquisar por Código, Razão, Fantasia ou Telefone...">
+        <input type="text" id="inputSearch" class="input-field" placeholder="Pesquisar por Código, Razão, Fantasia, Telefone ou Vendedor...">
       </div>
 
       <!-- Lista de Clientes -->
@@ -899,7 +917,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       if (config.password) {
         inputPassword.value = config.password;
-        verifyAndLoadVendedores(config.password);
+        verifyAndLoadClients(config.password);
       }
     });
 
@@ -919,19 +937,19 @@
       }, 4000);
     }
 
-    // PASSO 1: VERIFICAR SENHA E CARREGAR VENDEDORES
+    // PASSO 1: VERIFICAR SENHA E CARREGAR CLIENTES
     btnVerifyPassword.addEventListener('click', () => {
       const pwd = inputPassword.value.trim();
       if (!pwd) {
         showToast('Insira a senha de segurança.', 'error');
         return;
       }
-      verifyAndLoadVendedores(pwd);
+      verifyAndLoadClients(pwd);
     });
 
-    function verifyAndLoadVendedores(pwd) {
+    function verifyAndLoadClients(pwd) {
       setLoading(btnVerifyPassword, true, 'Verificando...');
-      const url = `${config.scriptUrl}?action=getVendedores&password=${encodeURIComponent(pwd)}`;
+      const url = `${config.scriptUrl}?action=getUnicaClients&password=${encodeURIComponent(pwd)}`;
       
       fetch(url)
         .then(response => response.json())
@@ -940,9 +958,13 @@
           if (res.success) {
             config.password = pwd;
             localStorage.setItem('selecta360_password', pwd);
-            state.vendedores = res.vendedores;
-            renderVendedores(res.vendedores);
-            transitionToStep('secVendor');
+            state.clients = res.clients;
+            
+            // Atribui aba ativa inicial
+            state.activeTab = 'PENDENTE';
+            
+            renderDashboard();
+            transitionToStep('secDashboard');
           } else {
             showToast(res.message || 'Senha incorreta.', 'error');
           }
@@ -954,73 +976,56 @@
         });
     }
 
-    function renderVendedores(list) {
-      selectVendor.innerHTML = '<option value="">Selecione seu nome...</option>';
-      list.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = v;
-        selectVendor.appendChild(opt);
-      });
-      selectVendor.disabled = false;
-      btnConfirmVendor.disabled = true;
-    }
-
-    selectVendor.addEventListener('change', () => {
-      btnConfirmVendor.disabled = selectVendor.value === '';
-    });
-
-    // PASSO 2: SELECIONAR VENDEDOR E BUSCAR CLIENTES (SELECTA_UNICA + CONVIDADOS)
-    btnConfirmVendor.addEventListener('click', () => {
-      const vName = selectVendor.value;
-      if (!vName) return;
-      state.selectedVendedor = vName;
-      lblVendedorName.textContent = `Vendedor: ${vName}`;
-      
-      loadClientsData(vName);
-    });
-
-    function loadClientsData(vName) {
-      setLoading(btnConfirmVendor, true, 'Carregando base de clientes...');
-      const url = `${config.scriptUrl}?action=getUnicaClients&vendedor=${encodeURIComponent(vName)}&password=${encodeURIComponent(config.password)}`;
-      
-      fetch(url)
-        .then(response => response.json())
-        .then(res => {
-          setLoading(btnConfirmVendor, false);
-          if (res.success) {
-            state.clients = res.clients;
-            renderDashboard();
-            transitionToStep('secDashboard');
-          } else {
-            showToast(res.message || 'Erro ao carregar os clientes.', 'error');
-          }
-        })
-        .catch(err => {
-          setLoading(btnConfirmVendor, false);
-          showToast('Erro de rede ao carregar os clientes.', 'error');
-          console.error(err);
-        });
-    }
-
-    // TROCAR VENDEDOR (VOLTAR)
+    // SAIR / DESCONECTAR (VOLTAR)
     btnChangeVendor.addEventListener('click', () => {
-      state.selectedVendedor = '';
-      selectVendor.value = '';
-      btnConfirmVendor.disabled = true;
-      transitionToStep('secVendor');
+      config.password = '';
+      localStorage.removeItem('selecta360_password');
+      inputPassword.value = '';
+      transitionToStep('secPassword');
     });
+
+    // CONTROLE DE ABAS DE STATUS
+    window.filterStatusTab = function(status) {
+      state.activeTab = status;
+      
+      // Atualiza classes dos botões das abas
+      document.querySelectorAll('.status-tabs .tab-link').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      if (status === 'PENDENTE') document.getElementById('tabPend').classList.add('active');
+      else if (status === 'ENVIADO') document.getElementById('tabSent').classList.add('active');
+      else if (status === 'CONFIRMADO') document.getElementById('tabConf').classList.add('active');
+      else if (status === 'TODOS') document.getElementById('tabAll').classList.add('active');
+      
+      filterAndRenderList();
+    };
 
     // PASSO 3: RENDERIZAR DASHBOARD E CLIENTES
     function renderDashboard() {
-      // 1. Calcula Métricas
-      const total = state.clients.length;
-      const invited = state.clients.filter(c => c.status === 'CONVIDADO' || c.status === 'COMPARECEU').length;
-      const checked = state.clients.filter(c => c.status === 'COMPARECEU').length;
+      // 1. Calcula contadores
+      let pendingCount = 0;
+      let sentCount = 0;
+      let confirmedCount = 0;
       
-      valTotal.textContent = total;
-      valInvited.textContent = invited;
-      valChecked.textContent = checked;
+      state.clients.forEach(c => {
+        if (c.status === 'PENDENTE') pendingCount++;
+        else if (c.status === 'ENVIADO') sentCount++;
+        else if (c.status === 'CONVIDADO' || c.status === 'COMPARECEU') confirmedCount++;
+      });
+      
+      const totalCount = state.clients.length;
+
+      // Atualiza elementos métricos
+      document.getElementById('valPending').textContent = pendingCount;
+      document.getElementById('valSent').textContent = sentCount;
+      document.getElementById('valConfirmed').textContent = confirmedCount;
+
+      // Atualiza contadores nas abas
+      document.getElementById('cntPend').textContent = pendingCount;
+      document.getElementById('cntSent').textContent = sentCount;
+      document.getElementById('cntConf').textContent = confirmedCount;
+      document.getElementById('cntAll').textContent = totalCount;
 
       // 2. Filtra e exibe a lista
       filterAndRenderList();
@@ -1039,18 +1044,36 @@
     function filterAndRenderList() {
       const query = inputSearch.value.trim().toLowerCase();
       
-      // Filtra os clientes
+      // Filtra por aba de status e depois por termo de busca
       const filtered = state.clients.filter(c => {
+        // Filtro de aba
+        let matchStatus = false;
+        if (state.activeTab === 'TODOS') {
+          matchStatus = true;
+        } else if (state.activeTab === 'PENDENTE') {
+          matchStatus = c.status === 'PENDENTE';
+        } else if (state.activeTab === 'ENVIADO') {
+          matchStatus = c.status === 'ENVIADO';
+        } else if (state.activeTab === 'CONFIRMADO') {
+          matchStatus = c.status === 'CONVIDADO' || c.status === 'COMPARECEU';
+        }
+
+        if (!matchStatus) return false;
+
+        // Filtro de query
         const cleanedRazao = cleanRazaoSocial(c.razao_social).toLowerCase();
+        const cleanedFant = (c.fantasia || "").toLowerCase();
+        const clientVendor = (c.vendedor || "").toLowerCase();
         return c.codigo.toLowerCase().includes(query) ||
                cleanedRazao.includes(query) ||
-               c.fantasia.toLowerCase().includes(query) ||
+               cleanedFant.includes(query) ||
+               clientVendor.includes(query) ||
                c.telefone.toLowerCase().includes(query);
       });
 
       listClients.innerHTML = '';
       if (filtered.length === 0) {
-        listClients.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum cliente correspondente encontrado na base.</div>';
+        listClients.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum cliente correspondente encontrado nesta aba.</div>';
         return;
       }
 
@@ -1063,10 +1086,13 @@
         const cleanedRazao = cleanRazaoSocial(c.razao_social);
 
         if (c.status === 'PENDENTE') {
-          statusBadge = '<span class="status-badge status-pending">Não Convidado</span>';
-          actionButtons = `<button class="btn btn-primary btn-action" onclick="openInviteModal('${c.codigo}')">Convidar</button>`;
+          statusBadge = '<span class="status-badge status-pending">Falta Enviar</span>';
+          actionButtons = `<button class="btn btn-primary btn-action" onclick="openInviteModal('${c.codigo}')">Enviar Convite</button>`;
+        } else if (c.status === 'ENVIADO') {
+          statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbd38d;">Mensagem Enviada</span>';
+          actionButtons = `<button class="btn btn-primary btn-action" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);" onclick="openInviteModal('${c.codigo}')">Confirmar Cadastro</button>`;
         } else if (c.status === 'CONVIDADO') {
-          statusBadge = '<span class="status-badge status-invited">Convidado</span>';
+          statusBadge = '<span class="status-badge status-invited">Cadastrado</span>';
           actionButtons = `
             <button class="btn btn-primary btn-action" style="background: var(--primary-gradient);" onclick="executeCheckIn('${c.codigo}')">Confirmar Check-in</button>
             <button class="btn btn-secondary btn-action" style="margin-top: 5px;" onclick="openInviteModal('${c.codigo}')">Editar Dados</button>
@@ -1076,17 +1102,17 @@
           actionButtons = `<button class="btn btn-secondary btn-action" disabled>Confirmado</button>`;
         }
 
-        // Se o cliente não tem vendedor mapeado na base unificada
-        const isAdoptable = !c.vendedor ? ' <span style="color: var(--accent-color); font-size: 10px; font-weight: bold;">(Sem Vendedor)</span>' : '';
+        const vendorText = c.vendedor ? `<span><b>Vendedor:</b> ${c.vendedor}</span>` : ' <span style="color: var(--accent-color); font-size: 10px; font-weight: bold;">(Sem Vendedor)</span>';
 
         card.innerHTML = `
           <div class="client-details">
-            <div class="client-name">${cleanedRazao}${isAdoptable}</div>
+            <div class="client-name">${cleanedRazao}</div>
             <div class="client-meta">
               <span><b>Cód:</b> ${c.codigo}</span>
               <span><b>Tel:</b> ${c.telefone || 'N/A'}</span>
               <span><b>Cidade:</b> ${c.cidade_estab || c.cidade_evento || 'N/A'}</span>
               <span><b>Origem:</b> ${c.origem || 'N/A'}</span>
+              ${vendorText}
             </div>
             <div style="margin-top: 8px;">${statusBadge}</div>
           </div>
@@ -1256,6 +1282,43 @@
         });
     });
 
+    // Função para marcar mensagem como enviada na planilha
+    function markClientAsSent(codigo) {
+      const client = state.clients.find(c => c.codigo === codigo);
+      if (!client) return;
+      
+      // Só marca como enviado se o status atual for PENDENTE
+      if (client.status !== 'PENDENTE') return;
+
+      const payload = {
+        action: 'markMessageSent',
+        password: config.password,
+        codigo: codigo
+      };
+
+      fetch(config.scriptUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(res => {
+        if (res.success) {
+          client.status = 'ENVIADO';
+          renderDashboard();
+          showToast('Status atualizado para Mensagem Enviada!');
+        } else {
+          console.error('Erro ao marcar mensagem como enviada na planilha:', res.message);
+        }
+      })
+      .catch(err => {
+        console.error('Erro de rede ao marcar mensagem como enviada:', err);
+      });
+    }
+
     // Enviar via WhatsApp API
     btnSendWhatsApp.addEventListener('click', () => {
       const phoneRaw = regTelefone.value || (state.activeClient ? state.activeClient.telefone : '');
@@ -1268,6 +1331,10 @@
       const text = txtWhatsAppMessage.value;
       const url = `https://api.whatsapp.com/send?phone=${encodeURIComponent(phoneClean)}&text=${encodeURIComponent(text)}`;
       window.open(url, '_blank');
+      
+      if (state.activeClient) {
+        markClientAsSent(state.activeClient.codigo);
+      }
     });
 
     // MODAL DE CONVITE: SALVAR
@@ -1306,7 +1373,7 @@
         telefone2: regTelefone2.value.trim(),
         nome_convidado: convidado,
         cidade_evento: cidade,
-        vendedor: state.selectedVendedor, // Adota o cliente para este vendedor
+        vendedor: state.activeClient ? (state.activeClient.vendedor || '') : '', // Preserva o vendedor original do cliente
         cidade_cliente: state.activeClient ? (state.activeClient.cidade_estab || '') : '',
         ramo_atividade: '',
         compareceu: chkImmediateCheckin.checked,
