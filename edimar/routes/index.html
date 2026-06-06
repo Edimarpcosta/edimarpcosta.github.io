@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -163,7 +164,7 @@
         .card-body { padding: 15px; }
         
         .client-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .id-badge { font-size: 0.65rem; font-weight: 800; color: #718096; background: #edf2f7; padding: 3px 8px; border-radius: 5px; }
+        .id-badge { font-size: 0.9rem; font-weight: 800; color: #4a5568; background: #edf2f7; padding: 4px 10px; border-radius: 6px; }
         .ordem-badge { background: #e0f2f1; color: var(--primary); font-weight: 800; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
         .ordem-whats { background: #fff8e1; color: #f57c00; }
         .visitado-badge { background: #d4edda; color: #155724; font-weight: 800; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
@@ -192,8 +193,8 @@
         .btn-circle.copied { background: var(--primary) !important; }
 
         /* Floating Button */
-        .fab { position: fixed; bottom: calc(85px + env(safe-area-inset-bottom, 0px)); right: 25px; width: 60px; height: 60px; background: var(--gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 16px rgba(0,77,64,0.3); border: none; z-index: 1000; transition: var(--transition); }
-        .fab:active { transform: scale(0.9); }
+        .app-fab { position: fixed; bottom: calc(85px + env(safe-area-inset-bottom, 0px)); right: 25px; width: 60px; height: 60px; background: var(--gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 16px rgba(0,77,64,0.3); border: none; z-index: 1000; transition: var(--transition); }
+        .app-fab:active { transform: scale(0.9); }
         
         /* Loader */
         .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.92); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
@@ -322,7 +323,7 @@
         }
         body.dark-theme .id-badge {
             background: #2d3748;
-            color: #a0aec0;
+            color: #edf2f7;
         }
         body.dark-theme .info-box {
             background: #1a1a1a;
@@ -386,6 +387,45 @@
         body.dark-theme .filter-chip.active {
             background: var(--accent) !important;
             color: white !important;
+        }
+        
+        /* Customizar Popup do Leaflet */
+        .leaflet-popup-content-wrapper {
+            background: var(--card-bg, #ffffff) !important;
+            color: var(--text-main, #2d3748) !important;
+            border-radius: 16px !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
+            border: 1px solid var(--border-color, #e2e8f0) !important;
+        }
+        body.dark-theme .leaflet-popup-content-wrapper {
+            background: #1e1e1e !important;
+            color: #e0e0e0 !important;
+            border-color: #2d2d2d !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+        }
+        .leaflet-popup-content {
+            margin: 0 !important;
+            width: 260px !important;
+            line-height: inherit !important;
+        }
+        .leaflet-popup-tip {
+            background: var(--card-bg, #ffffff) !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+        }
+        body.dark-theme .leaflet-popup-tip {
+            background: #1e1e1e !important;
+        }
+        .leaflet-popup-close-button {
+            color: #ffffff !important;
+            font-size: 1.25rem !important;
+            padding: 6px 8px 0 0 !important;
+            z-index: 10;
+        }
+        .leaflet-popup-close-button:hover {
+            color: #ffcccc !important;
+            background: none !important;
         }
     </style>
 </head>
@@ -471,7 +511,7 @@
 <div class="container mt-2" id="lista"></div>
 
 <!-- Botão Flutuante de Adicionar Cliente -->
-<button class="fab" id="btn-fab" onclick="abrirForm()"><i class="fas fa-plus"></i></button>
+<button class="app-fab" id="btn-fab" onclick="abrirForm()"><i class="fas fa-plus"></i></button>
 
 <!-- BOTTOM NAVIGATION BAR -->
 <div class="bottom-nav">
@@ -546,8 +586,8 @@
         </form>
       </div>
       <div class="modal-footer border-0 p-3 flex-column">
-        <button type="button" class="btn btn-success w-100 py-3 rounded-pill fw-bold mb-2 shadow-sm" onclick="salvar()">SALVAR NA PLANILHA</button>
-        <button type="button" class="btn btn-outline-danger w-100 py-2 rounded-pill small border-0" onclick="excluir()">EXCLUIR CLIENTE</button>
+        <button type="button" class="btn btn-success w-100 py-3 rounded-pill fw-bold mb-2 shadow-sm" onclick="salvar()"><i class="fas fa-save me-2"></i>SALVAR NA PLANILHA</button>
+        <button type="button" id="btn-excluir-cliente" class="btn btn-outline-danger w-100 py-2 rounded-pill small border-0" onclick="excluir()"><i class="fas fa-trash-alt me-2"></i>EXCLUIR CLIENTE</button>
       </div>
     </div>
   </div>
@@ -1160,15 +1200,25 @@
     
     const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-    async function geocodeAddress(address) {
-        if (!address) return null;
-        const cleanAddr = address.trim();
-        if (coordsCache[cleanAddr]) {
-            return coordsCache[cleanAddr];
+    function cleanAddressForGeocoding(address) {
+        if (!address) return '';
+        let addr = address.trim();
+        const idxPira = addr.toLowerCase().indexOf('piracicaba');
+        if (idxPira !== -1) {
+            addr = addr.substring(0, idxPira).trim();
         }
-        
+        addr = addr.replace(/[,-\s]+$/, '');
+        const parts = addr.split(',');
+        if (parts.length >= 2) {
+            const street = parts[0].trim();
+            const numberPart = parts[1].split('-')[0].trim();
+            return `${street}, ${numberPart}`;
+        }
+        return addr;
+    }
+
+    async function geocodeAddress(cleanAddr) {
         try {
-            // Buscando no Nominatim OpenStreetMap com limite de 1
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanAddr + ', Piracicaba, SP')}&limit=1`;
             const resp = await fetch(url, {
                 headers: { 'User-Agent': 'RotaEdimarApp/1.0 (edimarpcosta.github.io)' }
@@ -1176,19 +1226,42 @@
             if (!resp.ok) throw new Error("Erro na rede do Nominatim");
             const data = await resp.json();
             if (data && data.length > 0) {
-                const coords = {
+                return {
                     lat: parseFloat(data[0].lat),
                     lon: parseFloat(data[0].lon)
                 };
-                coordsCache[cleanAddr] = coords;
-                localStorage.setItem('coords_cache', JSON.stringify(coordsCache));
-                return coords;
             }
         } catch (e) {
-            console.error("Erro ao geocodificar endereço: " + cleanAddr, e);
+            console.error("Erro ao geocodificar no Nominatim: " + cleanAddr, e);
         }
         return null;
     }
+
+    async function getCoordinatesForAddress(address) {
+        if (!address) return null;
+        const cleanAddr = cleanAddressForGeocoding(address);
+        if (!cleanAddr) return null;
+        if (coordsCache[cleanAddr]) {
+            return coordsCache[cleanAddr];
+        }
+        const coords = await geocodeAddress(cleanAddr);
+        if (coords) {
+            coordsCache[cleanAddr] = coords;
+            localStorage.setItem('coords_cache', JSON.stringify(coordsCache));
+        }
+        return coords;
+    }
+
+    // Exposição de funções do mapa no escopo global (window)
+    window.abrirGpsDoMapa = function(id) {
+        abrirGps(id);
+    };
+    window.abrirWhatsDoMapa = function(id) {
+        abrirWhatsapp(id);
+    };
+    window.registrarVisitaDoMapa = function(id, status) {
+        toggleVisita(id, null, null, status);
+    };
 
     async function renderLeafletMap(clients, targetDate) {
         const mapEl = document.getElementById('map');
@@ -1231,13 +1304,14 @@
         for (let idx = 0; idx < clients.length; idx++) {
             const c = clients[idx];
             const address = c.Endereco;
-            const hasCache = coordsCache[address.trim()];
+            const cleanAddr = cleanAddressForGeocoding(address);
+            const hasCache = coordsCache[cleanAddr];
             let coords = null;
             
             if (hasCache) {
                 coords = hasCache;
             } else {
-                coords = await geocodeAddress(address);
+                coords = await getCoordinatesForAddress(address);
                 await sleep(1000); // Pausa recomendada para respeitar limites do Nominatim
             }
             
@@ -1270,15 +1344,86 @@
                     iconAnchor: [13, 13]
                 });
                 
+                let statusText = 'Pendente';
+                let headerGradient = 'linear-gradient(135deg, #004d40 0%, #00796b 100%)';
+                if (isVisited) {
+                    statusText = 'Visitado';
+                    headerGradient = 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)';
+                } else if (isAbsent) {
+                    statusText = 'Ausente';
+                    headerGradient = 'linear-gradient(135deg, #e65100 0%, #f57c00 100%)';
+                }
+
+                const lastVisitDate = getLastVisitDateStr(c.ID);
+
+                const popupHtml = `
+                    <div style="font-family: 'Outfit', sans-serif; overflow: hidden; width: 260px;">
+                        <!-- Header do Card -->
+                        <div style="background: ${headerGradient}; color: white; padding: 12px 15px; position: relative;">
+                            <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 700; opacity: 0.85; letter-spacing: 0.5px;">
+                                CLIENTE ROTEIRO #${idx + 1}
+                            </div>
+                            <h6 style="margin: 2px 0 0 0; font-weight: 700; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                ${c.Fantasia || c.Cliente}
+                            </h6>
+                            <span style="display: inline-block; background: rgba(255,255,255,0.25); border-radius: 12px; padding: 2px 8px; font-size: 0.65rem; font-weight: bold; margin-top: 5px;">
+                                ${statusText}
+                            </span>
+                        </div>
+                        
+                        <!-- Corpo do Card -->
+                        <div style="padding: 12px 15px; display: flex; flex-direction: column; gap: 8px;">
+                            <div style="font-size: 0.72rem; color: #718096; text-transform: uppercase; font-weight: 700; margin-bottom: -3px;">
+                                ${c.Cidade || 'PIRACICABA'}
+                            </div>
+                            
+                            <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.8rem; color: inherit;">
+                                <i class="fas fa-map-marker-alt" style="color: var(--accent); margin-top: 2px; width: 14px;"></i>
+                                <span style="font-weight: 500;">${c.Endereco}</span>
+                            </div>
+                            
+                            ${c.Comprador ? `
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: inherit;">
+                                <i class="fas fa-user" style="color: var(--accent); width: 14px;"></i>
+                                <span>Comprador: <strong>${c.Comprador}</strong></span>
+                            </div>
+                            ` : ''}
+
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: inherit;">
+                                <i class="fas fa-clock" style="color: var(--accent); width: 14px;"></i>
+                                <span>H. Visita: <strong>${c.Hvisita || c.HAbertura || 'Livre'}</strong></span>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: inherit;">
+                                <i class="fas fa-history" style="color: var(--accent); width: 14px;"></i>
+                                <span>Última visita: <strong>${lastVisitDate}</strong></span>
+                            </div>
+                            
+                            <!-- Ações Rápidas -->
+                            <div style="display: flex; gap: 8px; margin-top: 6px; border-top: 1px solid #edf2f7; padding-top: 8px;">
+                                <a href="javascript:void(0)" onclick="abrirGpsDoMapa('${c.ID}')" class="btn btn-sm text-white" style="flex: 1; font-size: 0.75rem; border-radius: 8px; font-weight: 600; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background-color: #4285f4; border: none; text-decoration: none;">
+                                    <i class="fas fa-location-arrow" style="font-size: 0.7rem;"></i> GPS
+                                </a>
+                                <a href="javascript:void(0)" onclick="abrirWhatsDoMapa('${c.ID}')" class="btn btn-sm text-white" style="flex: 1; font-size: 0.75rem; border-radius: 8px; font-weight: 600; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background-color: #25d366; border: none; text-decoration: none;">
+                                    <i class="fab fa-whatsapp" style="font-size: 0.85rem;"></i> Whats
+                                </a>
+                            </div>
+
+                            <div style="display: flex; gap: 8px; margin-top: 2px;">
+                                <a href="javascript:void(0)" onclick="registrarVisitaDoMapa('${c.ID}', 'Visita')" class="btn btn-sm btn-outline-success" style="flex: 1; font-size: 0.7rem; border-radius: 8px; font-weight: 600; padding: 4px 2px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border-color: #28a745; color: #28a745; text-decoration: none;">
+                                    <i class="fas fa-check"></i> Presente
+                                </a>
+                                <a href="javascript:void(0)" onclick="registrarVisitaDoMapa('${c.ID}', 'Não Encontrado')" class="btn btn-sm btn-outline-warning" style="flex: 1; font-size: 0.7rem; border-radius: 8px; font-weight: 600; padding: 4px 2px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border-color: #ffc107; color: #d39e00; text-decoration: none;">
+                                    <i class="fas fa-user-slash"></i> Ausente
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
                 const marker = L.marker([coords.lat, coords.lon], { icon: customIcon })
                     .addTo(leafletMap)
-                    .bindPopup(`
-                        <div style="font-family: 'Outfit', sans-serif; font-size: 0.85rem;">
-                            <strong>${c.Fantasia || c.Cliente}</strong><br>
-                            <span style="font-size:0.75rem; color:#666;">${c.Endereco}</span><br>
-                            <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.Endereco)}" target="_blank" class="btn btn-xs btn-primary text-white mt-2 px-2 py-0.5" style="font-size:0.7rem; display:inline-block; border-radius:5px;"><i class="fas fa-route me-1"></i>Ir ao GPS</a>
-                        </div>
-                    `);
+                    .bindPopup(popupHtml);
                     
                 mapMarkers.push(marker);
                 latLns.push([coords.lat, coords.lon]);
@@ -1327,7 +1472,7 @@
             const coordsList = [];
             for (let c of scheduled) {
                 if (c.Endereco) {
-                    const coords = coordsCache[c.Endereco.trim()] || await geocodeAddress(c.Endereco);
+                    const coords = await getCoordinatesForAddress(c.Endereco);
                     if (coords) {
                         coordsList.push({ id: c.ID, lat: coords.lat, lon: coords.lon });
                     }
@@ -2318,9 +2463,9 @@
                         <span class="client-razao">${i.Cliente}</span>
                         
                         <div class="info-box">
-                            <div class="info-item"><i class="fas fa-user-circle"></i> ${i.Comprador}</div>
-                            <div class="info-item"><i class="fas fa-phone-alt"></i> ${i.WhatsApp}</div>
-                            <div class="info-item"><i class="fas fa-calendar-day"></i> V: ${i.Visita}</div>
+                            <div class="info-item"><i class="fas fa-user"></i> ${i.Comprador}</div>
+                            <div class="info-item"><i class="fab fa-whatsapp text-success"></i> ${i.WhatsApp}</div>
+                            <div class="info-item"><i class="fas fa-calendar-alt"></i> V: ${i.Visita}</div>
                             <div class="info-item"><i class="fas fa-truck"></i> E: ${i.Entrega}</div>
                             ${i.HAbertura ? `<div class="info-item"><i class="fas fa-door-open"></i> Abre: ${i.HAbertura}</div>` : ''}
                             ${i.Hvisita ? `<div class="info-item"><i class="fas fa-clock"></i> Visita: ${i.Hvisita}</div>` : ''}
@@ -2421,8 +2566,8 @@
                     <div class="card-body py-3 d-flex justify-content-between align-items-center">
                         <div style="max-width: 70%;">
                             <div class="fw-bold text-dark" style="font-size:1.05rem;">${i.Fantasia || i.Cliente}</div>
-                            <div class="small text-muted" style="font-size:0.75rem;">
-                                Cód: #${i.ID} | Ordem: ${i.Ordem} | Cidade: ${i.Cidade}<br>
+                            <div class="small text-muted" style="font-size:0.75rem; mt-1">
+                                <span class="id-badge">#${i.ID}</span> | Ordem: ${i.Ordem} | Cidade: ${i.Cidade}<br>
                                 <i class="far fa-clock me-1 mt-1"></i>Última: ${lastVisit}
                                 ${isAbsent ? '<br><b class="text-warning"><i class="fas fa-user-slash me-1"></i>Não Encontrado</b>' : ''}
                             </div>
@@ -2734,10 +2879,14 @@
     function abrirForm(id = null) {
         document.getElementById('clienteForm').reset();
         document.getElementById('f-cep-helper').value = '';
+        const btnExcluir = document.getElementById('btn-excluir-cliente');
+        const idField = document.getElementById('f-id');
         
         if(id) {
             const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
-            document.getElementById('f-id').value = c.ID;
+            idField.value = c.ID;
+            idField.readOnly = true;
+            idField.style.backgroundColor = '#e9ecef'; // Fundo cinza de leitura
             document.getElementById('f-fant').value = c.Fantasia;
             document.getElementById('f-cli').value = c.Cliente;
             document.getElementById('f-comp').value = c.Comprador;
@@ -2751,6 +2900,20 @@
             document.getElementById('f-obs').value = c.Obs;
             document.getElementById('f-hab').value = c.HAbertura || '';
             document.getElementById('f-hvis').value = c.Hvisita || '';
+            
+            if (btnExcluir) btnExcluir.style.display = 'block';
+        } else {
+            idField.readOnly = false;
+            idField.style.backgroundColor = '';
+            
+            // Auto-gera o ID do novo cliente (Max ID + 1)
+            const maxId = db.reduce((max, item) => {
+                const num = parseInt(item.ID);
+                return isNaN(num) ? max : Math.max(max, num);
+            }, 0);
+            idField.value = maxId + 1;
+            
+            if (btnExcluir) btnExcluir.style.display = 'none';
         }
         modal.show();
     }
