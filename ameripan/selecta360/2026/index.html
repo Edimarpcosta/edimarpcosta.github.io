@@ -794,12 +794,21 @@
           </div>
         </div>
 
-        <div class="selected-client-title" style="margin-top: 25px;">Dados Obrigatórios do Participante</div>
+        <div class="selected-client-title" style="margin-top: 25px;">Dados dos Participantes</div>
 
         <!-- Nome do Convidado -->
         <div class="form-group">
-          <label for="regNomeConvidado" class="form-label">Nome Completo do Participante *</label>
-          <input type="text" id="regNomeConvidado" class="input-field" placeholder="Quem irá ao evento?">
+          <label for="regNomeConvidado" class="form-label">Pessoa 1 (Proprietário / Sócio / etc.) *</label>
+          <input type="text" id="regNomeConvidado" class="input-field" placeholder="Nome completo do participante principal...">
+        </div>
+        
+        <!-- Contêiner de acompanhantes dinâmicos -->
+        <div id="companionsContainer"></div>
+        
+        <div class="form-group" style="margin-bottom: 25px;">
+          <button type="button" id="btnAddCompanion" class="btn btn-secondary" style="font-size: 13px; padding: 10px 16px; width: auto; background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.2); color: #a5b4fc;">
+            ＋ Adicionar Convidado
+          </button>
         </div>
 
         <!-- Cidade e Data de Preferência -->
@@ -889,6 +898,53 @@
     
     const toast = document.getElementById('toastNotification');
     const toastText = document.getElementById('toastText');
+
+    const companionsContainer = document.getElementById('companionsContainer');
+    const btnAddCompanion = document.getElementById('btnAddCompanion');
+
+    // DYNAMIC COMPANIONS LOGIC
+    function addCompanionInput(name = '') {
+      const index = companionsContainer.children.length + 2; // Convidado 2 em diante
+      
+      const formGroup = document.createElement('div');
+      formGroup.className = 'form-group companion-group';
+      formGroup.style.display = 'flex';
+      formGroup.style.alignItems = 'flex-end';
+      formGroup.style.gap = '10px';
+      formGroup.style.marginBottom = '15px';
+      formGroup.style.animation = 'fadeIn 0.3s ease-out forwards';
+      
+      formGroup.innerHTML = `
+        <div style="flex-grow: 1;">
+          <label class="form-label">Convidado ${index}</label>
+          <input type="text" class="input-field companion-input" placeholder="Nome do Convidado ${index}..." value="${name}">
+        </div>
+        <button type="button" class="btn btn-secondary btn-remove-companion" style="padding: 14px; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--error-color); border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);" title="Remover Convidado">
+          ✕
+        </button>
+      `;
+      
+      formGroup.querySelector('.btn-remove-companion').addEventListener('click', () => {
+        formGroup.remove();
+        reindexCompanions();
+      });
+      
+      companionsContainer.appendChild(formGroup);
+    }
+
+    function reindexCompanions() {
+      const groups = companionsContainer.querySelectorAll('.companion-group');
+      groups.forEach((group, idx) => {
+        const index = idx + 2;
+        group.querySelector('.form-label').textContent = `Convidado ${index}`;
+        const input = group.querySelector('.companion-input');
+        input.placeholder = `Nome do Convidado ${index}...`;
+      });
+    }
+
+    btnAddCompanion.addEventListener('click', () => {
+      addCompanionInput();
+    });
 
     // INITIALIZATION
     window.addEventListener('DOMContentLoaded', () => {
@@ -1256,9 +1312,39 @@
       populateEnrichField(regTelefone, chkTelefone, client.telefone, 'telefone');
       populateEnrichField(regTelefone2, chkTelefone2, client.telefone2, 'telefone2');
 
-      // Reseta campos do participante
+      // Reseta campos do participante e limpa acompanhantes
       regNomeConvidado.value = '';
       selectEventCity.value = '';
+      companionsContainer.innerHTML = '';
+
+      // Verifica se o CNPJ do cliente já tem cadastro em CONVIDADOS
+      if (client.cnpj) {
+        const cleanCnpj = client.cnpj.replace(/\D/g, "");
+        const pwd = inputPassword.value.trim() || state.password;
+        if (cleanCnpj && pwd) {
+          const checkUrl = `${state.scriptUrl}?action=checkCnpj&cnpj=${encodeURIComponent(cleanCnpj)}&password=${encodeURIComponent(pwd)}`;
+          fetch(checkUrl)
+            .then(r => r.json())
+            .then(res => {
+              if (res.success && res.exists) {
+                // Preenche dados existentes
+                regNomeConvidado.value = res.data.nome_convidado || '';
+                selectEventCity.value = res.data.cidade_evento || '';
+                
+                // Mapeia acompanhantes existentes
+                let compIdx = 2;
+                while (res.data[`convidado${compIdx}`] !== undefined) {
+                  const val = res.data[`convidado${compIdx}`];
+                  if (val && val.trim() !== '') {
+                    addCompanionInput(val);
+                  }
+                  compIdx++;
+                }
+              }
+            })
+            .catch(e => console.error("Erro ao verificar CNPJ em CONVIDADOS:", e));
+        }
+      }
 
       // Mostra o formulário de cadastro
       formRegistration.classList.add('active');
@@ -1342,6 +1428,7 @@
       // Reseta campos do participante
       regNomeConvidado.value = '';
       selectEventCity.value = '';
+      companionsContainer.innerHTML = '';
 
       // Mostra o formulário de cadastro
       formRegistration.classList.add('active');
@@ -1385,6 +1472,21 @@
         cidade_cliente: state.selectedClient.cidade_cliente,
         ramo_atividade: state.selectedClient.ramo_atividade
       };
+
+      // Se estamos editando, limpa os acompanhantes antigos no payload para evitar sobras
+      if (state.selectedClient) {
+        for (let key in state.selectedClient) {
+          if (key.indexOf("convidado") === 0) {
+            payload[key] = "";
+          }
+        }
+      }
+
+      // Adiciona os acompanhantes dinâmicos no payload
+      const companionInputs = companionsContainer.querySelectorAll('.companion-input');
+      companionInputs.forEach((input, index) => {
+        payload[`convidado${index + 2}`] = input.value.trim();
+      });
 
       // Como o Apps Script tem restrições CORS em POSTs em alguns ambientes com JSON simples, 
       // enviamos como payload stringificado ou texto simples para garantir total compatibilidade.
