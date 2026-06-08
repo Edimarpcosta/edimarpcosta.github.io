@@ -340,8 +340,17 @@
 
       <!-- Nome do Convidado -->
       <div class="form-group">
-        <label for="regNomeConvidado" class="form-label">Nome Completo do Participante *</label>
-        <input type="text" id="regNomeConvidado" class="input-field" placeholder="Nome completo de quem irá comparecer..." required>
+        <label for="regNomeConvidado" class="form-label">Pessoa 1 (Proprietário / Sócio / etc.) *</label>
+        <input type="text" id="regNomeConvidado" class="input-field" placeholder="Nome completo do participante principal..." required>
+      </div>
+
+      <!-- Contêiner de acompanhantes dinâmicos -->
+      <div id="companionsContainer"></div>
+      
+      <div class="form-group" style="margin-bottom: 25px;">
+        <button type="button" id="btnAddCompanion" class="btn btn-secondary" style="font-size: 13px; padding: 10px 16px; width: auto; background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.2); color: #a5b4fc;">
+          ＋ Adicionar Convidado
+        </button>
       </div>
 
       <!-- Vendedor que Atende -->
@@ -398,6 +407,52 @@
     
     const toast = document.getElementById('toastNotification');
     const toastText = document.getElementById('toastText');
+
+    const companionsContainer = document.getElementById('companionsContainer');
+    const btnAddCompanion = document.getElementById('btnAddCompanion');
+
+    // DYNAMIC COMPANIONS LOGIC
+    function addCompanionInput(name = '') {
+      const index = companionsContainer.children.length + 2; // Convidado 2 em diante
+      
+      const formGroup = document.createElement('div');
+      formGroup.className = 'form-group companion-group';
+      formGroup.style.display = 'flex';
+      formGroup.style.alignItems = 'flex-end';
+      formGroup.style.gap = '10px';
+      formGroup.style.marginBottom = '15px';
+      
+      formGroup.innerHTML = `
+        <div style="flex-grow: 1;">
+          <label class="form-label">Convidado ${index}</label>
+          <input type="text" class="input-field companion-input" placeholder="Nome do Convidado ${index}..." value="${name}">
+        </div>
+        <button type="button" class="btn btn-secondary btn-remove-companion" style="padding: 14px; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--error-color); border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);" title="Remover Convidado">
+          ✕
+        </button>
+      `;
+      
+      formGroup.querySelector('.btn-remove-companion').addEventListener('click', () => {
+        formGroup.remove();
+        reindexCompanions();
+      });
+      
+      companionsContainer.appendChild(formGroup);
+    }
+
+    function reindexCompanions() {
+      const groups = companionsContainer.querySelectorAll('.companion-group');
+      groups.forEach((group, idx) => {
+        const index = idx + 2;
+        group.querySelector('.form-label').textContent = `Convidado ${index}`;
+        const input = group.querySelector('.companion-input');
+        input.placeholder = `Nome do Convidado ${index}...`;
+      });
+    }
+
+    btnAddCompanion.addEventListener('click', () => {
+      addCompanionInput();
+    });
 
     // INITIALIZATION
     window.addEventListener('DOMContentLoaded', () => {
@@ -708,6 +763,12 @@
         ramo_atividade: ''
       };
 
+      // Adiciona os acompanhantes dinâmicos no payload
+      const companionInputs = companionsContainer.querySelectorAll('.companion-input');
+      companionInputs.forEach((input, index) => {
+        payload[`convidado${index + 2}`] = input.value.trim();
+      });
+
       fetch(config.scriptUrl, {
         method: 'POST',
         mode: 'cors',
@@ -732,6 +793,7 @@
           regNomeConvidado.value = '';
           selectVendor.value = '';
           selectEventCity.value = '';
+          companionsContainer.innerHTML = '';
           
           // Rola para o topo do formulário
           window.scrollTo({ top: 0, behavior: 'smooth' });
