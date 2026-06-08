@@ -730,7 +730,7 @@
           </div>
           <div class="card">
             <div class="metric-value" id="valVagasRestantes" style="color: #f59e0b;">0</div>
-            <div class="metric-label">Vagas Restantes</div>
+            <div class="metric-label">Vagas Cadastro (Tolerância)</div>
           </div>
           <div class="card">
             <div class="metric-value" id="valOcupacaoGeral" style="color: #818cf8;">0%</div>
@@ -1163,6 +1163,26 @@
     // ============================
     // RENDER ALL
     // ============================
+    // COMPANIONS HELPER
+    function getCompanionsList(g) {
+      let list = [];
+      let keys = Object.keys(g)
+        .filter(k => k.indexOf("convidado") === 0)
+        .map(k => parseInt(k.replace("convidado", "")))
+        .filter(n => !isNaN(n) && n >= 2)
+        .sort((a, b) => a - b);
+      keys.forEach(n => {
+        let name = g["convidado" + n];
+        if (name && name.trim() !== "") {
+          list.push(name.trim());
+        }
+      });
+      return list;
+    }
+
+    // ============================
+    // RENDER ALL
+    // ============================
     function renderAll() {
       // 1. Calcula Métricas Gerais
       let countGuests = 0;
@@ -1171,9 +1191,11 @@
 
       state.guests.forEach(g => {
         if (g.nome_convidado) countGuests++;
-        if (g.convidado2) countCompanions++;
-        if (g.convidado3) countCompanions++;
-        if (g.convidado4) countCompanions++;
+        
+        // Conta dinamicamente acompanhantes
+        const comps = getCompanionsList(g);
+        countCompanions += comps.length;
+        
         if (g.compareceu) countCheckins++;
       });
 
@@ -1185,22 +1207,25 @@
 
       // Vagas restantes e ocupação
       let totalLimite = 0;
+      let totalPermitidoComTolerancia = 0;
       let totalOcupado = 0;
       DEFAULT_CITIES.forEach(city => {
         const set = state.settings.find(s => s.cidade_evento.toUpperCase() === city.toUpperCase()) || { limite: 150 };
-        totalLimite += (parseInt(set.limite) || 150);
+        const physLimit = (parseInt(set.limite) || 150);
+        totalLimite += physLimit;
+        totalPermitidoComTolerancia += Math.floor(physLimit * 1.30);
+
         let count = 0;
         state.guests.forEach(g => {
           if (g.cidade_evento.toUpperCase() === city.toUpperCase()) {
             if (g.nome_convidado) count++;
-            if (g.convidado2) count++;
-            if (g.convidado3) count++;
-            if (g.convidado4) count++;
+            const comps = getCompanionsList(g);
+            count += comps.length;
           }
         });
         totalOcupado += count;
       });
-      valVagasRestantes.textContent = Math.max(0, totalLimite - totalOcupado);
+      valVagasRestantes.textContent = Math.max(0, totalPermitidoComTolerancia - totalOcupado);
       valOcupacaoGeral.textContent = totalLimite > 0 ? Math.round((totalOcupado / totalLimite) * 100) + '%' : '0%';
 
       // 2. Renderiza Lotação de Cidades
@@ -1256,26 +1281,36 @@
         state.guests.forEach(g => {
           if (g.cidade_evento.toUpperCase() === city.toUpperCase()) {
             if (g.nome_convidado) count++;
-            if (g.convidado2) count++;
-            if (g.convidado3) count++;
-            if (g.convidado4) count++;
+            const comps = getCompanionsList(g);
+            count += comps.length;
           }
         });
 
-        const percent = Math.min(Math.round((count / set.limite) * 100) || 0, 100);
-        let color = '#10b981';
-        if (percent >= 90) color = '#ef4444';
-        else if (percent >= 70) color = '#f59e0b';
+        const allowedLimit = Math.floor(set.limite * 1.3);
+        const percentPhysical = Math.round((count / set.limite) * 100) || 0;
+        
+        let color = '#10b981'; // Green
+        if (count >= allowedLimit) {
+          color = '#ef4444'; // Red
+        } else if (count >= set.limite) {
+          color = '#f59e0b'; // Orange (faixa de tolerância de 30%)
+        } else if (percentPhysical >= 80) {
+          color = '#fbbf24'; // Yellow
+        }
+
+        const progressBarPercent = Math.min(Math.round((count / allowedLimit) * 100) || 0, 100);
 
         const cityBox = document.createElement('div');
         cityBox.className = 'city-card';
         cityBox.innerHTML = `
           <div class="city-header">
             <div class="city-name">${set.cidade_evento}</div>
-            <div class="city-stats" style="color: ${color};">${count} / ${set.limite} (${percent}%)</div>
+            <div class="city-stats" style="color: ${color}; font-size: 12px;">
+              <b>${count}</b> de ${set.limite} <span style="font-weight: normal; opacity: 0.8;">(Máx c/ Tol: ${allowedLimit})</span> <b>${percentPhysical}%</b>
+            </div>
           </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" style="width: ${percent}%; background-color: ${color};"></div>
+          <div class="progress-bar-bg" title="Progresso em relação à capacidade máxima tolerada de cadastros">
+            <div class="progress-bar-fill" style="width: ${progressBarPercent}%; background-color: ${color};"></div>
           </div>
         `;
         cityCapacityContainer.appendChild(cityBox);
@@ -1288,7 +1323,11 @@
       const citiesMap = {};
       state.guests.forEach(g => {
         const cName = (g.cidade_cliente || '').trim() || 'Não informada';
-        const totalRow = 1 + (g.convidado2 ? 1 : 0) + (g.convidado3 ? 1 : 0) + (g.convidado4 ? 1 : 0);
+        
+        let totalRow = g.nome_convidado ? 1 : 0;
+        const comps = getCompanionsList(g);
+        totalRow += comps.length;
+        
         citiesMap[cName] = (citiesMap[cName] || 0) + totalRow;
       });
 
@@ -1364,10 +1403,7 @@
 
       filtered.forEach(g => {
         const tr = document.createElement('tr');
-        let companions = [];
-        if (g.convidado2) companions.push(g.convidado2);
-        if (g.convidado3) companions.push(g.convidado3);
-        if (g.convidado4) companions.push(g.convidado4);
+        const companions = getCompanionsList(g);
         
         let companionBadge = '<span style="color: var(--text-muted);">—</span>';
         if (companions.length > 0) {
@@ -1628,10 +1664,11 @@
       state.guests.forEach(g => {
         const city = g.cidade_evento;
         if (city) {
-          citiesCount[city] = (citiesCount[city] || 0) + 1;
-          if (g.convidado2) citiesCount[city]++;
-          if (g.convidado3) citiesCount[city]++;
-          if (g.convidado4) citiesCount[city]++;
+          if (g.nome_convidado) {
+            citiesCount[city] = (citiesCount[city] || 0) + 1;
+          }
+          const comps = getCompanionsList(g);
+          citiesCount[city] = (citiesCount[city] || 0) + comps.length;
         }
       });
       const cityLabels = Object.keys(citiesCount);
@@ -1752,9 +1789,9 @@
       let totalPessoas = 0, totalAcomp = 0, totalCheckins = 0;
       state.guests.forEach(g => {
         if (g.nome_convidado) totalPessoas++;
-        if (g.convidado2) { totalPessoas++; totalAcomp++; }
-        if (g.convidado3) { totalPessoas++; totalAcomp++; }
-        if (g.convidado4) { totalPessoas++; totalAcomp++; }
+        const comps = getCompanionsList(g);
+        totalPessoas += comps.length;
+        totalAcomp += comps.length;
         if (g.compareceu) totalCheckins++;
       });
 
@@ -1769,11 +1806,14 @@
         let count = 0;
         state.guests.forEach(g => {
           if (g.cidade_evento.toUpperCase() === city.toUpperCase()) {
-            count++; if (g.convidado2) count++; if (g.convidado3) count++; if (g.convidado4) count++;
+            if (g.nome_convidado) count++;
+            const comps = getCompanionsList(g);
+            count += comps.length;
           }
         });
+        const allowedLimit = Math.floor((set.limite || 150) * 1.30);
         const pct = Math.round((count / (set.limite || 150)) * 100);
-        lotacaoRows += `<tr><td>${city}</td><td style="text-align:center;font-weight:bold;">${count}</td><td style="text-align:center;">${set.limite}</td><td style="text-align:center;font-weight:bold;">${pct}%</td></tr>`;
+        lotacaoRows += `<tr><td>${city}</td><td style="text-align:center;font-weight:bold;">${count}</td><td style="text-align:center;">${set.limite} (Máx Tol: ${allowedLimit})</td><td style="text-align:center;font-weight:bold;">${pct}%</td></tr>`;
       });
 
       // Vendedores
@@ -1788,7 +1828,10 @@
       const origMap = {};
       state.guests.forEach(g => {
         const c = (g.cidade_cliente || '').trim() || 'N/A';
-        origMap[c] = (origMap[c] || 0) + 1 + (g.convidado2?1:0) + (g.convidado3?1:0) + (g.convidado4?1:0);
+        let qty = g.nome_convidado ? 1 : 0;
+        const comps = getCompanionsList(g);
+        qty += comps.length;
+        origMap[c] = (origMap[c] || 0) + qty;
       });
       const topOrig = Object.entries(origMap).sort((a,b)=>b[1]-a[1]).slice(0, 10);
       let origRows = '';
@@ -1832,10 +1875,11 @@
       let rows = '';
       let totalPessoas = 0;
       filtered.forEach(g => {
-        const comps = [g.convidado2, g.convidado3, g.convidado4].filter(Boolean).join(', ') || '—';
-        const total = 1 + (g.convidado2?1:0) + (g.convidado3?1:0) + (g.convidado4?1:0);
+        const comps = getCompanionsList(g);
+        const compsText = comps.join(', ') || '—';
+        const total = (g.nome_convidado ? 1 : 0) + comps.length;
         totalPessoas += total;
-        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${comps}</td><td>${g.vendedor || 'N/A'}</td><td style="text-align:center;">${g.compareceu ? '✓' : '—'}</td></tr>`;
+        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${compsText}</td><td>${g.vendedor || 'N/A'}</td><td style="text-align:center;">${g.compareceu ? '✓' : '—'}</td></tr>`;
       });
 
       const body = `
@@ -1852,9 +1896,27 @@
       const filtered = state.guests.filter(g => g.cidade_evento === city);
       if (filtered.length === 0) { showToast('Nenhum credenciado para essa cidade.', 'error'); return; }
       
-      const wsData = [['Código','Razão Social','Fantasia','CNPJ','Convidado','E-mail','Telefone','Acomp. 2','Acomp. 3','Acomp. 4','Vendedor','Check-in']];
+      let maxCompsCount = 3;
       filtered.forEach(g => {
-        wsData.push([g.codigo, g.razao_social, g.fantasia, g.cnpj, g.nome_convidado, g.email, g.telefone, g.convidado2, g.convidado3, g.convidado4, g.vendedor, g.compareceu?'SIM':'NÃO']);
+        const comps = getCompanionsList(g);
+        if (comps.length > maxCompsCount) maxCompsCount = comps.length;
+      });
+
+      const header = ['Código','Razão Social','Fantasia','CNPJ','Convidado','E-mail','Telefone'];
+      for (let i = 2; i <= maxCompsCount + 1; i++) {
+        header.push(`Acomp. ${i-1}`);
+      }
+      header.push('Vendedor','Check-in');
+      const wsData = [header];
+
+      filtered.forEach(g => {
+        const comps = getCompanionsList(g);
+        const row = [g.codigo, g.razao_social, g.fantasia, g.cnpj, g.nome_convidado, g.email, g.telefone];
+        for (let i = 0; i < maxCompsCount; i++) {
+          row.push(comps[i] || '');
+        }
+        row.push(g.vendedor, g.compareceu?'SIM':'NÃO');
+        wsData.push(row);
       });
       downloadXLSX(wsData, `Credenciados_${city.split(' (')[0].replace(/\s/g,'_')}.xlsx`, city.split(' (')[0]);
     };
@@ -1884,31 +1946,50 @@
     // REPORT: PDF ACOMPANHANTES
     // ============================
     window.generateCompanionsPDF = function() {
-      const withCompanions = state.guests.filter(g => g.convidado2 || g.convidado3 || g.convidado4);
+      const withCompanions = state.guests.filter(g => getCompanionsList(g).length > 0);
       if (withCompanions.length === 0) { showToast('Nenhum acompanhante registrado.', 'error'); return; }
 
       let rows = '';
       let totalAcomp = 0;
       withCompanions.forEach(g => {
-        const c2 = g.convidado2 || '—'; const c3 = g.convidado3 || '—'; const c4 = g.convidado4 || '—';
-        const n = (g.convidado2?1:0)+(g.convidado3?1:0)+(g.convidado4?1:0);
-        totalAcomp += n;
-        rows += `<tr><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${c2}</td><td>${c3}</td><td>${c4}</td><td style="text-align:center;">${g.cidade_evento.split(' (')[0]}</td></tr>`;
+        const comps = getCompanionsList(g);
+        totalAcomp += comps.length;
+        rows += `<tr><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${comps.join(', ')}</td><td style="text-align:center;">${g.cidade_evento.split(' (')[0]}</td></tr>`;
       });
 
       const body = `
         <div class="header"><h1>Relatório de Acompanhantes</h1><p>${withCompanions.length} inscrições com acompanhantes | Total de ${totalAcomp} acompanhantes • Emissão: ${new Date().toLocaleDateString('pt-BR')}</p></div>
-        <table><thead><tr><th>Empresa</th><th>Convidado Principal</th><th>Acomp. 1</th><th>Acomp. 2</th><th>Acomp. 3</th><th style="text-align:center;">Cidade</th></tr></thead><tbody>${rows}</tbody></table>
+        <table><thead><tr><th>Empresa</th><th>Convidado Principal</th><th>Acompanhantes</th><th style="text-align:center;">Cidade</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="legend">Total de ${withCompanions.length} inscrições com acompanhantes (${totalAcomp} acompanhantes)</div>
       `;
       openPrintWindow('Relatório de Acompanhantes - Selecta 360', body);
     };
 
     window.generateCompanionsXLSX = function() {
-      const withCompanions = state.guests.filter(g => g.convidado2 || g.convidado3 || g.convidado4);
+      const withCompanions = state.guests.filter(g => getCompanionsList(g).length > 0);
       if (withCompanions.length === 0) { showToast('Nenhum acompanhante registrado.', 'error'); return; }
-      const wsData = [['Empresa','Convidado Principal','Acompanhante 1','Acompanhante 2','Acompanhante 3','Cidade Evento','Vendedor']];
+      
+      let maxCompsCount = 3;
       withCompanions.forEach(g => {
-        wsData.push([g.fantasia || g.razao_social, g.nome_convidado, g.convidado2||'', g.convidado3||'', g.convidado4||'', g.cidade_evento, g.vendedor]);
+        const comps = getCompanionsList(g);
+        if (comps.length > maxCompsCount) maxCompsCount = comps.length;
+      });
+
+      const header = ['Empresa','Convidado Principal'];
+      for (let i = 2; i <= maxCompsCount + 1; i++) {
+        header.push(`Acompanhante ${i - 1}`);
+      }
+      header.push('Cidade Evento','Vendedor');
+      const wsData = [header];
+
+      withCompanions.forEach(g => {
+        const comps = getCompanionsList(g);
+        const row = [g.fantasia || g.razao_social, g.nome_convidado];
+        for (let i = 0; i < maxCompsCount; i++) {
+          row.push(comps[i] || '');
+        }
+        row.push(g.cidade_evento, g.vendedor);
+        wsData.push(row);
       });
       downloadXLSX(wsData, 'Acompanhantes_Selecta360.xlsx', 'Acompanhantes');
     };
@@ -1920,21 +2001,44 @@
       if (state.guests.length === 0) { showToast('Nenhum dado para exportar.', 'error'); return; }
       const wb = XLSX.utils.book_new();
 
-      // Aba 1: Credenciados
-      const credData = [['Código','Razão Social','Fantasia','CNPJ','E-mail','Telefone','Tel 2','Convidado','Cidade Evento','Vendedor','Cidade Origem','Acomp. 2','Acomp. 3','Acomp. 4','Compareceu']];
+      let maxCompsCount = 3;
       state.guests.forEach(g => {
-        credData.push([g.codigo,g.razao_social,g.fantasia,g.cnpj,g.email,g.telefone,g.telefone2,g.nome_convidado,g.cidade_evento,g.vendedor,g.cidade_cliente,g.convidado2,g.convidado3,g.convidado4,g.compareceu?'SIM':'NÃO']);
+        const comps = getCompanionsList(g);
+        if (comps.length > maxCompsCount) maxCompsCount = comps.length;
+      });
+
+      // Aba 1: Credenciados
+      const credHeader = ['Código','Razão Social','Fantasia','CNPJ','E-mail','Telefone','Tel 2','Convidado','Cidade Evento','Vendedor','Cidade Origem'];
+      for (let i = 2; i <= maxCompsCount + 1; i++) {
+        credHeader.push(`Acomp. ${i}`);
+      }
+      credHeader.push('Compareceu');
+      const credData = [credHeader];
+
+      state.guests.forEach(g => {
+        const comps = getCompanionsList(g);
+        const row = [g.codigo,g.razao_social,g.fantasia,g.cnpj,g.email,g.telefone,g.telefone2,g.nome_convidado,g.cidade_evento,g.vendedor,g.cidade_cliente];
+        for (let i = 0; i < maxCompsCount; i++) {
+          row.push(comps[i] || '');
+        }
+        row.push(g.compareceu?'SIM':'NÃO');
+        credData.push(row);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(credData), 'Credenciados');
 
       // Aba 2: Resumo Cidades
-      const cityData = [['Cidade do Evento','Inscrições','Pessoas Total','Limite','Ocupação %']];
+      const cityData = [['Cidade do Evento','Inscrições','Pessoas Total','Limite (Físico)','Limite c/ Tol (+30%)','Ocupação %']];
       DEFAULT_CITIES.forEach(city => {
         const set = state.settings.find(s => s.cidade_evento.toUpperCase() === city.toUpperCase()) || { limite: 150 };
+        const physLimit = (set.limite || 150);
+        const allowedLimit = Math.floor(physLimit * 1.30);
         const insc = state.guests.filter(g => g.cidade_evento.toUpperCase() === city.toUpperCase());
         let pessoas = 0;
-        insc.forEach(g => { pessoas += 1 + (g.convidado2?1:0) + (g.convidado3?1:0) + (g.convidado4?1:0); });
-        cityData.push([city, insc.length, pessoas, set.limite, Math.round((pessoas/(set.limite||150))*100) + '%']);
+        insc.forEach(g => { 
+          const comps = getCompanionsList(g);
+          pessoas += (g.nome_convidado ? 1 : 0) + comps.length; 
+        });
+        cityData.push([city, insc.length, pessoas, physLimit, allowedLimit, Math.round((pessoas/physLimit)*100) + '%']);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cityData), 'Resumo Cidades');
 
@@ -1997,7 +2101,7 @@
 
       let rows = '';
       filtered.forEach(g => {
-        const comps = [g.convidado2, g.convidado3, g.convidado4].filter(Boolean).join(', ') || '—';
+        const comps = getCompanionsList(g).join(', ') || '—';
         rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${g.telefone}</td><td>${comps}</td><td>${g.cidade_evento.split(' (')[0]}</td><td>${g.vendedor||'N/A'}</td><td style="text-align:center;">${g.compareceu?'✓':'—'}</td></tr>`;
       });
 
@@ -2057,9 +2161,28 @@
     // ============================
     window.exportAllGuestsXLSX = function() {
       if (state.guests.length === 0) { showToast('Nenhum credenciado para exportar.', 'error'); return; }
-      const wsData = [['Código','Razão Social','Fantasia','CNPJ','E-mail','Telefone','Tel 2','Convidado','Cidade Evento','Vendedor','Cidade Origem','Acomp. 2','Acomp. 3','Acomp. 4','Compareceu']];
+      
+      let maxCompsCount = 3;
       state.guests.forEach(g => {
-        wsData.push([g.codigo,g.razao_social,g.fantasia,g.cnpj,g.email,g.telefone,g.telefone2,g.nome_convidado,g.cidade_evento,g.vendedor,g.cidade_cliente,g.convidado2,g.convidado3,g.convidado4,g.compareceu?'SIM':'NÃO']);
+        const comps = getCompanionsList(g);
+        if (comps.length > maxCompsCount) maxCompsCount = comps.length;
+      });
+
+      const header = ['Código','Razão Social','Fantasia','CNPJ','E-mail','Telefone','Tel 2','Convidado','Cidade Evento','Vendedor','Cidade Origem'];
+      for (let i = 2; i <= maxCompsCount + 1; i++) {
+        header.push(`Acomp. ${i}`);
+      }
+      header.push('Compareceu');
+      const wsData = [header];
+
+      state.guests.forEach(g => {
+        const comps = getCompanionsList(g);
+        const row = [g.codigo,g.razao_social,g.fantasia,g.cnpj,g.email,g.telefone,g.telefone2,g.nome_convidado,g.cidade_evento,g.vendedor,g.cidade_cliente];
+        for (let i = 0; i < maxCompsCount; i++) {
+          row.push(comps[i] || '');
+        }
+        row.push(g.compareceu?'SIM':'NÃO');
+        wsData.push(row);
       });
       downloadXLSX(wsData, 'Credenciados_Selecta360.xlsx', 'Credenciados');
     };
