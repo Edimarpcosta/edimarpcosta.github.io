@@ -774,20 +774,12 @@
           </div>
 
           <!-- Acompanhantes Section -->
-          <div id="companionSection" style="display: none; margin-top: 10px; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px;">
-            <h4 style="font-family: 'Outfit', sans-serif; font-size: 13px; color: #a5b4fc; margin-bottom: 10px; font-weight: 600;">Acompanhantes da Empresa (Até 3)</h4>
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label class="form-label" style="font-size: 11px;">Nome Completo do Acompanhante 2</label>
-              <input type="text" id="regConvidado2" class="input-field" placeholder="Segundo participante..." style="padding: 10px 12px; font-size: 13px;">
-            </div>
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label class="form-label" style="font-size: 11px;">Nome Completo do Acompanhante 3</label>
-              <input type="text" id="regConvidado3" class="input-field" placeholder="Terceiro participante..." style="padding: 10px 12px; font-size: 13px;">
-            </div>
-            <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" style="font-size: 11px;">Nome Completo do Acompanhante 4</label>
-              <input type="text" id="regConvidado4" class="input-field" placeholder="Quarto participante..." style="padding: 10px 12px; font-size: 13px;">
-            </div>
+          <div id="companionSection" style="margin-top: 10px; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px;">
+            <h4 style="font-family: 'Outfit', sans-serif; font-size: 13px; color: #a5b4fc; margin-bottom: 10px; font-weight: 600;">Convidados da Empresa</h4>
+            <div id="companionsContainer"></div>
+            <button type="button" id="btnAddCompanion" class="btn btn-secondary" style="font-size: 12px; padding: 8px 12px; width: auto; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.05); color: #a5b4fc; margin-top: 10px;">
+              ＋ Adicionar Convidado
+            </button>
           </div>
 
           <!-- Switch de Check-in Imediato -->
@@ -901,9 +893,52 @@
     const cnpjSpinner = document.getElementById('cnpjSpinner');
     const cnpjAlert = document.getElementById('cnpjAlert');
     const companionSection = document.getElementById('companionSection');
-    const regConvidado2 = document.getElementById('regConvidado2');
-    const regConvidado3 = document.getElementById('regConvidado3');
-    const regConvidado4 = document.getElementById('regConvidado4');
+    
+    const companionsContainer = document.getElementById('companionsContainer');
+    const btnAddCompanion = document.getElementById('btnAddCompanion');
+
+    // DYNAMIC COMPANIONS LOGIC
+    function addCompanionInput(name = '') {
+      const index = companionsContainer.children.length + 2; // Convidado 2 em diante
+      
+      const formGroup = document.createElement('div');
+      formGroup.className = 'form-group companion-group';
+      formGroup.style.display = 'flex';
+      formGroup.style.alignItems = 'flex-end';
+      formGroup.style.gap = '10px';
+      formGroup.style.marginBottom = '10px';
+      
+      formGroup.innerHTML = `
+        <div style="flex-grow: 1;">
+          <label class="form-label" style="font-size: 11px;">Convidado ${index}</label>
+          <input type="text" class="input-field companion-input" placeholder="Nome do Convidado ${index}..." value="${name}" style="padding: 10px 12px; font-size: 13px;">
+        </div>
+        <button type="button" class="btn btn-secondary btn-remove-companion" style="padding: 10px; width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--error-color); border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);" title="Remover Convidado">
+          ✕
+        </button>
+      `;
+      
+      formGroup.querySelector('.btn-remove-companion').addEventListener('click', () => {
+        formGroup.remove();
+        reindexCompanions();
+      });
+      
+      companionsContainer.appendChild(formGroup);
+    }
+
+    function reindexCompanions() {
+      const groups = companionsContainer.querySelectorAll('.companion-group');
+      groups.forEach((group, idx) => {
+        const index = idx + 2;
+        group.querySelector('.form-label').textContent = `Convidado ${index}`;
+        const input = group.querySelector('.companion-input');
+        input.placeholder = `Nome do Convidado ${index}...`;
+      });
+    }
+
+    btnAddCompanion.addEventListener('click', () => {
+      addCompanionInput();
+    });
 
     const txtWhatsAppMessage = document.getElementById('txtWhatsAppMessage');
     const chkIncludeLink = document.getElementById('chkIncludeLink');
@@ -1309,10 +1344,8 @@
       // Limpa alertas e seção de acompanhantes
       cnpjAlert.style.display = 'none';
       cnpjAlert.innerHTML = '';
-      companionSection.style.display = 'none';
-      regConvidado2.value = '';
-      regConvidado3.value = '';
-      regConvidado4.value = '';
+      companionSection.style.display = 'block';
+      companionsContainer.innerHTML = '';
 
       // Configura a mensagem de WhatsApp inicial
       chkIncludeLink.checked = true;
@@ -1383,11 +1416,15 @@
             chkImmediateCheckin.checked = res.data.compareceu;
 
             // Preenche acompanhantes
-            regConvidado2.value = res.data.convidado2 || '';
-            regConvidado3.value = res.data.convidado3 || '';
-            regConvidado4.value = res.data.convidado4 || '';
-
-            companionSection.style.display = 'block';
+            companionsContainer.innerHTML = '';
+            let compIdx = 2;
+            while (res.data[`convidado${compIdx}`] !== undefined) {
+              const val = res.data[`convidado${compIdx}`];
+              if (val && val.trim() !== '') {
+                addCompanionInput(val);
+              }
+              compIdx++;
+            }
             generateWhatsAppMessage();
           } else {
             cnpjAlert.style.display = 'none';
@@ -1542,11 +1579,23 @@
         vendedor: state.activeClient ? (state.activeClient.vendedor || '') : '', // Preserva o vendedor original do cliente
         cidade_cliente: state.activeClient ? (state.activeClient.cidade_estab || '') : '',
         ramo_atividade: '',
-        compareceu: chkImmediateCheckin.checked,
-        convidado2: regConvidado2.value.trim(),
-        convidado3: regConvidado3.value.trim(),
-        convidado4: regConvidado4.value.trim()
+        compareceu: chkImmediateCheckin.checked
       };
+
+      // Limpa os acompanhantes antigos no payload para evitar resíduos se editando
+      if (state.activeClient) {
+        for (let key in state.activeClient) {
+          if (key.indexOf("convidado") === 0) {
+            payload[key] = "";
+          }
+        }
+      }
+
+      // Adiciona os acompanhantes dinâmicos no payload
+      const companionInputs = companionsContainer.querySelectorAll('.companion-input');
+      companionInputs.forEach((input, index) => {
+        payload[`convidado${index + 2}`] = input.value.trim();
+      });
 
       fetch(config.scriptUrl, {
         method: 'POST',
