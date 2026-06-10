@@ -99,7 +99,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: calc(65px + env(safe-area-inset-bottom, 0px));
+            height: calc(60px + env(safe-area-inset-bottom, 0px));
             padding-bottom: env(safe-area-inset-bottom, 0px);
             background: white;
             display: flex;
@@ -117,23 +117,24 @@
             background: none;
             border: none;
             color: #718096;
-            font-size: 0.72rem;
+            font-size: 0.65rem;
             font-weight: 600;
-            padding: 5px;
+            padding: 2px;
             flex-grow: 1;
             transition: var(--transition);
             position: relative;
+            min-width: 0; /* Permite comprimir */
         }
         .nav-item-btn i {
-            font-size: 1.25rem;
-            margin-bottom: 2px;
+            font-size: 1.15rem;
+            margin-bottom: 1px;
             transition: var(--transition);
         }
         .nav-item-btn.active {
             color: var(--primary);
         }
         .nav-item-btn.active i {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             color: var(--accent);
         }
 
@@ -527,6 +528,10 @@
         <i class="fas fa-map-marked-alt"></i>
         <span>Mapa</span>
     </button>
+    <button class="nav-item-btn" id="btn-tab-playbook" onclick="switchTab('playbook')">
+        <i class="fas fa-book-open"></i>
+        <span>Playbook</span>
+    </button>
     <button class="nav-item-btn" id="btn-tab-dashboard" onclick="switchTab('dashboard')">
         <i class="fas fa-chart-pie"></i>
         <span>Indicadores</span>
@@ -551,7 +556,13 @@
           <div class="row g-2">
             <div class="col-4"><label class="small text-muted fw-bold">ID CLIENTE</label><input type="text" id="f-id" class="form-control rounded-3"></div>
             <div class="col-8"><label class="small text-muted fw-bold">FANTASIA</label><input type="text" id="f-fant" class="form-control rounded-3"></div>
-            <div class="col-12"><label class="small text-muted fw-bold">RAZÃO SOCIAL</label><input type="text" id="f-cli" class="form-control rounded-3"></div>
+            <div class="col-12">
+              <label class="small text-muted fw-bold">RAZÃO SOCIAL / CLIENTE</label>
+              <div class="input-group input-group-sm">
+                <input type="text" id="f-cli" class="form-control rounded-start-3">
+                <button class="btn btn-outline-info text-dark fw-bold" type="button" onclick="buscarGoogleForm()"><i class="fab fa-google"></i> Pesquisar</button>
+              </div>
+            </div>
             <div class="col-6"><label class="small text-muted fw-bold">COMPRADOR</label><input type="text" id="f-comp" class="form-control rounded-3"></div>
             <div class="col-6"><label class="small text-muted fw-bold">WHATSAPP</label><input type="text" id="f-whats" class="form-control rounded-3" placeholder="DDD + Número"></div>
             
@@ -713,6 +724,7 @@
     
     let db = [];
     let visitsDb = [];
+    let playbookDb = []; // Dados dos Playbooks/Dossiês (Clientes_Brain)
     let activeTab = 'roteiro';
     let filterChecklist = 'hoje'; // 'hoje' ou 'todos'
     let checklistSearch = '';
@@ -727,7 +739,55 @@
         return `${year}-${month}-${day}`;
     }
     
-    let selectedChecklistDate = getLocalDateStr();
+    let selectedDate = getLocalDateStr();
+    
+    // Converte YYYY-MM-DD para DD/MM/YYYY
+    function formatDatePtBr(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length < 3) return dateStr;
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    
+    // Converte YYYY-MM-DD para "DD/MM/YYYY DIA"
+    function formatLocalDateAndDay(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length < 3) return dateStr;
+        const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        const dayCode = getDayCodeForDate(dateStr);
+        return `${formattedDate} ${dayCode}`;
+    }
+    
+    function updateSelectedDate(newDate, updateDayFilter = true) {
+        selectedDate = newDate;
+        
+        // Sincroniza todos os campos de data
+        const inputRoteiro = document.getElementById('roteiroDate');
+        if (inputRoteiro) inputRoteiro.value = newDate;
+        
+        const inputChecklist = document.getElementById('chk-visit-date');
+        if (inputChecklist) inputChecklist.value = newDate;
+        
+        const inputMapa = document.getElementById('mapa-visit-date');
+        if (inputMapa) inputMapa.value = newDate;
+        
+        const inputDashboard = document.getElementById('dash-visit-date');
+        if (inputDashboard) inputDashboard.value = newDate;
+        
+        if (updateDayFilter) {
+            const dayCode = getDayCodeForDate(newDate);
+            const fVisitaEl = document.getElementById('fVisita');
+            if (fVisitaEl) {
+                fVisitaEl.value = dayCode;
+            }
+        }
+        
+        // Limpa ordenação temporária local de GPS quando a data muda
+        gpsSortedOrder = null;
+        
+        render();
+    }
     
     // Alvos para os modais de WhatsApp/GPS
     let currentWaTarget = null;
@@ -943,6 +1003,19 @@
         const parts = dateStr.split('-');
         const d = new Date(parts[0], parts[1] - 1, parts[2]);
         return days[d.getDay()];
+    }
+
+    // Retorna o índice de prioridade do dia da semana (SEG=1, TER=2...) para ordenação padrão
+    const dayOrderMap = { 'SEG': 1, 'TER': 2, 'QUA': 3, 'QUI': 4, 'SEX': 5, 'SAB': 6, 'DOM': 7 };
+    function getMinDayOrder(visitaStr) {
+        if (!visitaStr) return 8;
+        let min = 8;
+        for (const [day, order] of Object.entries(dayOrderMap)) {
+            if (visitaStr.toUpperCase().includes(day)) {
+                if (order < min) min = order;
+            }
+        }
+        return min;
     }
 
     // Retorna a string por extenso do dia para uma data 'YYYY-MM-DD'
@@ -1290,6 +1363,34 @@
             
         L.tileLayer(tileUrl, { attribution }).addTo(leafletMap);
         
+        // Exibir localização atual do usuário no mapa
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                const uLat = position.coords.latitude;
+                const uLon = position.coords.longitude;
+                
+                const userIcon = L.divIcon({
+                    className: 'user-location-marker',
+                    html: `<div style="
+                        background-color: #007bff;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        width: 18px;
+                        height: 18px;
+                        box-shadow: 0 0 10px rgba(0, 123, 255, 0.7);
+                    "></div>`,
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
+                });
+                
+                L.marker([uLat, uLon], { icon: userIcon })
+                    .addTo(leafletMap)
+                    .bindPopup("<b>Minha Localização Atual</b>");
+            }, (err) => {
+                console.warn("Não foi possível obter localização atual para marcador no mapa:", err);
+            }, { timeout: 5000 });
+        }
+        
         mapMarkers = [];
         const latLns = [];
         
@@ -1446,83 +1547,250 @@
         }
     }
 
-    // Otimização pelo vizinho mais próximo baseado no GPS
-    async function optimizeRouteByGPS() {
-        if (!navigator.geolocation) {
-            customAlert("Seu navegador não oferece suporte à geolocalização.");
+    // --- METODOS DE OTIMIZAÇÃO E INTEGRAÇÃO DO MAPA ---
+    window.toggleMapStartInput = function() {
+        const type = document.getElementById('map-start-type').value;
+        localStorage.setItem('map_start_type', type);
+        const container = document.getElementById('map-start-address-container');
+        const btnOptimize = document.getElementById('btn-optimize-map');
+        
+        if (type === 'address') {
+            container.style.display = 'block';
+        } else {
+            container.style.display = 'none';
+        }
+        
+        if (type) {
+            btnOptimize.style.display = 'block';
+        } else {
+            btnOptimize.style.display = 'none';
+        }
+    };
+
+    window.toggleMapOmitWhats = function(checked) {
+        localStorage.setItem('map_omit_whats', checked);
+        render();
+    };
+
+    window.clearMapOptimization = function() {
+        gpsSortedOrder = null;
+        render();
+    };
+
+    window.saveMapRouteOrderToCloud = async function() {
+        const targetDate = selectedDate;
+        const targetDateCode = getDayCodeForDate(targetDate);
+        let scheduledToday = db.filter(i => i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
+        if (omitWhats) {
+            scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
+        }
+        
+        if (gpsSortedOrder) {
+            scheduledToday.sort((a, b) => {
+                const idxA = gpsSortedOrder.indexOf(a.ID);
+                const idxB = gpsSortedOrder.indexOf(b.ID);
+                const posA = idxA === -1 ? Infinity : idxA;
+                const posB = idxB === -1 ? Infinity : idxB;
+                return posA - posB;
+            });
+        } else {
+            customAlert("A rota não foi otimizada. Não há nova sequência para salvar.");
+            return;
+        }
+        
+        const confirmed = await customConfirm("Deseja gravar permanentemente esta ordem de visita na planilha da nuvem? Isso mudará a sequência numérica de visitas para este dia de semana.");
+        if (!confirmed) return;
+        
+        toggleLoader(true);
+        try {
+            // Atualiza sequencialmente a ordem dos clientes na nuvem
+            for (let idx = 0; idx < scheduledToday.length; idx++) {
+                const c = scheduledToday[idx];
+                c.Ordem = idx + 1;
+                await apiPost('save', c);
+            }
+            
+            // Força recarregamento total
+            await load();
+            customAlert("Nova ordem de rota salva com sucesso na planilha (nuvem)!", "Sucesso");
+        } catch (e) {
+            console.error(e);
+            customAlert("Erro ao salvar ordem de rota na planilha.");
+        }
+        toggleLoader(false);
+    };
+
+    window.openGoogleMapsMultiStopRoute = async function() {
+        const type = document.getElementById('map-start-type').value;
+        if (!type) {
+            customAlert("Selecione um ponto de partida para abrir a rota no Google Maps.");
+            return;
+        }
+        
+        let startAddress = "";
+        
+        if (type === 'gps') {
+            startAddress = "My+Location";
+        } else if (type === 'address') {
+            const val = document.getElementById('map-start-address').value.trim();
+            if (!val) {
+                customAlert("Por favor, digite o endereço de partida.");
+                return;
+            }
+            startAddress = encodeURIComponent(val);
+        }
+        
+        const targetDate = selectedDate;
+        const targetDateCode = getDayCodeForDate(targetDate);
+        let scheduledToday = db.filter(i => i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
+        if (omitWhats) {
+            scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
+        }
+        
+        if (scheduledToday.length === 0) {
+            customAlert("Não há clientes na rota para abrir no Maps.");
+            return;
+        }
+        
+        if (gpsSortedOrder) {
+            scheduledToday.sort((a, b) => {
+                const idxA = gpsSortedOrder.indexOf(a.ID);
+                const idxB = gpsSortedOrder.indexOf(b.ID);
+                const posA = idxA === -1 ? Infinity : idxA;
+                const posB = idxB === -1 ? Infinity : idxB;
+                return posA - posB;
+            });
+        }
+        
+        const addresses = [startAddress];
+        scheduledToday.forEach(c => {
+            if (c.Endereco) {
+                addresses.push(encodeURIComponent(c.Endereco));
+            }
+        });
+        
+        if (addresses.length > 10) {
+            const chunk = addresses.slice(0, 10);
+            const confirmed = await customConfirm(`O Google Maps suporta no máximo 9 paradas por link. Deseja abrir apenas as primeiras 9 paradas da rota? (Você possui ${addresses.length - 1} clientes no total).`);
+            if (confirmed) {
+                const url = `https://www.google.com/maps/dir/${chunk.join('/')}`;
+                window.open(url, '_blank');
+            }
+        } else {
+            const url = `https://www.google.com/maps/dir/${addresses.join('/')}`;
+            window.open(url, '_blank');
+        }
+    };
+
+    window.optimizeMapRoute = async function() {
+        const type = document.getElementById('map-start-type').value;
+        if (!type) {
+            customAlert("Selecione um ponto de partida.");
             return;
         }
         
         toggleLoader(true);
-        navigator.geolocation.getCurrentPosition(async (position) => {
-            const userLat = position.coords.latitude;
-            const userLon = position.coords.longitude;
-            
-            const rotDateEl = document.getElementById('roteiroDate');
-            const targetDate = rotDateEl ? rotDateEl.value : getLocalDateStr();
-            const targetDateCode = getDayCodeForDate(targetDate);
-            
-            const scheduled = db.filter(i => i.Visita.includes(targetDateCode));
-            if (scheduled.length === 0) {
+        let startLat, startLon;
+        
+        if (type === 'gps') {
+            if (!navigator.geolocation) {
                 toggleLoader(false);
-                customAlert("Não há clientes agendados neste dia para otimizar.");
+                customAlert("Seu navegador não oferece suporte à geolocalização.");
+                return;
+            }
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000 });
+                });
+                startLat = position.coords.latitude;
+                startLon = position.coords.longitude;
+            } catch (err) {
+                toggleLoader(false);
+                console.error(err);
+                customAlert("Falha ao obter sinal de GPS do aparelho. Verifique as permissões de localização.");
+                return;
+            }
+        } else if (type === 'address') {
+            const addressVal = document.getElementById('map-start-address').value.trim();
+            if (!addressVal) {
+                toggleLoader(false);
+                customAlert("Digite o endereço de partida.");
                 return;
             }
             
-            const coordsList = [];
-            for (let c of scheduled) {
-                if (c.Endereco) {
-                    const coords = await getCoordinatesForAddress(c.Endereco);
-                    if (coords) {
-                        coordsList.push({ id: c.ID, lat: coords.lat, lon: coords.lon });
-                    }
+            const coords = await getCoordinatesForAddress(addressVal);
+            if (!coords) {
+                toggleLoader(false);
+                customAlert("Não foi possível geocodificar o endereço de partida digitado.");
+                return;
+            }
+            startLat = coords.lat;
+            startLon = coords.lon;
+        }
+        
+        const targetDate = selectedDate;
+        const targetDateCode = getDayCodeForDate(targetDate);
+        let scheduled = db.filter(i => i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        
+        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
+        if (omitWhats) {
+            scheduled = scheduled.filter(i => i.Ordem != 99);
+        }
+        
+        if (scheduled.length === 0) {
+            toggleLoader(false);
+            customAlert("Não há clientes agendados com endereço neste dia para otimizar.");
+            return;
+        }
+        
+        const coordsList = [];
+        for (let c of scheduled) {
+            const coords = await getCoordinatesForAddress(c.Endereco);
+            if (coords) {
+                coordsList.push({ id: c.ID, lat: coords.lat, lon: coords.lon });
+            }
+        }
+        
+        let currentLat = startLat;
+        let currentLon = startLon;
+        const remaining = [...coordsList];
+        const sortedIds = [];
+        
+        while (remaining.length > 0) {
+            let nearestIdx = -1;
+            let minDistance = Infinity;
+            
+            for (let i = 0; i < remaining.length; i++) {
+                const d = getHaversineDistance(currentLat, currentLon, remaining[i].lat, remaining[i].lon);
+                if (d < minDistance) {
+                    minDistance = d;
+                    nearestIdx = i;
                 }
             }
             
-            let currentLat = userLat;
-            let currentLon = userLon;
-            const remaining = [...coordsList];
-            const sortedIds = [];
-            
-            while (remaining.length > 0) {
-                let nearestIdx = -1;
-                let minDistance = Infinity;
-                
-                for (let i = 0; i < remaining.length; i++) {
-                    const d = getHaversineDistance(currentLat, currentLon, remaining[i].lat, remaining[i].lon);
-                    if (d < minDistance) {
-                        minDistance = d;
-                        nearestIdx = i;
-                    }
-                }
-                
-                if (nearestIdx !== -1) {
-                    const next = remaining.splice(nearestIdx, 1)[0];
-                    sortedIds.push(next.id);
-                    currentLat = next.lat;
-                    currentLon = next.lon;
-                } else {
-                    break;
-                }
+            if (nearestIdx !== -1) {
+                const next = remaining.splice(nearestIdx, 1)[0];
+                sortedIds.push(next.id);
+                currentLat = next.lat;
+                currentLon = next.lon;
+            } else {
+                break;
             }
-            
-            // Adiciona remanescentes sem coordenadas
-            scheduled.forEach(c => {
-                if (!sortedIds.includes(c.ID)) {
-                    sortedIds.push(c.ID);
-                }
-            });
-            
-            gpsSortedOrder = sortedIds;
-            toggleLoader(false);
-            customAlert("Rota ordenada pela menor distância do seu GPS!", "Otimizador");
-            render();
-        }, (err) => {
-            toggleLoader(false);
-            console.error(err);
-            customAlert("Falha ao obter sinal de GPS do aparelho.");
-        }, { enableHighAccuracy: true, timeout: 8000 });
-    }
+        }
+        
+        scheduled.forEach(c => {
+            if (!sortedIds.includes(c.ID)) {
+                sortedIds.push(c.ID);
+            }
+        });
+        
+        gpsSortedOrder = sortedIds;
+        toggleLoader(false);
+        customAlert("Rota ordenada localmente a partir do ponto de partida!", "Otimizador");
+        render();
+    };
     
     function getHaversineDistance(lat1, lon1, lat2, lon2) {
         const R = 6371; // km
@@ -1706,10 +1974,17 @@
                 if (res && res.clients) {
                     db = res.clients;
                     visitsDb = res.visits || [];
+                    playbookDb = res.brain || [];
                 } else {
                     db = res;
                     visitsDb = [];
+                    playbookDb = [];
                 }
+                
+                localStorage.setItem('cached_db', JSON.stringify(db));
+                localStorage.setItem('cached_visits', JSON.stringify(visitsDb));
+                localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+                
                 popularCidades();
                 updateSemEnderecoBadge();
                 render();
@@ -1743,11 +2018,13 @@
         // Carregamento instantâneo do cache se disponível
         const cachedDb = localStorage.getItem('cached_db');
         const cachedVisits = localStorage.getItem('cached_visits');
+        const cachedPlaybook = localStorage.getItem('cached_playbook');
         let cacheLoaded = false;
         if (cachedDb) {
             try {
                 db = JSON.parse(cachedDb);
                 visitsDb = cachedVisits ? JSON.parse(cachedVisits) : [];
+                playbookDb = cachedPlaybook ? JSON.parse(cachedPlaybook) : [];
                 popularCidades();
                 updateSemEnderecoBadge();
                 render();
@@ -1790,14 +2067,17 @@
             if (res && res.clients) {
                 db = res.clients;
                 visitsDb = res.visits || [];
+                playbookDb = res.brain || [];
             } else {
                 db = res;
                 visitsDb = [];
+                playbookDb = [];
             }
             
             // Salvar no cache local
             localStorage.setItem('cached_db', JSON.stringify(db));
             localStorage.setItem('cached_visits', JSON.stringify(visitsDb));
+            localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
             
             popularCidades();
             updateSemEnderecoBadge();
@@ -2011,6 +2291,20 @@
     }
 
     // Funções chamadas dentro do Form de Clientes
+    // Pesquisa a razão social no Google a partir do formulário de edição
+    function buscarGoogleForm() {
+        const clientVal = document.getElementById('f-cli').value.trim();
+        if (!clientVal) {
+            customAlert("Digite o nome ou a razão social do cliente para pesquisar.");
+            return;
+        }
+        buscarGoogleNome(clientVal);
+    }
+
+    function buscarGoogleNome(nome) {
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(nome + ' Piracicaba SP CNPJ CEP')}`, '_blank');
+    }
+
     async function buscarCNPJForm() {
         const cnpjVal = document.getElementById('f-cnpj').value;
         if (!cnpjVal) return customAlert("Digite o CNPJ antes de buscar.");
@@ -2429,7 +2723,14 @@
                 return matchS && (!v || i.Visita.includes(v)) && (!e || i.Entrega.includes(e)) && (!c || i.Cidade === c);
             });
 
-            filtered.sort((a,b) => a.Cidade.localeCompare(b.Cidade) || a.Ordem - b.Ordem);
+            filtered.sort((a, b) => {
+                const dayA = getMinDayOrder(a.Visita);
+                const dayB = getMinDayOrder(b.Visita);
+                if (dayA !== dayB) return dayA - dayB;
+                const ordA = parseInt(a.Ordem) || 0;
+                const ordB = parseInt(b.Ordem) || 0;
+                return ordA - ordB;
+            });
             document.getElementById('counter').innerText = filtered.length + " Clientes";
 
             if (filtered.length === 0) {
@@ -2440,7 +2741,11 @@
             const rotDateEl = document.getElementById('roteiroDate');
             const targetDate = rotDateEl ? rotDateEl.value : getLocalDateStr();
 
-            container.innerHTML = filtered.map(i => {
+            container.innerHTML = `
+            <div class="alert text-center py-2 px-3 small rounded-3 mb-3 fw-bold shadow-sm" style="background: white; border: 1px solid #e2e8f0; color: var(--primary);">
+                <i class="far fa-calendar-alt me-1 text-success"></i> Relação de Visitas: ${formatLocalDateAndDay(targetDate)}
+            </div>
+            ` + filtered.map(i => {
                 const cnpj = formatCnpj(i.CNPJ);
                 const ordLabel = i.Ordem == 99 ? "📱 Whats" : `ORD: ${i.Ordem}`;
                 const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
@@ -2504,8 +2809,8 @@
         
         // --- 2. RENDER CHECKLIST ---
         else if (activeTab === 'checklist') {
-            const selectedDateCode = getDayCodeForDate(selectedChecklistDate);
-            const selectedDateFullString = getFullStringForDate(selectedChecklistDate);
+            const selectedDateCode = getDayCodeForDate(selectedDate);
+            const selectedDateFullString = getFullStringForDate(selectedDate);
             
             let filtered = db;
             
@@ -2518,7 +2823,14 @@
                 filtered = filtered.filter(i => (i.ID + i.Cliente + i.Fantasia + i.Cidade).toLowerCase().includes(s));
             }
             
-            filtered.sort((a,b) => a.Ordem - b.Ordem);
+            filtered.sort((a, b) => {
+                const dayA = getMinDayOrder(a.Visita);
+                const dayB = getMinDayOrder(b.Visita);
+                if (dayA !== dayB) return dayA - dayB;
+                const ordA = parseInt(a.Ordem) || 0;
+                const ordB = parseInt(b.Ordem) || 0;
+                return ordA - ordB;
+            });
             
             let html = `
             <div class="dash-card py-3 mb-3 text-center" style="background: var(--gradient); color: white;">
@@ -2528,8 +2840,8 @@
                     <span class="small opacity-75"><i class="far fa-calendar-alt"></i> Data:</span>
                     <input type="date" class="form-control form-control-sm text-center" id="chk-visit-date" 
                            style="max-width: 160px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark;" 
-                           value="${selectedChecklistDate}" 
-                           onchange="selectedChecklistDate = this.value; render();">
+                           value="${selectedDate}" 
+                           onchange="updateSelectedDate(this.value, true);">
                 </div>
                 
                 <p class="small mb-2 opacity-90 fw-bold">${selectedDateFullString} (${selectedDateCode})</p>
@@ -2552,7 +2864,7 @@
             }
             
             html += filtered.map(i => {
-                const visitStatus = getVisitStatusOnDate(i.ID, selectedChecklistDate);
+                const visitStatus = getVisitStatusOnDate(i.ID, selectedDate);
                 const visited = visitStatus !== null;
                 const isAbsent = visitStatus === 'Não Encontrado';
                 const lastVisit = getLastVisitDateStr(i.ID);
@@ -2574,13 +2886,13 @@
                         </div>
                         <div class="d-flex gap-2">
                             ${visited ?
-                                `<button class="chk-btn ${isAbsent ? 'btn-warning text-white border-warning' : 'btn-success text-white border-success'}" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'delete')" style="${isAbsent ? 'background-color: #ffc107;' : ''}">
+                                `<button class="chk-btn ${isAbsent ? 'btn-warning text-white border-warning' : 'btn-success text-white border-success'}" onclick="toggleVisita('${i.ID}', event, selectedDate, 'delete')" style="${isAbsent ? 'background-color: #ffc107;' : ''}">
                                     <i class="fas fa-trash-alt"></i>
                                  </button>` :
-                                `<button class="chk-btn btn-outline-success border-success text-success" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'Visita')" title="Marcar Visita">
+                                `<button class="chk-btn btn-outline-success border-success text-success" onclick="toggleVisita('${i.ID}', event, selectedDate, 'Visita')" title="Marcar Visita">
                                     <i class="fas fa-check"></i>
                                  </button>
-                                 <button class="chk-btn btn-outline-warning border-warning text-warning" onclick="toggleVisita('${i.ID}', event, selectedChecklistDate, 'Não Encontrado')" title="Marcar como Ausente" style="color: #b58100; border-color: #ffc107;">
+                                 <button class="chk-btn btn-outline-warning border-warning text-warning" onclick="toggleVisita('${i.ID}', event, selectedDate, 'Não Encontrado')" title="Marcar como Ausente" style="color: #b58100; border-color: #ffc107;">
                                     <i class="fas fa-user-slash"></i>
                                  </button>`
                             }
@@ -2594,14 +2906,15 @@
         
         // --- 3. RENDER DASHBOARD / INDICADORES ---
         else if (activeTab === 'dashboard') {
-            const todayCode = getTodayCode();
+            const targetDate = selectedDate;
+            const targetDateCode = getDayCodeForDate(targetDate);
             
-            // Total clientes visitados hoje
-            const totalVisitedToday = db.filter(i => isVisitedToday(i.ID)).length;
+            // Total clientes visitados na data selecionada
+            const totalVisitedOnDate = db.filter(i => isVisitedOnDate(i.ID, targetDate)).length;
             
-            // Total clientes agendados para hoje
-            const scheduledToday = db.filter(i => i.Visita.includes(todayCode));
-            const visitedScheduledToday = scheduledToday.filter(i => isVisitedToday(i.ID)).length;
+            // Total clientes agendados para a data selecionada
+            const scheduledOnDate = db.filter(i => i.Visita.includes(targetDateCode));
+            const visitedScheduledOnDate = scheduledOnDate.filter(i => isVisitedOnDate(i.ID, targetDate)).length;
             
             // Ranking de Visitas
             const visitCounts = {};
@@ -2620,11 +2933,11 @@
                 return { ...c, count: visitCounts[c.ID.toString().trim()] || 0 };
             }).sort((a,b) => a.count - b.count);
             
-            // Sugestões para Hoje: Agendados para hoje, não visitados hoje (ou marcados como ausentes), ordenados por menor número de visitas total ou data mais antiga
-            const suggestions = scheduledToday
-                .filter(i => !isVisitedToday(i.ID))
+            // Sugestões para a data selecionada: agendados, não visitados
+            const suggestions = scheduledOnDate
+                .filter(i => !isVisitedOnDate(i.ID, targetDate))
                 .map(i => {
-                    const status = getVisitStatusOnDate(i.ID, getLocalDateStr());
+                    const status = getVisitStatusOnDate(i.ID, targetDate);
                     const clientVisits = visitsDb
                         .filter(v => v && v.ID && v.Data && v.ID.toString().trim() === i.ID.toString().trim())
                         .map(v => parseDate(v.Data))
@@ -2637,11 +2950,24 @@
                         lastVisitDate: clientVisits.length > 0 ? clientVisits[0] : new Date(0)
                     };
                 })
+                .filter(i => i.todayStatus !== 'Visita')
                 .sort((a,b) => a.totalVisits - b.totalVisits || a.lastVisitDate - b.lastVisitDate)
                 .slice(0, 5); // Sugere os 5 mais prioritários
                 
             let html = `
-            <h5 class="fw-bold text-success mb-3"><i class="fas fa-chart-line me-2"></i>INDICADORES</h5>
+            <div class="dash-card py-3 mb-3 text-center" style="background: var(--gradient); color: white;">
+                <h5 class="fw-bold mb-1"><i class="fas fa-chart-line me-2"></i>INDICADORES</h5>
+                
+                <div class="d-flex justify-content-center align-items-center gap-2 my-2 px-3">
+                    <span class="small opacity-75"><i class="far fa-calendar-alt"></i> Data:</span>
+                    <input type="date" class="form-control form-control-sm text-center" id="dash-visit-date" 
+                           style="max-width: 160px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark;" 
+                           value="${targetDate}" 
+                           onchange="updateSelectedDate(this.value, true);">
+                </div>
+                
+                <p class="small mb-0 opacity-90 fw-bold">${formatLocalDateAndDay(targetDate)}</p>
+            </div>
             
             <!-- Grid de Estatísticas Rápidas -->
             <div class="dash-stat-grid">
@@ -2650,12 +2976,12 @@
                     <div class="dash-stat-label">Clientes</div>
                 </div>
                 <div class="dash-stat-box">
-                    <div class="dash-stat-num">${totalVisitedToday}</div>
-                    <div class="dash-stat-label">Visitas Hoje</div>
+                    <div class="dash-stat-num">${totalVisitedOnDate}</div>
+                    <div class="dash-stat-label">Visitas no Dia</div>
                 </div>
                 <div class="dash-stat-box">
-                    <div class="dash-stat-num">${scheduledToday.length > 0 ? Math.round((visitedScheduledToday/scheduledToday.length)*100) : 0}%</div>
-                    <div class="dash-stat-label">Meta Hoje</div>
+                    <div class="dash-stat-num">${scheduledOnDate.length > 0 ? Math.round((visitedScheduledOnDate/scheduledOnDate.length)*100) : 0}%</div>
+                    <div class="dash-stat-label">Meta do Dia</div>
                 </div>
             </div>
             
@@ -2678,12 +3004,12 @@
                 </div>
             </div>
             
-            <!-- Sugestões de Visitas para Hoje -->
+            <!-- Sugestões de Visitas para o Dia -->
             <div class="dash-card">
-                <h6 class="fw-bold text-warning mb-3"><i class="fas fa-lightbulb me-2"></i>SUGESTÕES PARA HOJE (${todayCode})</h6>
-                <p class="small text-muted">Clientes programados para hoje que ainda não foram visitados:</p>
+                <h6 class="fw-bold text-warning mb-3"><i class="fas fa-lightbulb me-2"></i>SUGESTÕES PARA O DIA (${targetDateCode})</h6>
+                <p class="small text-muted">Clientes programados para o dia que ainda não foram visitados:</p>
                 ${suggestions.length === 0 ? `
-                <div class="text-center text-muted small py-2"><i class="fas fa-check-circle me-1 text-success"></i>Tudo em dia! Nenhuma sugestão pendente para hoje.</div>
+                <div class="text-center text-muted small py-2"><i class="fas fa-check-circle me-1 text-success"></i>Tudo em dia! Nenhuma sugestão pendente para este dia.</div>
                 ` : suggestions.map(i => {
                     const lastVisitStr = i.totalVisits > 0 ? i.lastVisitDate.toLocaleDateString('pt-BR') : 'Nunca visitado';
                     const isAbsentToday = i.todayStatus === 'Não Encontrado';
@@ -2694,7 +3020,7 @@
                             ${isAbsentToday ? ' <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;"><i class="fas fa-user-slash me-1"></i>Ausente hoje</span>' : ''}<br>
                             <span class="small text-muted">Última visita: ${lastVisitStr} (${i.totalVisits} visitas no total)</span>
                         </div>
-                        <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="toggleVisita('${i.ID}', event)">
+                        <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="toggleVisita('${i.ID}', event, '${targetDate}')">
                             <i class="fas fa-check me-1"></i>Visitar
                         </button>
                     </div>`;
@@ -2734,12 +3060,25 @@
         
         // --- 4. RENDER MAPA ---
         else if (activeTab === 'mapa') {
-            const rotDateEl = document.getElementById('roteiroDate');
-            const targetDate = rotDateEl ? rotDateEl.value : getLocalDateStr();
+            const targetDate = selectedDate;
             const targetDateCode = getDayCodeForDate(targetDate);
+            const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
             
-            // Filtra clientes agendados para este dia
-            let scheduledToday = db.filter(i => i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+            // Lista completa de clientes para hoje
+            let allScheduledToday = db.filter(i => i.Visita.includes(targetDateCode));
+            
+            // Clientes válidos para a rota física
+            let scheduledToday = allScheduledToday.filter(i => i.Endereco && i.Endereco.trim().length > 5);
+            if (omitWhats) {
+                scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
+            }
+            
+            // Clientes excluídos
+            let excludedClients = allScheduledToday.filter(i => {
+                const noAddress = !i.Endereco || i.Endereco.trim().length <= 5;
+                const isWhats = i.Ordem == 99;
+                return noAddress || (omitWhats && isWhats);
+            });
             
             if (gpsSortedOrder) {
                 scheduledToday.sort((a, b) => {
@@ -2750,16 +3089,63 @@
                     return posA - posB;
                 });
             } else {
-                scheduledToday.sort((a,b) => a.Ordem - b.Ordem);
+                scheduledToday.sort((a, b) => (parseInt(a.Ordem) || 0) - (parseInt(b.Ordem) || 0));
             }
             
             let html = `
             <div class="dash-card py-3 mb-3 text-center" style="background: var(--gradient); color: white;">
                 <h5 class="fw-bold mb-1"><i class="fas fa-map-marked-alt me-2"></i>MAPA DE VISITAS</h5>
-                <p class="small mb-2 opacity-90 fw-bold">${getFullStringForDate(targetDate)} (${targetDateCode})</p>
-                <div class="d-flex justify-content-center gap-2 mt-2">
-                    <button class="btn btn-sm btn-light rounded-pill px-3 fw-bold" onclick="optimizeRouteByGPS()" title="Ordenar pela proximidade usando sua localização GPS"><i class="fas fa-magic me-1"></i>Otimizar Rota GPS</button>
-                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="recenterMap()" title="Centralizar o mapa nos pins"><i class="fas fa-compress-arrows-alt me-1"></i>Centralizar</button>
+                <div class="d-flex justify-content-center align-items-center gap-2 my-2 px-3">
+                    <span class="small opacity-75"><i class="far fa-calendar-alt"></i> Data:</span>
+                    <input type="date" class="form-control form-control-sm text-center" id="mapa-visit-date" 
+                           style="max-width: 160px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark;" 
+                           value="${targetDate}" 
+                           onchange="updateSelectedDate(this.value, true);">
+                </div>
+                <p class="small mb-2 opacity-90 fw-bold">${formatLocalDateAndDay(targetDate)}</p>
+                
+                <!-- Painel de Ponto de Partida e Otimização -->
+                <div class="mt-3 p-3 rounded-3 mx-2 text-start" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15);">
+                    <div class="small fw-bold mb-2"><i class="fas fa-route me-1"></i> Configurar Rota Física</div>
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <select id="map-start-type" class="form-select form-select-sm border-0 rounded-3 text-dark" onchange="toggleMapStartInput()">
+                                <option value="">Selecione o ponto de partida...</option>
+                                <option value="gps">📍 Minha Localização Atual (GPS)</option>
+                                <option value="address">🏠 Endereço Personalizado</option>
+                            </select>
+                        </div>
+                        <div class="col-12" id="map-start-address-container" style="display: none;">
+                            <input type="text" id="map-start-address" class="form-control form-control-sm border-0 rounded-3 text-dark" 
+                                   placeholder="Endereço de partida..." value="${localStorage.getItem('map_custom_start') || ''}" 
+                                   onchange="localStorage.setItem('map_custom_start', this.value)">
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div class="form-check form-switch small">
+                                <input class="form-check-input" type="checkbox" id="map-omit-whats" ${omitWhats ? 'checked' : ''} onchange="toggleMapOmitWhats(this.checked)">
+                                <label class="form-check-label text-white" for="map-omit-whats">Omitir clientes de WhatsApp (Ordem 99)</label>
+                            </div>
+                        </div>
+                        <div class="col-12 d-grid gap-2 mt-2">
+                            <button id="btn-optimize-map" class="btn btn-sm btn-light rounded-pill fw-bold" style="display: none;" onclick="optimizeMapRoute()">
+                                <i class="fas fa-magic me-1"></i>Calcular Rota Otimizada
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-center gap-2 mt-3 px-2">
+                    ${gpsSortedOrder ? `
+                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="clearMapOptimization()">
+                        <i class="fas fa-undo me-1"></i>Restaurar Ordem
+                    </button>
+                    <button class="btn btn-sm btn-success rounded-pill px-3 fw-bold" onclick="saveMapRouteOrderToCloud()">
+                        <i class="fas fa-cloud-upload-alt me-1"></i>Gravar Ordem na Planilha
+                    </button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="recenterMap()">
+                        <i class="fas fa-compress-arrows-alt me-1"></i>Centralizar
+                    </button>
                 </div>
             </div>
             
@@ -2770,18 +3156,25 @@
 
             <div id="map" class="mb-3"></div>
             
+            ${scheduledToday.length > 0 ? `
+            <div class="d-grid gap-2 mb-3">
+                <button class="btn btn-primary py-2.5 rounded-pill fw-bold shadow-sm" style="background-color: #4285f4; border: none;" onclick="openGoogleMapsMultiStopRoute()">
+                    <i class="fas fa-map-marked-alt me-2"></i>Abrir Rota Completa no Google Maps
+                </button>
+            </div>
+            ` : ''}
+            
             <div class="fw-bold mb-2 text-primary" style="font-size: 0.95rem;">📌 SEQUÊNCIA DE VISITAS:</div>
             <div id="map-client-list">
             `;
             
             if (scheduledToday.length === 0) {
-                html += `<div class="text-center text-muted py-5"><i class="fas fa-map-marked fa-3x mb-3 text-secondary"></i><br>Nenhum cliente agendado com endereço para este dia.</div>`;
+                html += `<div class="text-center text-muted py-5"><i class="fas fa-map-marked fa-3x mb-3 text-secondary"></i><br>Nenhum cliente na rota física para este dia.</div>`;
             } else {
                 html += scheduledToday.map((i, idx) => {
                     const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
                     const visited = visitStatus !== null;
                     const isAbsent = visitStatus === 'Não Encontrado';
-                    const ordLabel = i.Ordem == 99 ? "Whats" : `ORD: ${i.Ordem}`;
                     
                     return `
                     <div class="card card-client mb-2 ${visitStatus === 'Visita' ? 'visited-card' : isAbsent ? 'absent-card' : ''}" style="border-left-width: 4px;">
@@ -2805,16 +3198,126 @@
                 }).join('');
             }
             
-            html += `</div><div style="height: 100px;"></div>`;
+            html += `</div>`;
+            
+            if (excludedClients.length > 0) {
+                html += `
+                <div class="mt-4">
+                    <div class="fw-bold mb-2 text-danger" style="font-size: 0.95rem;">⚠️ CLIENTES NÃO INCLUÍDOS NA ROTA FÍSICA:</div>
+                    <div id="map-excluded-list">
+                    ${excludedClients.map(i => {
+                        const noAddress = !i.Endereco || i.Endereco.trim().length <= 5;
+                        const isWhats = i.Ordem == 99;
+                        const reason = noAddress ? "Sem Endereço cadastrado" : (isWhats ? "Contato apenas por WhatsApp (Ordem 99)" : "Outro motivo");
+                        return `
+                        <div class="card card-client mb-2 border-danger" style="border-left-width: 4px; background-color: #fff8f8;">
+                            <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold text-dark" style="font-size: 0.92rem;">${i.Fantasia || i.Cliente}</span>
+                                    <div class="small text-danger" style="font-size: 0.72rem; font-weight: 500;">Motivo: ${reason}</div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    ${isWhats ? `
+                                    <button class="btn btn-sm btn-outline-success px-2 py-0.5 rounded-pill fw-bold" style="font-size: 0.72rem;" onclick="abrirWhatsapp('${i.ID}', event)">Whats</button>
+                                    ` : `
+                                    <button class="btn btn-sm btn-outline-secondary px-2 py-0.5 rounded-pill fw-bold" style="font-size: 0.72rem;" onclick="abrirForm('${i.ID}')">Editar</button>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                    </div>
+                </div>
+                `;
+            }
+            
+            html += `<div style="height: 100px;"></div>`;
             container.innerHTML = html;
             
             // Inicializar mapa de forma segura
             setTimeout(() => {
                 renderLeafletMap(scheduledToday, targetDate);
+                const startTypeEl = document.getElementById('map-start-type');
+                if (startTypeEl) {
+                    const lastType = localStorage.getItem('map_start_type') || '';
+                    startTypeEl.value = lastType;
+                    toggleMapStartInput();
+                }
             }, 100);
         }
         
-        // --- 5. RENDER SEM ENDEREÇO ---
+        // --- 5. RENDER PLAYBOOK ---
+        else if (activeTab === 'playbook') {
+            const clientSelectHtml = [...db].sort((a, b) => (a.Fantasia || a.Cliente).localeCompare(b.Fantasia || b.Cliente)).map(c => {
+                return `<option value="${c.ID}">${c.Fantasia || c.Cliente} (#${c.ID})</option>`;
+            }).join('');
+            
+            let html = `
+            <h5 class="fw-bold text-success mb-3"><i class="fas fa-book-open me-2"></i>PLAYBOOK DO CLIENTE</h5>
+            
+            <div class="dash-card">
+                <label class="small text-muted fw-bold mb-2">SELECIONE O CLIENTE:</label>
+                <select id="pb-client-select" class="form-select rounded-pill border-0 shadow-sm px-3 text-dark" style="background: #f1f5f9; height: 45px;" onchange="loadPlaybookForSelectedClient()">
+                    <option value="">-- Escolha um cliente --</option>
+                    ${clientSelectHtml}
+                </select>
+            </div>
+            
+            <div id="playbook-details-container" style="display: none;">
+                <div class="dash-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h6 class="fw-bold text-primary mb-1" id="pb-client-name">---</h6>
+                            <span class="id-badge" id="pb-client-id">#---</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-dark rounded-pill px-3" id="pb-google-search-btn">
+                            <i class="fab fa-google me-1"></i>Buscar no Google
+                        </button>
+                    </div>
+                    
+                    <form id="playbookForm">
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold ps-1 mb-1"><i class="fas fa-id-card me-1 text-primary"></i>DOSSIÊ GERAL / COMPORTAMENTO</label>
+                            <textarea id="pb-dossie" class="form-control rounded-3" rows="4" placeholder="O que compra? Com quem compra? Como age? Notas de negociação..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold ps-1 mb-1"><i class="fas fa-star text-warning me-1"></i>PRODUTOS CURVA A</label>
+                            <textarea id="pb-curva-a" class="form-control rounded-3" rows="3" placeholder="Produtos críticos que não podem faltar para este cliente..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold ps-1 mb-1"><i class="fas fa-exclamation-triangle text-danger me-1"></i>HOSTILIDADES / CONFLITOS REGIONAIS</label>
+                            <textarea id="pb-inimizades" class="form-control rounded-3" rows="3" placeholder="Inimizades na região, hostilidades, restrições ou cuidados especiais..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold ps-1 mb-1"><i class="fas fa-sticky-note text-secondary me-1"></i>NOTAS ADICIONAIS</label>
+                            <textarea id="pb-notas" class="form-control rounded-3" rows="3" placeholder="Outras informações úteis..."></textarea>
+                        </div>
+                        
+                        <button type="button" class="btn btn-success w-100 py-3 rounded-pill fw-bold shadow-sm" onclick="savePlaybook()">
+                            <i class="fas fa-save me-2"></i>SALVAR DOSSIÊ NA NUVEM
+                        </button>
+                        <div class="text-center text-muted small mt-2">
+                            <i class="fas fa-cloud-upload-alt me-1"></i>Os dados serão gravados diretamente na aba 'Clientes_Brain'
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div id="playbook-empty-state" class="text-center text-muted py-5">
+                <i class="fas fa-folder-open fa-3x mb-3 text-secondary"></i>
+                <br>Selecione um cliente acima para visualizar seu dossiê.
+            </div>
+            
+            <div style="height: 100px;"></div>
+            `;
+            container.innerHTML = html;
+        }
+        
+        // --- 6. RENDER SEM ENDEREÇO ---
         else if (activeTab === 'endereco') {
             const missingAddress = db.filter(i => !i.Endereco || i.Endereco.trim().length < 5);
             
@@ -2862,6 +3365,11 @@
                             <div class="col-12 mt-2">
                                 <button class="btn btn-sm btn-outline-dark w-100 py-2 rounded-pill small" onclick="abrirForm('${i.ID}')">
                                     <i class="fas fa-edit me-1"></i>Editar Completo
+                                </button>
+                            </div>
+                            <div class="col-12 mt-1">
+                                <button class="btn btn-sm btn-outline-info w-100 py-2 rounded-pill small text-dark fw-bold" onclick="buscarGoogleNome(\`${i.Cliente.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
+                                    <i class="fab fa-google me-1"></i>Buscar no Google
                                 </button>
                             </div>
                         </div>
@@ -2918,6 +3426,74 @@
         modal.show();
     }
 
+    // PLAYBOOK DO CLIENTE: Funções do Dossiê (Clientes_Brain)
+    function loadPlaybookForSelectedClient() {
+        const id = document.getElementById('pb-client-select').value;
+        const detailsContainer = document.getElementById('playbook-details-container');
+        const emptyState = document.getElementById('playbook-empty-state');
+        
+        if (!id) {
+            detailsContainer.style.display = 'none';
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
+        if (!c) return;
+        
+        document.getElementById('pb-client-name').innerText = c.Fantasia || c.Cliente;
+        document.getElementById('pb-client-id').innerText = `#${c.ID}`;
+        
+        // Botão de busca Google
+        const searchBtn = document.getElementById('pb-google-search-btn');
+        searchBtn.onclick = function() {
+            const query = encodeURIComponent(`${c.Cliente} Piracicaba SP CNPJ CEP`);
+            window.open(`https://www.google.com/search?q=${query}`, '_blank');
+        };
+        
+        const pb = playbookDb.find(x => x.ID.toString().trim() === id.toString().trim()) || {};
+        
+        document.getElementById('pb-dossie').value = pb.Dossie || pb.dossie || '';
+        document.getElementById('pb-curva-a').value = pb.Curva_A || pb.curva_a || '';
+        document.getElementById('pb-inimizades').value = pb.Inimizades || pb.inimizades || '';
+        document.getElementById('pb-notas').value = pb.Notas || pb.notas || '';
+        
+        emptyState.style.display = 'none';
+        detailsContainer.style.display = 'block';
+    }
+
+    async function savePlaybook() {
+        const id = document.getElementById('pb-client-select').value;
+        if (!id) return;
+        
+        const data = {
+            ID: id,
+            Dossie: document.getElementById('pb-dossie').value,
+            Curva_A: document.getElementById('pb-curva-a').value,
+            Inimizades: document.getElementById('pb-inimizades').value,
+            Notas: document.getElementById('pb-notas').value
+        };
+        
+        toggleLoader(true);
+        try {
+            await apiPost('save_brain', data);
+            
+            const idx = playbookDb.findIndex(x => x.ID.toString().trim() === id.toString().trim());
+            if (idx !== -1) {
+                playbookDb[idx] = data;
+            } else {
+                playbookDb.push(data);
+            }
+            
+            localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+            customAlert("Dossiê do cliente salvo com sucesso na nuvem!", "Playbook");
+        } catch (e) {
+            console.error(e);
+            customAlert("Erro ao salvar dossiê na planilha.");
+        }
+        toggleLoader(false);
+    }
+
     async function salvar() {
         const data = {
             ID: document.getElementById('f-id').value,
@@ -2961,18 +3537,22 @@
     }
 
     // Configuração dos Event Listeners dos Filtros
-    ['search','fVisita','fEntrega','fCidade','roteiroDate'].forEach(id => {
+    ['search','fVisita','fEntrega','fCidade'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener(id === 'search' ? 'input' : 'change', render);
         }
     });
 
-    // Iniciar data do roteiro com o dia de hoje
     const roteiroDateEl = document.getElementById('roteiroDate');
     if (roteiroDateEl) {
-        roteiroDateEl.value = getLocalDateStr();
+        roteiroDateEl.addEventListener('change', function() {
+            updateSelectedDate(this.value, true);
+        });
     }
+
+    // Iniciar data do roteiro com o dia de hoje e sincronizar
+    updateSelectedDate(getLocalDateStr(), true);
 
     window.onload = function() {
         initTheme();
