@@ -730,6 +730,9 @@
     let checklistSearch = '';
     let gpsSortedOrder = null;
     const coordsCache = JSON.parse(localStorage.getItem('coords_cache') || '{}');
+    let pbSearchQuery = '';
+    let pbDayFilterVal = '';
+    let pbSelectedClientId = '';
     
     function getLocalDateStr() {
         const d = new Date();
@@ -3249,16 +3252,50 @@
         
         // --- 5. RENDER PLAYBOOK ---
         else if (activeTab === 'playbook') {
-            const clientSelectHtml = [...db].sort((a, b) => (a.Fantasia || a.Cliente).localeCompare(b.Fantasia || b.Cliente)).map(c => {
-                return `<option value="${c.ID}">${c.Fantasia || c.Cliente} (#${c.ID})</option>`;
+            const s = pbSearchQuery.toLowerCase();
+            const d = pbDayFilterVal;
+            
+            let filteredClients = [...db];
+            if (s) {
+                filteredClients = filteredClients.filter(c => 
+                    (c.ID + c.Cliente + c.Fantasia + c.CNPJ + c.Endereco).toLowerCase().includes(s)
+                );
+            }
+            if (d) {
+                filteredClients = filteredClients.filter(c => c.Visita.includes(d));
+            }
+            
+            filteredClients.sort((a, b) => (a.Fantasia || a.Cliente).localeCompare(b.Fantasia || b.Cliente));
+            
+            const clientSelectHtml = filteredClients.map(c => {
+                const isSelected = pbSelectedClientId.toString() === c.ID.toString();
+                return `<option value="${c.ID}" ${isSelected ? 'selected' : ''}>${c.Fantasia || c.Cliente} (#${c.ID})</option>`;
             }).join('');
             
             let html = `
             <h5 class="fw-bold text-success mb-3"><i class="fas fa-book-open me-2"></i>PLAYBOOK DO CLIENTE</h5>
             
             <div class="dash-card">
-                <label class="small text-muted fw-bold mb-2">SELECIONE O CLIENTE:</label>
-                <select id="pb-client-select" class="form-select rounded-pill border-0 shadow-sm px-3 text-dark" style="background: #f1f5f9; height: 45px;" onchange="loadPlaybookForSelectedClient()">
+                <label class="small text-muted fw-bold mb-2">BUSCAR CLIENTE NO PLAYBOOK:</label>
+                <div class="row g-2 mb-2">
+                    <div class="col-8">
+                        <input type="text" id="pb-search-input" class="form-control form-control-sm rounded-pill px-3" 
+                               placeholder="Nome, Código, Razão..." value="${pbSearchQuery}" oninput="filterPlaybookClients()">
+                    </div>
+                    <div class="col-4">
+                        <select id="pb-day-filter" class="form-select form-select-sm rounded-pill text-dark" onchange="filterPlaybookClients()">
+                            <option value="">Dia (Todos)</option>
+                            <option value="SEG" ${pbDayFilterVal === 'SEG' ? 'selected' : ''}>SEG</option>
+                            <option value="TER" ${pbDayFilterVal === 'TER' ? 'selected' : ''}>TER</option>
+                            <option value="QUA" ${pbDayFilterVal === 'QUA' ? 'selected' : ''}>QUA</option>
+                            <option value="QUI" ${pbDayFilterVal === 'QUI' ? 'selected' : ''}>QUI</option>
+                            <option value="SEX" ${pbDayFilterVal === 'SEX' ? 'selected' : ''}>SEX</option>
+                            <option value="SAB" ${pbDayFilterVal === 'SAB' ? 'selected' : ''}>SAB</option>
+                            <option value="DOM" ${pbDayFilterVal === 'DOM' ? 'selected' : ''}>DOM</option>
+                        </select>
+                    </div>
+                </div>
+                <select id="pb-client-select" class="form-select rounded-pill border-0 shadow-sm px-3 text-dark" style="background: #f1f5f9; height: 45px;" onchange="pbSelectedClientId = this.value; loadPlaybookForSelectedClient()">
                     <option value="">-- Escolha um cliente --</option>
                     ${clientSelectHtml}
                 </select>
@@ -3379,6 +3416,16 @@
             
             container.innerHTML = html;
         }
+        
+        if (activeTab === 'playbook' && pbSelectedClientId) {
+            setTimeout(() => {
+                const select = document.getElementById('pb-client-select');
+                if (select) {
+                    select.value = pbSelectedClientId;
+                    loadPlaybookForSelectedClient();
+                }
+            }, 50);
+        }
     }
 
     // ============================================
@@ -3489,9 +3536,48 @@
             customAlert("Dossiê do cliente salvo com sucesso na nuvem!", "Playbook");
         } catch (e) {
             console.error(e);
-            customAlert("Erro ao salvar dossiê na planilha.");
+            customAlert("Erro ao salvar Playbook.");
         }
         toggleLoader(false);
+    }
+
+    function filterPlaybookClients() {
+        const sInput = document.getElementById('pb-search-input');
+        const dInput = document.getElementById('pb-day-filter');
+        const select = document.getElementById('pb-client-select');
+        if (!select || !sInput || !dInput) return;
+        
+        const s = sInput.value.toLowerCase();
+        const d = dInput.value;
+        
+        // Retain selection
+        const currentSelectedId = select.value;
+        
+        let filtered = [...db];
+        if (s) {
+            filtered = filtered.filter(c => 
+                (c.ID + c.Cliente + c.Fantasia + c.CNPJ + c.Endereco).toLowerCase().includes(s)
+            );
+        }
+        if (d) {
+            filtered = filtered.filter(c => c.Visita.includes(d));
+        }
+        
+        filtered.sort((a, b) => (a.Fantasia || a.Cliente).localeCompare(b.Fantasia || b.Cliente));
+        
+        select.innerHTML = '<option value="">-- Escolha um cliente --</option>';
+        filtered.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.ID;
+            option.textContent = `${c.Fantasia || c.Cliente} (#${c.ID})`;
+            if (c.ID.toString() === currentSelectedId.toString()) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        pbSearchQuery = sInput.value;
+        pbDayFilterVal = d;
     }
 
     async function salvar() {
