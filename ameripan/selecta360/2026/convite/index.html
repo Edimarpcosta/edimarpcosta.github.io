@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -528,6 +529,15 @@
       color: var(--error-color);
     }
 
+    .toast-warning {
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .toast-warning .toast-icon {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent-color);
+    }
+
     .toast-text {
       font-size: 14px;
       font-weight: 500;
@@ -633,6 +643,31 @@
       color: #fff;
       background: var(--primary-gradient);
     }
+
+    /* CHECK-IN LIST */
+    .checkin-list-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+
+    .checkin-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--primary-color);
+    }
+
+    .checkin-label {
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -652,6 +687,12 @@
       <div class="form-group">
         <label for="inputPassword" class="form-label">Insira a Senha de Segurança</label>
         <input type="password" id="inputPassword" class="input-field" placeholder="Digite a senha de acesso...">
+      </div>
+      <div class="form-group" id="groupSelectVendor" style="display: none;">
+        <label for="selectVendorConvite" class="form-label">Selecione seu Nome (Vendedor)</label>
+        <select id="selectVendorConvite" class="input-field">
+          <option value="">Todos os Vendedores</option>
+        </select>
       </div>
       <button class="btn btn-primary" id="btnVerifyPassword">
         <span>Autenticar</span>
@@ -839,6 +880,28 @@
     <div class="toast-text" id="toastText">Operação bem-sucedida!</div>
   </div>
 
+  <!-- MODAL DE CHECK-IN CONVITE -->
+  <div class="modal-overlay" id="modalCheckinConvite">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <div class="modal-title">Realizar Check-in Granular</div>
+        <button class="modal-close" onclick="closeCheckinModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px 0;">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">Selecione os participantes presentes para confirmar o check-in:</p>
+        <div id="checkinConviteListContainer" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Inseridos dinamicamente -->
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-secondary" onclick="closeCheckinModal()" style="width: auto;">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmCheckinConvite" style="width: auto;">
+          <span>Confirmar Check-in</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // CONFIGURAÇÃO DA API
     const config = {
@@ -958,18 +1021,21 @@
 
     // TOAST HELPER
     function showToast(message, type = 'success') {
-      toastText.innerText = message;
+      toastText.innerHTML = message;
       toast.className = 'toast active';
       if (type === 'success') {
         toast.classList.add('toast-success');
         toast.querySelector('.toast-icon').innerText = '✓';
+      } else if (type === 'warning') {
+        toast.classList.add('toast-warning');
+        toast.querySelector('.toast-icon').innerText = '⚠️';
       } else {
         toast.classList.add('toast-error');
         toast.querySelector('.toast-icon').innerText = '✕';
       }
       setTimeout(() => {
         toast.className = 'toast';
-      }, 4000);
+      }, 5000);
     }
 
     // CAPACITY ALERT MODAL (WHATSAPP WEB)
@@ -1139,17 +1205,51 @@
     }
 
     // PASSO 1: VERIFICAR SENHA E CARREGAR CLIENTES
+    state.selectedVendedor = '';
+
     btnVerifyPassword.addEventListener('click', () => {
       const pwd = inputPassword.value.trim();
       if (!pwd) {
         showToast('Insira a senha de segurança.', 'error');
         return;
       }
-      verifyAndLoadClients(pwd);
+
+      const vendorGroup = document.getElementById('groupSelectVendor');
+      if (vendorGroup.style.display === 'none') {
+        setLoading(btnVerifyPassword, true, 'Autenticando...');
+        const url = `${config.scriptUrl}?action=getVendedores&password=${encodeURIComponent(pwd)}`;
+        
+        fetch(url)
+          .then(r => r.json())
+          .then(res => {
+            setLoading(btnVerifyPassword, false);
+            if (res.success) {
+              config.password = pwd;
+              const select = document.getElementById('selectVendorConvite');
+              select.innerHTML = '<option value="">Todos os Vendedores</option>';
+              res.vendedores.forEach(v => {
+                select.innerHTML += `<option value="${v}">${v}</option>`;
+              });
+              
+              vendorGroup.style.display = 'block';
+              btnVerifyPassword.querySelector('span').innerText = 'Acessar Painel';
+            } else {
+              showToast(res.message || 'Senha incorreta.', 'error');
+            }
+          })
+          .catch(err => {
+            setLoading(btnVerifyPassword, false);
+            showToast('Erro de rede ao buscar vendedores.', 'error');
+            console.error(err);
+          });
+      } else {
+        state.selectedVendedor = document.getElementById('selectVendorConvite').value;
+        verifyAndLoadClients(config.password);
+      }
     });
 
     function verifyAndLoadClients(pwd) {
-      setLoading(btnVerifyPassword, true, 'Verificando...');
+      setLoading(btnVerifyPassword, true, 'Carregando...');
       const url = `${config.scriptUrl}?action=getUnicaClients&password=${encodeURIComponent(pwd)}`;
       
       fetch(url)
@@ -1163,6 +1263,12 @@
             
             // Atribui aba ativa inicial
             state.activeTab = 'PENDENTE';
+            
+            // Update UI label
+            const lblName = document.getElementById('lblVendedorName');
+            if (lblName) {
+              lblName.innerText = state.selectedVendedor ? `Vendedor: ${state.selectedVendedor}` : 'Gestão de Convites: Todos';
+            }
             
             renderDashboard();
             transitionToStep('secDashboard');
@@ -1182,6 +1288,9 @@
       config.password = '';
       localStorage.removeItem('selecta360_password');
       inputPassword.value = '';
+      state.selectedVendedor = '';
+      document.getElementById('groupSelectVendor').style.display = 'none';
+      btnVerifyPassword.querySelector('span').innerText = 'Autenticar';
       transitionToStep('secPassword');
     });
 
@@ -1210,12 +1319,17 @@
       let confirmedCount = 0;
       
       state.clients.forEach(c => {
+        if (state.selectedVendedor && (c.vendedor || "").toLowerCase() !== state.selectedVendedor.toLowerCase()) {
+          return;
+        }
         if (c.status === 'PENDENTE') pendingCount++;
         else if (c.status === 'ENVIADO') sentCount++;
         else if (c.status === 'CONVIDADO' || c.status === 'COMPARECEU') confirmedCount++;
       });
       
-      const totalCount = state.clients.length;
+      const totalCount = state.clients.filter(c => {
+        return !state.selectedVendedor || (c.vendedor || "").toLowerCase() === state.selectedVendedor.toLowerCase();
+      }).length;
 
       // Atualiza elementos métricos
       document.getElementById('valPending').textContent = pendingCount;
@@ -1247,6 +1361,11 @@
       
       // Filtra por aba de status e depois por termo de busca
       const filtered = state.clients.filter(c => {
+        // Filtro de vendedor selecionado no login
+        if (state.selectedVendedor && (c.vendedor || "").toLowerCase() !== state.selectedVendedor.toLowerCase()) {
+          return false;
+        }
+
         // Filtro de aba
         let matchStatus = false;
         if (state.activeTab === 'TODOS') {
@@ -1576,7 +1695,7 @@
         telefone2: regTelefone2.value.trim(),
         nome_convidado: convidado,
         cidade_evento: cidade,
-        vendedor: state.activeClient ? (state.activeClient.vendedor || '') : '', // Preserva o vendedor original do cliente
+        vendedor: (state.activeClient && state.activeClient.vendedor && state.activeClient.vendedor !== "Outro / Não sei") ? state.activeClient.vendedor : (state.selectedVendedor || ''),
         cidade_cliente: state.activeClient ? (state.activeClient.cidade_estab || '') : '',
         ramo_atividade: '',
         compareceu: chkImmediateCheckin.checked
@@ -1609,14 +1728,31 @@
       .then(res => {
         setLoading(btnSaveInvite, false);
         if (res.success) {
-          showToast('Inscrição do convite gravada!');
+          if (res.warning) {
+            const phoneClean = res.alert_phone ? res.alert_phone.replace(/\D/g, '') : '';
+            const msg = `Inscrição gravada com aviso! Limite padrão excedido para ${payload.cidade_evento}.`;
+            if (phoneClean) {
+              const waText = `⚠️ *Alerta Selecta 360 (Aviso de Lotação)* ⚠️\n\n` +
+                             `Inscrição realizada excedendo o limite padrão de assentos.\n\n` +
+                             `• *Cliente:* ${payload.nome_convidado || payload.razao_social}\n` +
+                             `• *CNPJ:* ${payload.cnpj}\n` +
+                             `• *Cidade do Evento:* ${payload.cidade_evento}\n` +
+                             `• *Vendedor:* ${payload.vendedor || 'Não informado'}`;
+              const waUrl = `https://api.whatsapp.com/send?phone=${phoneClean}&text=${encodeURIComponent(waText)}`;
+              showToast(`${msg} <a href="${waUrl}" target="_blank" style="color: #fff; background: #25d366; padding: 4px 8px; border-radius: 6px; text-decoration: none; font-size: 11px; margin-left: 8px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">WhatsApp</a>`, 'warning');
+            } else {
+              showToast(msg, 'warning');
+            }
+          } else {
+            showToast('Inscrição do convite gravada!');
+          }
           modalInvite.classList.remove('active');
           
           // Atualiza o status localmente para evitar nova requisição de rede
           const updatedClient = state.clients.find(c => c.codigo === state.activeClient.codigo);
           if (updatedClient) {
             updatedClient.status = chkImmediateCheckin.checked ? 'COMPARECEU' : 'CONVIDADO';
-            updatedClient.vendedor = state.selectedVendedor; // Atribui vendedor
+            updatedClient.vendedor = (state.activeClient && state.activeClient.vendedor && state.activeClient.vendedor !== "Outro / Não sei") ? state.activeClient.vendedor : (state.selectedVendedor || '');
             updatedClient.nome_completo = convidado;
             updatedClient.cidade_evento = cidade;
           }
@@ -1651,31 +1787,137 @@
       const cardElement = document.querySelector(`[onclick="executeCheckIn('${codigo}')"]`);
       if (cardElement) {
         cardElement.disabled = true;
+        cardElement.textContent = 'Carregando...';
+      }
+
+      const url = `${config.scriptUrl}?action=getGuestByCode&codigo=${encodeURIComponent(codigo)}&password=${encodeURIComponent(config.password)}`;
+      fetch(url)
+        .then(r => r.json())
+        .then(res => {
+          if (cardElement) {
+            cardElement.disabled = false;
+            cardElement.textContent = 'Confirmar Check-in';
+          }
+
+          if (res.success && res.exists) {
+            const g = res.data;
+            const comps = [];
+            let cIdx = 2;
+            while (g["convidado" + cIdx] !== undefined) {
+              const name = g["convidado" + cIdx];
+              if (name && name.trim() !== "") {
+                comps.push(name.trim());
+              }
+              cIdx++;
+            }
+
+            if (comps.length > 0) {
+              openCheckinConviteModal(g, comps, client, cardElement);
+            } else {
+              performDirectCheckIn(codigo, [1], client, cardElement);
+            }
+          } else {
+            performDirectCheckIn(codigo, [1], client, cardElement);
+          }
+        })
+        .catch(err => {
+          if (cardElement) {
+            cardElement.disabled = false;
+            cardElement.textContent = 'Confirmar Check-in';
+          }
+          showToast('Erro ao carregar dados do convidado.', 'error');
+        });
+    };
+
+    function openCheckinConviteModal(g, comps, client, cardElement) {
+      const container = document.getElementById('checkinConviteListContainer');
+      container.innerHTML = '';
+
+      const presents = [];
+      const val = (g.compareceu || "").toString().trim().toUpperCase();
+      const totalParticipants = 1 + comps.length;
+      if (val === "SIM") {
+        for (let i = 1; i <= totalParticipants; i++) presents.push(i);
+      } else if (val) {
+        val.split(",")
+           .map(x => parseInt(x.trim()))
+           .filter(x => !isNaN(x) && x >= 1 && x <= totalParticipants)
+           .forEach(x => presents.push(x));
+      }
+
+      if (g.nome_convidado) {
+        const mainDiv = document.createElement('div');
+        mainDiv.className = 'checkin-list-item';
+        const mainChecked = presents.includes(1) ? 'checked' : '';
+        mainDiv.innerHTML = `
+          <input type="checkbox" id="chkConvitePart1" class="checkin-checkbox" data-index="1" ${mainChecked}>
+          <label for="chkConvitePart1" class="checkin-label"><strong>${g.nome_convidado}</strong> (Principal)</label>
+        `;
+        container.appendChild(mainDiv);
+      }
+
+      comps.forEach((name, idx) => {
+        const pIndex = idx + 2;
+        const compDiv = document.createElement('div');
+        compDiv.className = 'checkin-list-item';
+        const compChecked = presents.includes(pIndex) ? 'checked' : '';
+        compDiv.innerHTML = `
+          <input type="checkbox" id="chkConvitePart${pIndex}" class="checkin-checkbox" data-index="${pIndex}" ${compChecked}>
+          <label for="chkConvitePart${pIndex}" class="checkin-label">${name} (Acompanhante)</label>
+        `;
+        container.appendChild(compDiv);
+      });
+
+      const btnConfirm = document.getElementById('btnConfirmCheckinConvite');
+      btnConfirm.onclick = function() {
+        const selected = [];
+        container.querySelectorAll('.checkin-checkbox').forEach(cb => {
+          if (cb.checked) {
+            selected.push(parseInt(cb.dataset.index));
+          }
+        });
+
+        setLoading(btnConfirm, true, 'Confirmando...');
+        performDirectCheckIn(g.codigo, selected, client, cardElement, btnConfirm, () => {
+          closeCheckinModal();
+        });
+      };
+
+      document.getElementById('modalCheckinConvite').classList.add('active');
+    }
+
+    window.closeCheckinModal = function() {
+      document.getElementById('modalCheckinConvite').classList.remove('active');
+    };
+
+    function performDirectCheckIn(codigo, participantes, client, cardElement, btnConfirm = null, callback = null) {
+      if (cardElement) {
+        cardElement.disabled = true;
         cardElement.textContent = 'Aguarde...';
       }
 
       const payload = {
         action: 'checkIn',
         password: config.password,
-        codigo: codigo
+        codigo: codigo,
+        participantes: participantes
       };
 
       fetch(config.scriptUrl, {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
+        method: 'POST', mode: 'cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       })
       .then(response => response.json())
       .then(res => {
+        if (btnConfirm) setLoading(btnConfirm, false);
         if (res.success) {
           showToast('Check-in confirmado!');
           client.status = 'COMPARECEU';
           renderDashboard();
+          if (callback) callback();
         } else {
-          showToast(res.message || 'Erro ao efetuar check-in.', 'error');
+          showToast(res.message || 'Erro ao realizar check-in.', 'error');
           if (cardElement) {
             cardElement.disabled = false;
             cardElement.textContent = 'Confirmar Check-in';
@@ -1683,14 +1925,14 @@
         }
       })
       .catch(err => {
+        if (btnConfirm) setLoading(btnConfirm, false);
         showToast('Erro de rede ao confirmar check-in.', 'error');
-        console.error(err);
         if (cardElement) {
           cardElement.disabled = false;
           cardElement.textContent = 'Confirmar Check-in';
         }
       });
-    };
+    }
 
     // HELPERS
     function transitionToStep(stepId) {
