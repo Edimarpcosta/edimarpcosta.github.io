@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -582,6 +583,15 @@
       color: var(--error-color);
     }
 
+    .toast-warning {
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .toast-warning .toast-icon {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent-color);
+    }
+
     .toast-text {
       font-size: 14px;
       font-weight: 500;
@@ -957,11 +967,14 @@
 
     // TOAST HELPER
     function showToast(message, type = 'success') {
-      toastText.innerText = message;
+      toastText.innerHTML = message;
       toast.className = 'toast active';
       if (type === 'success') {
         toast.classList.add('toast-success');
         toast.querySelector('.toast-icon').innerText = '✓';
+      } else if (type === 'warning') {
+        toast.classList.add('toast-warning');
+        toast.querySelector('.toast-icon').innerText = '⚠️';
       } else {
         toast.classList.add('toast-error');
         toast.querySelector('.toast-icon').innerText = '✕';
@@ -969,7 +982,7 @@
       
       setTimeout(() => {
         toast.className = 'toast';
-      }, 4000);
+      }, 5000);
     }
 
     // CAPACITY ALERT MODAL (WHATSAPP WEB)
@@ -1502,7 +1515,25 @@
       .then(res => {
         setLoading(btnSaveGuest, false);
         if (res.success) {
-          showToast('Inscrição confirmada com sucesso!');
+          if (res.warning) {
+            const phoneClean = res.alert_phone ? res.alert_phone.replace(/\D/g, '') : '';
+            const msg = `Inscrição confirmada com aviso! Limite padrão excedido para ${payload.cidade_evento}.`;
+            
+            if (phoneClean) {
+              const waText = `⚠️ *Alerta Selecta 360 (Aviso de Lotação)* ⚠️\n\n` +
+                             `Inscrição realizada excedendo o limite padrão de assentos.\n\n` +
+                             `• *Cliente:* ${payload.nome_convidado || payload.razao_social}\n` +
+                             `• *CNPJ:* ${payload.cnpj}\n` +
+                             `• *Cidade do Evento:* ${payload.cidade_evento}\n` +
+                             `• *Vendedor:* ${payload.vendedor || 'Não informado'}`;
+              const waUrl = `https://api.whatsapp.com/send?phone=${phoneClean}&text=${encodeURIComponent(waText)}`;
+              showToast(`${msg} <a href="${waUrl}" target="_blank" style="color: #fff; background: #25d366; padding: 4px 8px; border-radius: 6px; text-decoration: none; font-size: 11px; margin-left: 8px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">WhatsApp</a>`, 'warning');
+            } else {
+              showToast(msg, 'warning');
+            }
+          } else {
+            showToast('Inscrição confirmada com sucesso!');
+          }
           
           // Reseta a busca de cliente para o próximo cadastro
           inputSearchClient.value = '';
