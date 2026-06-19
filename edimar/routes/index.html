@@ -937,7 +937,7 @@
     let visitsDb = [];
     let playbookDb = []; // Dados dos Playbooks/Dossiês (Clientes_Brain)
     let userConfig = { adress_start: '', adress_back: '' };
-    let roteiroStatFilter = 'all'; // Filtros por banner: 'all', 'visitados', 'ausentes', 'whats', 'agendados'
+    let roteiroStatFilter = 'all'; // Filtros por banner: 'all', 'visitados', 'ausentes', 'whats', 'pendentes'
     let focusedClientId = null; // ID do cliente focado no mapa
     let mapRenderInstanceId = 0; // Evita condições de corrida assíncronas no Leaflet
     let activeTab = 'roteiro';
@@ -3599,7 +3599,7 @@
             const targetDate = rotDateEl ? rotDateEl.value : getLocalDateStr();
 
             // Calcular estatísticas para o dia selecionado (ou filtros aplicados)
-            const totalAgendados = filtered.length;
+            const totalPendentes = filtered.filter(i => i.Ordem != 99 && getVisitStatusOnDate(i.ID, targetDate) === null).length;
             const totalVisitados = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita').length;
             const totalAusentes = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Não Encontrado').length;
             const totalWhatsOnly = filtered.filter(i => i.Ordem == 99).length;
@@ -3612,8 +3612,8 @@
                 displayFiltered = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Não Encontrado');
             } else if (roteiroStatFilter === 'whats') {
                 displayFiltered = filtered.filter(i => i.Ordem == 99);
-            } else if (roteiroStatFilter === 'agendados') {
-                displayFiltered = filtered.filter(i => i.Ordem != 99);
+            } else if (roteiroStatFilter === 'pendentes') {
+                displayFiltered = filtered.filter(i => i.Ordem != 99 && getVisitStatusOnDate(i.ID, targetDate) === null);
             }
 
             // Divide entre Pendentes e Finalizados (Visitado/Ausente)
@@ -3708,9 +3708,9 @@
             <!-- Banner de Estatísticas do Dia (Clicável para Filtrar) -->
             <div class="row g-2 mb-3">
                 <div class="col-3">
-                    <div onclick="setRoteiroStatFilter('agendados')" class="p-2 border rounded-3 text-center bg-white shadow-sm stat-box-interactive ${roteiroStatFilter === 'agendados' ? 'active-filter' : (roteiroStatFilter !== 'all' ? 'stat-box-dimmed' : '')}" style="border-left: 4px solid var(--primary) !important;">
-                        <div class="fw-bold text-primary" style="font-size: 1rem;">${totalAgendados}</div>
-                        <div class="text-muted" style="font-size: 0.55rem; text-transform: uppercase; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Agendados</div>
+                    <div onclick="setRoteiroStatFilter('pendentes')" class="p-2 border rounded-3 text-center bg-white shadow-sm stat-box-interactive ${roteiroStatFilter === 'pendentes' ? 'active-filter' : (roteiroStatFilter !== 'all' ? 'stat-box-dimmed' : '')}" style="border-left: 4px solid var(--primary) !important;">
+                        <div class="fw-bold text-primary" style="font-size: 1rem;">${totalPendentes}</div>
+                        <div class="text-muted" style="font-size: 0.55rem; text-transform: uppercase; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Pendentes</div>
                     </div>
                 </div>
                 <div class="col-3">
@@ -3737,7 +3737,7 @@
             if (pending.length > 0) {
                 roteiroHtml += pending.map(generateClientCardHtml).join('');
             } else if (processed.length === 0) {
-                roteiroHtml += `<div class="text-center text-muted py-5"><i class="fas fa-folder-open fa-3x mb-3 text-secondary"></i><br>Nenhum cliente agendado nesta listagem.</div>`;
+                roteiroHtml += `<div class="text-center text-muted py-5"><i class="fas fa-folder-open fa-3x mb-3 text-secondary"></i><br>Nenhum cliente nesta listagem.</div>`;
             }
 
             if (processed.length > 0) {
