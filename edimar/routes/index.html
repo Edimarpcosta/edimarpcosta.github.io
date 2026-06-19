@@ -987,6 +987,29 @@
         render();
     };
 
+    // --- Funções para o Ponto de Partida do Trajeto Individual (Focado) ---
+    window.updateFocusStartType = function(type) {
+        localStorage.setItem('focus_start_type', type);
+        const container = document.getElementById('focus-start-address-container');
+        if (container) {
+            container.style.display = type === 'address' ? 'block' : 'none';
+        }
+        render();
+    };
+
+    window.applyFocusStartAddress = function() {
+        const input = document.getElementById('focus-start-address');
+        if (input) {
+            const addr = input.value.trim();
+            if (!addr) {
+                customAlert("Digite um endereço para usar como ponto de partida.");
+                return;
+            }
+            localStorage.setItem('focus_start_address', addr);
+            render();
+        }
+    };
+
     // Converte YYYY-MM-DD para DD/MM/YYYY
     function formatDatePtBr(dateStr) {
         if (!dateStr) return '';
@@ -1712,6 +1735,22 @@
         }
         if (currentInstanceId !== mapRenderInstanceId) return;
         
+        // 3b. Obter coordenadas de partida específicas para trajeto individual (focado)
+        let focusStartCoords = null;
+        if (focusedClientId && focusedCoords) {
+            const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
+            if (focusStartType === 'planilha' && userConfig.adress_start) {
+                focusStartCoords = await getCoordinatesForAddress(userConfig.adress_start);
+            } else if (focusStartType === 'address') {
+                const focusAddr = localStorage.getItem('focus_start_address') || '';
+                if (focusAddr.trim()) {
+                    focusStartCoords = await getCoordinatesForAddress(focusAddr.trim());
+                }
+            }
+            // focusStartType === 'gps' será tratado via geolocation assíncrona abaixo
+        }
+        if (currentInstanceId !== mapRenderInstanceId) return;
+        
         // Garantir que o cliente focado está na lista de desenho mesmo que não esteja agendado para hoje
         let clientsToRender = [...clients];
         if (focusedClient && !clients.some(c => c.ID.toString().trim() === focusedClientId.toString().trim())) {
@@ -1928,22 +1967,23 @@
         
         // 6. Desenhar trajeto e configurar visão do mapa
         if (focusedClientId && focusedCoords) {
-            // Origem inicial: fallback para startCoords ou default
-            const initialOrigin = startCoords || { lat: -22.725, lon: -47.6476 };
+            const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
             
-            // Desenhar trajeto inicial instantâneo
-            const initialPolylineLatLns = [[initialOrigin.lat, initialOrigin.lon], [focusedCoords.lat, focusedCoords.lon]];
-            routePolyline = L.polyline(initialPolylineLatLns, {
-                color: '#d3007b',
-                weight: 6,
-                opacity: 0.9,
-                dashArray: '8, 8'
-            }).addTo(leafletMap);
-            
-            leafletMap.fitBounds(L.latLngBounds(initialPolylineLatLns), { padding: [50, 50] });
-            
-            // Adicionar marcador do ponto de partida fallback
-            if (startCoords) {
+            // Determinar a origem para o trajeto individual
+            // Se temos coordenadas fixas (planilha ou endereço digitado), usar diretamente
+            if (focusStartCoords) {
+                // Desenhar trajeto com o ponto de partida fixo
+                const polylineLatLns = [[focusStartCoords.lat, focusStartCoords.lon], [focusedCoords.lat, focusedCoords.lon]];
+                routePolyline = L.polyline(polylineLatLns, {
+                    color: '#d3007b',
+                    weight: 6,
+                    opacity: 0.9,
+                    dashArray: '8, 8'
+                }).addTo(leafletMap);
+                
+                leafletMap.fitBounds(L.latLngBounds(polylineLatLns), { padding: [50, 50] });
+                
+                // Marcador do ponto de partida
                 const startIcon = L.divIcon({
                     className: 'start-marker-icon',
                     html: `<div style="
@@ -1961,55 +2001,144 @@
                     iconSize: [28, 28],
                     iconAnchor: [14, 14]
                 });
-                L.marker([startCoords.lat, startCoords.lon], { icon: startIcon })
+                L.marker([focusStartCoords.lat, focusStartCoords.lon], { icon: startIcon })
                     .addTo(leafletMap)
-                    .bindPopup("<b>Ponto de Partida (Fallback)</b>");
-            }
-            
-            // Obter GPS em tempo real de forma assíncrona (não-bloqueante)
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const gpsLat = position.coords.latitude;
-                    const gpsLon = position.coords.longitude;
+                    .bindPopup(`<b>Ponto de Partida</b><br><span style="font-size: 0.8rem;">${focusStartType === 'planilha' ? userConfig.adress_start : localStorage.getItem('focus_start_address') || ''}</span>`);
                     
-                    // Verifica se o mapa ainda está ativo e somos o render atual
-                    if (leafletMap && currentInstanceId === mapRenderInstanceId) {
-                        // Adicionar marcador do GPS real do usuário
-                        const userIcon = L.divIcon({
-                            className: 'user-location-marker',
-                            html: `<div style="
-                                background-color: #007bff;
-                                border: 3px solid white;
-                                border-radius: 50%;
-                                width: 18px;
-                                height: 18px;
-                                box-shadow: 0 0 10px rgba(0, 123, 255, 0.7);
-                            "></div>`,
-                            iconSize: [18, 18],
-                            iconAnchor: [9, 9]
-                        });
+            } else if (focusStartType === 'gps') {
+                // Modo GPS: desenhar trajeto provisório usando fallback, depois atualizar com GPS real
+                const initialOrigin = startCoords || { lat: -22.725, lon: -47.6476 };
+                
+                // Desenhar trajeto provisório (será substituído quando o GPS responder)
+                const initialPolylineLatLns = [[initialOrigin.lat, initialOrigin.lon], [focusedCoords.lat, focusedCoords.lon]];
+                routePolyline = L.polyline(initialPolylineLatLns, {
+                    color: '#d3007b',
+                    weight: 6,
+                    opacity: 0.5,
+                    dashArray: '4, 12'
+                }).addTo(leafletMap);
+                
+                // Se temos startCoords como fallback inicial, centralizar nelas + destino
+                if (startCoords) {
+                    leafletMap.fitBounds(L.latLngBounds(initialPolylineLatLns), { padding: [50, 50] });
+                } else {
+                    // Sem fallback, apenas centralizar no destino focado
+                    leafletMap.setView([focusedCoords.lat, focusedCoords.lon], 14);
+                }
+                
+                // Obter GPS em tempo real de forma assíncrona (timeout aumentado para 10s)
+                if (navigator.geolocation) {
+                    // Atualizar indicador de status do GPS
+                    const gpsStatusEl = document.getElementById('focus-gps-status');
+                    
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        const gpsLat = position.coords.latitude;
+                        const gpsLon = position.coords.longitude;
                         
-                        L.marker([gpsLat, gpsLon], { icon: userIcon })
-                            .addTo(leafletMap)
-                            .bindPopup("<b>Minha Localização Atual</b>");
+                        // Salvar no cache de sessão para reutilização
+                        localStorage.setItem('session_gps_coords', JSON.stringify({ lat: gpsLat, lon: gpsLon }));
                         
-                        // Atualizar trajeto usando a coordenada GPS real
-                        if (routePolyline) {
-                            leafletMap.removeLayer(routePolyline);
+                        if (leafletMap && currentInstanceId === mapRenderInstanceId) {
+                            // Adicionar marcador do GPS real do usuário
+                            const userIcon = L.divIcon({
+                                className: 'user-location-marker',
+                                html: `<div style="
+                                    background-color: #007bff;
+                                    border: 3px solid white;
+                                    border-radius: 50%;
+                                    width: 18px;
+                                    height: 18px;
+                                    box-shadow: 0 0 10px rgba(0, 123, 255, 0.7);
+                                "></div>`,
+                                iconSize: [18, 18],
+                                iconAnchor: [9, 9]
+                            });
+                            
+                            L.marker([gpsLat, gpsLon], { icon: userIcon })
+                                .addTo(leafletMap)
+                                .bindPopup("<b>Minha Localização Atual</b>");
+                            
+                            // Atualizar trajeto usando a coordenada GPS real
+                            if (routePolyline) {
+                                leafletMap.removeLayer(routePolyline);
+                            }
+                            const newPolylineLatLns = [[gpsLat, gpsLon], [focusedCoords.lat, focusedCoords.lon]];
+                            routePolyline = L.polyline(newPolylineLatLns, {
+                                color: '#d3007b',
+                                weight: 6,
+                                opacity: 0.9,
+                                dashArray: '8, 8'
+                            }).addTo(leafletMap);
+                            
+                            leafletMap.fitBounds(L.latLngBounds(newPolylineLatLns), { padding: [50, 50] });
+                            
+                            // Atualizar indicador de status
+                            if (gpsStatusEl) {
+                                gpsStatusEl.innerHTML = '<i class="fas fa-check-circle me-1 text-success"></i>GPS localizado!';
+                            }
                         }
-                        const newPolylineLatLns = [[gpsLat, gpsLon], [focusedCoords.lat, focusedCoords.lon]];
-                        routePolyline = L.polyline(newPolylineLatLns, {
-                            color: '#d3007b',
-                            weight: 6,
-                            opacity: 0.9,
-                            dashArray: '8, 8'
-                        }).addTo(leafletMap);
+                    }, (error) => {
+                        console.warn("Erro ao obter localização GPS em tempo real:", error);
+                        // Atualizar indicador de status para erro
+                        if (gpsStatusEl) {
+                            gpsStatusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1" style="color: #ffc107;"></i>GPS indisponível. Use "Endereço digitado" acima como alternativa.';
+                        }
                         
-                        leafletMap.fitBounds(L.latLngBounds(newPolylineLatLns), { padding: [50, 50] });
+                        // Tentar usar coordenada de sessão anterior como fallback
+                        const sessionGps = localStorage.getItem('session_gps_coords');
+                        if (sessionGps && leafletMap && currentInstanceId === mapRenderInstanceId) {
+                            try {
+                                const cachedGps = JSON.parse(sessionGps);
+                                const userIcon = L.divIcon({
+                                    className: 'user-location-marker',
+                                    html: `<div style="
+                                        background-color: #6c757d;
+                                        border: 3px solid white;
+                                        border-radius: 50%;
+                                        width: 18px;
+                                        height: 18px;
+                                        box-shadow: 0 0 10px rgba(108, 117, 125, 0.5);
+                                    "></div>`,
+                                    iconSize: [18, 18],
+                                    iconAnchor: [9, 9]
+                                });
+                                
+                                L.marker([cachedGps.lat, cachedGps.lon], { icon: userIcon })
+                                    .addTo(leafletMap)
+                                    .bindPopup("<b>Última Localização Conhecida</b><br><span style='font-size: 0.75rem; color: #6c757d;'>GPS em cache</span>");
+                                
+                                if (routePolyline) {
+                                    leafletMap.removeLayer(routePolyline);
+                                }
+                                const cachedPolylineLatLns = [[cachedGps.lat, cachedGps.lon], [focusedCoords.lat, focusedCoords.lon]];
+                                routePolyline = L.polyline(cachedPolylineLatLns, {
+                                    color: '#d3007b',
+                                    weight: 5,
+                                    opacity: 0.6,
+                                    dashArray: '6, 10'
+                                }).addTo(leafletMap);
+                                
+                                leafletMap.fitBounds(L.latLngBounds(cachedPolylineLatLns), { padding: [50, 50] });
+                                
+                                if (gpsStatusEl) {
+                                    gpsStatusEl.innerHTML = '<i class="fas fa-history me-1" style="color: #6c757d;"></i>Usando última localização conhecida (GPS indisponível).';
+                                }
+                            } catch(err) {
+                                console.error("Erro ao usar GPS em cache:", err);
+                            }
+                        }
+                    }, { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 });
+                } else {
+                    // Navegador não suporta geolocalização
+                    const gpsStatusEl = document.getElementById('focus-gps-status');
+                    if (gpsStatusEl) {
+                        gpsStatusEl.innerHTML = '<i class="fas fa-times-circle me-1 text-danger"></i>Navegador sem suporte a GPS. Use "Endereço digitado".';
                     }
-                }, (error) => {
-                    console.warn("Erro ao obter localização GPS em tempo real:", error);
-                }, { timeout: 4000, enableHighAccuracy: true });
+                }
+            } else {
+                // Nenhum ponto de partida configurado (nem GPS, nem endereço)
+                // Apenas centralizar no destino
+                leafletMap.setView([focusedCoords.lat, focusedCoords.lon], 14);
             }
             
         } else {
@@ -4217,15 +4346,41 @@
             ${focusedClientId ? (() => {
                 const fc = db.find(i => i.ID.toString().trim() === focusedClientId.toString().trim());
                 const clientName = fc ? (fc.Fantasia || fc.Cliente) : `Cliente #${focusedClientId}`;
+                const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
+                const focusStartAddress = localStorage.getItem('focus_start_address') || '';
                 return `
-                <div class="alert d-flex justify-content-between align-items-center py-2.5 px-3 rounded-3 mb-3 shadow-sm border-0" style="background: linear-gradient(135deg, #d3007b 0%, #a2005e 100%); color: white;">
-                    <div class="d-flex align-items-center gap-2" style="font-size: 0.88rem; font-weight: 500;">
-                        <i class="fas fa-star" style="animation: pulseFocus 1.5s infinite;"></i>
-                        <span>Foco: <strong>${clientName}</strong> | Trajeto Individual</span>
+                <div class="rounded-3 mb-3 shadow-sm border-0 overflow-hidden">
+                    <div class="d-flex justify-content-between align-items-center py-2.5 px-3" style="background: linear-gradient(135deg, #d3007b 0%, #a2005e 100%); color: white;">
+                        <div class="d-flex align-items-center gap-2" style="font-size: 0.88rem; font-weight: 500;">
+                            <i class="fas fa-star" style="animation: pulseFocus 1.5s infinite;"></i>
+                            <span>Foco: <strong>${clientName}</strong> | Trajeto Individual</span>
+                        </div>
+                        <button class="btn btn-xs btn-light rounded-pill px-3 py-1 fw-bold text-dark" style="font-size: 0.72rem; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" onclick="clearFocusedClient()">
+                            Limpar Foco
+                        </button>
                     </div>
-                    <button class="btn btn-xs btn-light rounded-pill px-3 py-1 fw-bold text-dark" style="font-size: 0.72rem; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" onclick="clearFocusedClient()">
-                        Limpar Foco
-                    </button>
+                    <div class="px-3 py-2" style="background: rgba(211, 0, 123, 0.08); border: 1px solid rgba(211, 0, 123, 0.15); border-top: none;">
+                        <label class="small fw-bold text-muted mb-1 d-block" style="font-size: 0.68rem;">PONTO DE PARTIDA DO TRAJETO:</label>
+                        <div class="d-flex gap-2 align-items-center mb-1">
+                            <select id="focus-start-type" class="form-select form-select-sm border-0 rounded-3 text-dark" style="font-size: 0.8rem; max-width: 260px;" onchange="updateFocusStartType(this.value)">
+                                <option value="gps" ${focusStartType === 'gps' ? 'selected' : ''}>📍 Localização Atual (GPS)</option>
+                                <option value="address" ${focusStartType === 'address' ? 'selected' : ''}>✍️ Endereço digitado</option>
+                                <option value="planilha" ${focusStartType === 'planilha' ? 'selected' : ''}>🏠 Endereço Padrão (Planilha)</option>
+                            </select>
+                        </div>
+                        <div id="focus-start-address-container" style="display: ${focusStartType === 'address' ? 'block' : 'none'};">
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="focus-start-address" class="form-control border-0 rounded-start-3 text-dark" style="font-size: 0.8rem;"
+                                       placeholder="Ex: Rua XV de Novembro, 100, Piracicaba" value="${focusStartAddress}"
+                                       onchange="localStorage.setItem('focus_start_address', this.value)">
+                                <button class="btn btn-sm text-white rounded-end-3 fw-bold" style="background: #d3007b; font-size: 0.72rem;" type="button" onclick="applyFocusStartAddress()">
+                                    <i class="fas fa-sync-alt me-1"></i>Atualizar
+                                </button>
+                            </div>
+                        </div>
+                        ${focusStartType === 'planilha' ? `<div class="small text-muted mt-1" style="font-size: 0.7rem;"><i class="fas fa-home me-1"></i>${userConfig.adress_start || '<em>Não cadastrado na planilha</em>'}</div>` : ''}
+                        ${focusStartType === 'gps' ? `<div class="small text-muted mt-1" style="font-size: 0.7rem;" id="focus-gps-status"><i class="fas fa-satellite-dish me-1"></i>Buscando sinal GPS...</div>` : ''}
+                    </div>
                 </div>
                 `;
             })() : ''}
