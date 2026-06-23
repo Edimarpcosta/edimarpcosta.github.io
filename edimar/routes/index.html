@@ -1371,9 +1371,7 @@
         
         try {
             const respText = await apiPost('record_positivacao', { ID: id }, { date: dateStr });
-            if (respText !== 'queued') {
-                load();
-            }
+            // Estado local ja atualizado e renderizado de forma fluida. O load() foi removido para evitar lentidao.
         } catch (e) {
             console.error("Falha ao registrar positivação em background:", e);
         }
@@ -1417,9 +1415,7 @@
             
             try {
                 const respText = await apiPost('delete_positivacao', { ID: id }, { date: dateStr });
-                if (respText !== 'queued') {
-                    load();
-                }
+                // Estado local ja atualizado e renderizado de forma fluida. O load() foi removido para evitar lentidao.
             } catch (e) {
                 console.error("Falha ao remover positivação em background:", e);
             }
@@ -1701,7 +1697,8 @@
         if (failed.length === 0) {
             isOnlineMode = true; // garante que volta a online
             updateConnectionBadge(true);
-            customAlert("Todas as alterações offline foram sincronizadas com a planilha!", "Sincronização");
+            // Sincroniza silenciosamente sem alert intrusivo
+            console.log("Todas as alterações offline foram sincronizadas com a planilha!");
             load();
         } else {
             updateConnectionBadge(isOnlineMode && navigator.onLine, `${failed.length} pendente(s)`);
@@ -1798,12 +1795,13 @@
         return result;
     }
 
-    function cleanAddressForGeocoding(address) {
+    function cleanAddressForGeocoding(address, cidade = 'Piracicaba') {
         if (!address) return '';
         let addr = address.trim();
-        const idxPira = addr.toLowerCase().indexOf('piracicaba');
-        if (idxPira !== -1) {
-            addr = addr.substring(0, idxPira).trim();
+        const cityLower = (cidade || 'piracicaba').toString().toLowerCase().trim();
+        const idxCity = addr.toLowerCase().indexOf(cityLower);
+        if (idxCity !== -1) {
+            addr = addr.substring(0, idxCity).trim();
         }
         addr = addr.replace(/[,-\s]+$/, '');
         const parts = addr.split(',');
@@ -1815,9 +1813,9 @@
         return addr;
     }
 
-    async function geocodeAddress(cleanAddr) {
+    async function geocodeAddress(cleanAddr, cidade = 'Piracicaba') {
         try {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanAddr + ', Piracicaba, SP')}&limit=1`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanAddr + ', ' + (cidade || 'Piracicaba') + ', SP')}&limit=1`;
             const resp = await fetch(url, {
                 headers: { 'User-Agent': 'RotaEdimarApp/1.0 (edimarpcosta.github.io)' }
             });
@@ -1842,7 +1840,8 @@
         if (client && safeClientLat !== null && safeClientLon !== null) {
             return { lat: safeClientLat, lon: safeClientLon };
         }
-        const cleanAddr = cleanAddressForGeocoding(address);
+        const city = (client && client.Cidade) || 'Piracicaba';
+        const cleanAddr = cleanAddressForGeocoding(address, city);
         if (!cleanAddr) return null;
         if (coordsCache[cleanAddr]) {
             const coords = coordsCache[cleanAddr];
@@ -1854,7 +1853,7 @@
             }
             return coords;
         }
-        const coords = await geocodeAddress(cleanAddr);
+        const coords = await geocodeAddress(cleanAddr, city);
         if (coords) {
             coordsCache[cleanAddr] = coords;
             localStorage.setItem('coords_cache', JSON.stringify(coordsCache));
@@ -1874,6 +1873,9 @@
     };
     window.abrirWhatsDoMapa = function(id) {
         abrirWhatsapp(id);
+    };
+    window.registrarVisitaDoMapa = function(id, status) {
+        toggleVisita(id, null, null, status);
     };
 
     async function renderLeafletMap(clients, targetDate) {
@@ -1948,7 +1950,7 @@
         for (let idx = 0; idx < clientsToRender.length; idx++) {
             const c = clientsToRender[idx];
             if (!c.Endereco) continue;
-            const cleanAddr = cleanAddressForGeocoding(c.Endereco);
+            const cleanAddr = cleanAddressForGeocoding(c.Endereco, c.Cidade);
             const hasCache = coordsCache[cleanAddr];
             let coords = null;
             
@@ -2715,7 +2717,7 @@
         
         for (let idx = 0; idx < scheduled.length; idx++) {
             const c = scheduled[idx];
-            const cleanAddr = cleanAddressForGeocoding(c.Endereco);
+            const cleanAddr = cleanAddressForGeocoding(c.Endereco, c.Cidade);
             const needsGeocode = (safeCoord(c.lat) === null || safeCoord(c.long) === null) && !coordsCache[cleanAddr];
             
             if (needsGeocode) {
@@ -3767,11 +3769,11 @@
                 if (data) {
                     let updated = false;
                     
-                    if (fillBairro && data.bairro) {
+                    if (fillBairro && data.bairro && (!client.Bairro || !client.Bairro.trim())) {
                         client.Bairro = data.bairro.toUpperCase();
                         updated = true;
                     }
-                    if (fillCep && data.cep) {
+                    if (fillCep && data.cep && (!client.CEP || !client.CEP.trim())) {
                         client.CEP = data.cep.replace(/\D/g, '');
                         updated = true;
                     }
@@ -3831,6 +3833,10 @@
             }
             
             updateProgressUI(idx + 1, totalCount);
+            if ((idx + 1) % 10 === 0) {
+                localStorage.setItem('cached_db', JSON.stringify(db));
+                localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+            }
             await sleep(1000);
         }
         
@@ -4176,29 +4182,37 @@
             const rotDateEl = document.getElementById('roteiroDate');
             const targetDate = rotDateEl ? rotDateEl.value : getLocalDateStr();
 
+            // Pré-computar status de visitas e positivações para otimização O(1)
+            const visitStatusMap = {};
+            const clientPosStatusMap = {};
+            filtered.forEach(i => {
+                visitStatusMap[i.ID] = getVisitStatusOnDate(i.ID, targetDate);
+                clientPosStatusMap[i.ID] = getClientPositivacaoStatus(i.ID, targetDate);
+            });
+
             // Calcular estatísticas para o dia selecionado (ou filtros aplicados)
-            const totalPendentes = filtered.filter(i => i.Ordem != 99 && getVisitStatusOnDate(i.ID, targetDate) === null).length;
-            const totalVisitados = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita').length;
-            const totalAusentes = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Não Encontrado').length;
+            const totalPendentes = filtered.filter(i => i.Ordem != 99 && visitStatusMap[i.ID] === null).length;
+            const totalVisitados = filtered.filter(i => visitStatusMap[i.ID] === 'Visita').length;
+            const totalAusentes = filtered.filter(i => visitStatusMap[i.ID] === 'Não Encontrado').length;
             const totalWhatsOnly = filtered.filter(i => i.Ordem == 99).length;
 
             // Filtro por estatística selecionada
             let displayFiltered = [...filtered];
             if (roteiroStatFilter === 'visitados') {
-                displayFiltered = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita');
+                displayFiltered = filtered.filter(i => visitStatusMap[i.ID] === 'Visita');
             } else if (roteiroStatFilter === 'ausentes') {
-                displayFiltered = filtered.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Não Encontrado');
+                displayFiltered = filtered.filter(i => visitStatusMap[i.ID] === 'Não Encontrado');
             } else if (roteiroStatFilter === 'whats') {
                 displayFiltered = filtered.filter(i => i.Ordem == 99);
             } else if (roteiroStatFilter === 'pendentes') {
-                displayFiltered = filtered.filter(i => i.Ordem != 99 && getVisitStatusOnDate(i.ID, targetDate) === null);
+                displayFiltered = filtered.filter(i => i.Ordem != 99 && visitStatusMap[i.ID] === null);
             }
 
             // Divide entre Pendentes e Finalizados (Visitado/Ausente)
             const pending = [];
             const processed = [];
             displayFiltered.forEach(i => {
-                const status = getVisitStatusOnDate(i.ID, targetDate);
+                const status = visitStatusMap[i.ID];
                 if (status === 'Visita' || status === 'Não Encontrado') {
                     processed.push(i);
                 } else {
@@ -4209,10 +4223,10 @@
             const generateClientCardHtml = (i) => {
                 const cnpj = formatCnpj(i.CNPJ);
                 const ordLabel = i.Ordem == 99 ? "📱 Whats" : `ORD: ${i.Ordem}`;
-                const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
+                const visitStatus = visitStatusMap[i.ID];
                 const isAbsent = visitStatus === 'Não Encontrado';
                 
-                const posData = getClientPositivacaoStatus(i.ID, targetDate);
+                const posData = clientPosStatusMap[i.ID] || { count: 0, status: 'none', latestDate: null, daysSince: Infinity };
                 let posBtnClass = 'btn-outline-primary';
                 let posBtnStyle = '';
                 let posBtnText = '🛒 Positivar';
@@ -4542,16 +4556,42 @@
             const targetDate = selectedDate;
             const targetDateCode = getDayCodeForDate(targetDate);
             
+            // Pré-computar caches para otimização do Dashboard (Reduz complexidade de O(N*M) para O(N + M))
+            const visitStatusMap = {};
+            const clientPosStatusMap = {};
+            db.forEach(c => {
+                visitStatusMap[c.ID] = getVisitStatusOnDate(c.ID, targetDate);
+                clientPosStatusMap[c.ID] = getClientPositivacaoStatus(c.ID, targetDate);
+            });
+
+            // Indexar positivações por ID do cliente para busca rápida
+            const clientPosRecordsMap = {};
+            positivacoesDb.forEach(p => {
+                const id = p.ID.toString().trim();
+                if (!clientPosRecordsMap[id]) clientPosRecordsMap[id] = [];
+                clientPosRecordsMap[id].push(p);
+            });
+
+            // Indexar visitas por ID do cliente para busca rápida
+            const visitsByClientMap = {};
+            visitsDb.forEach(v => {
+                if (v && v.ID) {
+                    const id = v.ID.toString().trim();
+                    if (!visitsByClientMap[id]) visitsByClientMap[id] = [];
+                    visitsByClientMap[id].push(v);
+                }
+            });
+
             // Total clientes visitados na data selecionada (Apenas visitas reais)
-            const totalVisitedOnDate = db.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita').length;
+            const totalVisitedOnDate = db.filter(i => visitStatusMap[i.ID] === 'Visita').length;
             
             // Total clientes agendados para a data selecionada
             const scheduledOnDate = db.filter(i => i.Visita && i.Visita.includes(targetDateCode));
-            const visitedScheduledOnDate = scheduledOnDate.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita').length;
+            const visitedScheduledOnDate = scheduledOnDate.filter(i => visitStatusMap[i.ID] === 'Visita').length;
             
             // Clientes positivados há mais de 15 dias sem pedido
             const latePositives = db.filter(c => {
-                const pos = getClientPositivacaoStatus(c.ID, targetDate);
+                const pos = clientPosStatusMap[c.ID];
                 return pos.latestDate !== null && pos.daysSince > 15;
             });
 
@@ -4568,7 +4608,7 @@
                         const diffDays = (todayObj - visitDateObj) / (1000 * 60 * 60 * 24);
                         if (diffDays >= 7) {
                             totalVisitsForRate++;
-                            const clientPos = positivacoesDb.filter(p => p.ID.toString().trim() === v.ID.toString().trim());
+                            const clientPos = clientPosRecordsMap[v.ID.toString().trim()] || [];
                             let boughtInWeek = false;
                             clientPos.forEach(p => {
                                 if (p.Datas_Pedidos) {
@@ -4597,14 +4637,15 @@
             const targetMonthStr = `${partsMonth[0]}-${partsMonth[1]}`;
             
             const getClientFrequencyLabel = (clientId) => {
-                const rec = positivacoesDb.find(p => p.ID.toString().trim() === clientId.toString().trim() && p.Ano_Mes === targetMonthStr);
+                const clientPosList = clientPosRecordsMap[clientId.toString().trim()] || [];
+                const rec = clientPosList.find(p => p.Ano_Mes === targetMonthStr);
                 const count = rec ? (parseInt(rec.Count_Pedidos) || 0) : 0;
                 if (count >= 3) return 'Semanal 🗓️';
                 if (count === 2) return 'Quinzenal 🌓';
                 if (count === 1) return 'Mensal 🌑';
                 
-                const statusData = getClientPositivacaoStatus(clientId, targetDate);
-                if (statusData.daysSince <= 60) return 'Bimestral ⏳';
+                const statusData = clientPosStatusMap[clientId];
+                if (statusData && statusData.daysSince <= 60) return 'Bimestral ⏳';
                 return 'Esporádico ❓';
             };
             
@@ -4623,7 +4664,8 @@
             const totalMonthsCount = Math.max(uniqueMonthsInSystem.length, 1);
             
             const clientDifficulties = db.map(c => {
-                const positiveMonths = positivacoesDb.filter(p => p.ID.toString().trim() === c.ID.toString().trim() && (parseInt(p.Count_Pedidos) || 0) > 0).length;
+                const clientPos = clientPosRecordsMap[c.ID.toString().trim()] || [];
+                const positiveMonths = clientPos.filter(p => (parseInt(p.Count_Pedidos) || 0) > 0).length;
                 const rate = Math.round((positiveMonths / totalMonthsCount) * 100);
                 return { ...c, rate, positiveMonths };
             }).sort((a,b) => a.rate - b.rate);
@@ -4659,11 +4701,12 @@
             
             // Sugestões para a data selecionada: agendados, não visitados
             const suggestions = scheduledOnDate
-                .filter(i => getVisitStatusOnDate(i.ID, targetDate) !== 'Visita')
+                .filter(i => visitStatusMap[i.ID] !== 'Visita')
                 .map(i => {
-                    const status = getVisitStatusOnDate(i.ID, targetDate);
-                    const clientVisits = visitsDb
-                        .filter(v => v && v.ID && v.Data && v.ID.toString().trim() === i.ID.toString().trim() && (!v.Status || v.Status === 'Visita'))
+                    const status = visitStatusMap[i.ID];
+                    const clientVisitsList = visitsByClientMap[i.ID.toString().trim()] || [];
+                    const clientVisits = clientVisitsList
+                        .filter(v => !v.Status || v.Status === 'Visita')
                         .map(v => parseDate(v.Data))
                         .filter(d => d && !isNaN(d.getTime()))
                         .sort((a,b) => b - a);
@@ -4974,7 +5017,7 @@
             
             // Calcular quantos possuem coordenadas mapeadas
             const mappedCount = scheduledToday.filter(c => {
-                const cleanAddr = cleanAddressForGeocoding(c.Endereco);
+                const cleanAddr = cleanAddressForGeocoding(c.Endereco, c.Cidade);
                 return (safeCoord(c.lat) !== null && safeCoord(c.long) !== null) || coordsCache[cleanAddr];
             }).length;
             const totalCount = scheduledToday.length;
@@ -5238,6 +5281,7 @@
         }
         
         // --- 5. RENDER PLAYBOOK ---
+        else if (activeTab === 'playbook') {
             let html = `
             <h5 class="fw-bold text-success mb-3"><i class="fas fa-book-open me-2"></i>PLAYBOOK DO CLIENTE</h5>
             
