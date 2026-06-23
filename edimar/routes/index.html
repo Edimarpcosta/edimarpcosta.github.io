@@ -633,7 +633,7 @@
 <!-- Loader Overlay -->
 <div id="loader" class="loading-overlay">
     <div class="spinner-grow text-success" style="width: 3rem; height: 3rem;"></div>
-    <div class="mt-3 fw-bold text-success">Carregando Roteiro...</div>
+    <div id="loader-text" class="mt-3 fw-bold text-success">Carregando Roteiro...</div>
 </div>
 
 <!-- Tela de Login de Acesso Restrito -->
@@ -681,7 +681,7 @@
     <!-- Cabeçalho Principal -->
     <div class="app-header">
         <div class="d-flex justify-content-between align-items-center w-100">
-            <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-warning"></i>ROTA EDIMAR</h5>
+            <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-warning"></i>ROTA EDIMAR <span id="top-date-display" style="font-size: 0.82rem; font-weight: normal; opacity: 0.85; margin-left: 5px;"></span></h5>
             <div class="d-flex align-items-center gap-2">
                 <div class="d-flex align-items-center gap-1.5">
                     <div class="online-toggle-container online-mode" id="toggle-container" title="Alternar Modo Online/Offline">
@@ -715,6 +715,7 @@
             <select id="fVisita" class="filter-select"><option value="">Dia Visita</option><option value="SEG">SEG</option><option value="TER">TER</option><option value="QUA">QUA</option><option value="QUI">QUI</option><option value="SEX">SEX</option></select>
             <select id="fEntrega" class="filter-select"><option value="">Dia Entrega</option><option value="SEG">SEG</option><option value="TER">TER</option><option value="QUA">QUA</option><option value="QUI">QUI</option><option value="SEX">SEX</option></select>
             <select id="fCidade" class="filter-select"><option value="">Cidade</option></select>
+            <select id="fBairro" class="filter-select"><option value="">Bairro</option></select>
         </div>
     </div>
 </div>
@@ -797,8 +798,10 @@
             </div>
 
             <div class="col-12"><label class="small text-muted fw-bold">ENDEREÇO COMPLETO</label><input type="text" id="f-end" class="form-control rounded-3"></div>
-            <div class="col-7"><label class="small text-muted fw-bold">CIDADE</label><input type="text" id="f-cid" class="form-control rounded-3"></div>
-            <div class="col-5"><label class="small text-muted fw-bold">ORDEM ROTEIRO</label><input type="number" id="f-ord" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">CIDADE</label><input type="text" id="f-cid" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">BAIRRO</label><input type="text" id="f-bairro" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">CEP</label><input type="text" id="f-cep" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">ORDEM ROTEIRO</label><input type="number" id="f-ord" class="form-control rounded-3"></div>
             <div class="col-6"><label class="small text-muted fw-bold">VISITA (Ex: TER, QUA)</label><input type="text" id="f-vis" class="form-control rounded-3"></div>
             <div class="col-6"><label class="small text-muted fw-bold">ENTREGA</label><input type="text" id="f-ent" class="form-control rounded-3"></div>
             <div class="col-6"><label class="small text-muted fw-bold">H. ABERTURA (Ex: 08:00-18:00)</label><input type="text" id="f-hab" class="form-control rounded-3" placeholder="Ex: 08:00 - 18:00"></div>
@@ -936,6 +939,7 @@
     let db = [];
     let visitsDb = [];
     let playbookDb = []; // Dados dos Playbooks/Dossiês (Clientes_Brain)
+    let positivacoesDb = []; // Histórico de positivações/pedidos dos clientes
     let userConfig = { adress_start: '', adress_back: '' };
     let roteiroStatFilter = 'all'; // Filtros por banner: 'all', 'visitados', 'ausentes', 'whats', 'pendentes'
     let focusedClientId = null; // ID do cliente focado no mapa
@@ -976,6 +980,27 @@
         switchTab('mapa');
     };
 
+    window.showBairroOnMap = function(city, Bairro, event) {
+        if (event) event.stopPropagation();
+        const fCidadeEl = document.getElementById('fCidade');
+        if (fCidadeEl) fCidadeEl.value = city;
+        popularBairros();
+        const fBairroEl = document.getElementById('fBairro');
+        if (fBairroEl) fBairroEl.value = Bairro;
+        switchTab('mapa');
+    };
+
+    window.updateMapDayFilter = function(value) {
+        const fVisitaEl = document.getElementById('fVisita');
+        if (fVisitaEl) fVisitaEl.value = value;
+        
+        const mapaFVisitaEl = document.getElementById('mapa-fVisita');
+        if (mapaFVisitaEl) mapaFVisitaEl.value = value;
+        
+        gpsSortedOrder = null;
+        render();
+    };
+
     window.clearFocusedClient = function() {
         focusedClientId = null;
         render();
@@ -985,29 +1010,6 @@
         const isCol = localStorage.getItem('map_config_collapsed') === 'true';
         localStorage.setItem('map_config_collapsed', !isCol);
         render();
-    };
-
-    // --- Funções para o Ponto de Partida do Trajeto Individual (Focado) ---
-    window.updateFocusStartType = function(type) {
-        localStorage.setItem('focus_start_type', type);
-        const container = document.getElementById('focus-start-address-container');
-        if (container) {
-            container.style.display = type === 'address' ? 'block' : 'none';
-        }
-        render();
-    };
-
-    window.applyFocusStartAddress = function() {
-        const input = document.getElementById('focus-start-address');
-        if (input) {
-            const addr = input.value.trim();
-            if (!addr) {
-                customAlert("Digite um endereço para usar como ponto de partida.");
-                return;
-            }
-            localStorage.setItem('focus_start_address', addr);
-            render();
-        }
     };
 
     // Converte YYYY-MM-DD para DD/MM/YYYY
@@ -1050,6 +1052,15 @@
             if (fVisitaEl) {
                 fVisitaEl.value = dayCode;
             }
+            const mapaFVisitaEl = document.getElementById('mapa-fVisita');
+            if (mapaFVisitaEl) {
+                mapaFVisitaEl.value = dayCode;
+            }
+        }
+        
+        const topDateEl = document.getElementById('top-date-display');
+        if (topDateEl) {
+            topDateEl.innerText = `(${formatLocalDateAndDay(newDate)})`;
         }
         
         // Limpa ordenação temporária local de GPS quando a data muda
@@ -1157,7 +1168,12 @@
         });
     }
 
-    function toggleLoader(s) { document.getElementById('loader').style.display = s ? 'flex' : 'none'; }
+    function toggleLoader(s, text = "Carregando Roteiro...") {
+        const loader = document.getElementById('loader');
+        if (loader) loader.style.display = s ? 'flex' : 'none';
+        const txtEl = document.getElementById('loader-text');
+        if (txtEl) txtEl.innerText = text;
+    }
 
     // Limpa complementos do endereço para navegação (evitando quebrar o GPS)
     function cleanAddressForGps(address) {
@@ -1264,6 +1280,151 @@
     function isVisitedOnDate(clientId, dateStr) {
         return getVisitStatusOnDate(clientId, dateStr) !== null;
     }
+
+    // Retorna o status de positivação e dias desde a última compra
+    function getClientPositivacaoStatus(clientId, refDateStr) {
+        if (!clientId) return { count: 0, status: 'none', latestDate: null, daysSince: Infinity };
+        if (!refDateStr) refDateStr = getLocalDateStr();
+        const parts = refDateStr.split('-');
+        const refMonth = `${parts[0]}-${parts[1]}`; // YYYY-MM
+        
+        let allDates = [];
+        positivacoesDb.forEach(p => {
+            if (p.ID.toString().trim() === clientId.toString().trim() && p.Datas_Pedidos) {
+                p.Datas_Pedidos.toString().split(',').forEach(d => {
+                    const parsed = parseDate(d);
+                    if (!isNaN(parsed.getTime())) {
+                        allDates.push(parsed);
+                    }
+                });
+            }
+        });
+        
+        allDates.sort((a, b) => b - a); // decrescente
+        const latestDate = allDates[0] || null;
+        
+        const currentRecord = positivacoesDb.find(p => p.ID.toString().trim() === clientId.toString().trim() && p.Ano_Mes === refMonth);
+        const count = currentRecord ? (parseInt(currentRecord.Count_Pedidos) || 0) : 0;
+        
+        let daysSince = Infinity;
+        let status = 'none';
+        
+        if (latestDate) {
+            const refDateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+            const diffTime = refDateObj - latestDate;
+            daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (daysSince > 40) {
+                status = 'critical'; // Vermelho (>40 dias sem pedido)
+            } else if (count >= 3) {
+                status = 'very_active'; // Verde escuro (3+ pedidos no mês)
+            } else if (count >= 1) {
+                status = 'positivado'; // Verde claro (1-2 pedidos no mês)
+            } else {
+                status = 'active_before'; // Amarelo (0 pedidos este mês, mas ativo nos últimos 40 dias)
+            }
+        }
+        
+        return { count, status, latestDate, daysSince };
+    }
+
+    // Registra uma compra/positivação
+    window.recordPositivacao = async function(id, event) {
+        if (event) event.stopPropagation();
+        
+        const client = db.find(c => c.ID.toString().trim() === id.toString().trim());
+        if (!client) return;
+        
+        const targetDate = selectedDate || getLocalDateStr();
+        const parts = targetDate.split('-');
+        const currentMonthStr = `${parts[0]}-${parts[1]}`;
+        const dateStr = `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+        
+        const statusData = getClientPositivacaoStatus(id, targetDate);
+        
+        if (statusData.count > 0) {
+            const confirmed = await customConfirm(`O cliente "${client.Fantasia || client.Cliente}" já possui ${statusData.count} pedido(s) registrado(s) em ${parts[1]}/${parts[0]}.\nDeseja registrar mais um pedido?`, "Registrar Compra");
+            if (!confirmed) return;
+        } else {
+            const confirmed = await customConfirm(`Deseja registrar uma compra/positivação para "${client.Fantasia || client.Cliente}" em ${parts[1]}/${parts[0]}?`, "Registrar Compra");
+            if (!confirmed) return;
+        }
+        
+        // Grava localmente imediatamente para responsividade
+        let record = positivacoesDb.find(p => p.ID.toString().trim() === id.toString().trim() && p.Ano_Mes === currentMonthStr);
+        if (record) {
+            record.Count_Pedidos = (parseInt(record.Count_Pedidos) || 0) + 1;
+            const datesArr = record.Datas_Pedidos ? record.Datas_Pedidos.toString().split(',') : [];
+            datesArr.push(dateStr);
+            record.Datas_Pedidos = datesArr.join(',');
+        } else {
+            record = {
+                ID: id,
+                Ano_Mes: currentMonthStr,
+                Count_Pedidos: 1,
+                Datas_Pedidos: dateStr
+            };
+            positivacoesDb.push(record);
+        }
+        localStorage.setItem('cached_positivacoes', JSON.stringify(positivacoesDb));
+        render();
+        
+        try {
+            const respText = await apiPost('record_positivacao', { ID: id }, { date: dateStr });
+            if (respText !== 'queued') {
+                load();
+            }
+        } catch (e) {
+            console.error("Falha ao registrar positivação em background:", e);
+        }
+    };
+
+    // Remove a última compra/positivação do mês
+    window.deletePositivacao = async function(id, event) {
+        if (event) event.stopPropagation();
+        
+        const client = db.find(c => c.ID.toString().trim() === id.toString().trim());
+        if (!client) return;
+        
+        const targetDate = selectedDate || getLocalDateStr();
+        const parts = targetDate.split('-');
+        const currentMonthStr = `${parts[0]}-${parts[1]}`;
+        const dateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        
+        const confirmed = await customConfirm(`Deseja remover a última compra registrada para "${client.Fantasia || client.Cliente}" em ${parts[1]}/${parts[0]}?`, "Remover Compra");
+        if (!confirmed) return;
+        
+        // Remove localmente primeiro
+        let record = positivacoesDb.find(p => p.ID.toString().trim() === id.toString().trim() && p.Ano_Mes === currentMonthStr);
+        if (record && record.Count_Pedidos > 0) {
+            record.Count_Pedidos = parseInt(record.Count_Pedidos) - 1;
+            let datesArr = record.Datas_Pedidos ? record.Datas_Pedidos.toString().split(',') : [];
+            const dateIdx = datesArr.lastIndexOf(dateStr);
+            if (dateIdx !== -1) {
+                datesArr.splice(dateIdx, 1);
+            } else {
+                datesArr.pop();
+            }
+            
+            if (record.Count_Pedidos === 0) {
+                positivacoesDb = positivacoesDb.filter(p => !(p.ID.toString().trim() === id.toString().trim() && p.Ano_Mes === currentMonthStr));
+            } else {
+                record.Datas_Pedidos = datesArr.join(',');
+            }
+            
+            localStorage.setItem('cached_positivacoes', JSON.stringify(positivacoesDb));
+            render();
+            
+            try {
+                const respText = await apiPost('delete_positivacao', { ID: id }, { date: dateStr });
+                if (respText !== 'queued') {
+                    load();
+                }
+            } catch (e) {
+                console.error("Falha ao remover positivação em background:", e);
+            }
+        }
+    };
 
     // Retorna o código do dia ('SEG', 'TER', etc.) para uma data 'YYYY-MM-DD'
     function getDayCodeForDate(dateStr) {
@@ -1483,6 +1644,7 @@
         // Salva cache local imediato
         localStorage.setItem('cached_visits', JSON.stringify(visitsDb));
         localStorage.setItem('cached_db', JSON.stringify(db));
+        localStorage.setItem('cached_positivacoes', JSON.stringify(positivacoesDb));
     }
 
     async function syncOfflineQueue() {
@@ -1605,6 +1767,37 @@
     
     const sleep = ms => new Promise(res => setTimeout(res, ms));
 
+    /**
+     * Normaliza uma coordenada que pode estar armazenada como inteiro sem decimal.
+     * Ex: -22773317 → -22.773317  |  -475918219 → -47.5918219
+     * Coordenadas válidas de lat estão entre -90 e 90. De lon entre -180 e 180.
+     * Se o valor absoluto for > 180, é um inteiro que precisa ser dividido.
+     */
+    function safeCoord(val) {
+        if (val === null || val === undefined || val === '' || val === 0) return null;
+        const num = parseFloat(val);
+        if (isNaN(num)) return null;
+        // Se estiver dentro do range válido, retorna diretamente
+        if (Math.abs(num) <= 180) return num;
+        // É um inteiro sem decimal: calcular o divisor correto
+        // -22773317 tem 8 dígitos → dividir por 10^6 = -22.773317
+        // -475918219 tem 9 dígitos → dividir por 10^7 = -47.5918219
+        const absStr = Math.abs(Math.round(num)).toString();
+        const digits = absStr.length;
+        // Para lat (max 2 casas inteiras: -90 a 90): digits - 2 casas decimais
+        // Para lon (max 3 casas inteiras: -180 a 180): digits - 3 casas decimais
+        // Usamos a heurística: se dividindo por 10^(digits-2) ainda > 180, tenta digits-3
+        let divisor = Math.pow(10, digits - 2);
+        let result = num / divisor;
+        if (Math.abs(result) > 180) {
+            divisor = Math.pow(10, digits - 3);
+            result = num / divisor;
+        }
+        // Sanity check final
+        if (Math.abs(result) > 180) return null;
+        return result;
+    }
+
     function cleanAddressForGeocoding(address) {
         if (!address) return '';
         let addr = address.trim();
@@ -1644,8 +1837,10 @@
 
     async function getCoordinatesForAddress(address, client) {
         if (!address) return null;
-        if (client && client.lat && client.long && !isNaN(parseFloat(client.lat)) && !isNaN(parseFloat(client.long))) {
-            return { lat: parseFloat(client.lat), lon: parseFloat(client.long) };
+        const safeClientLat = safeCoord(client && client.lat);
+        const safeClientLon = safeCoord(client && client.long);
+        if (client && safeClientLat !== null && safeClientLon !== null) {
+            return { lat: safeClientLat, lon: safeClientLon };
         }
         const cleanAddr = cleanAddressForGeocoding(address);
         if (!cleanAddr) return null;
@@ -1688,38 +1883,42 @@
         const mapEl = document.getElementById('map');
         if (!mapEl) return;
         
-        // 1. Obter coordenadas de partida (pode conter await)
+        // 1. Obter coordenadas de partida (apenas se houver rota otimizada calculada)
         let startCoords = null;
         const startType = localStorage.getItem('map_start_type') || '';
-        if (startType === 'planilha' && userConfig.adress_start) {
-            startCoords = await getCoordinatesForAddress(userConfig.adress_start);
-        } else if (startType === 'address') {
-            const startVal = document.getElementById('map-start-address') ? document.getElementById('map-start-address').value.trim() : (localStorage.getItem('map_custom_start') || '');
-            if (startVal) {
-                startCoords = await getCoordinatesForAddress(startVal);
-            }
-        } else if (startType === 'gps') {
-            const sessionGps = localStorage.getItem('session_gps_coords');
-            if (sessionGps) {
-                try { startCoords = JSON.parse(sessionGps); } catch(err) {}
+        if (gpsSortedOrder && gpsSortedOrder.length > 0) {
+            if (startType === 'planilha' && userConfig.adress_start) {
+                startCoords = await getCoordinatesForAddress(userConfig.adress_start);
+            } else if (startType === 'address') {
+                const startVal = document.getElementById('map-start-address') ? document.getElementById('map-start-address').value.trim() : (localStorage.getItem('map_custom_start') || '');
+                if (startVal) {
+                    startCoords = await getCoordinatesForAddress(startVal);
+                }
+            } else if (startType === 'gps') {
+                const sessionGps = localStorage.getItem('session_gps_coords');
+                if (sessionGps) {
+                    try { startCoords = JSON.parse(sessionGps); } catch(err) {}
+                }
             }
         }
         if (currentInstanceId !== mapRenderInstanceId) return;
         
-        // 2. Obter coordenadas de retorno (pode conter await)
+        // 2. Obter coordenadas de retorno (apenas se houver rota otimizada calculada)
         let backCoords = null;
         const backType = localStorage.getItem('map_back_type') || 'none';
-        if (backType === 'planilha' && userConfig.adress_back) {
-            backCoords = await getCoordinatesForAddress(userConfig.adress_back);
-        } else if (backType === 'address') {
-            const backVal = document.getElementById('map-back-address') ? document.getElementById('map-back-address').value.trim() : (localStorage.getItem('map_custom_back') || '');
-            if (backVal) {
-                backCoords = await getCoordinatesForAddress(backVal);
-            }
-        } else if (backType === 'click') {
-            const clickCoords = localStorage.getItem('map_click_back_coords');
-            if (clickCoords) {
-                try { backCoords = JSON.parse(clickCoords); } catch(err) {}
+        if (gpsSortedOrder && gpsSortedOrder.length > 0) {
+            if (backType === 'planilha' && userConfig.adress_back) {
+                backCoords = await getCoordinatesForAddress(userConfig.adress_back);
+            } else if (backType === 'address') {
+                const backVal = document.getElementById('map-back-address') ? document.getElementById('map-back-address').value.trim() : (localStorage.getItem('map_custom_back') || '');
+                if (backVal) {
+                    backCoords = await getCoordinatesForAddress(backVal);
+                }
+            } else if (backType === 'click') {
+                const clickCoords = localStorage.getItem('map_click_back_coords');
+                if (clickCoords) {
+                    try { backCoords = JSON.parse(clickCoords); } catch(err) {}
+                }
             }
         }
         if (currentInstanceId !== mapRenderInstanceId) return;
@@ -1735,69 +1934,39 @@
         }
         if (currentInstanceId !== mapRenderInstanceId) return;
         
-        // 3b. Obter coordenadas de partida específicas para trajeto individual (focado)
-        let focusStartCoords = null;
-        if (focusedClientId && focusedCoords) {
-            const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
-            if (focusStartType === 'planilha' && userConfig.adress_start) {
-                focusStartCoords = await getCoordinatesForAddress(userConfig.adress_start);
-            } else if (focusStartType === 'address') {
-                const focusAddr = localStorage.getItem('focus_start_address') || '';
-                if (focusAddr.trim()) {
-                    focusStartCoords = await getCoordinatesForAddress(focusAddr.trim());
-                }
-            }
-            // focusStartType === 'gps' será tratado via geolocation assíncrona abaixo
-        }
-        if (currentInstanceId !== mapRenderInstanceId) return;
-        
         // Garantir que o cliente focado está na lista de desenho mesmo que não esteja agendado para hoje
         let clientsToRender = [...clients];
         if (focusedClient && !clients.some(c => c.ID.toString().trim() === focusedClientId.toString().trim())) {
             clientsToRender.push(focusedClient);
         }
         
-        // 4. Geocodificar todos os clientes no loop (pode conter await)
+        // 4. Mapear coordenadas (apenas do cache ou BD, sem geocodificar no load para evitar loops)
         const resolvedClients = [];
         const loaderEl = document.getElementById('map-loading');
-        
-        const needsGeocode = clientsToRender.filter(c => {
-            if (!c.Endereco) return false;
-            if (c.lat && c.long && !isNaN(parseFloat(c.lat)) && !isNaN(parseFloat(c.long))) return false;
-            const cleanAddr = cleanAddressForGeocoding(c.Endereco);
-            return !coordsCache[cleanAddr];
-        });
-        if (needsGeocode.length > 0 && loaderEl) {
-            loaderEl.style.display = 'block';
-        }
+        if (loaderEl) loaderEl.style.display = 'none';
         
         for (let idx = 0; idx < clientsToRender.length; idx++) {
             const c = clientsToRender[idx];
-            const address = c.Endereco;
-            const cleanAddr = cleanAddressForGeocoding(address);
+            if (!c.Endereco) continue;
+            const cleanAddr = cleanAddressForGeocoding(c.Endereco);
             const hasCache = coordsCache[cleanAddr];
             let coords = null;
             
-            if (c.lat && c.long && !isNaN(parseFloat(c.lat)) && !isNaN(parseFloat(c.long))) {
-                coords = { lat: parseFloat(c.lat), lon: parseFloat(c.long) };
+            const safeL = safeCoord(c.lat);
+            const safeN = safeCoord(c.long);
+            if (safeL !== null && safeN !== null) {
+                coords = { lat: safeL, lon: safeN };
             } else if (hasCache) {
                 coords = hasCache;
-            } else {
-                coords = await getCoordinatesForAddress(address, c);
-                if (currentInstanceId !== mapRenderInstanceId) return;
-                await sleep(1000);
-                if (currentInstanceId !== mapRenderInstanceId) return;
             }
             
             if (coords) {
                 resolvedClients.push({ client: c, coords });
             }
         }
-        if (loaderEl) loaderEl.style.display = 'none';
         if (currentInstanceId !== mapRenderInstanceId) return;
         
-        // 5. INICIALIZAÇÃO E DESENHO DO MAPA (100% SÍNCRONO E SEGURO!)
-        
+        // 5. INICIALIZAÇÃO E DESENHO DO MAPA
         if (leafletMap) {
             try {
                 leafletMap.remove();
@@ -1967,23 +2136,18 @@
         
         // 6. Desenhar trajeto e configurar visão do mapa
         if (focusedClientId && focusedCoords) {
-            const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
+            const initialOrigin = startCoords || { lat: -22.725, lon: -47.6476 };
+            const initialPolylineLatLns = [[initialOrigin.lat, initialOrigin.lon], [focusedCoords.lat, focusedCoords.lon]];
+            routePolyline = L.polyline(initialPolylineLatLns, {
+                color: '#d3007b',
+                weight: 6,
+                opacity: 0.9,
+                dashArray: '8, 8'
+            }).addTo(leafletMap);
             
-            // Determinar a origem para o trajeto individual
-            // Se temos coordenadas fixas (planilha ou endereço digitado), usar diretamente
-            if (focusStartCoords) {
-                // Desenhar trajeto com o ponto de partida fixo
-                const polylineLatLns = [[focusStartCoords.lat, focusStartCoords.lon], [focusedCoords.lat, focusedCoords.lon]];
-                routePolyline = L.polyline(polylineLatLns, {
-                    color: '#d3007b',
-                    weight: 6,
-                    opacity: 0.9,
-                    dashArray: '8, 8'
-                }).addTo(leafletMap);
-                
-                leafletMap.fitBounds(L.latLngBounds(polylineLatLns), { padding: [50, 50] });
-                
-                // Marcador do ponto de partida
+            leafletMap.fitBounds(L.latLngBounds(initialPolylineLatLns), { padding: [50, 50] });
+            
+            if (startCoords) {
                 const startIcon = L.divIcon({
                     className: 'start-marker-icon',
                     html: `<div style="
@@ -2001,148 +2165,55 @@
                     iconSize: [28, 28],
                     iconAnchor: [14, 14]
                 });
-                L.marker([focusStartCoords.lat, focusStartCoords.lon], { icon: startIcon })
+                L.marker([startCoords.lat, startCoords.lon], { icon: startIcon })
                     .addTo(leafletMap)
-                    .bindPopup(`<b>Ponto de Partida</b><br><span style="font-size: 0.8rem;">${focusStartType === 'planilha' ? userConfig.adress_start : localStorage.getItem('focus_start_address') || ''}</span>`);
-                    
-            } else if (focusStartType === 'gps') {
-                // Modo GPS: desenhar trajeto provisório usando fallback, depois atualizar com GPS real
-                const initialOrigin = startCoords || { lat: -22.725, lon: -47.6476 };
-                
-                // Desenhar trajeto provisório (será substituído quando o GPS responder)
-                const initialPolylineLatLns = [[initialOrigin.lat, initialOrigin.lon], [focusedCoords.lat, focusedCoords.lon]];
-                routePolyline = L.polyline(initialPolylineLatLns, {
-                    color: '#d3007b',
-                    weight: 6,
-                    opacity: 0.5,
-                    dashArray: '4, 12'
-                }).addTo(leafletMap);
-                
-                // Se temos startCoords como fallback inicial, centralizar nelas + destino
-                if (startCoords) {
-                    leafletMap.fitBounds(L.latLngBounds(initialPolylineLatLns), { padding: [50, 50] });
-                } else {
-                    // Sem fallback, apenas centralizar no destino focado
-                    leafletMap.setView([focusedCoords.lat, focusedCoords.lon], 14);
-                }
-                
-                // Obter GPS em tempo real de forma assíncrona (timeout aumentado para 10s)
-                if (navigator.geolocation) {
-                    // Atualizar indicador de status do GPS
-                    const gpsStatusEl = document.getElementById('focus-gps-status');
-                    
-                    navigator.geolocation.getCurrentPosition((position) => {
-                        const gpsLat = position.coords.latitude;
-                        const gpsLon = position.coords.longitude;
-                        
-                        // Salvar no cache de sessão para reutilização
-                        localStorage.setItem('session_gps_coords', JSON.stringify({ lat: gpsLat, lon: gpsLon }));
-                        
-                        if (leafletMap && currentInstanceId === mapRenderInstanceId) {
-                            // Adicionar marcador do GPS real do usuário
-                            const userIcon = L.divIcon({
-                                className: 'user-location-marker',
-                                html: `<div style="
-                                    background-color: #007bff;
-                                    border: 3px solid white;
-                                    border-radius: 50%;
-                                    width: 18px;
-                                    height: 18px;
-                                    box-shadow: 0 0 10px rgba(0, 123, 255, 0.7);
-                                "></div>`,
-                                iconSize: [18, 18],
-                                iconAnchor: [9, 9]
-                            });
-                            
-                            L.marker([gpsLat, gpsLon], { icon: userIcon })
-                                .addTo(leafletMap)
-                                .bindPopup("<b>Minha Localização Atual</b>");
-                            
-                            // Atualizar trajeto usando a coordenada GPS real
-                            if (routePolyline) {
-                                leafletMap.removeLayer(routePolyline);
-                            }
-                            const newPolylineLatLns = [[gpsLat, gpsLon], [focusedCoords.lat, focusedCoords.lon]];
-                            routePolyline = L.polyline(newPolylineLatLns, {
-                                color: '#d3007b',
-                                weight: 6,
-                                opacity: 0.9,
-                                dashArray: '8, 8'
-                            }).addTo(leafletMap);
-                            
-                            leafletMap.fitBounds(L.latLngBounds(newPolylineLatLns), { padding: [50, 50] });
-                            
-                            // Atualizar indicador de status
-                            if (gpsStatusEl) {
-                                gpsStatusEl.innerHTML = '<i class="fas fa-check-circle me-1 text-success"></i>GPS localizado!';
-                            }
-                        }
-                    }, (error) => {
-                        console.warn("Erro ao obter localização GPS em tempo real:", error);
-                        // Atualizar indicador de status para erro
-                        if (gpsStatusEl) {
-                            gpsStatusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1" style="color: #ffc107;"></i>GPS indisponível. Use "Endereço digitado" acima como alternativa.';
-                        }
-                        
-                        // Tentar usar coordenada de sessão anterior como fallback
-                        const sessionGps = localStorage.getItem('session_gps_coords');
-                        if (sessionGps && leafletMap && currentInstanceId === mapRenderInstanceId) {
-                            try {
-                                const cachedGps = JSON.parse(sessionGps);
-                                const userIcon = L.divIcon({
-                                    className: 'user-location-marker',
-                                    html: `<div style="
-                                        background-color: #6c757d;
-                                        border: 3px solid white;
-                                        border-radius: 50%;
-                                        width: 18px;
-                                        height: 18px;
-                                        box-shadow: 0 0 10px rgba(108, 117, 125, 0.5);
-                                    "></div>`,
-                                    iconSize: [18, 18],
-                                    iconAnchor: [9, 9]
-                                });
-                                
-                                L.marker([cachedGps.lat, cachedGps.lon], { icon: userIcon })
-                                    .addTo(leafletMap)
-                                    .bindPopup("<b>Última Localização Conhecida</b><br><span style='font-size: 0.75rem; color: #6c757d;'>GPS em cache</span>");
-                                
-                                if (routePolyline) {
-                                    leafletMap.removeLayer(routePolyline);
-                                }
-                                const cachedPolylineLatLns = [[cachedGps.lat, cachedGps.lon], [focusedCoords.lat, focusedCoords.lon]];
-                                routePolyline = L.polyline(cachedPolylineLatLns, {
-                                    color: '#d3007b',
-                                    weight: 5,
-                                    opacity: 0.6,
-                                    dashArray: '6, 10'
-                                }).addTo(leafletMap);
-                                
-                                leafletMap.fitBounds(L.latLngBounds(cachedPolylineLatLns), { padding: [50, 50] });
-                                
-                                if (gpsStatusEl) {
-                                    gpsStatusEl.innerHTML = '<i class="fas fa-history me-1" style="color: #6c757d;"></i>Usando última localização conhecida (GPS indisponível).';
-                                }
-                            } catch(err) {
-                                console.error("Erro ao usar GPS em cache:", err);
-                            }
-                        }
-                    }, { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 });
-                } else {
-                    // Navegador não suporta geolocalização
-                    const gpsStatusEl = document.getElementById('focus-gps-status');
-                    if (gpsStatusEl) {
-                        gpsStatusEl.innerHTML = '<i class="fas fa-times-circle me-1 text-danger"></i>Navegador sem suporte a GPS. Use "Endereço digitado".';
-                    }
-                }
-            } else {
-                // Nenhum ponto de partida configurado (nem GPS, nem endereço)
-                // Apenas centralizar no destino
-                leafletMap.setView([focusedCoords.lat, focusedCoords.lon], 14);
+                    .bindPopup("<b>Ponto de Partida (Fallback)</b>");
             }
             
-        } else {
-            // Rota completa normal diária
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const gpsLat = position.coords.latitude;
+                    const gpsLon = position.coords.longitude;
+                    
+                    if (leafletMap && currentInstanceId === mapRenderInstanceId) {
+                        const userIcon = L.divIcon({
+                            className: 'user-location-marker',
+                            html: `<div style="
+                                background-color: #007bff;
+                                border: 3px solid white;
+                                border-radius: 50%;
+                                width: 18px;
+                                height: 18px;
+                                box-shadow: 0 0 10px rgba(0, 123, 255, 0.7);
+                            "></div>`,
+                            iconSize: [18, 18],
+                            iconAnchor: [9, 9]
+                        });
+                        
+                        L.marker([gpsLat, gpsLon], { icon: userIcon })
+                            .addTo(leafletMap)
+                            .bindPopup("<b>Minha Localização Atual</b>");
+                        
+                        if (routePolyline) {
+                            leafletMap.removeLayer(routePolyline);
+                        }
+                        const newPolylineLatLns = [[gpsLat, gpsLon], [focusedCoords.lat, focusedCoords.lon]];
+                        routePolyline = L.polyline(newPolylineLatLns, {
+                            color: '#d3007b',
+                            weight: 6,
+                            opacity: 0.9,
+                            dashArray: '8, 8'
+                        }).addTo(leafletMap);
+                        
+                        leafletMap.fitBounds(L.latLngBounds(newPolylineLatLns), { padding: [50, 50] });
+                    }
+                }, (error) => {
+                    console.warn("Erro ao obter localização GPS em tempo real:", error);
+                }, { timeout: 4000, enableHighAccuracy: true });
+            }
+            
+        } else if (gpsSortedOrder && gpsSortedOrder.length > 0) {
+            // Desenhar trajeto completo otimizado
             if (startCoords) {
                 const startIcon = L.divIcon({
                     className: 'start-marker-icon',
@@ -2199,7 +2270,6 @@
                 leafletMap.fitBounds(L.latLngBounds(polylineLatLns), { padding: [30, 30] });
             }
             
-            // Adicionar marcador do usuário via GPS de forma assíncrona se não estiver focado
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     const gpsLat = position.coords.latitude;
@@ -2223,6 +2293,13 @@
                             .bindPopup("<b>Minha Localização Atual</b>");
                     }
                 }, null, { timeout: 4000 });
+            }
+        } else {
+            // Sem trajeto ativo: centraliza apenas nos marcadores dos clientes mapeados
+            if (latLns.length > 0) {
+                leafletMap.fitBounds(L.latLngBounds(latLns), { padding: [40, 40] });
+            } else {
+                leafletMap.setView([-22.725, -47.6476], 13);
             }
         }
         
@@ -2393,7 +2470,18 @@
     window.saveMapRouteOrderToCloud = async function() {
         const targetDate = selectedDate;
         const targetDateCode = getDayCodeForDate(targetDate);
-        let scheduledToday = db.filter(i => i.Visita && i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
+        
+        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
+        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
+        
+        let scheduledToday;
+        if (selectedBairroVal) {
+            scheduledToday = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        } else {
+            scheduledToday = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        }
+        
         const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
         if (omitWhats) {
             scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
@@ -2475,7 +2563,18 @@
         
         const targetDate = selectedDate;
         const targetDateCode = getDayCodeForDate(targetDate);
-        let scheduledToday = db.filter(i => i.Visita && i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
+        
+        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
+        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
+        
+        let scheduledToday;
+        if (selectedBairroVal) {
+            scheduledToday = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        } else {
+            scheduledToday = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        }
+        
         const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
         if (omitWhats) {
             scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
@@ -2532,7 +2631,7 @@
             return;
         }
         
-        toggleLoader(true);
+        toggleLoader(true, "Obtendo sinal GPS e ponto de partida...");
         let startLat, startLon;
         
         if (type === 'gps') {
@@ -2587,7 +2686,17 @@
         
         const targetDate = selectedDate;
         const targetDateCode = getDayCodeForDate(targetDate);
-        let scheduled = db.filter(i => i.Visita && i.Visita.includes(targetDateCode) && i.Endereco && i.Endereco.trim().length > 5);
+        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
+        
+        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
+        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
+        
+        let scheduled;
+        if (selectedBairroVal) {
+            scheduled = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        } else {
+            scheduled = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        }
         
         const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
         if (omitWhats) {
@@ -2596,17 +2705,34 @@
         
         if (scheduled.length === 0) {
             toggleLoader(false);
-            customAlert("Não há clientes agendados com endereço neste dia para otimizar.");
+            customAlert("Não há clientes agendados com endereço neste dia/filtro para otimizar.");
             return;
         }
         
+        // Obter coordenadas para todos os clientes da rota (com controle de progresso e rate limits)
         const coordsList = [];
-        for (let c of scheduled) {
+        let geocodeCount = 0;
+        
+        for (let idx = 0; idx < scheduled.length; idx++) {
+            const c = scheduled[idx];
+            const cleanAddr = cleanAddressForGeocoding(c.Endereco);
+            const needsGeocode = (safeCoord(c.lat) === null || safeCoord(c.long) === null) && !coordsCache[cleanAddr];
+            
+            if (needsGeocode) {
+                geocodeCount++;
+                toggleLoader(true, `Geocodificando: ${c.Fantasia || c.Cliente} (Respeitando rate limit de 1 req/s)...`);
+                await sleep(1000);
+            } else {
+                toggleLoader(true, `Preparando rota: ${c.Fantasia || c.Cliente} (${idx + 1}/${scheduled.length})...`);
+            }
+            
             const coords = await getCoordinatesForAddress(c.Endereco, c);
             if (coords) {
                 coordsList.push({ id: c.ID, lat: coords.lat, lon: coords.lon });
             }
         }
+        
+        toggleLoader(true, "Otimizando ordem dos pontos da rota...");
         
         let currentLat = startLat;
         let currentLon = startLon;
@@ -2660,6 +2786,7 @@
     
     let chartVisitsDayInstance = null;
     let chartClientsCityInstance = null;
+    let chartPositivacoesInstance = null;
     
     function renderCharts(visits, clients) {
         if (chartVisitsDayInstance) {
@@ -2667,6 +2794,9 @@
         }
         if (chartClientsCityInstance) {
             try { chartClientsCityInstance.destroy(); } catch(e) {}
+        }
+        if (chartPositivacoesInstance) {
+            try { chartPositivacoesInstance.destroy(); } catch(e) {}
         }
         
         const dayCounts = { 'SEG': 0, 'TER': 0, 'QUA': 0, 'QUI': 0, 'SEX': 0, 'SAB': 0 };
@@ -2701,6 +2831,31 @@
         const sortedCities = Object.entries(cityCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
         const cityLabels = sortedCities.map(x => x[0]);
         const cityValues = sortedCities.map(x => x[1]);
+
+        const parts = selectedDate.split('-');
+        const year = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        
+        let monthList = [];
+        for (let i = 5; i >= 0; i--) {
+            let m = month - i;
+            let y = year;
+            if (m <= 0) {
+                m += 12;
+                y -= 1;
+            }
+            const mStr = String(m).padStart(2, '0');
+            monthList.push(`${y}-${mStr}`);
+        }
+        
+        const monthRates = monthList.map(anoMes => {
+            const positivadosCount = db.filter(c => {
+                const rec = positivacoesDb.find(p => p.ID.toString().trim() === c.ID.toString().trim() && p.Ano_Mes === anoMes);
+                return rec && (parseInt(rec.Count_Pedidos) || 0) > 0;
+            }).length;
+            const rate = db.length > 0 ? Math.round((positivadosCount / db.length) * 100) : 0;
+            return { month: anoMes, count: positivadosCount, rate: rate };
+        });
 
         const drawHtmlFallbackDay = () => {
             const ctxDay = document.getElementById('chart-visits-day');
@@ -2751,10 +2906,30 @@
             }
         };
 
+        const drawHtmlFallbackPositivacoes = () => {
+            const ctxPos = document.getElementById('chart-positivacoes-history');
+            const parentPos = ctxPos ? ctxPos.parentElement : null;
+            if (parentPos) {
+                let fallbackPosHtml = '<div style="display: flex; align-items: flex-end; justify-content: space-around; height: 180px; padding-top: 15px; border-bottom: 2px solid #cbd5e1; border-left: 2px solid #cbd5e1; padding-left: 5px; padding-bottom: 5px;">';
+                monthRates.forEach(item => {
+                    const formattedMonth = item.month.split('-')[1] + '/' + item.month.split('-')[0].substring(2);
+                    fallbackPosHtml += `
+                    <div style="display: flex; flex-direction: column; align-items: center; width: 14%; flex-grow: 1;">
+                        <span style="font-size: 0.65rem; font-weight: bold; color: inherit; margin-bottom: 4px;">${item.rate}%</span>
+                        <div style="background: linear-gradient(to top, #00796b, #4db6ac); width: 60%; height: ${Math.max(item.rate, 5)}%; border-radius: 4px 4px 0 0; min-height: 5px;" title="${item.count} clientes positivados"></div>
+                        <span style="font-size: 0.6rem; font-weight: bold; color: #64748b; margin-top: 6px; white-space: nowrap;">${formattedMonth}</span>
+                    </div>`;
+                });
+                fallbackPosHtml += '</div>';
+                parentPos.innerHTML = fallbackPosHtml;
+            }
+        };
+
         if (typeof Chart === 'undefined') {
             console.warn("Chart.js não carregado. Usando fallback HTML.");
             drawHtmlFallbackDay();
             drawHtmlFallbackCity();
+            drawHtmlFallbackPositivacoes();
             return;
         }
 
@@ -2839,6 +3014,52 @@
             console.error("Erro ao desenhar gráfico de cidades:", e);
             drawHtmlFallbackCity();
         }
+
+        try {
+            const ctxPos = document.getElementById('chart-positivacoes-history');
+            if (ctxPos) {
+                const isDark = document.body.classList.contains('dark-theme');
+                const labelColor = isDark ? '#ffffff' : '#333333';
+                const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+                
+                chartPositivacoesInstance = new Chart(ctxPos, {
+                    type: 'bar',
+                    data: {
+                        labels: monthRates.map(item => item.month.split('-')[1] + '/' + item.month.split('-')[0].substring(2)),
+                        datasets: [{
+                            label: 'Taxa de Positivação (%)',
+                            data: monthRates.map(item => item.rate),
+                            backgroundColor: '#00796b',
+                            borderColor: '#004d40',
+                            borderWidth: 1,
+                            borderRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: labelColor },
+                                grid: { color: gridColor }
+                            },
+                            y: { 
+                                beginAtZero: true, 
+                                max: 100,
+                                ticks: { precision: 0, color: labelColor, callback: value => value + '%' },
+                                grid: { color: gridColor }
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Erro ao desenhar gráfico histórico de positivações:", e);
+            drawHtmlFallbackPositivacoes();
+        }
     }
 
     // Mostrar/Ocultar Tela de Login
@@ -2907,17 +3128,20 @@
                     db = res.clients;
                     visitsDb = res.visits || [];
                     playbookDb = res.brain || [];
+                    positivacoesDb = res.positivacoes || [];
                     userConfig = res.userConfig || { adress_start: '', adress_back: '' };
                 } else {
                     db = res;
                     visitsDb = [];
                     playbookDb = [];
+                    positivacoesDb = [];
                     userConfig = { adress_start: '', adress_back: '' };
                 }
                 
                 localStorage.setItem('cached_db', JSON.stringify(db));
                 localStorage.setItem('cached_visits', JSON.stringify(visitsDb));
                 localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+                localStorage.setItem('cached_positivacoes', JSON.stringify(positivacoesDb));
                 localStorage.setItem('cached_user_config', JSON.stringify(userConfig));
                 
                 popularCidades();
@@ -2950,10 +3174,19 @@
             return;
         }
         
+        const CACHE_VERSION = 'v2_safe_coords';
+        if (localStorage.getItem('cache_version') !== CACHE_VERSION) {
+            localStorage.removeItem('coords_cache');
+            localStorage.removeItem('cached_db');
+            localStorage.setItem('cache_version', CACHE_VERSION);
+            console.log('[CACHE] Cache de coordenadas limpo — migração v2_safe_coords aplicada.');
+        }
+        
         // Carregamento instantâneo do cache se disponível
         const cachedDb = localStorage.getItem('cached_db');
         const cachedVisits = localStorage.getItem('cached_visits');
         const cachedPlaybook = localStorage.getItem('cached_playbook');
+        const cachedPositivacoes = localStorage.getItem('cached_positivacoes');
         const cachedUserConfig = localStorage.getItem('cached_user_config');
         let cacheLoaded = false;
         if (cachedDb) {
@@ -2961,6 +3194,7 @@
                 db = JSON.parse(cachedDb);
                 visitsDb = cachedVisits ? JSON.parse(cachedVisits) : [];
                 playbookDb = cachedPlaybook ? JSON.parse(cachedPlaybook) : [];
+                positivacoesDb = cachedPositivacoes ? JSON.parse(cachedPositivacoes) : [];
                 userConfig = cachedUserConfig ? JSON.parse(cachedUserConfig) : { adress_start: '', adress_back: '' };
                 popularCidades();
                 updateSemEnderecoBadge();
@@ -3005,11 +3239,13 @@
                 db = res.clients;
                 visitsDb = res.visits || [];
                 playbookDb = res.brain || [];
+                positivacoesDb = res.positivacoes || [];
                 userConfig = res.userConfig || { adress_start: '', adress_back: '' };
             } else {
                 db = res;
                 visitsDb = [];
                 playbookDb = [];
+                positivacoesDb = [];
                 userConfig = { adress_start: '', adress_back: '' };
             }
             
@@ -3017,6 +3253,7 @@
             localStorage.setItem('cached_db', JSON.stringify(db));
             localStorage.setItem('cached_visits', JSON.stringify(visitsDb));
             localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+            localStorage.setItem('cached_positivacoes', JSON.stringify(positivacoesDb));
             localStorage.setItem('cached_user_config', JSON.stringify(userConfig));
             
             popularCidades();
@@ -3040,9 +3277,28 @@
 
     function popularCidades() {
         const sel = document.getElementById('fCidade');
+        if (!sel) return;
         sel.innerHTML = '<option value="">Cidades</option>';
         [...new Set(db.map(i => i.Cidade))].filter(c=>c).sort().forEach(c => {
             sel.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+        popularBairros();
+    }
+
+    function popularBairros() {
+        const selectedCity = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
+        const sel = document.getElementById('fBairro');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Bairros</option>';
+        
+        let filteredBairros = db;
+        if (selectedCity) {
+            filteredBairros = db.filter(i => i.Cidade === selectedCity);
+        }
+        
+        const bairros = [...new Set(filteredBairros.map(i => i.Bairro))].filter(b => b).sort();
+        bairros.forEach(b => {
+            sel.innerHTML += `<option value="${b}">${b}</option>`;
         });
     }
 
@@ -3156,10 +3412,10 @@
         });
     }
 
-    async function queryCNPJ(cnpjRaw) {
+    async function queryCNPJ(cnpjRaw, ignoreAlerts = false) {
         const cnpj = cnpjRaw.replace(/\D/g, '');
         if (cnpj.length !== 14) {
-            customAlert("CNPJ inválido. Digite 14 dígitos.");
+            if (!ignoreAlerts) customAlert("CNPJ inválido. Digite 14 dígitos.");
             return null;
         }
         toggleLoader(true);
@@ -3181,7 +3437,12 @@
                 municipio: data.municipio,
                 uf: data.uf,
                 cep: data.cep ? data.cep.replace(/\D/g, '') : '',
-                ddd_telefone_1: data.telefone ? data.telefone.split('/')[0].replace(/\D/g, '') : ''
+                ddd_telefone_1: data.telefone ? data.telefone.split('/')[0].replace(/\D/g, '') : '',
+                data_abertura: data.abertura,
+                situacao: data.situacao,
+                capital_social: data.capital_social,
+                qsa: data.qsa ? data.qsa.map(s => ({ nome: s.nome, qual: s.qual })) : [],
+                cnpj: data.cnpj ? data.cnpj.replace(/\D/g, '') : cnpj
             };
         } catch (e) {
             console.warn("Falha no ReceitaWS (ou limite excedido), tentando BrasilAPI...", e);
@@ -3202,10 +3463,15 @@
                     municipio: data.municipio,
                     uf: data.uf,
                     cep: data.cep ? data.cep.replace(/\D/g, '') : '',
-                    ddd_telefone_1: data.ddd_telefone_1 || ''
+                    ddd_telefone_1: data.ddd_telefone_1 || '',
+                    data_abertura: data.data_abertura,
+                    situacao: data.descricao_situacao_cadastral,
+                    capital_social: data.capital_social,
+                    qsa: data.qsa ? data.qsa.map(s => ({ nome: s.nome_socio || s.nome, qual: s.qualificacao_socio || s.qual })) : [],
+                    cnpj: data.cnpj ? data.cnpj.replace(/\D/g, '') : cnpj
                 };
             } catch (err) {
-                customAlert("Erro ao buscar CNPJ (ReceitaWS e BrasilAPI falharam): " + err.message);
+                if (!ignoreAlerts) customAlert("Erro ao buscar CNPJ (ReceitaWS e BrasilAPI falharam): " + err.message);
                 return null;
             }
         } finally {
@@ -3288,6 +3554,8 @@
             
             document.getElementById('f-end').value = end.toUpperCase();
             document.getElementById('f-cid').value = (data.municipio || '').toUpperCase();
+            document.getElementById('f-bairro').value = (data.bairro || '').toUpperCase();
+            document.getElementById('f-cep').value = (data.cep || '').replace(/\D/g, '');
             
             // Preenche o CEP no campo auxiliar para facilitar re-busca se necessário
             if (data.cep) {
@@ -3320,6 +3588,8 @@
             
             document.getElementById('f-end').value = end.toUpperCase();
             document.getElementById('f-cid').value = (data.localidade || '').toUpperCase();
+            document.getElementById('f-bairro').value = (data.bairro || '').toUpperCase();
+            document.getElementById('f-cep').value = (data.cep || '').replace(/\D/g, '');
             customAlert("Endereço do CEP importado com sucesso! Você pode editar o número diretamente no campo de endereço.");
         }
     }
@@ -3353,6 +3623,8 @@
                 if (c) {
                     c.Endereco = end;
                     c.Cidade = city;
+                    c.Bairro = (data.bairro || '').toUpperCase();
+                    c.CEP = (data.cep || '').replace(/\D/g, '');
                     if (!c.Cliente || c.Cliente.trim() === '') c.Cliente = data.razao_social;
                     if (!c.Fantasia || c.Fantasia.trim() === '') c.Fantasia = data.nome_fantasia || data.razao_social;
                     
@@ -3395,6 +3667,8 @@
             if (c) {
                 c.Endereco = end;
                 c.Cidade = city;
+                c.Bairro = (data.bairro || '').toUpperCase();
+                c.CEP = (data.cep || '').replace(/\D/g, '');
                 
                 // Salva no cache local
                 localStorage.setItem('cached_db', JSON.stringify(db));
@@ -3405,6 +3679,180 @@
                 // Envia para o backend em background
                 apiPost('save', c).catch(e => console.error("Erro ao salvar CEP rápido:", e));
             }
+        }
+    }
+
+    let isBatchRunning = false;
+
+    window.toggleBatchSelectionView = function() {
+        // Sem ação adicional necessária no controle de seleção
+    };
+
+    window.stopBatchEnrichment = function() {
+        isBatchRunning = false;
+        document.getElementById('btn-start-batch').style.display = 'block';
+        document.getElementById('btn-stop-batch').style.display = 'none';
+        const pBar = document.getElementById('batch-progress-bar');
+        if (pBar) pBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+    };
+
+    window.startBatchEnrichment = async function() {
+        if (isBatchRunning) return;
+        
+        const mode = document.querySelector('input[name="batch-select-mode"]:checked').value;
+        const fillBairro = document.getElementById('chk-fill-bairro').checked;
+        const fillCep = document.getElementById('chk-fill-cep').checked;
+        const fillEnd = document.getElementById('chk-fill-end').checked;
+        const fillPlaybook = document.getElementById('chk-fill-playbook').checked;
+        
+        if (!fillBairro && !fillCep && !fillEnd && !fillPlaybook) {
+            return customAlert("Selecione pelo menos um item para preencher.");
+        }
+        
+        let targetList = [];
+        if (mode === 'all') {
+            targetList = db.filter(c => c.CNPJ && c.CNPJ.replace(/\D/g, '').trim().length === 14);
+        } else {
+            targetList = db.filter(c => (!c.Endereco || c.Endereco.trim().length < 5) && c.CNPJ && c.CNPJ.replace(/\D/g, '').trim().length === 14);
+        }
+        
+        if (targetList.length === 0) {
+            return customAlert("Nenhum cliente elegível com CNPJ válido encontrado para enriquecer.");
+        }
+        
+        const confirmed = await customConfirm(`Deseja iniciar o enriquecimento em lote para ${targetList.length} clientes?\n\nEste processo faz requisições às APIs públicas e respeita os intervalos de rate limit (1 chamada/s).`, "Iniciar Lote");
+        if (!confirmed) return;
+        
+        isBatchRunning = true;
+        document.getElementById('btn-start-batch').style.display = 'none';
+        document.getElementById('btn-stop-batch').style.display = 'block';
+        
+        const statsBox = document.getElementById('batch-stats-box');
+        statsBox.style.display = 'block';
+        
+        const progText = document.getElementById('batch-progress-text');
+        const progBar = document.getElementById('batch-progress-bar');
+        const statSuccess = document.getElementById('batch-stat-success');
+        const statNoCnpj = document.getElementById('batch-stat-nocnpj');
+        const statError = document.getElementById('batch-stat-error');
+        
+        statSuccess.innerText = '0';
+        statNoCnpj.innerText = '0';
+        statError.innerText = '0';
+        
+        let successCount = 0;
+        let nocnpjCount = 0;
+        let errorCount = 0;
+        let totalCount = targetList.length;
+        
+        progText.innerText = `0 / ${totalCount}`;
+        progBar.style.width = '0%';
+        progBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+        
+        for (let idx = 0; idx < totalCount; idx++) {
+            if (!isBatchRunning) break;
+            
+            const client = targetList[idx];
+            const cleanCnpj = client.CNPJ.replace(/\D/g, '').trim();
+            
+            if (!cleanCnpj || cleanCnpj.length !== 14) {
+                nocnpjCount++;
+                statNoCnpj.innerText = nocnpjCount;
+                updateProgressUI(idx + 1, totalCount);
+                continue;
+            }
+            
+            try {
+                const data = await queryCNPJ(cleanCnpj, true); // ignoreAlerts = true
+                if (data) {
+                    let updated = false;
+                    
+                    if (fillBairro && data.bairro) {
+                        client.Bairro = data.bairro.toUpperCase();
+                        updated = true;
+                    }
+                    if (fillCep && data.cep) {
+                        client.CEP = data.cep.replace(/\D/g, '');
+                        updated = true;
+                    }
+                    if (fillEnd && (!client.Endereco || client.Endereco.trim().length < 5)) {
+                        let logradouroCompleto = (data.logradouro || '').trim();
+                        if (data.source === 'brasilapi' && data.descricao_tipo_de_logradouro) {
+                            const tipo = data.descricao_tipo_de_logradouro.trim();
+                            if (tipo && !logradouroCompleto.toUpperCase().startsWith(tipo.toUpperCase())) {
+                                logradouroCompleto = `${tipo} ${logradouroCompleto}`;
+                            }
+                        }
+                        let end = `${logradouroCompleto}, ${data.numero || 'S/N'}`;
+                        if (data.complemento && data.complemento.trim()) end += ` - ${data.complemento.trim()}`;
+                        if (data.bairro && data.bairro.trim()) end += ` - ${data.bairro.trim()}`;
+                        end += `, ${data.municipio || ''}, ${data.uf || ''}`;
+                        client.Endereco = end.toUpperCase();
+                        client.Cidade = (data.municipio || '').toUpperCase();
+                        updated = true;
+                    }
+                    
+                    if (updated) {
+                        await apiPost('save', client);
+                    }
+                    
+                    if (fillPlaybook) {
+                        let brainNotes = `CNPJ: ${data.cnpj || cleanCnpj}`;
+                        if (data.data_abertura) brainNotes += ` | Abertura: ${data.data_abertura}`;
+                        if (data.capital_social) brainNotes += ` | Capital: R$ ${parseFloat(data.capital_social).toLocaleString('pt-BR')}`;
+                        if (data.situacao) brainNotes += ` | Situação: ${data.situacao}`;
+                        if (data.qsa && data.qsa.length > 0) {
+                            brainNotes += `\n\nSócios: ${data.qsa.map(s => `${s.nome} (${s.qual || 'Sócio'})`).join(', ')}`;
+                        }
+                        
+                        let pbRecord = playbookDb.find(p => p.ID.toString().trim() === client.ID.toString().trim());
+                        if (pbRecord) {
+                            if (!pbRecord.Notas) {
+                                pbRecord.Notas = brainNotes;
+                                await apiPost('save_brain_auto', { ID: client.ID, Notas: brainNotes });
+                            }
+                        } else {
+                            pbRecord = { ID: client.ID, Notas: brainNotes };
+                            playbookDb.push(pbRecord);
+                            await apiPost('save_brain_auto', { ID: client.ID, Notas: brainNotes });
+                        }
+                    }
+                    
+                    successCount++;
+                    statSuccess.innerText = successCount;
+                } else {
+                    errorCount++;
+                    statError.innerText = errorCount;
+                }
+            } catch (err) {
+                console.error(`Erro ao processar lote para ID ${client.ID}:`, err);
+                errorCount++;
+                statError.innerText = errorCount;
+            }
+            
+            updateProgressUI(idx + 1, totalCount);
+            await sleep(1000);
+        }
+        
+        isBatchRunning = false;
+        document.getElementById('btn-start-batch').style.display = 'block';
+        document.getElementById('btn-stop-batch').style.display = 'none';
+        progBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        localStorage.setItem('cached_db', JSON.stringify(db));
+        localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
+        popularCidades();
+        updateSemEnderecoBadge();
+        render();
+        customAlert("Enriquecimento em lote concluído!");
+    };
+
+    function updateProgressUI(current, total) {
+        const progText = document.getElementById('batch-progress-text');
+        const progBar = document.getElementById('batch-progress-bar');
+        if (progText) progText.innerText = `${current} / ${total}`;
+        if (progBar) {
+            const pct = Math.round((current / total) * 100);
+            progBar.style.width = `${pct}%`;
         }
     }
 
@@ -3703,10 +4151,11 @@
             const v = document.getElementById('fVisita').value;
             const e = document.getElementById('fEntrega').value;
             const c = document.getElementById('fCidade').value;
+            const b = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
             
             let filtered = db.filter(i => {
-                const matchS = (i.ID + i.Cliente + i.Fantasia + i.Comprador + i.WhatsApp + i.CNPJ + i.Endereco).toLowerCase().includes(s);
-                return matchS && (!v || (i.Visita && i.Visita.includes(v))) && (!e || (i.Entrega && i.Entrega.includes(e))) && (!c || i.Cidade === c);
+                const matchS = (i.ID + i.Cliente + i.Fantasia + i.Comprador + i.WhatsApp + i.CNPJ + i.Endereco + (i.Bairro || '')).toLowerCase().includes(s);
+                return matchS && (!v || (i.Visita && i.Visita.includes(v))) && (!e || (i.Entrega && i.Entrega.includes(e))) && (!c || i.Cidade === c) && (!b || i.Bairro === b);
             });
 
             filtered.sort((a, b) => {
@@ -3763,11 +4212,35 @@
                 const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
                 const isAbsent = visitStatus === 'Não Encontrado';
                 
+                const posData = getClientPositivacaoStatus(i.ID, targetDate);
+                let posBtnClass = 'btn-outline-primary';
+                let posBtnStyle = '';
+                let posBtnText = '🛒 Positivar';
+                
+                if (posData.status === 'very_active') {
+                    posBtnClass = 'btn-success text-white border-0';
+                    posBtnStyle = 'background-color: #1b5e20 !important;';
+                    posBtnText = `🛒 Positivado (✅ ${posData.count}x)`;
+                } else if (posData.status === 'positivado') {
+                    posBtnClass = 'btn-success text-white border-0';
+                    posBtnStyle = 'background-color: #4caf50 !important;';
+                    posBtnText = `🛒 Positivado (✅ ${posData.count}x)`;
+                } else if (posData.status === 'active_before') {
+                    posBtnClass = 'btn-warning text-dark border-0';
+                    posBtnStyle = 'background-color: #ffeb3b !important;';
+                    posBtnText = '🛒 Sem Compra este mês';
+                } else if (posData.status === 'critical') {
+                    posBtnClass = 'btn-danger text-white border-0';
+                    posBtnStyle = 'background-color: #f44336 !important;';
+                    posBtnText = `🛒 Sem compra há ${posData.daysSince} dias`;
+                }
+                
                 return `
                 <div class="card card-client ${visitStatus === 'Visita' ? 'visited-card' : isAbsent ? 'absent-card' : ''}">
                     <div class="card-body">
                         <div class="client-header">
                             <span class="id-badge">#${i.ID}</span>
+                            ${posData.status === 'critical' ? `<span class="badge bg-danger text-white rounded-pill px-2 py-0.5 me-1" style="font-size: 0.65rem;" title="Alerta crítico: 40+ dias sem pedido"><i class="fas fa-exclamation-triangle me-1"></i>⚠️ ${posData.daysSince}d s/ pedido</span>` : ''}
                             ${visitStatus === 'Visita' ? 
                                 `<span class="visitado-badge"><i class="fas fa-check-double me-1"></i>Visitado</span>` : 
                               isAbsent ?
@@ -3786,10 +4259,10 @@
                             ${i.HAbertura ? `<div class="info-item"><i class="fas fa-door-open"></i> Abre: ${i.HAbertura}</div>` : ''}
                             ${i.Hvisita ? `<div class="info-item"><i class="fas fa-clock"></i> Visita: ${i.Hvisita}</div>` : ''}
                              <div class="info-item full-width" onclick="copyTextFromElement(this); event.stopPropagation();" style="cursor: pointer;" title="Clique para copiar o endereço">
-                                 <i class="fas fa-map-marker-alt"></i> 
-                                 <span class="flex-grow-1 address-text">${i.Endereco || 'Sem endereço'}</span>
-                                 ${i.Endereco ? '<i class="far fa-copy text-muted small ms-2"></i>' : ''}
-                             </div>
+                                  <i class="fas fa-map-marker-alt"></i> 
+                                  <span class="flex-grow-1 address-text">${i.Endereco || 'Sem endereço'}</span>
+                                  ${i.Endereco ? '<i class="far fa-copy text-muted small ms-2"></i>' : ''}
+                              </div>
                             <div class="info-item full-width"><i class="fas fa-fingerprint"></i> ${cnpj || '---'}</div>
                         </div>
 
@@ -3810,14 +4283,25 @@
                         
                         <div class="mt-2">
                             ${visitStatus === 'Visita' ? 
-                                `<button class="btn btn-sm btn-success w-100 py-2 rounded-pill fw-bold text-white" onclick="toggleVisita('${i.ID}', event, null, 'delete')" title="Remover Visita"><i class="fas fa-check-double me-2"></i>Visitado (Excluir)</button>` : 
+                                `<button class="btn btn-sm btn-success w-100 py-2 rounded-pill fw-bold text-white mb-2" onclick="toggleVisita('${i.ID}', event, null, 'delete')" title="Remover Visita"><i class="fas fa-check-double me-2"></i>Visitado (Excluir)</button>` : 
                               isAbsent ?
-                                `<button class="btn btn-sm btn-warning w-100 py-2 rounded-pill fw-bold text-white" onclick="toggleVisita('${i.ID}', event, null, 'delete')" style="background-color: #ffc107; border-color: #ffc107;" title="Remover status de não encontrado"><i class="fas fa-user-slash me-2"></i>Não Encontrado (Excluir)</button>` :
-                                `<div class="d-flex gap-2">
+                                `<button class="btn btn-sm btn-warning w-100 py-2 rounded-pill fw-bold text-white mb-2" onclick="toggleVisita('${i.ID}', event, null, 'delete')" style="background-color: #ffc107; border-color: #ffc107;" title="Remover status de não encontrado"><i class="fas fa-user-slash me-2"></i>Não Encontrado (Excluir)</button>` :
+                                `<div class="d-flex gap-2 mb-2">
                                     <button class="btn btn-sm btn-outline-success flex-grow-1 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event, null, 'Visita')" title="Marcar como visitado"><i class="far fa-check-circle me-1"></i>Visitar</button>
                                     <button class="btn btn-sm btn-outline-warning flex-grow-1 py-2 rounded-pill fw-bold" onclick="toggleVisita('${i.ID}', event, null, 'Não Encontrado')" style="color: #b58100; border-color: #ffc107;" title="Marcar como não encontrado"><i class="fas fa-user-slash me-1"></i>Ausente</button>
                                  </div>`
                             }
+                            
+                            <div class="d-flex gap-1.5">
+                                <button class="btn btn-sm ${posBtnClass} flex-grow-1 py-2 rounded-pill fw-bold" onclick="recordPositivacao('${i.ID}', event)" style="${posBtnStyle}" title="Registrar compra/pedido">
+                                    ${posBtnText}
+                                </button>
+                                ${posData.count > 0 ? 
+                                    `<button class="btn btn-sm btn-outline-danger py-2 rounded-pill px-2.5" onclick="deletePositivacao('${i.ID}', event)" title="Desfazer/remover última compra">
+                                        <i class="fas fa-undo"></i>
+                                     </button>` : ''
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -3970,15 +4454,22 @@
                 if (visitStatus === 'Visita') chkClass = 'visited';
                 else if (visitStatus === 'Não Encontrado') chkClass = 'absent';
                 
+                const posData = getClientPositivacaoStatus(i.ID, selectedDate);
+                const isCritical = posData.status === 'critical';
+                
                 return `
-                <div class="card card-client chk-card ${chkClass}" style="margin-bottom:10px;">
+                <div class="card card-client chk-card ${chkClass}" style="margin-bottom:10px; ${isCritical ? 'border-left: 4px solid #f44336 !important;' : ''}">
                     <div class="card-body py-3">
                         <div class="d-flex justify-content-between align-items-start">
                             <div style="flex-grow: 1; min-width: 0;">
-                                <div class="fw-bold text-dark text-truncate" style="font-size:1.05rem;">${i.Fantasia || i.Cliente}</div>
+                                <div class="fw-bold text-dark text-truncate" style="font-size:1.05rem;">
+                                    ${i.Fantasia || i.Cliente}
+                                    ${isCritical ? '<span class="text-danger small ms-1" title="Sem compras há mais de 40 dias!"><i class="fas fa-exclamation-triangle"></i></span>' : ''}
+                                </div>
                                 <div class="small text-muted" style="font-size:0.75rem; margin-top: 4px;">
                                     <span class="id-badge">#${i.ID}</span> · Ordem: ${i.Ordem} · Cidade: ${i.Cidade}<br>
                                     <i class="far fa-clock me-1 mt-1"></i>Última: ${lastVisit}
+                                    ${isCritical ? `<br><b class="text-danger"><i class="fas fa-shopping-cart me-1"></i>Sem compras há ${posData.daysSince} dias!</b>` : ''}
                                     ${isAbsent ? '<br><b class="text-warning"><i class="fas fa-user-slash me-1"></i>Não Encontrado</b>' : ''}
                                 </div>
                             </div>
@@ -4046,6 +4537,7 @@
         }
         
         // --- 3. RENDER DASHBOARD / INDICADORES ---
+        // --- 3. RENDER DASHBOARD / INDICADORES ---
         else if (activeTab === 'dashboard') {
             const targetDate = selectedDate;
             const targetDateCode = getDayCodeForDate(targetDate);
@@ -4057,6 +4549,95 @@
             const scheduledOnDate = db.filter(i => i.Visita && i.Visita.includes(targetDateCode));
             const visitedScheduledOnDate = scheduledOnDate.filter(i => getVisitStatusOnDate(i.ID, targetDate) === 'Visita').length;
             
+            // Clientes positivados há mais de 15 dias sem pedido
+            const latePositives = db.filter(c => {
+                const pos = getClientPositivacaoStatus(c.ID, targetDate);
+                return pos.latestDate !== null && pos.daysSince > 15;
+            });
+
+            // Taxa de positivação semanal (clientes visitados há >= 7 dias que compraram na semana seguinte)
+            let totalVisitsForRate = 0;
+            let visitsWithPurchase = 0;
+            const refDateObj = parseDate(targetDate);
+            const todayObj = isNaN(refDateObj.getTime()) ? new Date() : refDateObj;
+            
+            visitsDb.forEach(v => {
+                if (v && (!v.Status || v.Status === 'Visita') && v.Data) {
+                    const visitDateObj = parseDate(v.Data);
+                    if (!isNaN(visitDateObj.getTime())) {
+                        const diffDays = (todayObj - visitDateObj) / (1000 * 60 * 60 * 24);
+                        if (diffDays >= 7) {
+                            totalVisitsForRate++;
+                            const clientPos = positivacoesDb.filter(p => p.ID.toString().trim() === v.ID.toString().trim());
+                            let boughtInWeek = false;
+                            clientPos.forEach(p => {
+                                if (p.Datas_Pedidos) {
+                                    p.Datas_Pedidos.toString().split(',').forEach(dStr => {
+                                        const purchaseDateObj = parseDate(dStr);
+                                        if (!isNaN(purchaseDateObj.getTime())) {
+                                            const pDiffDays = (purchaseDateObj - visitDateObj) / (1000 * 60 * 60 * 24);
+                                            if (pDiffDays >= 0 && pDiffDays <= 7) {
+                                                boughtInWeek = true;
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                            if (boughtInWeek) {
+                                visitsWithPurchase++;
+                            }
+                        }
+                    }
+                }
+            });
+            const weeklyPosRate = totalVisitsForRate > 0 ? Math.round((visitsWithPurchase / totalVisitsForRate) * 100) : 0;
+
+            // Resumo de Frequências (Baseado no Ano-Mês selecionado)
+            const partsMonth = targetDate.split('-');
+            const targetMonthStr = `${partsMonth[0]}-${partsMonth[1]}`;
+            
+            const getClientFrequencyLabel = (clientId) => {
+                const rec = positivacoesDb.find(p => p.ID.toString().trim() === clientId.toString().trim() && p.Ano_Mes === targetMonthStr);
+                const count = rec ? (parseInt(rec.Count_Pedidos) || 0) : 0;
+                if (count >= 3) return 'Semanal 🗓️';
+                if (count === 2) return 'Quinzenal 🌓';
+                if (count === 1) return 'Mensal 🌑';
+                
+                const statusData = getClientPositivacaoStatus(clientId, targetDate);
+                if (statusData.daysSince <= 60) return 'Bimestral ⏳';
+                return 'Esporádico ❓';
+            };
+            
+            const freqCounts = { semanal: 0, quinzenal: 0, mensal: 0, bimestral: 0, esporadico: 0 };
+            db.forEach(c => {
+                const label = getClientFrequencyLabel(c.ID);
+                if (label.startsWith('Semanal')) freqCounts.semanal++;
+                else if (label.startsWith('Quinzenal')) freqCounts.quinzenal++;
+                else if (label.startsWith('Mensal')) freqCounts.mensal++;
+                else if (label.startsWith('Bimestral')) freqCounts.bimestral++;
+                else freqCounts.esporadico++;
+            });
+
+            // Ranking por menor % de meses positivados (clientes difíceis)
+            const uniqueMonthsInSystem = [...new Set(positivacoesDb.map(p => p.Ano_Mes))].filter(m => m);
+            const totalMonthsCount = Math.max(uniqueMonthsInSystem.length, 1);
+            
+            const clientDifficulties = db.map(c => {
+                const positiveMonths = positivacoesDb.filter(p => p.ID.toString().trim() === c.ID.toString().trim() && (parseInt(p.Count_Pedidos) || 0) > 0).length;
+                const rate = Math.round((positiveMonths / totalMonthsCount) * 100);
+                return { ...c, rate, positiveMonths };
+            }).sort((a,b) => a.rate - b.rate);
+
+            // Grouping by City -> Bairro
+            const cityBairroMap = {};
+            db.forEach(c => {
+                const city = c.Cidade || 'NÃO INFORMADA';
+                const Bairro = c.Bairro || 'NÃO INFORMADO';
+                if (!cityBairroMap[city]) cityBairroMap[city] = {};
+                if (!cityBairroMap[city][Bairro]) cityBairroMap[city][Bairro] = [];
+                cityBairroMap[city][Bairro].push(c);
+            });
+
             // Ranking de Visitas (Apenas visitas reais)
             const visitCounts = {};
             visitsDb.forEach(v => {
@@ -4096,6 +4677,13 @@
                 .sort((a,b) => a.totalVisits - b.totalVisits || a.lastVisitDate - b.lastVisitDate)
                 .slice(0, 5); // Sugere os 5 mais prioritários
                 
+            window.toggleLatePositivesList = function() {
+                const listEl = document.getElementById('late-positives-list');
+                if (listEl) {
+                    listEl.style.display = listEl.style.display === 'none' ? 'block' : 'none';
+                }
+            };
+
             let html = `
             <div class="dash-card py-3 mb-3 text-center" style="background: var(--gradient); color: white;">
                 <h5 class="fw-bold mb-1"><i class="fas fa-chart-line me-2"></i>INDICADORES</h5>
@@ -4110,6 +4698,28 @@
                 
                 <p class="small mb-0 opacity-90 fw-bold">${formatLocalDateAndDay(targetDate)}</p>
             </div>
+
+            <!-- Banner Amarelo de Alerta Recompra -->
+            ${latePositives.length > 0 ? `
+            <div class="alert alert-warning text-dark border-warning shadow-sm mb-3 text-start" style="border-radius: 12px; font-size: 0.85rem; background: #fffdf5;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="fas fa-exclamation-circle text-warning fs-5"></i>
+                    <div>
+                        <strong>⚠️ Alerta de Recompra:</strong> ${latePositives.length} cliente(s) positivado(s) há mais de 15 dias sem novo pedido!
+                        <button class="btn btn-sm btn-link p-0 text-decoration-none fw-bold ms-2" style="font-size: 0.8rem; color: #5a3c00;" onclick="toggleLatePositivesList()">Ver Lista</button>
+                    </div>
+                </div>
+                <div id="late-positives-list" style="display: none; max-height: 150px; overflow-y: auto;" class="border-top pt-2 mt-2">
+                    ${latePositives.map(c => {
+                        const pos = getClientPositivacaoStatus(c.ID, targetDate);
+                        return `<div class="d-flex justify-content-between align-items-center mb-1 small">
+                            <span>#${c.ID} - <b>${c.Fantasia || c.Cliente}</b> (${c.Cidade})</span>
+                            <span class="badge bg-secondary">${pos.daysSince} dias sem compra</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
             
             <!-- Grid de Estatísticas Rápidas -->
             <div class="dash-stat-grid">
@@ -4122,8 +4732,40 @@
                     <div class="dash-stat-label">Visitas no Dia</div>
                 </div>
                 <div class="dash-stat-box">
-                    <div class="dash-stat-num">${scheduledOnDate.length > 0 ? Math.round((visitedScheduledOnDate/scheduledOnDate.length)*100) : 0}%</div>
-                    <div class="dash-stat-label">Meta do Dia</div>
+                    <div class="dash-stat-num">${weeklyPosRate}%</div>
+                    <div class="dash-stat-label">Positivação Semanal</div>
+                </div>
+            </div>
+
+            <!-- Resumo de Frequências -->
+            <div class="dash-card text-dark">
+                <h6 class="fw-bold text-primary mb-3"><i class="fas fa-history me-2"></i>ESTATÍSTICA DE FREQUÊNCIA DE COMPRA</h6>
+                <div class="row g-2 text-center" style="font-size: 0.75rem;">
+                    <div class="col-4 col-sm-2.4 flex-grow-1">
+                        <div class="p-2 border rounded bg-light">
+                            <span class="d-block fw-bold text-success">${freqCounts.semanal}</span>Semanal
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-2.4 flex-grow-1">
+                        <div class="p-2 border rounded bg-light">
+                            <span class="d-block fw-bold text-info">${freqCounts.quinzenal}</span>Quinzenal
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-2.4 flex-grow-1">
+                        <div class="p-2 border rounded bg-light">
+                            <span class="d-block fw-bold text-primary">${freqCounts.mensal}</span>Mensal
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-2.4 flex-grow-1">
+                        <div class="p-2 border rounded bg-light">
+                            <span class="d-block fw-bold text-warning">${freqCounts.bimestral}</span>Bimestral
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-2.4 flex-grow-1">
+                        <div class="p-2 border rounded bg-light">
+                            <span class="d-block fw-bold text-muted">${freqCounts.esporadico}</span>Esporádico
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -4131,6 +4773,12 @@
             <div class="dash-card">
                 <h6 class="fw-bold text-primary mb-3"><i class="fas fa-chart-bar me-2"></i>DESEMPENHO & DISTRIBUIÇÃO</h6>
                 <div class="row g-3">
+                    <div class="col-12">
+                        <div class="p-2 border rounded-3" style="background: var(--card-bg); height: 250px;">
+                            <span class="small fw-bold text-muted d-block text-center mb-2">Taxa de Positivação Histórica (%)</span>
+                            <div style="position: relative; height: calc(100% - 25px);"><canvas id="chart-positivacoes-history"></canvas></div>
+                        </div>
+                    </div>
                     <div class="col-12 col-md-6">
                         <div class="p-2 border rounded-3" style="background: var(--card-bg); height: 250px;">
                             <span class="small fw-bold text-muted d-block text-center mb-2">Visitas por Dia da Semana</span>
@@ -4144,6 +4792,87 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Bairros Accordion Tree View -->
+            <div class="dash-card text-dark text-start">
+                <h6 class="fw-bold text-primary mb-3"><i class="fas fa-map-marked-alt me-2"></i>🏘️ NAVEGAÇÃO HIERÁRQUICA POR BAIRRO</h6>
+                <div class="accordion" id="cidadesBairrosAccordion">
+            `;
+            
+            let cityIdx = 0;
+            for (const [city, Bairros] of Object.entries(cityBairroMap).sort()) {
+                cityIdx++;
+                const totalClientsInCity = Object.values(Bairros).reduce((sum, list) => sum + list.length, 0);
+                html += `
+                <div class="accordion-item border-bottom">
+                    <h2 class="accordion-header" id="headingCity-${cityIdx}">
+                        <button class="accordion-button collapsed fw-bold py-2.5 px-3 bg-light text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCity-${cityIdx}" aria-expanded="false" aria-controls="collapseCity-${cityIdx}" style="font-size: 0.85rem;">
+                            📍 ${city.toUpperCase()} (${totalClientsInCity} clientes)
+                        </button>
+                    </h2>
+                    <div id="collapseCity-${cityIdx}" class="accordion-collapse collapse" aria-labelledby="headingCity-${cityIdx}" data-bs-parent="#cidadesBairrosAccordion">
+                        <div class="accordion-body p-2">
+                            <div class="accordion" id="bairrosAccordion-${cityIdx}">
+                `;
+                
+                let BairroIdx = 0;
+                for (const [Bairro, BairroClients] of Object.entries(Bairros).sort()) {
+                    BairroIdx++;
+                    const uniqueBairroId = `city-${cityIdx}-Bairro-${BairroIdx}`;
+                    
+                    let clientListHtml = BairroClients.map(bc => `
+                        <div class="d-flex justify-content-between align-items-center py-2 px-2 border-bottom text-dark" style="font-size: 0.75rem;">
+                            <div class="text-truncate" style="max-width: 70%;" title="${bc.Cliente}">
+                                <strong>#${bc.ID}</strong> - ${bc.Fantasia || bc.Cliente}
+                            </div>
+                            <button class="btn btn-sm btn-outline-info rounded-pill py-0.5 px-2" style="font-size: 0.65rem;" onclick="focusOnMap('${bc.ID}', event)">
+                                <i class="fas fa-map-marked-alt me-1"></i> Ver no Mapa
+                            </button>
+                        </div>
+                    `).join('');
+                    
+                    html += `
+                    <div class="accordion-item border-0">
+                        <h2 class="accordion-header" id="headingBairro-${uniqueBairroId}">
+                            <button class="accordion-button collapsed py-2 px-2 small text-secondary bg-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBairro-${uniqueBairroId}" aria-expanded="false" aria-controls="collapseBairro-${uniqueBairroId}" style="font-size: 0.8rem; box-shadow: none;">
+                                🏘️ ${Bairro.toUpperCase()} (${BairroClients.length} clientes)
+                            </button>
+                        </h2>
+                        <div id="collapseBairro-${uniqueBairroId}" class="accordion-collapse collapse" aria-labelledby="headingBairro-${uniqueBairroId}" data-bs-parent="#bairrosAccordion-${cityIdx}">
+                            <div class="accordion-body p-1 bg-light rounded-3">
+                                <div class="d-grid gap-1 mb-2">
+                                    <button class="btn btn-sm btn-outline-success py-1.5 fw-bold" style="font-size: 0.7rem; border-radius: 6px;" onclick="showBairroOnMap('${city.replace(/'/g, "\\'")}', '${Bairro.replace(/'/g, "\\'")}', event)">
+                                        <i class="fas fa-map me-1"></i> Mostrar todos no Mapa
+                                    </button>
+                                </div>
+                                ${clientListHtml}
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+            
+            html += `
+                </div>
+            </div>
+
+            <!-- Clientes Difíceis de Positivar -->
+            <div class="dash-card text-dark text-start">
+                <h6 class="fw-bold text-danger mb-3"><i class="fas fa-hand-holding-heart me-2"></i>DIFICULDADE DE POSITIVAÇÃO (Menor % meses positivados)</h6>
+                ${clientDifficulties.slice(0, 5).map(i => `
+                    <div class="dash-list-item">
+                        <span>#${i.ID} - <b>${i.Fantasia || i.Cliente}</b> (${i.Cidade})</span>
+                        <span class="badge bg-danger rounded-pill">${i.rate}% de meses</span>
+                    </div>
+                `).join('')}
             </div>
             
             <!-- Sugestões de Visitas para o Dia -->
@@ -4180,7 +4909,7 @@
                 `).join('')}
             </div>
 
-            <!-- Menos Visitados (Prioridade de Visita) -->
+            <!-- Menos Visitados -->
             <div class="dash-card">
                 <h6 class="fw-bold text-danger mb-3"><i class="fas fa-clock me-2"></i>MENOS VISITADOS / NUNCA VISITADOS</h6>
                 ${sortedByVisitsAsc.slice(0, 5).map(i => {
@@ -4204,10 +4933,19 @@
         else if (activeTab === 'mapa') {
             const targetDate = selectedDate;
             const targetDateCode = getDayCodeForDate(targetDate);
+            const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
             const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
             
-            // Lista completa de clientes para hoje
-            let allScheduledToday = db.filter(i => i.Visita && i.Visita.includes(targetDateCode));
+            const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
+            const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
+            
+            // Lista de clientes: se Bairro selecionado, mostra todos do Bairro; senão, os agendados do dia/filtro
+            let allScheduledToday;
+            if (selectedBairroVal) {
+                allScheduledToday = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal));
+            } else {
+                allScheduledToday = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal));
+            }
             
             // Clientes válidos para a rota física
             let scheduledToday = allScheduledToday.filter(i => i.Endereco && i.Endereco.trim().length > 5);
@@ -4234,15 +4972,40 @@
                 scheduledToday.sort((a, b) => (parseInt(a.Ordem) || 0) - (parseInt(b.Ordem) || 0));
             }
             
+            // Calcular quantos possuem coordenadas mapeadas
+            const mappedCount = scheduledToday.filter(c => {
+                const cleanAddr = cleanAddressForGeocoding(c.Endereco);
+                return (safeCoord(c.lat) !== null && safeCoord(c.long) !== null) || coordsCache[cleanAddr];
+            }).length;
+            const totalCount = scheduledToday.length;
+            
             let html = `
             <div class="dash-card py-3 mb-3 text-center" style="background: var(--gradient); color: white;">
                 <h5 class="fw-bold mb-1"><i class="fas fa-map-marked-alt me-2"></i>MAPA DE VISITAS</h5>
-                <div class="d-flex justify-content-center align-items-center gap-2 my-2 px-3">
-                    <span class="small opacity-75"><i class="far fa-calendar-alt"></i> Data:</span>
-                    <input type="date" class="form-control form-control-sm text-center" id="mapa-visit-date" 
-                           style="max-width: 160px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark;" 
-                           value="${targetDate}" 
-                           onchange="updateSelectedDate(this.value, true);">
+                
+                <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 my-2 px-3">
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small opacity-75"><i class="far fa-calendar-alt"></i> Data:</span>
+                        <input type="date" class="form-control form-control-sm text-center" id="mapa-visit-date" 
+                               style="max-width: 130px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark; font-size: 0.8rem;" 
+                               value="${targetDate}" 
+                               onchange="updateSelectedDate(this.value, true);">
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small opacity-75"><i class="fas fa-filter"></i> Dia:</span>
+                        <select id="mapa-fVisita" class="form-select form-select-sm text-center"
+                                style="max-width: 95px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; color-scheme: dark; font-size: 0.8rem;"
+                                onchange="updateMapDayFilter(this.value)">
+                            <option value="" style="color: #333;">Todos</option>
+                            <option value="SEG" style="color: #333;">SEG</option>
+                            <option value="TER" style="color: #333;">TER</option>
+                            <option value="QUA" style="color: #333;">QUA</option>
+                            <option value="QUI" style="color: #333;">QUI</option>
+                            <option value="SEX" style="color: #333;">SEX</option>
+                            <option value="SAB" style="color: #333;">SAB</option>
+                            <option value="DOM" style="color: #333;">DOM</option>
+                        </select>
+                    </div>
                 </div>
                 <p class="small mb-2 opacity-90 fw-bold">${formatLocalDateAndDay(targetDate)}</p>
                 
@@ -4315,8 +5078,8 @@
                                 </div>
                             </div>
                             <div class="col-12 d-grid gap-2 mt-2">
-                                <button id="btn-optimize-map" class="btn btn-sm btn-light rounded-pill fw-bold" style="display: none;" onclick="optimizeMapRoute()">
-                                    <i class="fas fa-magic me-1"></i>Calcular Rota Otimizada
+                                <button id="btn-optimize-map" class="btn btn-sm btn-primary rounded-pill fw-bold py-2 w-100 shadow" style="display: none;" onclick="optimizeMapRoute()">
+                                    <i class="fas fa-magic me-1"></i>🚀 Calcular e Otimizar Rota
                                 </button>
                             </div>
                         </div>
@@ -4338,6 +5101,12 @@
                 </div>
             </div>
             
+            ${!gpsSortedOrder ? `
+            <div class="alert text-center py-2.5 px-3 small rounded-3 mb-2 shadow-sm" style="background: white; border: 1px solid #cbd5e1; color: #475569; font-size: 0.8rem; border-left: 4px solid #17a2b8 !important;">
+                <i class="fas fa-info-circle me-1 text-info fs-6"></i> <b>Clientes no mapa:</b> ${mappedCount} de ${totalCount} mapeados. Escolha o ponto de partida e clique em <b>🚀 Calcular e Otimizar Rota</b> para traçar o percurso.
+            </div>
+            ` : ''}
+            
             <!-- Aviso do Mapa -->
             <div id="map-loading" class="alert alert-info py-2 px-3 small rounded-3 mb-3 text-center" style="display: none;">
                 <span class="spinner-border spinner-border-sm me-2"></span>Buscando coordenadas dos clientes...
@@ -4346,41 +5115,15 @@
             ${focusedClientId ? (() => {
                 const fc = db.find(i => i.ID.toString().trim() === focusedClientId.toString().trim());
                 const clientName = fc ? (fc.Fantasia || fc.Cliente) : `Cliente #${focusedClientId}`;
-                const focusStartType = localStorage.getItem('focus_start_type') || 'gps';
-                const focusStartAddress = localStorage.getItem('focus_start_address') || '';
                 return `
-                <div class="rounded-3 mb-3 shadow-sm border-0 overflow-hidden">
-                    <div class="d-flex justify-content-between align-items-center py-2.5 px-3" style="background: linear-gradient(135deg, #d3007b 0%, #a2005e 100%); color: white;">
-                        <div class="d-flex align-items-center gap-2" style="font-size: 0.88rem; font-weight: 500;">
-                            <i class="fas fa-star" style="animation: pulseFocus 1.5s infinite;"></i>
-                            <span>Foco: <strong>${clientName}</strong> | Trajeto Individual</span>
-                        </div>
-                        <button class="btn btn-xs btn-light rounded-pill px-3 py-1 fw-bold text-dark" style="font-size: 0.72rem; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" onclick="clearFocusedClient()">
-                            Limpar Foco
-                        </button>
+                <div class="alert d-flex justify-content-between align-items-center py-2.5 px-3 rounded-3 mb-3 shadow-sm border-0" style="background: linear-gradient(135deg, #d3007b 0%, #a2005e 100%); color: white;">
+                    <div class="d-flex align-items-center gap-2" style="font-size: 0.88rem; font-weight: 500;">
+                        <i class="fas fa-star" style="animation: pulseFocus 1.5s infinite;"></i>
+                        <span>Foco: <strong>${clientName}</strong> | Trajeto Individual</span>
                     </div>
-                    <div class="px-3 py-2" style="background: rgba(211, 0, 123, 0.08); border: 1px solid rgba(211, 0, 123, 0.15); border-top: none;">
-                        <label class="small fw-bold text-muted mb-1 d-block" style="font-size: 0.68rem;">PONTO DE PARTIDA DO TRAJETO:</label>
-                        <div class="d-flex gap-2 align-items-center mb-1">
-                            <select id="focus-start-type" class="form-select form-select-sm border-0 rounded-3 text-dark" style="font-size: 0.8rem; max-width: 260px;" onchange="updateFocusStartType(this.value)">
-                                <option value="gps" ${focusStartType === 'gps' ? 'selected' : ''}>📍 Localização Atual (GPS)</option>
-                                <option value="address" ${focusStartType === 'address' ? 'selected' : ''}>✍️ Endereço digitado</option>
-                                <option value="planilha" ${focusStartType === 'planilha' ? 'selected' : ''}>🏠 Endereço Padrão (Planilha)</option>
-                            </select>
-                        </div>
-                        <div id="focus-start-address-container" style="display: ${focusStartType === 'address' ? 'block' : 'none'};">
-                            <div class="input-group input-group-sm">
-                                <input type="text" id="focus-start-address" class="form-control border-0 rounded-start-3 text-dark" style="font-size: 0.8rem;"
-                                       placeholder="Ex: Rua XV de Novembro, 100, Piracicaba" value="${focusStartAddress}"
-                                       onchange="localStorage.setItem('focus_start_address', this.value)">
-                                <button class="btn btn-sm text-white rounded-end-3 fw-bold" style="background: #d3007b; font-size: 0.72rem;" type="button" onclick="applyFocusStartAddress()">
-                                    <i class="fas fa-sync-alt me-1"></i>Atualizar
-                                </button>
-                            </div>
-                        </div>
-                        ${focusStartType === 'planilha' ? `<div class="small text-muted mt-1" style="font-size: 0.7rem;"><i class="fas fa-home me-1"></i>${userConfig.adress_start || '<em>Não cadastrado na planilha</em>'}</div>` : ''}
-                        ${focusStartType === 'gps' ? `<div class="small text-muted mt-1" style="font-size: 0.7rem;" id="focus-gps-status"><i class="fas fa-satellite-dish me-1"></i>Buscando sinal GPS...</div>` : ''}
-                    </div>
+                    <button class="btn btn-xs btn-light rounded-pill px-3 py-1 fw-bold text-dark" style="font-size: 0.72rem; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" onclick="clearFocusedClient()">
+                        Limpar Foco
+                    </button>
                 </div>
                 `;
             })() : ''}
@@ -4407,21 +5150,28 @@
                     const visited = visitStatus !== null;
                     const isAbsent = visitStatus === 'Não Encontrado';
                     
+                    let reason = "";
+                    if (!i.Endereco || i.Endereco.trim().length <= 5) reason = "Sem endereço cadastrado";
+                    else if (omitWhats && i.Ordem == 99) reason = "Cliente de WhatsApp";
+                    
                     return `
-                    <div class="card card-client mb-2 ${visitStatus === 'Visita' ? 'visited-card' : isAbsent ? 'absent-card' : ''}" style="border-left-width: 4px;">
-                        <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="badge bg-secondary text-white rounded-circle me-1" style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">${idx + 1}</span>
-                                <span class="fw-bold" style="font-size: 0.92rem;">${i.Fantasia || i.Cliente}</span>
-                                <div class="small text-muted" style="font-size: 0.72rem; padding-left: 26px;">${i.Endereco}</div>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                ${visitStatus === 'Visita' ? 
-                                    `<span class="badge bg-success"><i class="fas fa-check"></i></span>` : 
-                                  isAbsent ?
-                                    `<span class="badge bg-warning text-dark"><i class="fas fa-user-slash"></i></span>` :
-                                    `<button class="btn btn-sm btn-outline-primary px-2 py-0.5 rounded-pill fw-bold" style="font-size: 0.72rem;" onclick="abrirGps('${i.ID}', event)">Ir</button>`
-                                }
+                    <div class="card card-client mb-2 ${visited ? (isAbsent ? 'absent-card' : 'visited-card') : ''}" onclick="focusOnMap('${i.ID}', event)" style="cursor: pointer;">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge ${visited ? 'bg-secondary' : 'bg-primary'} rounded-pill">${idx + 1}</span>
+                                    <div>
+                                        <div class="fw-bold text-dark" style="font-size: 0.88rem;">${i.Fantasia || i.Cliente}</div>
+                                        <div class="text-muted" style="font-size: 0.72rem;"><i class="fas fa-map-marker-alt me-1 text-secondary"></i>${i.Bairro || 'Sem Bairro'}, ${i.Cidade}</div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    ${visited ? `
+                                    <span class="badge ${isAbsent ? 'bg-warning text-dark' : 'bg-success'} rounded-pill" style="font-size: 0.65rem;">${isAbsent ? 'Ausente' : 'Visitado'}</span>
+                                    ` : `
+                                    <span class="badge bg-light text-muted border rounded-pill" style="font-size: 0.65rem;">Pendente</span>
+                                    `}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4433,13 +5183,12 @@
             
             if (excludedClients.length > 0) {
                 html += `
-                <div class="mt-4">
-                    <div class="fw-bold mb-2 text-danger" style="font-size: 0.95rem;">⚠️ CLIENTES NÃO INCLUÍDOS NA ROTA FÍSICA:</div>
+                <div class="mt-3">
+                    <div class="fw-bold mb-2 text-danger" style="font-size: 0.95rem;">🚫 CLIENTES EXCLUÍDOS DA ROTA FÍSICA (${excludedClients.length}):</div>
                     <div id="map-excluded-list">
                     ${excludedClients.map(i => {
-                        const noAddress = !i.Endereco || i.Endereco.trim().length <= 5;
                         const isWhats = i.Ordem == 99;
-                        const reason = noAddress ? "Sem Endereço cadastrado" : (isWhats ? "Contato apenas por WhatsApp (Ordem 99)" : "Outro motivo");
+                        const reason = !i.Endereco || i.Endereco.trim().length <= 5 ? "Sem endereço cadastrado" : "Cliente de WhatsApp (Omitido)";
                         return `
                         <div class="card card-client mb-2 border-danger" style="border-left-width: 4px; background-color: #fff8f8;">
                             <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
@@ -4481,11 +5230,14 @@
                     backTypeEl.value = lastBackType;
                     toggleMapBackInput();
                 }
+                const mapaFVisitaEl = document.getElementById('mapa-fVisita');
+                if (mapaFVisitaEl) {
+                    mapaFVisitaEl.value = document.getElementById('fVisita') ? document.getElementById('fVisita').value : '';
+                }
             }, 100);
         }
         
         // --- 5. RENDER PLAYBOOK ---
-        else if (activeTab === 'playbook') {
             let html = `
             <h5 class="fw-bold text-success mb-3"><i class="fas fa-book-open me-2"></i>PLAYBOOK DO CLIENTE</h5>
             
@@ -4740,6 +5492,82 @@
                 <h5 class="fw-bold text-danger mb-1"><i class="fas fa-map-pin me-2"></i>SEM ENDEREÇO CADASTRADO</h5>
                 <p class="small text-muted mb-0">Total: ${missingAddress.length} clientes sem endereço ou CEP.</p>
             </div>
+            
+            <div class="dash-card mb-3 text-dark" style="background: #f8fafc; border: 1px solid #cbd5e1; text-align: left !important;">
+                <h6 class="fw-bold text-dark mb-3"><i class="fas fa-industry me-2 text-primary"></i>🏭 ENRIQUECIMENTO DE DADOS EM LOTE</h6>
+                
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted d-block mb-2">SELECIONAR CLIENTES PARA ENRIQUECER:</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="batch-select-mode" id="bsm-all" value="all" checked onchange="toggleBatchSelectionView()">
+                            <label class="form-check-label small" for="bsm-all">Todos com CNPJ no sistema</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="batch-select-mode" id="bsm-missing" value="missing" onchange="toggleBatchSelectionView()">
+                            <label class="form-check-label small" for="bsm-missing">Apenas sem endereço</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted d-block mb-2">O QUE PREENCHER:</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chk-fill-bairro" checked>
+                            <label class="form-check-label small" for="chk-fill-bairro">Bairro</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chk-fill-cep" checked>
+                            <label class="form-check-label small" for="chk-fill-cep">CEP</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chk-fill-end" checked>
+                            <label class="form-check-label small" for="chk-fill-end">Endereço (se vazio)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chk-fill-playbook" checked>
+                            <label class="form-check-label small" for="chk-fill-playbook">Playbook (Dossiê CNPJ)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="batch-stats-box" style="display: none;" class="mb-3 p-3 border rounded-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-bold text-muted">Progresso do Lote:</span>
+                        <span id="batch-progress-text" class="small fw-bold text-primary">0 / 0</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 12px; border-radius: 6px; overflow: hidden; background-color: #e2e8f0;">
+                        <div id="batch-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="row g-2 text-center text-dark" style="font-size: 0.75rem;">
+                        <div class="col-4">
+                            <div class="p-1 border rounded bg-light">
+                                <b id="batch-stat-success" class="text-success" style="font-size: 1rem;">0</b><br>Preenchidos
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-1 border rounded bg-light">
+                                <b id="batch-stat-nocnpj" class="text-warning" style="font-size: 1rem;">0</b><br>Sem CNPJ
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-1 border rounded bg-light">
+                                <b id="batch-stat-error" class="text-danger" style="font-size: 1rem;">0</b><br>Erro/Falha
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="button" id="btn-start-batch" class="btn btn-success py-2.5 rounded-pill fw-bold shadow-sm" onclick="startBatchEnrichment()">
+                        <i class="fas fa-play me-2"></i>INICIAR ENRIQUECIMENTO
+                    </button>
+                    <button type="button" id="btn-stop-batch" class="btn btn-danger py-2 rounded-pill fw-bold" style="display: none;" onclick="stopBatchEnrichment()">
+                        <i class="fas fa-stop me-2"></i>PARAR PROCESSO
+                    </button>
+                </div>
+            </div>
             `;
             
             if (missingAddress.length === 0) {
@@ -4821,6 +5649,8 @@
             document.getElementById('f-whats').value = c.WhatsApp;
             document.getElementById('f-end').value = c.Endereco;
             document.getElementById('f-cid').value = c.Cidade;
+            document.getElementById('f-bairro').value = c.Bairro || '';
+            document.getElementById('f-cep').value = c.CEP || '';
             document.getElementById('f-vis').value = c.Visita;
             document.getElementById('f-ent').value = c.Entrega;
             document.getElementById('f-ord').value = c.Ordem;
@@ -5091,6 +5921,8 @@
             WhatsApp: document.getElementById('f-whats').value,
             Endereco: document.getElementById('f-end').value,
             Cidade: document.getElementById('f-cid').value,
+            Bairro: document.getElementById('f-bairro').value,
+            CEP: document.getElementById('f-cep').value,
             Visita: document.getElementById('f-vis').value,
             Entrega: document.getElementById('f-ent').value,
             Ordem: document.getElementById('f-ord').value,
@@ -5158,12 +5990,22 @@
     }
 
     // Configuração dos Event Listeners dos Filtros
-    ['search','fVisita','fEntrega','fCidade'].forEach(id => {
+    ['search','fVisita','fEntrega','fBairro'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener(id === 'search' ? 'input' : 'change', render);
         }
     });
+
+    const fCidadeEl = document.getElementById('fCidade');
+    if (fCidadeEl) {
+        fCidadeEl.addEventListener('change', function() {
+            popularBairros();
+            const fBairroEl = document.getElementById('fBairro');
+            if (fBairroEl) fBairroEl.value = '';
+            render();
+        });
+    }
 
     const roteiroDateEl = document.getElementById('roteiroDate');
     if (roteiroDateEl) {
