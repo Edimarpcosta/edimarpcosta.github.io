@@ -544,14 +544,17 @@ async function carregarParametrosConfigForm() {
         CUSTO_FLEX_PADRAO_PROMOTOR: "Flex Padrão Promotor (R$)",
         CUSTO_FLEX_PADRAO_TECNICO: "Flex Padrão Técnico (R$)",
         CUSTO_FLEX_100_PROMOTOR: "Flex 100% Promotor (R$)",
-        CUSTO_FLEX_100_TECNICO: "Flex 100% Técnico (R$)"
+        CUSTO_FLEX_100_TECNICO: "Flex 100% Técnico (R$)",
+        EMAIL_GERENTE: "E-mail do Gerente (Notificações)"
       };
       
       keys.forEach(k => {
         const div = document.createElement('div');
+        const isEmail = k === "EMAIL_GERENTE";
+        const inputType = isEmail ? 'type="email"' : 'type="number" step="0.01"';
         div.innerHTML = `
           <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">${labels[k] || k}</label>
-          <input type="number" step="0.01" data-chave="${k}" value="${res.parametros[k]}" required
+          <input ${inputType} data-chave="${k}" value="${res.parametros[k]}" required
             class="block w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm">
         `;
         form.appendChild(div);
