@@ -11,6 +11,12 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos
 let ultimoCacheTimestamp = null;
 let listaClientesGlobal = [];
 let clienteSelecionado = null;
+let listaProfissionaisGlobal = [];
+const fallbackProfissionais = [
+  { nome: "JOÃO", tipo: "TECNICO" },
+  { nome: "THIAGO", tipo: "TECNICO" },
+  { nome: "promotor", tipo: "PROMOTOR" }
+];
 
 // Solicitação pesquisada ou cadastrada ativa para geração de PDF
 let solicitacaoAtiva = null;
@@ -173,8 +179,9 @@ function switchAba(tab) {
 
 async function inicializarModuloCadastro() {
   await carregarRegrasCONFIG();
+  await carregarProfissionaisAtivos();
   await carregarListaClientesComCache();
-  await carregarMiniCalendario();
+  // Mini-calendário é carregado automaticamente por carregarProfissionaisAtivos -> atualizarDropdownTecnicos -> selecionarTecnico -> carregarMiniCalendario
   
   // Detecta navigator.share e exibe botões correspondentes
   const btnShareCad = document.getElementById('btn-share-cadastro');
@@ -194,6 +201,58 @@ async function inicializarModuloCadastro() {
       }
     });
   }
+}
+
+async function carregarProfissionaisAtivos() {
+  try {
+    const list = await apiGet('listarProfissionaisAtivos');
+    if (Array.isArray(list)) {
+      listaProfissionaisGlobal = list;
+    } else {
+      console.warn("API de profissionais ativos retornou formato inválido. Usando fallbacks.", list);
+      listaProfissionaisGlobal = fallbackProfissionais;
+    }
+  } catch (err) {
+    console.error("Falha ao carregar profissionais ativos da API. Usando fallbacks:", err);
+    listaProfissionaisGlobal = fallbackProfissionais;
+  }
+  atualizarDropdownTecnicos();
+}
+
+function atualizarDropdownTecnicos() {
+  const selectTecnico = document.getElementById('tecnico');
+  const selectProfissional = document.getElementById('profissional');
+  if (!selectTecnico || !selectProfissional) return;
+  
+  const profissionalRequerido = selectProfissional.value;
+  const oldVal = selectTecnico.value;
+  selectTecnico.innerHTML = "";
+  
+  const filtrados = listaProfissionaisGlobal.filter(p => p.tipo === profissionalRequerido);
+  
+  if (filtrados.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.innerText = `Nenhum ${profissionalRequerido.toLowerCase()} disponível`;
+    opt.disabled = true;
+    opt.selected = true;
+    selectTecnico.appendChild(opt);
+  } else {
+    filtrados.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.nome;
+      opt.innerText = `${p.nome} (${p.tipo})`;
+      selectTecnico.appendChild(opt);
+    });
+  }
+  
+  if (oldVal && selectTecnico.querySelector(`option[value="${oldVal}"]`)) {
+    selectTecnico.value = oldVal;
+  } else if (selectTecnico.options.length > 0) {
+    selectTecnico.selectedIndex = 0;
+  }
+  
+  selecionarTecnico();
 }
 
 async function carregarRegrasCONFIG() {
@@ -467,8 +526,15 @@ function visualizarMaps() {
 // ==========================================
 
 async function carregarMiniCalendario() {
-  const tecnico = document.getElementById('tecnico').value;
+  const selectTecnico = document.getElementById('tecnico');
+  const tecnico = selectTecnico ? selectTecnico.value : "";
   const calContainer = document.getElementById('calendarios-container');
+  
+  if (!tecnico) {
+    calContainer.innerHTML = `<div class="text-center text-slate-500 text-xs py-4 col-span-2">Nenhum profissional selecionado para ver a agenda.</div>`;
+    return;
+  }
+  
   calContainer.innerHTML = `<div class="text-center text-slate-500 text-xs py-4 col-span-2"><i class="fa-solid fa-spinner animate-spin mr-2"></i>Sincronizando agenda do profissional...</div>`;
   
   try {
@@ -689,12 +755,16 @@ async function calcularDistanciaRoteamento() {
 }
 
 async function verificarAgendaLocal() {
-  const tecnico = document.getElementById('tecnico').value;
+  const selectTecnico = document.getElementById('tecnico');
+  const tecnico = selectTecnico ? selectTecnico.value : "";
   const data = document.getElementById('dataTrabalho').value;
   const aviso = document.getElementById('agenda-aviso');
   const submit = document.getElementById('submit-btn');
   
-  if (!data) return;
+  if (!tecnico || !data) {
+    aviso.classList.add('hidden');
+    return;
+  }
   
   try {
     const ocupado = await apiGet('verificarAgenda', { tecnico, data });
