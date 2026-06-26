@@ -664,8 +664,8 @@ function alternarCamposDetalhamento(opcao) {
 function calcularRegraAutoCritica() {
   const prof = document.getElementById('profissional').value;
   const exec = document.getElementById('formaExecucao').value;
-  const valor = parseFloat(document.getElementById('valorPedido').value) || 0;
-  const markup = parseFloat(document.getElementById('indicePedido').value) || 0;
+  const valor = parseBR(document.getElementById('valorPedido').value) || 0;
+  const markup = parseBR(document.getElementById('indicePedido').value) || 0;
   const badge = document.getElementById('custo-flex-badge');
   const alerta = document.getElementById('autocritica-alerta');
   
@@ -814,8 +814,8 @@ async function enviarFormularioCadastro(e) {
     }
   }
   
-  const valorPedido = document.getElementById('valorPedido').value;
-  const indicePedido = document.getElementById('indicePedido').value;
+  const valorPedido = parseBR(document.getElementById('valorPedido').value);
+  const indicePedido = parseBR(document.getElementById('indicePedido').value);
   const numeroPedido = document.getElementById('numeroPedido').value.trim();
   
   const codCliente = document.getElementById('codCliente').value.trim() || 'MANUAL';
@@ -1222,5 +1222,62 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// ---- Utilitários de formatação BR ----
+
+function formatarMoedaBR(valor) {
+  const num = parseFloat(String(valor).replace(',', '.')) || 0;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatarDecimalBR(valor, casas = 1) {
+  const num = parseFloat(String(valor).replace(',', '.')) || 0;
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: 2 });
+}
+
+function parseBR(str) {
+  if (!str) return 0;
+  const limpo = String(str).replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+  return parseFloat(limpo) || 0;
+}
+
+function instalarFormatacaoForm() {
+  const form = document.getElementById('form-solicitacao');
+  if (!form) return;
+  const inputs = form.querySelectorAll('input[data-format]');
+
+  inputs.forEach(input => {
+    input.addEventListener('focus', function () {
+      const raw = parseBR(this.value);
+      if (raw !== 0) {
+        this.value = String(raw).replace('.', ',');
+      } else {
+        this.value = '';
+      }
+      this.select();
+    });
+
+    input.addEventListener('blur', function () {
+      if (!this.value.trim()) return;
+      const raw = parseBR(this.value);
+      const fmt = this.getAttribute('data-format');
+      if (fmt === 'moeda') {
+        this.value = formatarMoedaBR(raw);
+      } else if (fmt === 'decimal') {
+        this.value = formatarDecimalBR(raw);
+      }
+      // Re-calcula regra de autocrítica após formatação
+      calcularRegraAutoCritica();
+    });
+
+    input.addEventListener('keypress', function (e) {
+      if (!/[\d,.]/.test(e.key)) e.preventDefault();
+    });
+  });
+}
+
 // Inicialização ao carregar
-document.addEventListener('DOMContentLoaded', validarAcessoInicial);
+document.addEventListener('DOMContentLoaded', () => {
+  validarAcessoInicial();
+  instalarFormatacaoForm();
+});
+
