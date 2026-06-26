@@ -411,6 +411,23 @@ async function carregarUsuariosEquipe() {
     if (res.sucesso && res.usuarios) {
       listaUsuariosEquipe = res.usuarios;
       
+      const filterSelect = document.getElementById('filter-tecnico');
+      if (filterSelect) {
+        const oldVal = filterSelect.value;
+        filterSelect.innerHTML = `<option value="TODOS">TODOS OS PROFISSIONAIS</option>`;
+        res.usuarios.forEach(u => {
+          if (u.ativo === "SIM" && (u.tipo === "TECNICO" || u.tipo === "PROMOTOR")) {
+            const opt = document.createElement('option');
+            opt.value = u.nome;
+            opt.innerText = `${u.nome} (${u.tipo})`;
+            filterSelect.appendChild(opt);
+          }
+        });
+        if (oldVal && filterSelect.querySelector(`option[value="${oldVal}"]`)) {
+          filterSelect.value = oldVal;
+        }
+      }
+      
       res.usuarios.forEach(u => {
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-900/40 border-b border-slate-900";
