@@ -1196,3 +1196,48 @@ async function salvarEdicaoSolicitacao() {
     btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações`;
   }
 }
+
+/**
+ * Calcula a distância logístico-terrestre diretamente na tela de gestão
+ */
+async function calcularKmMensuracaoEdicao() {
+  const tecnico = document.getElementById('edit-tecnico').value;
+  const cep = document.getElementById('edit-cep').value;
+  const numero = document.getElementById('edit-numero').value.trim();
+  const cidade = document.getElementById('edit-cidade').value.trim();
+  const endereco = document.getElementById('edit-endereco').value.trim();
+  const bairro = document.getElementById('edit-bairro').value.trim();
+  const kmInput = document.getElementById('edit-kmDistancia');
+
+  if (!tecnico) {
+    alert("Selecione um profissional para o cálculo.");
+    return;
+  }
+  if (!cidade && !cep && !endereco) {
+    alert("Informe ao menos o Endereço, CEP ou Cidade do cliente para calcular.");
+    return;
+  }
+
+  const valorOriginal = kmInput.value;
+  kmInput.value = "Calc...";
+
+  try {
+    const km = await apiPost('calcularDistancia', {
+      tecnico: tecnico,
+      cep: cep,
+      numero: numero,
+      cidade: cidade,
+      endereco: endereco,
+      bairro: bairro
+    });
+    
+    if (km !== null && km !== undefined) {
+      kmInput.value = formatarDecimalBR(parseFloat(km) || 0, 1);
+    } else {
+      throw new Error("Retorno de quilometragem inválido.");
+    }
+  } catch (err) {
+    alert("Erro ao calcular distância: " + err.message);
+    kmInput.value = valorOriginal;
+  }
+}
