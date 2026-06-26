@@ -236,6 +236,9 @@ function aplicarFiltrosOperacoes() {
     }
     
     let acoesHtml = `
+      <button onclick="abrirModalEdicao('${s.id}')" title="Editar Registro" class="bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white p-1.5 rounded-lg border border-blue-500/20 transition-all">
+        <i class="fa-solid fa-pen-to-square"></i>
+      </button>
       <button onclick="baixarPdfFicha('${s.id}')" title="Baixar PDF" class="bg-slate-800 hover:bg-slate-700 text-white p-1.5 rounded-lg border border-slate-750 transition-colors">
         <i class="fa-solid fa-file-pdf"></i>
       </button>
@@ -522,86 +525,146 @@ async function alternarStatusUsuario(username, ativoAtual) {
 }
 
 // ==========================================
-// PARÂMETROS COMERCIAIS (M11)
+// PARÂMETROS COMERCIAIS + ACESSO/NOTIFICAÇÕES (M11 + F2)
 // ==========================================
 
+let _configsCache = [];
+
 async function carregarParametrosConfigForm() {
-  const loader = document.getElementById('config-loader');
-  const form = document.getElementById('form-config-parametros');
-  loader.classList.remove('hidden');
-  form.innerHTML = "";
-  
+  const loaderComercial = document.getElementById('config-loader');
+  const loaderAcesso = document.getElementById('acesso-loader');
+  const formComercial = document.getElementById('form-config-parametros');
+  const formAcesso = document.getElementById('form-config-acesso');
+
+  loaderComercial.classList.remove('hidden');
+  loaderAcesso.classList.remove('hidden');
+  formComercial.innerHTML = '';
+  formAcesso.innerHTML = '';
+
+  const labelsComercial = {
+    MIN_PEDIDO_PROMOTOR: 'Pedido Mínimo Promotor (R$)',
+    MIN_PEDIDO_TECNICO: 'Pedido Mínimo Técnico (R$)',
+    MIN_MARKUP: 'Markup Mínimo (M.U.)',
+    CUSTO_FLEX_PADRAO_PROMOTOR: 'Flex Padrão Promotor (R$)',
+    CUSTO_FLEX_PADRAO_TECNICO: 'Flex Padrão Técnico (R$)',
+    CUSTO_FLEX_100_PROMOTOR: 'Flex 100% Promotor (R$)',
+    CUSTO_FLEX_100_TECNICO: 'Flex 100% Técnico (R$)'
+  };
+  const labelsAcesso = {
+    SENHA_PORTAL: 'Senha do Portal (Vendedores)',
+    SENHA_GESTOR: 'Senha do Gestor (Painel Gerencial)',
+    EMAIL_GERENTE: 'E-mail do Gerente (Notificações)'
+  };
+
   try {
-    const res = await apiGet('obterParametrosPublicos');
-    loader.classList.add('hidden');
-    
-    if (res && res.sucesso && res.parametros) {
-      const keys = Object.keys(res.parametros);
-      const labels = {
-        MIN_PEDIDO_PROMOTOR: "Pedido Mínimo Promotor (R$)",
-        MIN_PEDIDO_TECNICO: "Pedido Mínimo Técnico (R$)",
-        MIN_MARKUP: "Markup Mínimo (M.U.)",
-        CUSTO_FLEX_PADRAO_PROMOTOR: "Flex Padrão Promotor (R$)",
-        CUSTO_FLEX_PADRAO_TECNICO: "Flex Padrão Técnico (R$)",
-        CUSTO_FLEX_100_PROMOTOR: "Flex 100% Promotor (R$)",
-        CUSTO_FLEX_100_TECNICO: "Flex 100% Técnico (R$)",
-        EMAIL_GERENTE: "E-mail do Gerente (Notificações)"
-      };
-      
-      keys.forEach(k => {
+    const res = await apiPost('obterTodasConfiguracoes');
+    loaderComercial.classList.add('hidden');
+    loaderAcesso.classList.add('hidden');
+
+    if (!res || !res.sucesso) {
+      formComercial.innerHTML = `<div class="text-rose-500 text-xs text-center py-4 md:col-span-2">Erro ao carregar configurações: ${res ? res.erro : 'Resposta inválida'}</div>`;
+      return;
+    }
+
+    _configsCache = res.configs;
+
+    res.configs.forEach(cfg => {
+      const chave = cfg.chave;
+      const valor = cfg.valor;
+      const ehSenha = cfg.ehSenha;
+
+      if (labelsComercial[chave]) {
         const div = document.createElement('div');
-        const isEmail = k === "EMAIL_GERENTE";
-        const inputType = isEmail ? 'type="email"' : 'type="number" step="0.01"';
         div.innerHTML = `
-          <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">${labels[k] || k}</label>
-          <input ${inputType} data-chave="${k}" value="${res.parametros[k]}" required
+          <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">${labelsComercial[chave]}</label>
+          <input type="number" step="0.01" data-chave="${chave}" data-secao="comercial" value="${valor}"
             class="block w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm">
         `;
-        form.appendChild(div);
-      });
-      
-      const btnDiv = document.createElement('div');
-      btnDiv.className = "md:col-span-2 pt-4 flex justify-end";
-      btnDiv.innerHTML = `
-        <button type="submit" class="bg-gradient-to-r from-brand-500 to-brand-gold text-white font-semibold py-2.5 px-6 rounded-xl text-xs flex items-center gap-1.5 transition-all">
-          <i class="fa-solid fa-save"></i> Gravar Parâmetros
-        </button>
-      `;
-      form.appendChild(btnDiv);
-    }
+        formComercial.appendChild(div);
+      } else if (labelsAcesso[chave]) {
+        const div = document.createElement('div');
+        const inputType = chave === 'EMAIL_GERENTE' ? 'email' : 'password';
+        const placeholder = ehSenha ? 'Deixe vazio para não alterar' : '';
+        const toggleBtn = ehSenha ? `<button type="button" onclick="toggleSenhaVisivel(this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs"><i class="fa-solid fa-eye"></i></button>` : '';
+        div.innerHTML = `
+          <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">${labelsAcesso[chave]}</label>
+          <div class="relative">
+            <input type="${inputType}" data-chave="${chave}" data-secao="acesso" data-eh-senha="${ehSenha}" value="${valor}" placeholder="${placeholder}"
+              class="block w-full px-3 py-2 ${ehSenha ? 'pr-10' : ''} bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-rose-500 text-sm">
+            ${toggleBtn}
+          </div>
+        `;
+        formAcesso.appendChild(div);
+      }
+    });
   } catch (err) {
-    loader.classList.add('hidden');
-    form.innerHTML = `<div class="text-rose-500 text-xs text-center py-4 md:col-span-2">Erro ao carregar configurações: ${err.message}</div>`;
+    loaderComercial.classList.add('hidden');
+    loaderAcesso.classList.add('hidden');
+    formComercial.innerHTML = `<div class="text-rose-500 text-xs text-center py-4 md:col-span-2">Erro: ${err.message}</div>`;
   }
 }
 
-async function salvarConfigParametros(e) {
-  e.preventDefault();
+function toggleSenhaVisivel(btn) {
+  const input = btn.parentElement.querySelector('input');
+  const icon = btn.querySelector('i');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'fa-solid fa-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'fa-solid fa-eye';
+  }
+}
+
+async function salvarConfigComercial() {
   const form = document.getElementById('form-config-parametros');
-  const inputs = form.querySelectorAll('input[data-chave]');
-  
+  const inputs = form.querySelectorAll('input[data-secao="comercial"]');
   let erros = 0;
   for (let input of inputs) {
     const chave = input.getAttribute('data-chave');
     const valor = input.value.trim();
-    
     try {
       const res = await apiPost('atualizarConfigParam', { chave, valor });
-      if (!res.sucesso) {
-        erros++;
-        console.error("Falha ao salvar " + chave);
-      }
-    } catch (err) {
-      erros++;
-    }
+      if (!res.sucesso) { erros++; console.error('Falha ao salvar ' + chave + ': ' + res.erro); }
+    } catch (err) { erros++; }
   }
-  
   if (erros === 0) {
-    alert("Parâmetros comerciais atualizados no banco de dados com sucesso!");
+    alert('Parâmetros comerciais gravados com sucesso!');
     carregarParametrosConfigForm();
   } else {
-    alert("Alguns parâmetros não puderam ser gravados. Verifique o console.");
+    alert('Alguns parâmetros não puderam ser gravados. Verifique o console.');
   }
+}
+
+async function salvarConfigAcesso() {
+  const form = document.getElementById('form-config-acesso');
+  const inputs = form.querySelectorAll('input[data-secao="acesso"]');
+  let erros = 0;
+  let salvou = 0;
+  for (let input of inputs) {
+    const chave = input.getAttribute('data-chave');
+    const ehSenha = input.getAttribute('data-eh-senha') === 'true';
+    const valor = input.value.trim();
+    // Se é senha e o campo está vazio, não altera
+    if (ehSenha && !valor) continue;
+    try {
+      const res = await apiPost('atualizarConfigParam', { chave, valor });
+      if (!res.sucesso) { erros++; console.error('Falha ao salvar ' + chave + ': ' + res.erro); }
+      else { salvou++; }
+    } catch (err) { erros++; }
+  }
+  if (erros === 0) {
+    alert(salvou === 0 ? 'Nenhuma alteração detectada (senhas em branco).' : 'Configurações de acesso gravadas com sucesso!');
+    carregarParametrosConfigForm();
+  } else {
+    alert('Alguns dados não puderam ser gravados. Verifique o console.');
+  }
+}
+
+// Função legada mantida para compatibilidade
+async function salvarConfigParametros(e) {
+  if (e) e.preventDefault();
+  await salvarConfigComercial();
 }
 
 // ==========================================
@@ -818,3 +881,109 @@ function baixarPdfFicha(id) {
 
 // Inicializa a escuta
 document.addEventListener('DOMContentLoaded', validarAcessoGerente);
+
+// ==========================================
+// MODAL DE EDIÇÃO DE SOLICITAÇÃO (F1)
+// ==========================================
+
+let _idEmEdicao = null;
+
+function abrirModalEdicao(id) {
+  const sol = listaSolicitacoesGerenciais.find(s => s.id === id);
+  if (!sol) { alert('Solicitação não encontrada na lista atual.'); return; }
+
+  _idEmEdicao = id;
+  document.getElementById('modal-edicao-titulo').innerText = `Editando: ${id} — ${sol.razaoSocial || ''}`;
+
+  // Planejamento
+  document.getElementById('edit-vendedor').value = sol.vendedor || '';
+  document.getElementById('edit-tecnico').value = sol.tecnico || '';
+  document.getElementById('edit-dataTrabalho').value = sol.dataTrabalho || '';
+
+  // Cliente
+  document.getElementById('edit-codCliente').value = sol.codCliente || '';
+  document.getElementById('edit-razaoSocial').value = sol.razaoSocial || '';
+  document.getElementById('edit-nomeFantasia').value = sol.nomeFantasia || '';
+  document.getElementById('edit-cidade').value = sol.cidade || '';
+  document.getElementById('edit-endereco').value = sol.endereco || '';
+  document.getElementById('edit-bairro').value = sol.bairro || '';
+  document.getElementById('edit-numero').value = sol.numero || '';
+  document.getElementById('edit-cep').value = sol.cep || '';
+
+  // Escopo
+  const selProf = document.getElementById('edit-profissional');
+  selProf.value = sol.profissional || 'TECNICO';
+  const selTipo = document.getElementById('edit-tipoServico');
+  selTipo.value = sol.tipoServico || 'Panificação';
+  const selForma = document.getElementById('edit-formaExecucao');
+  selForma.value = sol.formaExecucao || 'PADRAO';
+  document.getElementById('edit-detalhes').value = sol.detalhes || '';
+
+  // Valores e Logística
+  document.getElementById('edit-valorPedido').value = sol.valorPedido || 0;
+  document.getElementById('edit-indicePedido').value = sol.indicePedido || 0;
+  document.getElementById('edit-numeroPedido').value = sol.numeroPedido || '';
+  document.getElementById('edit-kmDistancia').value = sol.kmDistancia || 0;
+  document.getElementById('edit-custoFlex').value = sol.custoFlex || 0;
+
+  // Status
+  const selStatus = document.getElementById('edit-status');
+  selStatus.value = sol.status || 'Pendente Aprovacao Gerencial';
+
+  document.getElementById('modal-edicao-solicitacao').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharModalEdicao() {
+  document.getElementById('modal-edicao-solicitacao').classList.add('hidden');
+  document.body.style.overflow = '';
+  _idEmEdicao = null;
+}
+
+async function salvarEdicaoSolicitacao() {
+  if (!_idEmEdicao) return;
+
+  const btn = document.getElementById('btn-salvar-edicao');
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Salvando...`;
+
+  const campos = {
+    vendedor:      document.getElementById('edit-vendedor').value.trim(),
+    tecnico:       document.getElementById('edit-tecnico').value.trim(),
+    dataTrabalho:  document.getElementById('edit-dataTrabalho').value,
+    codCliente:    document.getElementById('edit-codCliente').value.trim(),
+    razaoSocial:   document.getElementById('edit-razaoSocial').value.trim(),
+    nomeFantasia:  document.getElementById('edit-nomeFantasia').value.trim(),
+    cidade:        document.getElementById('edit-cidade').value.trim(),
+    endereco:      document.getElementById('edit-endereco').value.trim(),
+    bairro:        document.getElementById('edit-bairro').value.trim(),
+    numero:        document.getElementById('edit-numero').value.trim(),
+    cep:           document.getElementById('edit-cep').value.trim(),
+    profissional:  document.getElementById('edit-profissional').value,
+    tipoServico:   document.getElementById('edit-tipoServico').value,
+    formaExecucao: document.getElementById('edit-formaExecucao').value,
+    detalhes:      document.getElementById('edit-detalhes').value.trim(),
+    valorPedido:   document.getElementById('edit-valorPedido').value,
+    indicePedido:  document.getElementById('edit-indicePedido').value,
+    numeroPedido:  document.getElementById('edit-numeroPedido').value.trim(),
+    kmDistancia:   document.getElementById('edit-kmDistancia').value,
+    custoFlex:     document.getElementById('edit-custoFlex').value,
+    status:        document.getElementById('edit-status').value
+  };
+
+  try {
+    const res = await apiPost('editarSolicitacao', { id: _idEmEdicao, campos });
+    if (res.sucesso) {
+      fecharModalEdicao();
+      await recarregarDadosOperacionais();
+    } else {
+      alert('Erro ao salvar: ' + res.erro);
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações`;
+    }
+  } catch (err) {
+    alert('Falha de rede: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações`;
+  }
+}
