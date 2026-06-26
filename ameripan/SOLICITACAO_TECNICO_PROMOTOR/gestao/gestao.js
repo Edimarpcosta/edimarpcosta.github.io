@@ -116,7 +116,7 @@ async function validarAcessoGerente() {
   }
   
   try {
-    const res = await apiPost('autenticar', { token: token });
+    const res = await apiPost('verificarTokenGestor', {});
     if (res.sucesso) {
       overlay.classList.add('hidden');
       inicializarModuloGerencial();
@@ -709,7 +709,7 @@ function criarFichaPdf(sol) {
       ['Data Programada', dtVal || '-'],
       ['Cidade de Destino', sol.cidade || '-'],
       ['Cliente ERP', `[${sol.codCliente}] ${sol.razaoSocial} (${sol.nomeFantasia})`],
-      ['CEP / Número', `CEP ${sol.cep || '-'}, Nº ${sol.numero || '-'}`],
+      ['Endereço Completo', `${sol.endereco || '-'}, Nº ${sol.numero || '-'} - ${sol.bairro || '-'}, ${sol.cidade || '-'} (CEP: ${sol.cep || '-'})`],
       ['Tipo de Execução', `${sol.profissional} — ${sol.tipoServico}`],
       ['Forma de Cobrança', sol.formaExecucao === 'FLEX' ? '100% Flex (Isento de Faturamento)' : 'Regra Padrão (Pedido ERP)'],
       ['Valor do Pedido / Markup', `R$ ${parseFloat(sol.valorPedido || 0).toFixed(2)} / Markup ${parseFloat(sol.indicePedido || 0).toFixed(1)}`],

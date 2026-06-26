@@ -130,7 +130,7 @@ async function validarAcessoInicial() {
   }
   
   try {
-    const res = await apiGet('verificarSenhaPortal', { token: token });
+    const res = await apiGet('verificarTokenPortal');
     if (res.sucesso) {
       overlay.classList.add('hidden');
       inicializarModuloCadastro();
@@ -326,6 +326,8 @@ function selecionarClienteForm(c) {
   document.getElementById('cidade').value = c.cidade;
   document.getElementById('cep').value = c.cep || '';
   document.getElementById('numero').value = c.numero || '';
+  document.getElementById('endereco').value = c.endereco || '';
+  document.getElementById('bairro').value = c.bairro || '';
   if (c.vendedor) {
     document.getElementById('vendedor').value = c.vendedor;
   }
@@ -339,6 +341,8 @@ function selecionarClienteForm(c) {
     cepInfo.innerText = adr + ` — ${c.cidade}`;
     cepInfo.className = "text-[10px] text-emerald-400 mt-1 font-medium block";
     cepInfo.classList.remove('hidden');
+  } else if (cepInfo) {
+    cepInfo.classList.add('hidden');
   }
   buscarCepViaCep();
 }
@@ -409,9 +413,16 @@ async function buscarCepViaCep() {
       
       cidadeField.value = data.localidade.toUpperCase();
       
+      if (data.logradouro) {
+        document.getElementById('endereco').value = data.logradouro.toUpperCase();
+      }
+      if (data.bairro) {
+        document.getElementById('bairro').value = data.bairro.toUpperCase();
+      }
+      
       if (info) {
-        let adr = data.logradouro + (data.bairro ? `, ${data.bairro}` : "");
-        info.innerText = adr + ` — ${data.localidade}/${data.uf}`;
+        let adr = (data.logradouro || "") + (data.bairro ? `, ${data.bairro}` : "");
+        info.innerText = (adr || "CEP Geral de Cidade") + ` — ${data.localidade}/${data.uf}`;
         info.className = "text-[10px] text-emerald-400 mt-1 font-medium block";
       }
       zerarDistanciaCalculada();
@@ -428,16 +439,24 @@ function visualizarMaps() {
   const cep = document.getElementById('cep').value.replace(/\D/g, '');
   const numero = document.getElementById('numero').value.trim();
   const cidade = document.getElementById('cidade').value.trim();
-  const endereco = clienteSelecionado?.endereco || '';
+  const endereco = document.getElementById('endereco').value.trim();
+  const bairro = document.getElementById('bairro').value.trim();
   
-  if (!cep && !cidade) {
-    alert("Informe ao menos o CEP ou Cidade para abrir no mapa.");
+  if (!cep && !cidade && !endereco) {
+    alert("Informe ao menos o Endereço, CEP ou Cidade para abrir no mapa.");
     return;
   }
   
-  let q = endereco
-    ? `${endereco}, ${numero}, ${cidade}, SP, Brasil`
-    : `CEP ${cep}, ${numero}, ${cidade}, SP, Brasil`;
+  let q = "";
+  if (endereco) {
+    q = `${endereco}, ${numero || ""}`;
+    if (bairro) q += ` - ${bairro}`;
+    q += `, ${cidade}, SP, Brasil`;
+  } else if (cep) {
+    q = `CEP ${cep}, ${numero || ""}, ${cidade}, SP, Brasil`;
+  } else {
+    q = `${cidade}, SP, Brasil`;
+  }
     
   const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   window.open(url, '_blank');
@@ -638,6 +657,8 @@ async function calcularDistanciaRoteamento() {
   const cep = document.getElementById('cep').value;
   const numero = document.getElementById('numero').value.trim();
   const cidade = document.getElementById('cidade').value;
+  const endereco = document.getElementById('endereco').value.trim();
+  const bairro = document.getElementById('bairro').value.trim();
   
   if (!numero) {
     alert("Informe o número do estabelecimento para obter o trajeto logístico.");
@@ -656,8 +677,8 @@ async function calcularDistanciaRoteamento() {
       cep: cep,
       numero: numero,
       cidade: cidade,
-      endereco: clienteSelecionado ? (clienteSelecionado.endereco || "") : "",
-      bairro: clienteSelecionado ? (clienteSelecionado.bairro || "") : ""
+      endereco: endereco,
+      bairro: bairro
     });
     kmLogisticoCalculado = km;
     valSpan.innerText = parseFloat(km).toFixed(1);
@@ -727,30 +748,26 @@ async function enviarFormularioCadastro(e) {
   const indicePedido = document.getElementById('indicePedido').value;
   const numeroPedido = document.getElementById('numeroPedido').value.trim();
   
-  if (!clienteSelecionado) {
-    clienteSelecionado = {
-      codigo: document.getElementById('codCliente').value.trim() || 'MANUAL',
-      razaoSocial: document.getElementById('razaoSocial').value.trim() || 'MANUAL',
-      nomeFantasia: document.getElementById('nomeFantasia').value.trim() || 'MANUAL',
-      cidade: document.getElementById('cidade').value.trim() || '',
-      cep: document.getElementById('cep').value.trim() || '',
-      numero: numero,
-      vendedor: vendedor,
-      endereco: '',
-      bairro: ''
-    };
-  }
+  const codCliente = document.getElementById('codCliente').value.trim() || 'MANUAL';
+  const razaoSocial = document.getElementById('razaoSocial').value.trim() || 'MANUAL';
+  const nomeFantasia = document.getElementById('nomeFantasia').value.trim() || 'MANUAL';
+  const cidade = document.getElementById('cidade').value.trim() || '';
+  const cep = document.getElementById('cep').value.trim() || '';
+  const endereco = document.getElementById('endereco').value.trim() || '';
+  const bairro = document.getElementById('bairro').value.trim() || '';
   
   const payload = {
     vendedor,
     tecnico,
     dataTrabalho,
-    codCliente: clienteSelecionado.codigo,
-    razaoSocial: clienteSelecionado.razaoSocial,
-    nomeFantasia: clienteSelecionado.nomeFantasia,
-    cidade: clienteSelecionado.cidade,
-    cep: clienteSelecionado.cep,
-    numero: numero,
+    codCliente,
+    razaoSocial,
+    nomeFantasia,
+    cidade,
+    cep,
+    endereco,
+    bairro,
+    numero,
     profissional,
     tipoServico,
     formaExecucao,
@@ -789,6 +806,8 @@ async function enviarFormularioCadastro(e) {
         nomeFantasia: payload.nomeFantasia,
         cidade: payload.cidade,
         cep: payload.cep,
+        endereco: payload.endereco,
+        bairro: payload.bairro,
         numero: payload.numero,
         profissional: payload.profissional,
         tipoServico: payload.tipoServico,
@@ -875,7 +894,7 @@ function criarDocumentoPdf(sol) {
       ['Data Programada', dtVal || '-'],
       ['Cidade de Destino', sol.cidade || '-'],
       ['Cliente ERP', `[${sol.codCliente}] ${sol.razaoSocial} (${sol.nomeFantasia})`],
-      ['CEP / Número', `CEP ${sol.cep || '-'}, Nº ${sol.numero || '-'}`],
+      ['Endereço Completo', `${sol.endereco || '-'}, Nº ${sol.numero || '-'} - ${sol.bairro || '-'}, ${sol.cidade || '-'} (CEP: ${sol.cep || '-'})`],
       ['Tipo de Execução', `${sol.profissional} — ${sol.tipoServico}`],
       ['Forma de Cobrança', sol.formaExecucao === 'FLEX' ? '100% Flex (Isento de Faturamento)' : 'Regra Padrão (Pedido ERP)'],
       ['Valor do Pedido / Markup', `R$ ${parseFloat(sol.valorPedido || 0).toFixed(2)} / Markup ${parseFloat(sol.indicePedido || 0).toFixed(1)}`],

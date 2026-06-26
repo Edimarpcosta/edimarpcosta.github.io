@@ -256,6 +256,19 @@ function renderizarCardsAgenda() {
       concluidoHtml = `<p class="text-[10px] text-amber-500/80 font-medium italic mt-1 text-center"><i class="fa-solid fa-clock"></i> Aguardando aprovação da supervisão gerencial para execução.</p>`;
     }
     
+    let enderecoStr = "";
+    if (s.endereco) {
+      enderecoStr = `${s.endereco}`;
+      if (s.numero) enderecoStr += `, Nº ${s.numero}`;
+      if (s.bairro) enderecoStr += ` - ${s.bairro}`;
+      if (s.cidade) enderecoStr += ` — ${s.cidade}`;
+      if (s.cep) enderecoStr += ` (CEP ${s.cep})`;
+    } else {
+      enderecoStr = `CEP ${s.cep || 'Não informado'}`;
+      if (s.numero) enderecoStr += `, Nº ${s.numero}`;
+      if (s.cidade) enderecoStr += ` — ${s.cidade}`;
+    }
+
     card.innerHTML = `
       <div class="flex justify-between items-center border-b border-slate-800 pb-3">
         <div>
@@ -277,7 +290,7 @@ function renderizarCardsAgenda() {
         <div class="sm:col-span-2">
           <span class="text-slate-500 block uppercase text-[8px] tracking-wide">Cliente</span>
           <p class="font-medium text-white">[${s.codCliente}] ${s.razaoSocial}</p>
-          <p class="text-[10px] text-slate-500 mt-0.5">Endereço: CEP ${s.cep}, Nº ${s.numero} — ${s.cidade}</p>
+          <p class="text-[10px] text-slate-500 mt-0.5">Endereço: ${enderecoStr}</p>
         </div>
         <div class="sm:col-span-2 bg-slate-950/40 p-3 rounded-xl border border-slate-850">
           <span class="text-slate-500 block uppercase text-[8px] tracking-wide mb-1">Argumentações / Formulações Requeridas:</span>
