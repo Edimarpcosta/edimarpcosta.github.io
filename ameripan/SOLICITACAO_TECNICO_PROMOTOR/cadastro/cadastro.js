@@ -169,10 +169,10 @@ async function inicializarModuloCadastro() {
     if (btnShareCon) btnShareCon.classList.remove('hidden');
   }
   
-  // Configura Enter no código ERP
-  const codInput = document.getElementById('codCliente');
-  if (codInput) {
-    codInput.addEventListener('keydown', function(e) {
+  // Configura Enter no código de busca ERP
+  const codSearchInput = document.getElementById('cliente-search-cod');
+  if (codSearchInput) {
+    codSearchInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         buscarCodigoERPManual();
@@ -243,7 +243,7 @@ function filtrarAutocompleteDebounce() {
 }
 
 async function processarFiltroAutocomplete() {
-  const input = document.getElementById('cliente-search');
+  const input = document.getElementById('cliente-search-nome');
   const termo = input.value.trim();
   const dropdown = document.getElementById('autocomplete-lista');
   const status = document.getElementById('clientes-status');
@@ -301,7 +301,10 @@ function renderizarDropdownAutocomplete(clientes) {
 
 function selecionarClienteForm(c) {
   clienteSelecionado = c;
-  document.getElementById('cliente-search').value = c.codigo;
+  const searchCod = document.getElementById('cliente-search-cod');
+  const searchNome = document.getElementById('cliente-search-nome');
+  if (searchCod) searchCod.value = c.codigo;
+  if (searchNome) searchNome.value = c.razaoSocial;
   document.getElementById('codCliente').value = c.codigo;
   document.getElementById('razaoSocial').value = c.razaoSocial;
   document.getElementById('nomeFantasia').value = c.nomeFantasia;
@@ -326,7 +329,7 @@ function selecionarClienteForm(c) {
 }
 
 async function buscarCodigoERPManual() {
-  const codField = document.getElementById('codCliente');
+  const codField = document.getElementById('cliente-search-cod') || document.getElementById('codCliente');
   const codigo = codField.value.trim();
   if (!codigo) return;
   
@@ -1109,7 +1112,7 @@ async function compartilharPdfFichaConsulta() {
 
 // Fecha autocomplete ao clicar fora dele
 document.addEventListener('click', function(e) {
-  if (e.target.id !== 'cliente-search') {
+  if (e.target.id !== 'cliente-search-nome') {
     const list = document.getElementById('autocomplete-lista');
     if (list) list.classList.add('hidden');
   }
