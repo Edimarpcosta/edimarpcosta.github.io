@@ -23,7 +23,7 @@ async function apiGet(action, params = {}) {
   const url = new URL(API_URL);
   url.searchParams.append('action', action);
   
-  const token = sessionStorage.getItem('gerente_session_token');
+  const token = localStorage.getItem('gerente_session_token');
   if (token) {
     url.searchParams.append('token', token);
   }
@@ -34,11 +34,16 @@ async function apiGet(action, params = {}) {
   
   const res = await fetch(url.toString(), { method: 'GET' });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão") || data.erro.includes("expirada"))) {
+    realizarLogoutGerencia();
+    throw new Error(data.erro);
+  }
+  return data;
 }
 
 async function apiPost(action, payload = {}) {
-  const token = sessionStorage.getItem('gerente_session_token');
+  const token = localStorage.getItem('gerente_session_token');
   const body = {
     action: action,
     payload: {
@@ -53,7 +58,12 @@ async function apiPost(action, payload = {}) {
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão") || data.erro.includes("expirada"))) {
+    realizarLogoutGerencia();
+    throw new Error(data.erro);
+  }
+  return data;
 }
 
 // ==========================================
@@ -78,7 +88,7 @@ async function realizarLoginGerencial(e) {
     // Primeiro valida o acesso do gestor (com a senha geral do CONFIG)
     const res = await apiPost('autenticar', { senha: senha });
     if (res.sucesso) {
-      sessionStorage.setItem('gerente_session_token', res.token);
+      localStorage.setItem('gerente_session_token', res.token);
       document.getElementById('gerencia-lock-overlay').classList.add('hidden');
       inicializarModuloGerencial();
     } else {
@@ -97,7 +107,7 @@ async function realizarLoginGerencial(e) {
 }
 
 async function validarAcessoGerente() {
-  const token = sessionStorage.getItem('gerente_session_token');
+  const token = localStorage.getItem('gerente_session_token');
   const overlay = document.getElementById('gerencia-lock-overlay');
   
   if (!token) {
@@ -111,7 +121,7 @@ async function validarAcessoGerente() {
       overlay.classList.add('hidden');
       inicializarModuloGerencial();
     } else {
-      sessionStorage.removeItem('gerente_session_token');
+      localStorage.removeItem('gerente_session_token');
       overlay.classList.remove('hidden');
     }
   } catch (err) {
@@ -120,10 +130,8 @@ async function validarAcessoGerente() {
 }
 
 function realizarLogoutGerencia() {
-  sessionStorage.removeItem('gerente_session_token');
-  document.getElementById('login-senha').value = "";
-  document.getElementById('gerencia-lock-overlay').classList.remove('hidden');
-  listaSolicitacoesGerenciais = [];
+  localStorage.removeItem('gerente_session_token');
+  location.reload();
 }
 
 // ==========================================

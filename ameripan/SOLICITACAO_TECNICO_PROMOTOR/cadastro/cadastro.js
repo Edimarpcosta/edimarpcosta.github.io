@@ -34,7 +34,7 @@ async function apiGet(action, params = {}) {
   const url = new URL(API_URL);
   url.searchParams.append('action', action);
   
-  const token = sessionStorage.getItem('portal_session_token');
+  const token = localStorage.getItem('portal_session_token');
   if (token) {
     url.searchParams.append('token', token);
   }
@@ -45,11 +45,16 @@ async function apiGet(action, params = {}) {
   
   const res = await fetch(url.toString(), { method: 'GET' });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão inválida") || data.erro.includes("expirada"))) {
+    realizarLogout();
+    throw new Error(data.erro);
+  }
+  return data;
 }
 
 async function apiPost(action, payload = {}) {
-  const token = sessionStorage.getItem('portal_session_token');
+  const token = localStorage.getItem('portal_session_token');
   const body = {
     action: action,
     payload: {
@@ -64,7 +69,17 @@ async function apiPost(action, payload = {}) {
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão inválida") || data.erro.includes("expirada"))) {
+    realizarLogout();
+    throw new Error(data.erro);
+  }
+  return data;
+}
+
+function realizarLogout() {
+  localStorage.removeItem('portal_session_token');
+  location.reload();
 }
 
 // ==========================================
@@ -87,7 +102,7 @@ async function realizarLoginPortal(e) {
   try {
     const res = await apiPost('verificarSenhaPortal', { senha: senha });
     if (res.sucesso) {
-      sessionStorage.setItem('portal_session_token', res.token); // Salva token UUID temporário (M20)
+      localStorage.setItem('portal_session_token', res.token); // Salva token UUID temporário (M20)
       document.getElementById('portal-lock-overlay').classList.add('hidden');
       inicializarModuloCadastro();
     } else {
@@ -106,7 +121,7 @@ async function realizarLoginPortal(e) {
 }
 
 async function validarAcessoInicial() {
-  const token = sessionStorage.getItem('portal_session_token');
+  const token = localStorage.getItem('portal_session_token');
   const overlay = document.getElementById('portal-lock-overlay');
   
   if (!token) {
@@ -120,7 +135,7 @@ async function validarAcessoInicial() {
       overlay.classList.add('hidden');
       inicializarModuloCadastro();
     } else {
-      sessionStorage.removeItem('portal_session_token');
+      localStorage.removeItem('portal_session_token');
       overlay.classList.remove('hidden');
     }
   } catch (err) {

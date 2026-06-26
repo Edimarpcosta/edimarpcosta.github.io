@@ -27,7 +27,7 @@ async function apiGet(action, params = {}) {
   const url = new URL(API_URL);
   url.searchParams.append('action', action);
   
-  const token = sessionStorage.getItem('tecnico_session_token');
+  const token = localStorage.getItem('tecnico_session_token');
   if (token) {
     url.searchParams.append('token', token);
   }
@@ -38,11 +38,16 @@ async function apiGet(action, params = {}) {
   
   const res = await fetch(url.toString(), { method: 'GET' });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão") || data.erro.includes("expirada"))) {
+    realizarLogoutTecnico();
+    throw new Error(data.erro);
+  }
+  return data;
 }
 
 async function apiPost(action, payload = {}) {
-  const token = sessionStorage.getItem('tecnico_session_token');
+  const token = localStorage.getItem('tecnico_session_token');
   const body = {
     action: action,
     payload: {
@@ -57,7 +62,12 @@ async function apiPost(action, payload = {}) {
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error("Erro na rede: " + res.statusText);
-  return await res.json();
+  const data = await res.json();
+  if (data && data.sucesso === false && data.erro && (data.erro.includes("Acesso Negado") || data.erro.includes("Sessão") || data.erro.includes("expirada"))) {
+    realizarLogoutTecnico();
+    throw new Error(data.erro);
+  }
+  return data;
 }
 
 // ==========================================
@@ -83,9 +93,9 @@ async function realizarLoginTecnico(e) {
   try {
     const res = await apiPost('autenticarTecnico', { username, senha });
     if (res.sucesso) {
-      sessionStorage.setItem('tecnico_session_token', res.sessionToken);
-      sessionStorage.setItem('tecnico_session_nome', res.nome);
-      sessionStorage.setItem('tecnico_session_tipo', res.tipo);
+      localStorage.setItem('tecnico_session_token', res.sessionToken);
+      localStorage.setItem('tecnico_session_nome', res.nome);
+      localStorage.setItem('tecnico_session_tipo', res.tipo);
       
       document.getElementById('tecnico-lock-overlay').classList.add('hidden');
       inicializarModuloTecnico();
@@ -105,7 +115,7 @@ async function realizarLoginTecnico(e) {
 }
 
 async function validarAcessoTecnico() {
-  const token = sessionStorage.getItem('tecnico_session_token');
+  const token = localStorage.getItem('tecnico_session_token');
   const overlay = document.getElementById('tecnico-lock-overlay');
   
   if (!token) {
@@ -113,19 +123,22 @@ async function validarAcessoTecnico() {
     return;
   }
   
-  // Como o token está persistido, inicializa
-  overlay.classList.add('hidden');
-  inicializarModuloTecnico();
+  // Como o token está persistido, verifica no servidor para garantir
+  try {
+    const res = await apiPost('getTrabalhosTecnico', {}); // Rota segura que valida o token
+    overlay.classList.add('hidden');
+    inicializarModuloTecnico();
+  } catch (err) {
+    // Se falhar (token inválido/expirado/ex-funcionário), o interceptor de rede já terá chamado realizarLogoutTecnico()
+    console.error("Falha ao validar sessão do técnico:", err);
+  }
 }
 
 function realizarLogoutTecnico() {
-  sessionStorage.removeItem('tecnico_session_token');
-  sessionStorage.removeItem('tecnico_session_nome');
-  sessionStorage.removeItem('tecnico_session_tipo');
-  
-  document.getElementById('login-senha').value = "";
-  document.getElementById('tecnico-lock-overlay').classList.remove('hidden');
-  listaTrabalhosAlocados = [];
+  localStorage.removeItem('tecnico_session_token');
+  localStorage.removeItem('tecnico_session_nome');
+  localStorage.removeItem('tecnico_session_tipo');
+  location.reload();
 }
 
 // ==========================================
@@ -153,9 +166,9 @@ function switchAbaTecnico(aba) {
 }
 
 function inicializarModuloTecnico() {
-  profissionalLogado.nome = sessionStorage.getItem('tecnico_session_nome');
-  profissionalLogado.tipo = sessionStorage.getItem('tecnico_session_tipo');
-  profissionalLogado.token = sessionStorage.getItem('tecnico_session_token');
+  profissionalLogado.nome = localStorage.getItem('tecnico_session_nome');
+  profissionalLogado.tipo = localStorage.getItem('tecnico_session_tipo');
+  profissionalLogado.token = localStorage.getItem('tecnico_session_token');
   
   document.getElementById('header-tecnico-nome').innerText = `Olá, ${profissionalLogado.nome} (${profissionalLogado.tipo})`;
   
