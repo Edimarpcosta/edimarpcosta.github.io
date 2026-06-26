@@ -355,6 +355,9 @@ async function carregarCalendarioDisponibilidades() {
   
   try {
     const res = await apiGet('getDatasIndisponiveis', { tecnico: profissionalLogado.nome });
+    if (!res || res.sucesso === false) {
+      throw new Error(res ? res.erro : "Resposta inválida do servidor");
+    }
     indisponibilidadesAtivas = res; // { ocupadas, bloqueadas }
     renderizarCalendariosTecnico();
   } catch (err) {
