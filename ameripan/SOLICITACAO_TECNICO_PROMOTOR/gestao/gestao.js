@@ -161,7 +161,10 @@ function switchAbaAdmin(aba) {
 }
 
 async function inicializarModuloGerencial() {
-  await recarregarDadosOperacionais();
+  await Promise.all([
+    recarregarDadosOperacionais(),
+    carregarUsuariosEquipe()
+  ]);
 }
 
 async function recarregarDadosOperacionais() {
@@ -312,23 +315,136 @@ async function deletarAgendamento(id) {
   }
 }
 
-async function exportarRelatorioCSV() {
-  try {
-    const res = await apiPost('exportarCSV');
-    if (res.sucesso) {
-      const blob = new Blob(["\uFEFF" + res.csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `AMERIPAN_SOLICITACOES_CAMPO_${new Date().getFullYear()}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  } catch (err) {
-    alert(err.message);
+// ==========================================
+// EXPORTAÇÃO: EXCEL (SheetJS) + PDF RELATÓRIO
+// ==========================================
+
+function exportarRelatorioExcel() {
+  if (!listaSolicitacoesGerenciais || listaSolicitacoesGerenciais.length === 0) {
+    alert('Nenhum dado carregado para exportar. Aplique um filtro e aguarde carregar.');
+    return;
   }
+
+  const cabecalho = [
+    'ID', 'Vendedor', 'Profissional', 'Data', 'Cód. ERP', 'Razão Social', 'Nome Fantasia',
+    'Cidade', 'CEP', 'Número', 'Tipo Prof.', 'Tipo Serviço', 'Execução',
+    'Detalhes', 'Valor Pedido', 'Markup', 'Nº Pedido ERP',
+    'Custo Flex (R$)', 'KM Distância', 'Status',
+    'Data Criação', 'Aprovado Em', 'Realizado Em', 'Endereço', 'Bairro'
+  ];
+
+  const linhas = listaSolicitacoesGerenciais.map(s => [
+    s.id, s.vendedor, s.tecnico, s.dataTrabalho, s.codCliente, s.razaoSocial, s.nomeFantasia,
+    s.cidade, s.cep, s.numero, s.profissional, s.tipoServico, s.formaExecucao,
+    s.detalhes, parseFloat(s.valorPedido || 0), parseFloat(s.indicePedido || 0), s.numeroPedido,
+    parseFloat(s.custoFlex || 0), parseFloat(s.kmDistancia || 0), s.status,
+    s.dataCriacao, s.aprovadoEm, s.realizadoEm, s.endereco, s.bairro
+  ]);
+
+  const wsData = [cabecalho, ...linhas];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Larguras de coluna
+  ws['!cols'] = [
+    {wch: 8}, {wch: 20}, {wch: 20}, {wch: 12}, {wch: 10}, {wch: 30}, {wch: 22},
+    {wch: 18}, {wch: 12}, {wch: 8}, {wch: 10}, {wch: 18}, {wch: 10},
+    {wch: 40}, {wch: 14}, {wch: 10}, {wch: 14},
+    {wch: 14}, {wch: 12}, {wch: 28},
+    {wch: 14}, {wch: 14}, {wch: 14}, {wch: 30}, {wch: 18}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Solicitacoes');
+
+  const nomeArq = `AMERIPAN_RELATORIO_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, nomeArq);
+}
+
+function exportarRelatorioPDF() {
+  if (!listaSolicitacoesGerenciais || listaSolicitacoesGerenciais.length === 0) {
+    alert('Nenhum dado carregado para exportar. Aplique um filtro e aguarde carregar.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('l', 'mm', 'a4'); // landscape para caber mais colunas
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 10;
+
+  // Cabeçalho
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(30, 58, 138);
+  doc.text('AMERIPAN ALIMENTOS — Relatório de Solicitações de Campo', pageWidth / 2, 14, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120);
+  const periodo = document.getElementById('filter-periodo')?.selectedOptions[0]?.text || '';
+  doc.text(`Período: ${periodo} | Emitido em: ${new Date().toLocaleString('pt-BR')} | Total: ${listaSolicitacoesGerenciais.length} registros`, pageWidth / 2, 20, { align: 'center' });
+
+  // Tabela
+  const head = [['ID', 'Vendedor', 'Profissional', 'Data', 'Cliente', 'Cidade', 'Tipo', 'Execução', 'Vlr Pedido', 'Markup', 'Nº ERP', 'KM', 'Flex R$', 'Status']];
+  const body = listaSolicitacoesGerenciais.map(s => {
+    let dtTrab = s.dataTrabalho;
+    const pts = dtTrab ? dtTrab.split('-') : [];
+    if (pts.length === 3) dtTrab = `${pts[2]}/${pts[1]}/${pts[0]}`;
+    return [
+      s.id,
+      s.vendedor || '-',
+      s.tecnico || '-',
+      dtTrab || '-',
+      `${s.razaoSocial || '-'}`.slice(0, 22),
+      s.cidade || '-',
+      `${s.profissional || ''} / ${s.tipoServico || ''}`,
+      s.formaExecucao || '-',
+      `R$ ${parseFloat(s.valorPedido || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+      parseFloat(s.indicePedido || 0).toFixed(1),
+      s.numeroPedido || '-',
+      `${parseFloat(s.kmDistancia || 0).toFixed(1)} km`,
+      `R$ ${parseFloat(s.custoFlex || 0).toFixed(2)}`,
+      s.status || '-'
+    ];
+  });
+
+  doc.autoTable({
+    startY: 24,
+    head: head,
+    body: body,
+    theme: 'grid',
+    styles: { fontSize: 6.5, cellPadding: 1.8, lineColor: [200, 200, 200], lineWidth: 0.1, overflow: 'linebreak' },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    alternateRowStyles: { fillColor: [245, 247, 252] },
+    margin: { left: margin, right: margin },
+    columnStyles: {
+      0: { cellWidth: 12 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 16 },
+      4: { cellWidth: 32 },
+      5: { cellWidth: 22 },
+      6: { cellWidth: 24 },
+      7: { cellWidth: 14 },
+      8: { cellWidth: 20, halign: 'right' },
+      9: { cellWidth: 12, halign: 'right' },
+      10: { cellWidth: 16 },
+      11: { cellWidth: 13, halign: 'right' },
+      12: { cellWidth: 16, halign: 'right' },
+      13: { cellWidth: 28 }
+    }
+  });
+
+  doc.setFontSize(6);
+  doc.setTextColor(150);
+  doc.text(`Portal Ameripan — Emitido em ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: 'center' });
+
+  const nomeArq = `AMERIPAN_RELATORIO_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(nomeArq);
+}
+
+// Mantida para compatibilidade caso haja chamada legada
+async function exportarRelatorioCSV() {
+  exportarRelatorioExcel();
 }
 
 // ==========================================
@@ -428,6 +544,23 @@ async function carregarUsuariosEquipe() {
         });
         if (oldVal && filterSelect.querySelector(`option[value="${oldVal}"]`)) {
           filterSelect.value = oldVal;
+        }
+      }
+      
+      const editTecnicoSelect = document.getElementById('edit-tecnico');
+      if (editTecnicoSelect) {
+        const oldVal = editTecnicoSelect.value;
+        editTecnicoSelect.innerHTML = "";
+        res.usuarios.forEach(u => {
+          if (u.ativo === "SIM" && (u.tipo === "TECNICO" || u.tipo === "PROMOTOR")) {
+            const opt = document.createElement('option');
+            opt.value = u.nome;
+            opt.innerText = `${u.nome} (${u.tipo})`;
+            editTecnicoSelect.appendChild(opt);
+          }
+        });
+        if (oldVal && editTecnicoSelect.querySelector(`option[value="${oldVal}"]`)) {
+          editTecnicoSelect.value = oldVal;
         }
       }
       
@@ -575,9 +708,11 @@ async function carregarParametrosConfigForm() {
 
       if (labelsComercial[chave]) {
         const div = document.createElement('div');
+        const fmt = chave === 'MIN_MARKUP' ? 'decimal' : 'moeda';
+        const valorFmt = fmt === 'decimal' ? formatarDecimalBR(valor, 1) : formatarMoedaBR(valor);
         div.innerHTML = `
           <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">${labelsComercial[chave]}</label>
-          <input type="number" step="0.01" data-chave="${chave}" data-secao="comercial" value="${valor}"
+          <input type="text" inputmode="decimal" data-format="${fmt}" data-chave="${chave}" data-secao="comercial" value="${valorFmt}"
             class="block w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm">
         `;
         formComercial.appendChild(div);
@@ -597,6 +732,10 @@ async function carregarParametrosConfigForm() {
         formAcesso.appendChild(div);
       }
     });
+
+    // Instala os eventos de formatação nos inputs recém-gerados da seção comercial
+    instalarFormatacaoInputs('form-config-parametros');
+
   } catch (err) {
     loaderComercial.classList.add('hidden');
     loaderAcesso.classList.add('hidden');
@@ -622,7 +761,7 @@ async function salvarConfigComercial() {
   let erros = 0;
   for (let input of inputs) {
     const chave = input.getAttribute('data-chave');
-    const valor = input.value.trim();
+    const valor = String(parseBR(input.value));
     try {
       const res = await apiPost('atualizarConfigParam', { chave, valor });
       if (!res.sucesso) { erros++; console.error('Falha ao salvar ' + chave + ': ' + res.erro); }
@@ -888,6 +1027,78 @@ document.addEventListener('DOMContentLoaded', validarAcessoGerente);
 
 let _idEmEdicao = null;
 
+// ---- Utilitários de formatação BR ----
+
+/**
+ * Formata número como moeda BR: 4999.99 → "R$ 4.999,99"
+ */
+function formatarMoedaBR(valor) {
+  const num = parseFloat(String(valor).replace(',', '.')) || 0;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/**
+ * Formata número como decimal BR: 7.2 → "7,2"
+ */
+function formatarDecimalBR(valor, casas = 1) {
+  const num = parseFloat(String(valor).replace(',', '.')) || 0;
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: 2 });
+}
+
+/**
+ * Converte string BR para número: "R$ 4.999,99" → 4999.99 | "7,2" → 7.2
+ */
+function parseBR(str) {
+  if (!str) return 0;
+  // Remove símbolo de moeda, espaços e pontos de milhar; substitui vírgula decimal
+  const limpo = String(str).replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+  return parseFloat(limpo) || 0;
+}
+
+/**
+ * Instala eventos de formatação automática nos inputs com data-format dentro de um container
+ */
+function instalarFormatacaoInputs(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const inputs = container.querySelectorAll('input[data-format]');
+
+  inputs.forEach(input => {
+    // Ao focar: mostra o valor numérico cru para edição (vírgula como decimal)
+    input.addEventListener('focus', function () {
+      const raw = parseBR(this.value);
+      if (raw !== 0) {
+        this.value = String(raw).replace('.', ',');
+      } else {
+        this.value = '';
+      }
+      this.select();
+    });
+
+    // Ao sair: aplica formatação de exibição
+    input.addEventListener('blur', function () {
+      if (!this.value.trim()) return;
+      const raw = parseBR(this.value);
+      const fmt = this.getAttribute('data-format');
+      if (fmt === 'moeda') {
+        this.value = formatarMoedaBR(raw);
+      } else if (fmt === 'decimal') {
+        this.value = formatarDecimalBR(raw);
+      }
+    });
+
+    // Permite apenas dígitos, vírgula e ponto durante digitação
+    input.addEventListener('keypress', function (e) {
+      if (!/[\d,.]/.test(e.key)) e.preventDefault();
+    });
+  });
+}
+
+// Instala os listeners quando o DOM estiver pronto
+document.addEventListener('DOMContentLoaded', () => {
+  instalarFormatacaoInputs('modal-edicao-solicitacao');
+});
+
 function abrirModalEdicao(id) {
   const sol = listaSolicitacoesGerenciais.find(s => s.id === id);
   if (!sol) { alert('Solicitação não encontrada na lista atual.'); return; }
@@ -911,24 +1122,20 @@ function abrirModalEdicao(id) {
   document.getElementById('edit-cep').value = sol.cep || '';
 
   // Escopo
-  const selProf = document.getElementById('edit-profissional');
-  selProf.value = sol.profissional || 'TECNICO';
-  const selTipo = document.getElementById('edit-tipoServico');
-  selTipo.value = sol.tipoServico || 'Panificação';
-  const selForma = document.getElementById('edit-formaExecucao');
-  selForma.value = sol.formaExecucao || 'PADRAO';
+  document.getElementById('edit-profissional').value = sol.profissional || 'TECNICO';
+  document.getElementById('edit-tipoServico').value = sol.tipoServico || 'Panificação';
+  document.getElementById('edit-formaExecucao').value = sol.formaExecucao || 'PADRAO';
   document.getElementById('edit-detalhes').value = sol.detalhes || '';
 
-  // Valores e Logística
-  document.getElementById('edit-valorPedido').value = sol.valorPedido || 0;
-  document.getElementById('edit-indicePedido').value = sol.indicePedido || 0;
+  // Valores — formatados em BR ao abrir
+  document.getElementById('edit-valorPedido').value  = formatarMoedaBR(sol.valorPedido || 0);
+  document.getElementById('edit-indicePedido').value = formatarDecimalBR(sol.indicePedido || 0, 1);
   document.getElementById('edit-numeroPedido').value = sol.numeroPedido || '';
-  document.getElementById('edit-kmDistancia').value = sol.kmDistancia || 0;
-  document.getElementById('edit-custoFlex').value = sol.custoFlex || 0;
+  document.getElementById('edit-kmDistancia').value  = formatarDecimalBR(sol.kmDistancia || 0, 1);
+  document.getElementById('edit-custoFlex').value    = formatarMoedaBR(sol.custoFlex || 0);
 
   // Status
-  const selStatus = document.getElementById('edit-status');
-  selStatus.value = sol.status || 'Pendente Aprovacao Gerencial';
+  document.getElementById('edit-status').value = sol.status || 'Pendente Aprovacao Gerencial';
 
   document.getElementById('modal-edicao-solicitacao').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -947,6 +1154,7 @@ async function salvarEdicaoSolicitacao() {
   btn.disabled = true;
   btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Salvando...`;
 
+  // Parse dos campos com formatação BR de volta para números
   const campos = {
     vendedor:      document.getElementById('edit-vendedor').value.trim(),
     tecnico:       document.getElementById('edit-tecnico').value.trim(),
@@ -963,11 +1171,12 @@ async function salvarEdicaoSolicitacao() {
     tipoServico:   document.getElementById('edit-tipoServico').value,
     formaExecucao: document.getElementById('edit-formaExecucao').value,
     detalhes:      document.getElementById('edit-detalhes').value.trim(),
-    valorPedido:   document.getElementById('edit-valorPedido').value,
-    indicePedido:  document.getElementById('edit-indicePedido').value,
+    // Numéricos: parseia o formato BR de volta ao número
+    valorPedido:   parseBR(document.getElementById('edit-valorPedido').value),
+    indicePedido:  parseBR(document.getElementById('edit-indicePedido').value),
     numeroPedido:  document.getElementById('edit-numeroPedido').value.trim(),
-    kmDistancia:   document.getElementById('edit-kmDistancia').value,
-    custoFlex:     document.getElementById('edit-custoFlex').value,
+    kmDistancia:   parseBR(document.getElementById('edit-kmDistancia').value),
+    custoFlex:     parseBR(document.getElementById('edit-custoFlex').value),
     status:        document.getElementById('edit-status').value
   };
 
