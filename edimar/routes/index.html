@@ -16,6 +16,10 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Chart.js (Gráficos) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Decodificador de Polyline do Google -->
+    <script src="https://cdn.jsdelivr.net/npm/@mapbox/polyline@1.2.1/src/polyline.js"></script>
+    <!-- SortableJS para Ordenação por Drag-and-Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <style>
         :root { 
             --primary: #004d40; 
@@ -807,6 +811,16 @@
             <div class="col-6"><label class="small text-muted fw-bold">H. ABERTURA (Ex: 08:00-18:00)</label><input type="text" id="f-hab" class="form-control rounded-3" placeholder="Ex: 08:00 - 18:00"></div>
             <div class="col-6"><label class="small text-muted fw-bold">H. VISITA (Ex: 10:00-11:00)</label><input type="text" id="f-hvis" class="form-control rounded-3" placeholder="Ex: 10:00 - 11:00"></div>
             <div class="col-12"><label class="small text-muted fw-bold">OBSERVAÇÕES</label><textarea id="f-obs" class="form-control rounded-3" rows="2"></textarea></div>
+            
+            <div class="col-12 mt-2 pt-1 border-top">
+              <label class="small text-primary fw-bold"><i class="fas fa-info-circle me-1"></i>INFORMAÇÕES ENRIQUECIDAS (PLACES/REDES)</label>
+            </div>
+            <div class="col-6"><label class="small text-muted fw-bold">TELEFONE EXTRA</label><input type="text" id="f-tel-extra" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">SITE / WEBSITE</label><input type="text" id="f-web" class="form-control rounded-3"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">INSTAGRAM</label><input type="text" id="f-insta" class="form-control rounded-3" placeholder="Link do perfil"></div>
+            <div class="col-6"><label class="small text-muted fw-bold">FACEBOOK</label><input type="text" id="f-fb" class="form-control rounded-3" placeholder="Link do perfil"></div>
+            <div class="col-12"><label class="small text-muted fw-bold">GOOGLE MAPS URL (CID)</label><input type="text" id="f-gmaps-url" class="form-control rounded-3" placeholder="https://www.google.com/maps?cid=..."></div>
+            <div class="col-12"><label class="small text-muted fw-bold">HORÁRIO DE FUNCIONAMENTO COMPLETO</label><textarea id="f-hours" class="form-control rounded-3" rows="2" placeholder="Ex: sábado:[10:00-22:00], domingo:[10:00-22:00]..."></textarea></div>
           </div>
         </form>
       </div>
@@ -934,7 +948,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     // LINK DO BACKEND WEB APP (APPS SCRIPT)
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzfSATmgpwLFYJHKy95cdnmgh7kciPvaHD64f3J1cLoAOAdYFFrztMGixNLgKLLN0IO/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwI8pbbm-NMPudQrJ0fkflSaq-tXoGOFVJ62ih7J72LcNUxPIfmyiEhXUKi8KIjDgvG/exec';
     
     let db = [];
     let visitsDb = [];
@@ -948,6 +962,11 @@
     let filterChecklist = 'hoje'; // 'hoje' ou 'todos'
     let checklistSearch = '';
     let gpsSortedOrder = null;
+    // --- ESTADO DO MOTOR DE ROTAS GMAPS ---
+    let arrayOrdemRota = [];
+    let sortableListInstance = null;
+    let activePolyline = null;
+    let currentRouteData = null;
     const coordsCache = JSON.parse(localStorage.getItem('coords_cache') || '{}');
     let pbSearchQuery = '';
     let pbDayFilterVal = '';
@@ -1195,13 +1214,20 @@
         return cleanedParts.map(p => p.trim()).join(' - ');
     }
 
-    // Formatar CNPJ com máscara
-    function formatCnpj(v) {
+    function getCleanCnpj(v) {
         if (!v) return '';
-        v = v.toString().replace(/\D/g,"").replace(".0","");
-        if(v.length == 14) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-        return v;
+        let clean = v.toString().replace(/\.0+$/, "").replace(/\D/g, "");
+        if (!clean) return '';
+        return clean.padStart(14, '0').substring(0, 14);
     }
+
+    // Formatar CNPJ com máscara e preenchimento de zeros à esquerda (zero left)
+    function formatCnpj(v) {
+        const clean = getCleanCnpj(v);
+        if (!clean) return '';
+        return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+    }
+
 
     // Formatar Telefone com máscara
     function formatPhone(v) {
@@ -1877,6 +1903,21 @@
     window.registrarVisitaDoMapa = function(id, status) {
         toggleVisita(id, null, null, status);
     };
+    window.formatarHorariosQuebra = function(str) {
+        if (!str) return 'Sem horários definidos.';
+        return str.split(', ').join('<br>').split(',').join('<br>');
+    };
+    window.toggleHorarios = function(id, event) {
+        if (event) event.stopPropagation();
+        const el = document.getElementById(`hours-detail-${id}`);
+        if (el) {
+            if (el.classList.contains('d-none')) {
+                el.classList.remove('d-none');
+            } else {
+                el.classList.add('d-none');
+            }
+        }
+    };
 
     async function renderLeafletMap(clients, targetDate) {
         mapRenderInstanceId++;
@@ -2464,315 +2505,442 @@
         render();
     };
 
-    window.clearMapOptimization = function() {
-        gpsSortedOrder = null;
-        render();
+    // =========================================================================
+    // NOVO MOTOR DE ROTAS E INTEGRAÇÃO GMAPS / SCRAPER
+    // =========================================================================
+
+    // Inicializa a lista ordenada baseada nos clientes filtrados do dia
+    window.inicializarRoteiroMapa = function(clientesDia) {
+        const cacheOrdem = JSON.parse(sessionStorage.getItem('ordem_manual_dia') || 'null');
+        
+        if (cacheOrdem && cacheOrdem.length > 0) {
+            arrayOrdemRota = cacheOrdem;
+        } else {
+            // Ordena de acordo com o campo "Ordem" da planilha
+            arrayOrdemRota = clientesDia
+                .filter(c => c.Endereco && c.Endereco.length > 5 && parseInt(c.Ordem) !== 99)
+                .sort((a, b) => (parseInt(a.Ordem) || 0) - (parseInt(b.Ordem) || 0))
+                .map(c => c.ID.toString().trim());
+        }
+        
+        renderizarListaClientesArrastavel();
+        desenharRotaGMaps();
     };
 
-    window.saveMapRouteOrderToCloud = async function() {
-        const targetDate = selectedDate;
-        const targetDateCode = getDayCodeForDate(targetDate);
-        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
+    // Renderiza os cards e configura a ordenação por arrasto (SortableJS)
+    window.renderizarListaClientesArrastavel = function() {
+        const container = document.getElementById('lista-clientes-rota');
+        if (!container) return;
         
-        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
-        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
+        container.innerHTML = '';
         
-        let scheduledToday;
-        if (selectedBairroVal) {
-            scheduledToday = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
-        } else {
-            scheduledToday = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
+        // Hora de partida estimada (padrão 08:00 para cálculo de ETA)
+        let horaAcumulada = new Date();
+        horaAcumulada.setHours(8, 0, 0, 0); 
+        
+        arrayOrdemRota.forEach((id, index) => {
+            const cliente = db.find(c => c.ID.toString().trim() === id.toString().trim());
+            if (!cliente) return;
+            
+            // Calcula o ETA estimado para esta parada com base nos trechos
+            let etaString = '--:--';
+            let tempoViagemMin = 0;
+            if (currentRouteData && currentRouteData.trechos && currentRouteData.trechos[index - 1]) {
+                tempoViagemMin = currentRouteData.trechos[index - 1].tempoMinutos;
+            }
+            
+            // Adiciona tempo de visita fixo (ex: 15 minutos por parada) + tempo de trânsito
+            if (index > 0) {
+                horaAcumulada.setMinutes(horaAcumulada.getMinutes() + tempoViagemMin + 15);
+            }
+            etaString = horaAcumulada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            // Validação de horário de abertura
+            const statusHorario = obterStatusFuncionamento(cliente, horaAcumulada);
+            
+            // Status de visita/checklist
+            const statusVisita = getVisitStatusOnDate(cliente.ID, selectedDate);
+            const visitado = statusVisita === 'Visita';
+            const ausente = statusVisita === 'Não Encontrado';
+            const classVisit = visitado ? 'visited-card' : ausente ? 'absent-card' : '';
+
+            // Links de ação rápida
+            const linksHtml = `
+                <div class="d-flex flex-wrap gap-1 mt-2">
+                    ${(cliente.gmaps_url || cliente.place_id) ? `<a href="${cliente.gmaps_url ? cliente.gmaps_url : `https://www.google.com/maps/search/?api=1&query=Estabelecimento&query_place_id=${cliente.place_id}`}" target="_blank" class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fas fa-map-marked-alt me-1"></i>Maps</a>` : ''}
+                    ${cliente.instagram ? `<a href="${cliente.instagram}" target="_blank" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fab fa-instagram me-1"></i>Instagram</a>` : ''}
+                    ${cliente.facebook ? `<a href="${cliente.facebook}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fab fa-facebook-f me-1"></i>Facebook</a>` : ''}
+                    ${cliente.website ? `<a href="${cliente.website}" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fas fa-globe me-1"></i>Site</a>` : ''}
+                    ${cliente.link_ifood ? `<a href="${cliente.link_ifood}" target="_blank" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fas fa-motorcycle me-1"></i>iFood</a>` : ''}
+                    ${cliente.telefone_extra ? `<a href="tel:${cliente.telefone_extra}" class="btn btn-xs btn-outline-info py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fas fa-phone me-1"></i>Ligar</a>` : ''}
+                    ${cliente.horarios_completos ? `<button onclick="toggleHorarios('${cliente.ID}', event)" class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:0.65rem; border-radius:6px; color: #856404; border-color: #ffc107;"><i class="far fa-clock me-1"></i>Horários</button>` : ''}
+                    ${(!cliente.place_id || !cliente.horarios_completos || !cliente.website || !cliente.telefone_extra) ? `<button onclick="enriquecerViaPlaces('${cliente.ID}', event)" class="btn btn-xs btn-success py-0 px-2 text-white border-0" style="font-size:0.65rem; border-radius:6px;"><i class="fab fa-google me-1"></i>Google</button>` : ''}
+                </div>
+                ${cliente.horarios_completos ? `
+                <div id="hours-detail-${cliente.ID}" class="d-none mt-1 p-2 rounded-3 bg-light text-dark" style="font-size: 0.72rem; line-height: 1.3; border: 1px solid #ffeeba; text-align: left;">
+                    <div class="fw-bold mb-1"><i class="far fa-clock text-warning me-1"></i>Horário de Funcionamento:</div>
+                    <div>${formatarHorariosQuebra(cliente.horarios_completos)}</div>
+                </div>` : ''}
+            `;
+
+            const item = document.createElement('div');
+            item.className = `list-group-item p-2 mb-2 bg-white shadow-sm border ${classVisit}`;
+            item.style.borderRadius = '12px';
+            item.setAttribute('data-id', id);
+            
+            item.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <!-- Ícone para arrastar -->
+                    <div class="drag-handle text-muted align-self-center px-1" style="cursor: grab;">
+                        <i class="fas fa-grip-vertical"></i>
+                    </div>
+                    
+                    <!-- Número da parada -->
+                    <span class="badge bg-success rounded-circle d-flex align-items-center justify-content-center" style="width:22px; height:22px; font-size:0.7rem; flex-shrink:0;">
+                        ${index + 1}
+                    </span>
+                    
+                    <!-- Detalhes do Cliente -->
+                    <div class="w-100" style="overflow:hidden;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-truncate" style="font-size: 0.85rem; max-width:80%;">${cliente.Fantasia || cliente.Cliente}</span>
+                            <span class="badge bg-light text-dark small" style="font-size:0.65rem;">ETA: ${etaString}</span>
+                        </div>
+                        <div class="text-muted text-truncate small mb-1" style="font-size:0.7rem;">
+                            ${cliente.Endereco}, ${cliente.Bairro || ''}
+                        </div>
+                        
+                        <!-- Alertas de Horários -->
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            ${statusHorario.badge}
+                        </div>
+                        
+                        <!-- Links Rápidos -->
+                        ${linksHtml}
+                    </div>
+                    
+                    <!-- Botão para retirar temporariamente do dia -->
+                    <button onclick="removerClienteRoteiro('${id}')" class="btn btn-sm btn-outline-danger py-0 px-1 border-0" style="font-size:0.75rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+        
+        // Habilita o SortableJS para arrastar e ordenar a lista
+        if (sortableListInstance) sortableListInstance.destroy();
+        sortableListInstance = new Sortable(container, {
+            handle: '.drag-handle',
+            animation: 200,
+            onEnd: function() {
+                arrayOrdemRota = Array.from(container.children).map(child => child.getAttribute('data-id'));
+                sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+                desenharRotaGMaps(); // Recalcula a rota com o novo trajeto
+            }
+        });
+    };
+
+    // Analisa a string de horários do cache e compara com o horário estimado de visita (ETA)
+    window.obterStatusFuncionamento = function(cliente, dateEta) {
+        if (!cliente.horarios_completos) {
+            return { status: 'desconhecido', badge: `<span class="badge bg-secondary text-white py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-clock me-1"></i>Horário não cadastrado</span>` };
         }
         
-        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
-        if (omitWhats) {
-            scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
-        }
-        
-        if (gpsSortedOrder) {
-            scheduledToday.sort((a, b) => {
-                const idxA = gpsSortedOrder.indexOf(a.ID);
-                const idxB = gpsSortedOrder.indexOf(b.ID);
-                const posA = idxA === -1 ? Infinity : idxA;
-                const posB = idxB === -1 ? Infinity : idxB;
-                return posA - posB;
-            });
-        } else {
-            customAlert("A rota não foi otimizada. Não há nova sequência para salvar.");
-            return;
-        }
-        
-        const confirmed = await customConfirm("Deseja gravar permanentemente esta ordem de visita na planilha da nuvem? Isso mudará a sequência numérica de visitas para este dia de semana.");
-        if (!confirmed) return;
-        
-        toggleLoader(true);
         try {
-            // Atualiza sequencialmente a ordem dos clientes na nuvem
-            for (let idx = 0; idx < scheduledToday.length; idx++) {
-                const c = scheduledToday[idx];
-                c.Ordem = idx + 1;
-                await apiPost('save', c);
+            const grade = JSON.parse(cliente.horarios_completos);
+            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+            const diaHoje = diasSemana[dateEta.getDay()];
+            const horarioDia = grade[diaHoje];
+            
+            if (!horarioDia || horarioDia.toLowerCase() === 'fechado') {
+                return { status: 'fechado', badge: `<span class="badge bg-danger text-white py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-ban me-1"></i>Fechado aos ${diaHoje}s</span>` };
             }
             
-            // Força recarregamento total
-            await load();
-            customAlert("Nova ordem de rota salva com sucesso na planilha (nuvem)!", "Sucesso");
+            const [abertura, fechamento] = horarioDia.split('-');
+            const [hAbertura, mAbertura] = abertura.split(':').map(Number);
+            const [hFechamento, mFechamento] = fechamento.split(':').map(Number);
+            
+            const minEta = dateEta.getHours() * 60 + dateEta.getMinutes();
+            const minAbertura = hAbertura * 60 + mAbertura;
+            const minFechamento = hFechamento * 60 + mFechamento;
+            
+            if (minEta < minAbertura) {
+                return { status: 'antes_abrir', badge: `<span class="badge bg-warning text-dark py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-exclamation-triangle me-1"></i>Chega antes de abrir (${abertura})</span>` };
+            } else if (minEta > minFechamento) {
+                return { status: 'fechado', badge: `<span class="badge bg-danger text-white py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-exclamation-circle me-1"></i>Fecha às ${fechamento} (Atrasado)</span>` };
+            } else if (minFechamento - minEta <= 30) {
+                return { status: 'fechando', badge: `<span class="badge bg-warning text-dark py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-hourglass-half me-1"></i>Fecha em breve (${fechamento})</span>` };
+            }
+            
+            return { status: 'aberto', badge: `<span class="badge bg-success text-white py-0 px-2" style="font-size:0.6rem;"><i class="fas fa-check-circle me-1"></i>Aberto das ${abertura} às ${fechamento}</span>` };
         } catch (e) {
-            console.error(e);
-            customAlert("Erro ao salvar ordem de rota na planilha.");
-        }
-        toggleLoader(false);
-    };
-
-    window.openGoogleMapsMultiStopRoute = async function() {
-        const type = document.getElementById('map-start-type').value;
-        if (!type) {
-            customAlert("Selecione um ponto de partida para abrir a rota no Google Maps.");
-            return;
-        }
-        
-        let startAddress = "";
-        if (type === 'gps') {
-            startAddress = "My+Location";
-        } else if (type === 'planilha') {
-            if (!userConfig.adress_start) {
-                customAlert("Endereço padrão de partida não configurado na planilha.");
-                return;
-            }
-            startAddress = encodeURIComponent(userConfig.adress_start);
-        } else if (type === 'address') {
-            const val = document.getElementById('map-start-address').value.trim();
-            if (!val) {
-                customAlert("Por favor, digite o endereço de partida.");
-                return;
-            }
-            startAddress = encodeURIComponent(val);
-        }
-        
-        const backType = localStorage.getItem('map_back_type') || 'none';
-        let backAddress = "";
-        if (backType === 'planilha') {
-            if (userConfig.adress_back) {
-                backAddress = encodeURIComponent(userConfig.adress_back);
-            }
-        } else if (backType === 'address') {
-            const val = document.getElementById('map-back-address') ? document.getElementById('map-back-address').value.trim() : '';
-            if (val) backAddress = encodeURIComponent(val);
-        } else if (backType === 'click') {
-            const val = localStorage.getItem('map_click_back') || '';
-            if (val) backAddress = encodeURIComponent(val);
-        }
-        
-        const targetDate = selectedDate;
-        const targetDateCode = getDayCodeForDate(targetDate);
-        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
-        
-        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
-        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
-        
-        let scheduledToday;
-        if (selectedBairroVal) {
-            scheduledToday = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
-        } else {
-            scheduledToday = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
-        }
-        
-        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
-        if (omitWhats) {
-            scheduledToday = scheduledToday.filter(i => i.Ordem != 99);
-        }
-        
-        if (scheduledToday.length === 0) {
-            customAlert("Não há clientes na rota para abrir no Maps.");
-            return;
-        }
-        
-        if (gpsSortedOrder) {
-            scheduledToday.sort((a, b) => {
-                const idxA = gpsSortedOrder.indexOf(a.ID);
-                const idxB = gpsSortedOrder.indexOf(b.ID);
-                const posA = idxA === -1 ? Infinity : idxA;
-                const posB = idxB === -1 ? Infinity : idxB;
-                return posA - posB;
-            });
-        }
-        
-        const addresses = [startAddress];
-        scheduledToday.forEach(c => {
-            if (c.Endereco) {
-                addresses.push(encodeURIComponent(c.Endereco));
-            }
-        });
-        
-        if (backType !== 'none' && backAddress) {
-            addresses.push(backAddress);
-        }
-        
-        if (addresses.length > 10) {
-            let chunk;
-            if (backType !== 'none' && backAddress) {
-                chunk = [...addresses.slice(0, 9), backAddress];
-            } else {
-                chunk = addresses.slice(0, 10);
-            }
-            const confirmed = await customConfirm(`O Google Maps suporta no máximo 10 pontos (partida + 9 paradas). Deseja abrir os primeiros pontos da rota? (Você possui ${addresses.length} pontos no total).`);
-            if (confirmed) {
-                const url = `https://www.google.com/maps/dir/${chunk.join('/')}`;
-                window.open(url, '_blank');
-            }
-        } else {
-            const url = `https://www.google.com/maps/dir/${addresses.join('/')}`;
-            window.open(url, '_blank');
+            return { status: 'erro', badge: '' };
         }
     };
 
-    window.optimizeMapRoute = async function() {
-        const type = document.getElementById('map-start-type').value;
-        if (!type) {
-            customAlert("Selecione um ponto de partida.");
+    // Chamada ao Backend e Desenho da Polilinha da Rota Real (Google Routes API)
+    window.desenharRotaGMaps = async function() {
+        if (arrayOrdemRota.length < 2) {
+            if (activePolyline && leafletMap) leafletMap.removeLayer(activePolyline);
+            const panel = document.getElementById('painel-metricas-viagem');
+            if (panel) panel.style.display = 'none';
             return;
         }
         
-        toggleLoader(true, "Obtendo sinal GPS e ponto de partida...");
-        let startLat, startLon;
+        const loader = document.getElementById('rota-loader');
+        if (loader) loader.style.display = 'block';
         
-        if (type === 'gps') {
-            if (!navigator.geolocation) {
-                toggleLoader(false);
-                customAlert("Seu navegador não oferece suporte à geolocalização.");
-                return;
-            }
+        let partidaCoords = '';
+        const startType = localStorage.getItem('map_start_type') || 'planilha';
+        if (navigator.geolocation && startType === 'gps') {
             try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000 });
-                });
-                startLat = position.coords.latitude;
-                startLon = position.coords.longitude;
-            } catch (err) {
-                toggleLoader(false);
-                console.error(err);
-                customAlert("Falha ao obter sinal de GPS do aparelho. Verifique as permissões de localização.");
-                return;
+                const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout: 4000}));
+                partidaCoords = `${pos.coords.latitude},${pos.coords.longitude}`;
+            } catch (e) {
+                console.warn("Falha ao obter sinal de GPS atual. Usando padrão.");
             }
-        } else if (type === 'planilha') {
-            if (!userConfig.adress_start) {
-                toggleLoader(false);
-                customAlert("Endereço padrão de partida não configurado na planilha.");
-                return;
-            }
-            const coords = await getCoordinatesForAddress(userConfig.adress_start);
-            if (!coords) {
-                toggleLoader(false);
-                customAlert("Não foi possível geocodificar o endereço de partida padrão da planilha.");
-                return;
-            }
-            startLat = coords.lat;
-            startLon = coords.lon;
-        } else if (type === 'address') {
-            const addressVal = document.getElementById('map-start-address').value.trim();
-            if (!addressVal) {
-                toggleLoader(false);
-                customAlert("Digite o endereço de partida.");
-                return;
-            }
+        }
+
+        try {
+            const res = await apiPost('calcular_rota_dinamica', null, {
+                sequence_ids: arrayOrdemRota,
+                start_address: partidaCoords || userConfig.adress_start || '',
+                back_address: localStorage.getItem('map_back_type') !== 'none' ? userConfig.adress_back : ''
+            });
             
-            const coords = await getCoordinatesForAddress(addressVal);
-            if (!coords) {
-                toggleLoader(false);
-                customAlert("Não foi possível geocodificar o endereço de partida digitado.");
-                return;
+            const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+            
+            if (parsed.success) {
+                currentRouteData = parsed;
+                
+                // Decodifica a polilinha comprimida enviada pelo Google
+                const coords = polyline.decode(parsed.polyline);
+                const isDark = document.body.classList.contains('dark-theme');
+                
+                if (activePolyline && leafletMap) leafletMap.removeLayer(activePolyline);
+                
+                activePolyline = L.polyline(coords, {
+                    color: isDark ? '#26a69a' : '#004d40',
+                    weight: 6,
+                    opacity: 0.9,
+                    lineJoin: 'round'
+                }).addTo(leafletMap);
+                
+                leafletMap.fitBounds(activePolyline.getBounds(), { padding: [40, 40] });
+                
+                // Preenche o painel de métricas
+                const metricDist = document.getElementById('metric-distancia');
+                if (metricDist) metricDist.innerText = `${parsed.distanciaKmTotal} km`;
+                const metricDur = document.getElementById('metric-duracao');
+                if (metricDur) metricDur.innerText = `${parsed.tempoMinutosTotal} min`;
+                const metricParadas = document.getElementById('metric-paradas');
+                if (metricParadas) metricParadas.innerText = arrayOrdemRota.length;
+                const panel = document.getElementById('painel-metricas-viagem');
+                if (panel) panel.style.display = 'block';
+                
+                // Recarrega a lista para atualizar ETAs calculados
+                renderizarListaClientesArrastavel();
+            } else {
+                console.error("Erro no retorno da API do Google:", parsed.error, parsed.detalhes);
             }
-            startLat = coords.lat;
-            startLon = coords.lon;
+        } catch (err) {
+            console.error("Erro ao calcular rota:", err);
+        } finally {
+            if (loader) loader.style.display = 'none';
         }
+    };
+
+    // Abre a rota no aplicativo do Google Maps (Deep Link com múltiplas paradas)
+    window._abrirRotaMultiParadaNoGMaps = function() {
+        if (arrayOrdemRota.length === 0) return;
         
-        const targetDate = selectedDate;
-        const targetDateCode = getDayCodeForDate(targetDate);
-        const selectedDayCode = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : targetDateCode;
-        
-        const selectedCityVal = document.getElementById('fCidade') ? document.getElementById('fCidade').value : '';
-        const selectedBairroVal = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
-        
-        let scheduled;
-        if (selectedBairroVal) {
-            scheduled = db.filter(i => i.Bairro === selectedBairroVal && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
-        } else {
-            scheduled = db.filter(i => (!selectedDayCode || (i.Visita && i.Visita.includes(selectedDayCode))) && (!selectedCityVal || i.Cidade === selectedCityVal) && i.Endereco && i.Endereco.trim().length > 5);
-        }
-        
-        const omitWhats = localStorage.getItem('map_omit_whats') === 'true';
-        if (omitWhats) {
-            scheduled = scheduled.filter(i => i.Ordem != 99);
-        }
-        
-        if (scheduled.length === 0) {
-            toggleLoader(false);
-            customAlert("Não há clientes agendados com endereço neste dia/filtro para otimizar.");
+        const waypoints = arrayOrdemRota
+            .map(id => {
+                const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
+                if (!c) return null;
+                if (c.lat && c.long) {
+                    let lat = c.lat;
+                    let lon = c.long;
+                    if (Math.abs(lat) > 90) lat = lat / 10000000;
+                    if (Math.abs(lon) > 180) lon = lon / 10000000;
+                    return `${lat},${lon}`;
+                }
+                return encodeURIComponent(`${c.Endereco}, ${c.Cidade}`);
+            })
+            .filter(Boolean);
+            
+        if (waypoints.length < 2) {
+            customAlert("São necessários pelo menos 2 clientes na rota para abrir no GPS.", "Aviso");
             return;
         }
         
-        // Obter coordenadas para todos os clientes da rota (com controle de progresso e rate limits)
-        const coordsList = [];
-        let geocodeCount = 0;
+        const origin = waypoints[0];
+        const destination = waypoints[waypoints.length - 1];
+        const midpoints = waypoints.slice(1, -1).join('|');
         
-        for (let idx = 0; idx < scheduled.length; idx++) {
-            const c = scheduled[idx];
-            const cleanAddr = cleanAddressForGeocoding(c.Endereco, c.Cidade);
-            const needsGeocode = (safeCoord(c.lat) === null || safeCoord(c.long) === null) && !coordsCache[cleanAddr];
-            
-            if (needsGeocode) {
-                geocodeCount++;
-                toggleLoader(true, `Geocodificando: ${c.Fantasia || c.Cliente} (Respeitando rate limit de 1 req/s)...`);
-                await sleep(1000);
+        let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+        if (midpoints) url += `&waypoints=${midpoints}`;
+        
+        window.open(url, '_blank');
+    };
+
+    // Salva definitivamente a ordem alterada por arrasto de volta na planilha Google
+    window.salvarSequenciaOrdenada = async function() {
+        toggleLoader(true, 'Salvando ordem de visitas na planilha...');
+        try {
+            const res = await apiPost('salvar_ordem_rota', null, { ordem_ids: arrayOrdemRota });
+            const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+            if (parsed.success) {
+                customAlert('Nova sequência de visitas salva com sucesso!', 'Sucesso');
+                await load(); // Recarrega os dados globais
             } else {
-                toggleLoader(true, `Preparando rota: ${c.Fantasia || c.Cliente} (${idx + 1}/${scheduled.length})...`);
+                customAlert('Erro ao salvar sequência: ' + parsed.error, 'Erro');
             }
-            
-            const coords = await getCoordinatesForAddress(c.Endereco, c);
-            if (coords) {
-                coordsList.push({ id: c.ID, lat: coords.lat, lon: coords.lon });
-            }
+        } catch (err) {
+            customAlert('Falha na comunicação com backend: ' + err.message, 'Erro');
+        } finally {
+            toggleLoader(false);
         }
-        
-        toggleLoader(true, "Otimizando ordem dos pontos da rota...");
-        
-        let currentLat = startLat;
-        let currentLon = startLon;
-        const remaining = [...coordsList];
-        const sortedIds = [];
-        
-        while (remaining.length > 0) {
-            let nearestIdx = -1;
-            let minDistance = Infinity;
-            
-            for (let i = 0; i < remaining.length; i++) {
-                const d = getHaversineDistance(currentLat, currentLon, remaining[i].lat, remaining[i].lon);
-                if (d < minDistance) {
-                    minDistance = d;
-                    nearestIdx = i;
-                }
-            }
-            
-            if (nearestIdx !== -1) {
-                const next = remaining.splice(nearestIdx, 1)[0];
-                sortedIds.push(next.id);
-                currentLat = next.lat;
-                currentLon = next.lon;
-            } else {
-                break;
-            }
-        }
-        
-        scheduled.forEach(c => {
-            if (!sortedIds.includes(c.ID)) {
-                sortedIds.push(c.ID);
-            }
-        });
-        
-        gpsSortedOrder = sortedIds;
-        toggleLoader(false);
-        customAlert("Rota ordenada localmente a partir do ponto de partida!", "Otimizador");
+    };
+
+    window.resetarSequenciaManual = function() {
+        sessionStorage.removeItem('ordem_manual_dia');
+        currentRouteData = null;
         render();
+    };
+
+    window.removerClienteRoteiro = function(id) {
+        arrayOrdemRota = arrayOrdemRota.filter(itemId => itemId !== id);
+        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+        renderizarListaClientesArrastavel();
+        desenharRotaGMaps();
+    };
+
+    // Processa a importação do arquivo JSON da extensão GMapScraper
+    window.processarUploadScraper = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const leads = JSON.parse(e.target.result);
+                
+                if (!Array.isArray(leads)) {
+                    customAlert('O arquivo JSON do Scraper deve conter um array de registros.', 'Erro de Formato');
+                    return;
+                }
+                
+                const confirmed = await customConfirm(
+                    `Deseja processar ${leads.length} registros extraídos do Google Maps?\n\nOs clientes da planilha serão enriquecidos automaticamente por nome fantasia ou CNPJ.`,
+                    'Confirmar Importação de Leads'
+                );
+                
+                if (!confirmed) return;
+                
+                toggleLoader(true, 'Importando e mesclando dados dos clientes...');
+                
+                const res = await apiPost('importar_dados_raspados', null, { leads: leads });
+                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+                
+                if (parsed.success) {
+                    customAlert(`Importação concluída!\n\nClientes enriquecidos com sucesso: ${parsed.count} de ${leads.length}`, 'Sucesso');
+                    await load(); // Atualiza a aplicação
+                } else {
+                    customAlert('Erro ao importar dados: ' + parsed.error, 'Erro');
+                }
+            } catch (err) {
+                customAlert('Falha ao ler o arquivo JSON: ' + err.message, 'Erro');
+            } finally {
+                toggleLoader(false);
+                event.target.value = ''; // Limpa o input
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Geocodificar endereço do cliente ausente (Aba Sem Endereço)
+    window.geocodificarClienteNaAba = async function(id, event) {
+        if (event) event.stopPropagation();
+        const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
+        if (!c || !c.Endereco) {
+            customAlert('Este cliente não tem endereço cadastrado.', 'Erro');
+            return;
+        }
+
+        const confirmed = await customConfirm(
+            `Deseja buscar as coordenadas de "${c.Fantasia || c.Cliente}" via Google Geocoding?\n\nEndereço: ${c.Endereco}, ${c.Cidade}`,
+            'Geocodificar Endereço'
+        );
+        if (!confirmed) return;
+
+        toggleLoader(true, 'Buscando coordenadas no Google...');
+
+        try {
+            const resposta = await apiPost('geocodificar_endereco', null, {
+                endereco: c.Endereco + ', ' + c.Cidade + ', SP, Brasil',
+                cliente_id: c.ID
+            });
+            const dados = typeof resposta === 'string' ? JSON.parse(resposta) : resposta;
+
+            if (dados.success) {
+                c.lat = Math.round(dados.lat * 10000000);
+                c.long = Math.round(dados.lng * 10000000);
+
+                customAlert(`Coordenadas encontradas!\nLat: ${dados.lat}\nLng: ${dados.lng}\nEndereço formatado: ${dados.formatted}`, 'Sucesso');
+                await load(); // Recarregar dados
+            } else {
+                customAlert(`Não foi possível encontrar as coordenadas.\nErro: ${dados.error}`, 'Erro');
+            }
+        } catch (e) {
+            customAlert(`Falha na comunicação: ${e.message}`, 'Erro');
+        } finally {
+            toggleLoader(false);
+        }
+    };
+
+    // Enriquecer dados usando Google Places API (New)
+    window.enriquecerViaPlaces = async function(id, event) {
+        if (event) event.stopPropagation();
+        const c = db.find(x => x.ID.toString().trim() === id.toString().trim());
+        if (!c) return;
+
+        const confirmed = await customConfirm(
+            `Deseja enriquecer os dados de "${c.Fantasia || c.Cliente}" usando a Google Places API?\n\nIsso buscará automaticamente place_id, telefone, website, coordenadas e horário de funcionamento!`,
+            'Enriquecer via Google Places'
+        );
+        if (!confirmed) return;
+
+        toggleLoader(true, 'Consultando Google Places API...');
+
+        try {
+            const resposta = await apiPost('enriquecer_via_google_places', null, {
+                cliente_id: c.ID
+            });
+            const dados = typeof resposta === 'string' ? JSON.parse(resposta) : resposta;
+
+            if (dados.success) {
+                // Atualiza o objeto no banco de dados local
+                if (dados.coordenadas) {
+                    c.lat = Math.round(dados.coordenadas.lat * 10000000);
+                    c.long = Math.round(dados.coordenadas.lng * 10000000);
+                }
+                if (dados.place_id) c.place_id = dados.place_id;
+                if (dados.telefone) c.telefone_extra = dados.telefone;
+                if (dados.website) c.website = dados.website;
+                if (dados.horarios) c.horarios_completos = JSON.stringify(dados.horarios);
+
+                customAlert(`Enriquecimento concluído com sucesso para "${dados.nome}"!\n\nDados obtidos:\n- PlaceID: ${dados.place_id || 'Não encontrado'}\n- Telefone: ${dados.telefone || 'Não encontrado'}\n- Site: ${dados.website || 'Não encontrado'}\n- Horários: ${dados.horarios ? 'Obtidos' : 'Não encontrados'}\n- Coordenadas: ${dados.coordenadas ? 'Mapeadas' : 'Não mapeadas'}`, 'Sucesso');
+                await load(); // Recarrega os dados globais para redesenhar tudo
+            } else {
+                customAlert(`Não foi possível encontrar o local ou enriquecer os dados.\nErro: ${dados.error}`, 'Aviso');
+            }
+        } catch (e) {
+            customAlert(`Falha na comunicação com o servidor: ${e.message}`, 'Erro');
+        } finally {
+            toggleLoader(false);
+        }
     };
     
     function getHaversineDistance(lat1, lon1, lat2, lon2) {
@@ -3305,7 +3473,7 @@
     }
 
     function copyCnpj(text, btn) {
-        const cleanText = text.replace(/\D/g, '');
+        const cleanText = String(text || '').replace(/\D/g, '');
         navigator.clipboard.writeText(cleanText).then(() => {
             btn.classList.add('copied');
             const icon = btn.innerHTML;
@@ -3415,9 +3583,9 @@
     }
 
     async function queryCNPJ(cnpjRaw, ignoreAlerts = false) {
-        const cnpj = cnpjRaw.replace(/\D/g, '');
-        if (cnpj.length !== 14) {
-            if (!ignoreAlerts) customAlert("CNPJ inválido. Digite 14 dígitos.");
+        const cnpj = getCleanCnpj(cnpjRaw);
+        if (cnpj.length !== 14 || cnpj === '00000000000000') {
+            if (!ignoreAlerts) customAlert("CNPJ inválido. Verifique o número digitado.");
             return null;
         }
         toggleLoader(true);
@@ -3482,7 +3650,7 @@
     }
 
     async function queryCEP(cepRaw) {
-        const cep = cepRaw.replace(/\D/g, '');
+        const cep = String(cepRaw || '').replace(/\D/g, '');
         if (cep.length !== 8) {
             customAlert("CEP inválido. Digite 8 dígitos.");
             return null;
@@ -3696,6 +3864,10 @@
         document.getElementById('btn-stop-batch').style.display = 'none';
         const pBar = document.getElementById('batch-progress-bar');
         if (pBar) pBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        const currentClientEl = document.getElementById('batch-current-client');
+        if (currentClientEl) {
+            currentClientEl.innerText = 'Processamento interrompido pelo usuário.';
+        }
     };
 
     window.startBatchEnrichment = async function() {
@@ -3713,9 +3885,15 @@
         
         let targetList = [];
         if (mode === 'all') {
-            targetList = db.filter(c => c.CNPJ && c.CNPJ.replace(/\D/g, '').trim().length === 14);
+            targetList = db.filter(c => {
+                const clean = getCleanCnpj(c.CNPJ);
+                return clean.length === 14 && clean !== '00000000000000';
+            });
         } else {
-            targetList = db.filter(c => (!c.Endereco || c.Endereco.trim().length < 5) && c.CNPJ && c.CNPJ.replace(/\D/g, '').trim().length === 14);
+            targetList = db.filter(c => {
+                const clean = getCleanCnpj(c.CNPJ);
+                return (!c.Endereco || String(c.Endereco).trim().length < 5) && clean.length === 14 && clean !== '00000000000000';
+            });
         }
         
         if (targetList.length === 0) {
@@ -3755,7 +3933,13 @@
             if (!isBatchRunning) break;
             
             const client = targetList[idx];
-            const cleanCnpj = client.CNPJ.replace(/\D/g, '').trim();
+            const clientName = client.Cliente || client.Fantasia || `ID ${client.ID}`;
+            const currentClientEl = document.getElementById('batch-current-client');
+            if (currentClientEl) {
+                currentClientEl.innerText = `Preenchendo (${idx + 1}/${totalCount}): ${clientName}`;
+            }
+            
+            const cleanCnpj = getCleanCnpj(client.CNPJ);
             
             if (!cleanCnpj || cleanCnpj.length !== 14) {
                 nocnpjCount++;
@@ -3844,6 +4028,12 @@
         document.getElementById('btn-start-batch').style.display = 'block';
         document.getElementById('btn-stop-batch').style.display = 'none';
         progBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        
+        const currentClientEl = document.getElementById('batch-current-client');
+        if (currentClientEl) {
+            currentClientEl.innerText = 'Lote finalizado com sucesso!';
+        }
+        
         localStorage.setItem('cached_db', JSON.stringify(db));
         localStorage.setItem('cached_playbook', JSON.stringify(playbookDb));
         popularCidades();
@@ -4160,7 +4350,7 @@
             const b = document.getElementById('fBairro') ? document.getElementById('fBairro').value : '';
             
             let filtered = db.filter(i => {
-                const matchS = (i.ID + i.Cliente + i.Fantasia + i.Comprador + i.WhatsApp + i.CNPJ + i.Endereco + (i.Bairro || '')).toLowerCase().includes(s);
+                const matchS = [i.ID, i.Cliente, i.Fantasia, i.Comprador, i.WhatsApp, i.CNPJ, i.Endereco, i.Bairro].map(v => String(v || '').trim()).join(' ').toLowerCase().includes(s);
                 return matchS && (!v || (i.Visita && i.Visita.includes(v))) && (!e || (i.Entrega && i.Entrega.includes(e))) && (!c || i.Cidade === c) && (!b || i.Bairro === b);
             });
 
@@ -4281,6 +4471,22 @@
                         </div>
 
                         ${i.Obs ? `<div class="obs-tag"><b>⚠️ OBS:</b> ${i.Obs}</div>` : ''}
+
+                        <!-- Seção de links enriquecidos (Instagram, Facebook, Site, iFood, Tel Extra, Google Maps URL) -->
+                        <div class="d-flex flex-wrap gap-1 mt-2 mb-1" style="font-size: 0.75rem;">
+                            ${i.instagram ? `<a href="${i.instagram}" target="_blank" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-danger py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fab fa-instagram me-1"></i>Instagram</a>` : ''}
+                            ${i.facebook ? `<a href="${i.facebook}" target="_blank" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-primary py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fab fa-facebook-f me-1"></i>Facebook</a>` : ''}
+                            ${(i.gmaps_url || i.place_id) ? `<a href="${i.gmaps_url ? i.gmaps_url : `https://www.google.com/maps/search/?api=1&query=Estabelecimento&query_place_id=${i.place_id}`}" target="_blank" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-success py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fas fa-map-marked-alt me-1"></i>Google Maps</a>` : ''}
+                            ${i.website ? `<a href="${i.website}" target="_blank" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-secondary py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fas fa-globe me-1"></i>Site</a>` : ''}
+                            ${i.link_ifood ? `<a href="${i.link_ifood}" target="_blank" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-danger py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fas fa-motorcycle me-1"></i>iFood</a>` : ''}
+                            ${i.telefone_extra ? `<a href="tel:${i.telefone_extra}" onclick="event.stopPropagation();" class="btn btn-xs btn-outline-info py-1 px-2 rounded-3" style="font-size:0.68rem;"><i class="fas fa-phone me-1"></i>Ligar</a>` : ''}
+                            ${i.horarios_completos ? `<button onclick="toggleHorarios('${i.ID}', event)" class="btn btn-xs btn-outline-warning py-1 px-2 rounded-3" style="font-size:0.68rem; color: #856404; border-color: #ffc107;"><i class="far fa-clock me-1"></i>Horários</button>` : ''}
+                        </div>
+                        ${i.horarios_completos ? `
+                        <div id="hours-detail-${i.ID}" class="d-none mt-1 p-2 rounded-3 bg-light text-dark" style="font-size: 0.72rem; line-height: 1.3; border: 1px solid #ffeeba; text-align: left;">
+                            <div class="fw-bold mb-1"><i class="far fa-clock text-warning me-1"></i>Horário de Funcionamento:</div>
+                            <div>${formatarHorariosQuebra(i.horarios_completos)}</div>
+                        </div>` : ''}
 
                         <div class="action-grid">
                             <button onclick="abrirWhatsapp('${i.ID}', event)" class="btn-circle btn-wa"><i class="fab fa-whatsapp"></i></button>
@@ -4408,7 +4614,7 @@
             
             if (checklistSearch) {
                 const s = checklistSearch.toLowerCase();
-                filtered = filtered.filter(i => (i.ID + i.Cliente + i.Fantasia + i.Cidade).toLowerCase().includes(s));
+                filtered = filtered.filter(i => [i.ID, i.Cliente, i.Fantasia, i.Cidade].map(v => String(v || '').trim()).join(' ').toLowerCase().includes(s));
             }
             
             filtered.sort((a, b) => {
@@ -5003,18 +5209,6 @@
                 return noAddress || (omitWhats && isWhats);
             });
             
-            if (gpsSortedOrder) {
-                scheduledToday.sort((a, b) => {
-                    const idxA = gpsSortedOrder.indexOf(a.ID);
-                    const idxB = gpsSortedOrder.indexOf(b.ID);
-                    const posA = idxA === -1 ? Infinity : idxA;
-                    const posB = idxB === -1 ? Infinity : idxB;
-                    return posA - posB;
-                });
-            } else {
-                scheduledToday.sort((a, b) => (parseInt(a.Ordem) || 0) - (parseInt(b.Ordem) || 0));
-            }
-            
             // Calcular quantos possuem coordenadas mapeadas
             const mappedCount = scheduledToday.filter(c => {
                 const cleanAddr = cleanAddressForGeocoding(c.Endereco, c.Cidade);
@@ -5093,27 +5287,6 @@
                                        onchange="localStorage.setItem('map_custom_back', this.value)">
                             </div>
 
-                            <!-- Configurar Endereços Padrão -->
-                            <div class="col-12 mt-2">
-                                <button class="btn btn-sm btn-outline-light w-100 rounded-3 py-1 text-white border-white-50" type="button" data-bs-toggle="collapse" data-bs-target="#collapseConfigEnderecos" aria-expanded="false" aria-controls="collapseConfigEnderecos" style="font-size: 0.75rem;">
-                                    <i class="fas fa-cog me-1"></i>Configurar Endereços Padrão
-                                </button>
-                                <div class="collapse mt-2" id="collapseConfigEnderecos">
-                                    <div class="p-2.5 rounded-3 bg-white text-dark small" style="font-size: 0.78rem;">
-                                        <div class="mb-2">
-                                            <span class="fw-bold d-block text-muted mb-0.5"><i class="fas fa-home me-1"></i>Partida:</span>
-                                            <span class="d-block text-truncate text-secondary mb-1" id="config-start-val" title="${userConfig.adress_start || 'Não cadastrado'}">${userConfig.adress_start || 'Não cadastrado'}</span>
-                                            <button class="btn btn-xs btn-outline-primary py-0.5 px-2 rounded" onclick="configureStandardAddress('start')">Alterar Partida</button>
-                                        </div>
-                                        <div>
-                                            <span class="fw-bold d-block text-muted mb-0.5"><i class="fas fa-flag-checkered me-1"></i>Retorno:</span>
-                                            <span class="d-block text-truncate text-secondary mb-1" id="config-back-val" title="${userConfig.adress_back || 'Não cadastrado'}">${userConfig.adress_back || 'Não cadastrado'}</span>
-                                            <button class="btn btn-xs btn-outline-primary py-0.5 px-2 rounded" onclick="configureStandardAddress('back')">Alterar Retorno</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <div class="col-12 mt-2">
                                 <div class="form-check form-switch small">
                                     <input class="form-check-input" type="checkbox" id="map-omit-whats" ${omitWhats ? 'checked' : ''} onchange="toggleMapOmitWhats(this.checked)">
@@ -5121,8 +5294,8 @@
                                 </div>
                             </div>
                             <div class="col-12 d-grid gap-2 mt-2">
-                                <button id="btn-optimize-map" class="btn btn-sm btn-primary rounded-pill fw-bold py-2 w-100 shadow" style="display: none;" onclick="optimizeMapRoute()">
-                                    <i class="fas fa-magic me-1"></i>🚀 Calcular e Otimizar Rota
+                                <button id="btn-optimize-map" class="btn btn-sm btn-primary rounded-pill fw-bold py-2 w-100 shadow" onclick="desenharRotaGMaps()">
+                                    <i class="fas fa-route me-1"></i>🚀 Calcular Rota e Obter Trajeto Real
                                 </button>
                             </div>
                         </div>
@@ -5130,25 +5303,18 @@
                 </div>
                 
                 <div class="d-flex justify-content-center gap-2 mt-3 px-2">
-                    ${gpsSortedOrder ? `
-                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="clearMapOptimization()">
-                        <i class="fas fa-undo me-1"></i>Restaurar Ordem
+                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="resetarSequenciaManual()">
+                        <i class="fas fa-undo me-1"></i>Restaurar Ordem Original
                     </button>
-                    <button class="btn btn-sm btn-success rounded-pill px-3 fw-bold" onclick="saveMapRouteOrderToCloud()">
-                        <i class="fas fa-cloud-upload-alt me-1"></i>Gravar Ordem na Planilha
-                    </button>
-                    ` : ''}
                     <button class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="recenterMap()">
-                        <i class="fas fa-compress-arrows-alt me-1"></i>Centralizar
+                        <i class="fas fa-compress-arrows-alt me-1"></i>Centralizar Mapa
                     </button>
                 </div>
             </div>
             
-            ${!gpsSortedOrder ? `
             <div class="alert text-center py-2.5 px-3 small rounded-3 mb-2 shadow-sm" style="background: white; border: 1px solid #cbd5e1; color: #475569; font-size: 0.8rem; border-left: 4px solid #17a2b8 !important;">
-                <i class="fas fa-info-circle me-1 text-info fs-6"></i> <b>Clientes no mapa:</b> ${mappedCount} de ${totalCount} mapeados. Escolha o ponto de partida e clique em <b>🚀 Calcular e Otimizar Rota</b> para traçar o percurso.
+                <i class="fas fa-info-circle me-1 text-info fs-6"></i> <b>Clientes no mapa:</b> ${mappedCount} de ${totalCount} mapeados. Escolha o ponto de partida e clique em <b>🚀 Calcular Rota e Obter Trajeto Real</b> para obter direções.
             </div>
-            ` : ''}
             
             <!-- Aviso do Mapa -->
             <div id="map-loading" class="alert alert-info py-2 px-3 small rounded-3 mb-3 text-center" style="display: none;">
@@ -5171,58 +5337,82 @@
                 `;
             })() : ''}
 
-            <div id="map" class="mb-3"></div>
-            
-            ${scheduledToday.length > 0 ? `
-            <div class="d-grid gap-2 mb-3">
-                <button class="btn btn-primary py-2.5 rounded-pill fw-bold shadow-sm" style="background-color: #4285f4; border: none;" onclick="openGoogleMapsMultiStopRoute()">
-                    <i class="fas fa-map-marked-alt me-2"></i>Abrir Rota Completa no Google Maps
-                </button>
+            <!-- DUAL COLUMN ROW -->
+            <div class="row g-2">
+                <!-- Coluna do Mapa -->
+                <div class="col-12 col-lg-8 position-relative">
+                    <div id="map" style="height: 500px; border-radius: 16px; border: 2px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.05);"></div>
+                    
+                    <!-- Painel Flutuante de Métricas de Viagem -->
+                    <div id="painel-metricas-viagem" class="position-absolute bottom-0 start-0 m-3 p-3 bg-white border shadow-sm" style="border-radius: 12px; z-index: 1000; min-width: 250px; display: none; color: #333;">
+                      <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="fw-bold text-success" style="font-size:0.85rem;"><i class="fas fa-route me-1"></i> Resumo da Rota</span>
+                        <button onclick="_abrirRotaMultiParadaNoGMaps()" class="btn btn-sm btn-primary rounded-pill py-0 px-2" style="font-size: 0.7rem;"><i class="fab fa-google me-1"></i>Abrir no Maps</button>
+                      </div>
+                      <div class="d-flex justify-content-around text-center border-top pt-2">
+                        <div>
+                          <div class="small text-muted" style="font-size:0.65rem;">Distância</div>
+                          <div class="fw-bold fs-6" id="metric-distancia">0.0 km</div>
+                        </div>
+                        <div>
+                          <div class="small text-muted" style="font-size:0.65rem;">Duração Real</div>
+                          <div class="fw-bold fs-6" id="metric-duracao">0 min</div>
+                        </div>
+                        <div>
+                          <div class="small text-muted" style="font-size:0.65rem;">Paradas</div>
+                          <div class="fw-bold fs-6" id="metric-paradas">0</div>
+                        </div>
+                      </div>
+                    </div>
+                </div>
+
+                <!-- Coluna da Sequência e Controle -->
+                <div class="col-12 col-lg-4">
+                    <div class="card border-0 shadow-sm h-100" style="border-radius: 16px; background-color: var(--card-bg);">
+                      <div class="card-header bg-light border-0 py-3 d-flex justify-content-between align-items-center" style="border-radius: 16px 16px 0 0; color: #333;">
+                        <span class="fw-bold"><i class="fas fa-list-ol text-success me-2"></i>Sequência das Visitas</span>
+                        <div class="d-flex gap-1">
+                          <button onclick="salvarSequenciaOrdenada()" class="btn btn-sm btn-success rounded-pill px-2 py-1" style="font-size:0.7rem;">
+                            <i class="fas fa-save me-1"></i>Salvar
+                          </button>
+                        </div>
+                      </div>
+                      <div class="card-body p-2" style="max-height: 440px; overflow-y: auto;">
+                        <!-- Indicador de Carregamento da Rota -->
+                        <div id="rota-loader" style="display:none;" class="text-center p-3 text-muted">
+                          <div class="spinner-border spinner-border-sm text-success me-2"></div>
+                          <span style="font-size:0.8rem;">Calculando trajeto otimizado...</span>
+                        </div>
+                        
+                        <!-- Lista de Cards Arrastáveis -->
+                        <div id="lista-clientes-rota" class="list-group list-group-flush"></div>
+                      </div>
+                    </div>
+                </div>
             </div>
-            ` : ''}
-            
-            <div class="fw-bold mb-2 text-primary" style="font-size: 0.95rem;">📌 SEQUÊNCIA DE VISITAS:</div>
-            <div id="map-client-list">
+
+            <!-- Card de Importação do GMapScraper -->
+            <div class="card mt-3 border-0 shadow-sm" style="border-radius:16px; background-color: var(--card-bg);">
+              <div class="card-body py-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div>
+                    <h6 class="fw-bold mb-1"><i class="fas fa-file-import text-info me-2"></i>Importar Extensão GMapScraper</h6>
+                    <p class="text-muted mb-0 small">Enriqueça horários, telefones, placeid e links dos clientes de graça usando o JSON exportado.</p>
+                  </div>
+                  <div>
+                    <input type="file" id="file-scraper-input" accept=".json" style="display:none;" onchange="processarUploadScraper(event)">
+                    <button onclick="document.getElementById('file-scraper-input').click()" class="btn btn-sm btn-outline-info rounded-pill px-3">
+                      <i class="fas fa-upload me-1"></i>Enviar JSON Scraper
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
             `;
             
             if (scheduledToday.length === 0) {
                 html += `<div class="text-center text-muted py-5"><i class="fas fa-map-marked fa-3x mb-3 text-secondary"></i><br>Nenhum cliente na rota física para este dia.</div>`;
-            } else {
-                html += scheduledToday.map((i, idx) => {
-                    const visitStatus = getVisitStatusOnDate(i.ID, targetDate);
-                    const visited = visitStatus !== null;
-                    const isAbsent = visitStatus === 'Não Encontrado';
-                    
-                    let reason = "";
-                    if (!i.Endereco || i.Endereco.trim().length <= 5) reason = "Sem endereço cadastrado";
-                    else if (omitWhats && i.Ordem == 99) reason = "Cliente de WhatsApp";
-                    
-                    return `
-                    <div class="card card-client mb-2 ${visited ? (isAbsent ? 'absent-card' : 'visited-card') : ''}" onclick="focusOnMap('${i.ID}', event)" style="cursor: pointer;">
-                        <div class="card-body py-2 px-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="badge ${visited ? 'bg-secondary' : 'bg-primary'} rounded-pill">${idx + 1}</span>
-                                    <div>
-                                        <div class="fw-bold text-dark" style="font-size: 0.88rem;">${i.Fantasia || i.Cliente}</div>
-                                        <div class="text-muted" style="font-size: 0.72rem;"><i class="fas fa-map-marker-alt me-1 text-secondary"></i>${i.Bairro || 'Sem Bairro'}, ${i.Cidade}</div>
-                                    </div>
-                                </div>
-                                <div class="d-flex gap-2">
-                                    ${visited ? `
-                                    <span class="badge ${isAbsent ? 'bg-warning text-dark' : 'bg-success'} rounded-pill" style="font-size: 0.65rem;">${isAbsent ? 'Ausente' : 'Visitado'}</span>
-                                    ` : `
-                                    <span class="badge bg-light text-muted border rounded-pill" style="font-size: 0.65rem;">Pendente</span>
-                                    `}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                }).join('');
             }
-            
-            html += `</div>`;
             
             if (excludedClients.length > 0) {
                 html += `
@@ -5259,8 +5449,9 @@
             container.innerHTML = html;
             
             // Inicializar mapa de forma segura
-            setTimeout(() => {
-                renderLeafletMap(scheduledToday, targetDate);
+            setTimeout(async () => {
+                await renderLeafletMap(scheduledToday, targetDate);
+                inicializarRoteiroMapa(scheduledToday);
                 const startTypeEl = document.getElementById('map-start-type');
                 if (startTypeEl) {
                     const lastType = localStorage.getItem('map_start_type') || '';
@@ -5581,9 +5772,10 @@
                         <span class="small fw-bold text-muted">Progresso do Lote:</span>
                         <span id="batch-progress-text" class="small fw-bold text-primary">0 / 0</span>
                     </div>
-                    <div class="progress mb-3" style="height: 12px; border-radius: 6px; overflow: hidden; background-color: #e2e8f0;">
+                    <div class="progress mb-2" style="height: 12px; border-radius: 6px; overflow: hidden; background-color: #e2e8f0;">
                         <div id="batch-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
                     </div>
+                    <div id="batch-current-client" class="small text-muted text-truncate mb-3" style="font-size: 0.75rem; min-height: 1.2rem; font-style: italic;">Aguardando início...</div>
                     <div class="row g-2 text-center text-dark" style="font-size: 0.75rem;">
                         <div class="col-4">
                             <div class="p-1 border rounded bg-light">
@@ -5649,6 +5841,16 @@
                                 </button>
                             </div>
                             <div class="col-12 mt-2">
+                                <button class="btn btn-sm btn-outline-success w-100 py-2 rounded-pill fw-bold" onclick="geocodificarClienteNaAba('${i.ID}', event)">
+                                    <i class="fas fa-map-marker-alt me-1"></i>Geocodificar Endereço
+                                </button>
+                            </div>
+                            <div class="col-12 mt-1">
+                                <button class="btn btn-sm btn-success w-100 py-2 rounded-pill fw-bold" onclick="enriquecerViaPlaces('${i.ID}', event)">
+                                    <i class="fab fa-google me-1"></i>Buscar dados ricos (Places API)
+                                </button>
+                            </div>
+                            <div class="col-12 mt-2">
                                 <button class="btn btn-sm btn-outline-dark w-100 py-2 rounded-pill small" onclick="abrirForm('${i.ID}')">
                                     <i class="fas fa-edit me-1"></i>Editar Completo
                                 </button>
@@ -5698,15 +5900,27 @@
             document.getElementById('f-vis').value = c.Visita;
             document.getElementById('f-ent').value = c.Entrega;
             document.getElementById('f-ord').value = c.Ordem;
-            document.getElementById('f-cnpj').value = c.CNPJ;
+            document.getElementById('f-cnpj').value = formatCnpj(c.CNPJ);
             document.getElementById('f-obs').value = c.Obs;
             document.getElementById('f-hab').value = c.HAbertura || '';
             document.getElementById('f-hvis').value = c.Hvisita || '';
+            document.getElementById('f-tel-extra').value = c.telefone_extra || '';
+            document.getElementById('f-web').value = c.website || '';
+            document.getElementById('f-insta').value = c.instagram || '';
+            document.getElementById('f-fb').value = c.facebook || '';
+            document.getElementById('f-gmaps-url').value = c.gmaps_url || '';
+            document.getElementById('f-hours').value = c.horarios_completos || '';
             
             if (btnExcluir) btnExcluir.style.display = 'block';
         } else {
             idField.readOnly = false;
             idField.style.backgroundColor = '';
+            document.getElementById('f-tel-extra').value = '';
+            document.getElementById('f-web').value = '';
+            document.getElementById('f-insta').value = '';
+            document.getElementById('f-fb').value = '';
+            document.getElementById('f-gmaps-url').value = '';
+            document.getElementById('f-hours').value = '';
             
             // Auto-gera o ID do novo cliente (Max ID + 1)
             const maxId = db.reduce((max, item) => {
@@ -5970,32 +6184,40 @@
             Visita: document.getElementById('f-vis').value,
             Entrega: document.getElementById('f-ent').value,
             Ordem: document.getElementById('f-ord').value,
-            CNPJ: document.getElementById('f-cnpj').value,
+            CNPJ: formatCnpj(document.getElementById('f-cnpj').value),
             Obs: document.getElementById('f-obs').value,
             HAbertura: document.getElementById('f-hab').value,
-            Hvisita: document.getElementById('f-hvis').value
+            Hvisita: document.getElementById('f-hvis').value,
+            telefone_extra: document.getElementById('f-tel-extra').value,
+            website: document.getElementById('f-web').value,
+            instagram: document.getElementById('f-insta').value,
+            facebook: document.getElementById('f-fb').value,
+            gmaps_url: document.getElementById('f-gmaps-url').value,
+            horarios_completos: document.getElementById('f-hours').value
         };
         
         const oldClient = db.find(x => x.ID.toString().trim() === data.ID.toString().trim());
+        let updatedData = oldClient ? { ...oldClient, ...data } : data;
+        
         if (oldClient) {
             if (oldClient.Endereco === data.Endereco) {
-                data.lat = oldClient.lat || '';
-                data.long = oldClient.long || '';
+                updatedData.lat = oldClient.lat || '';
+                updatedData.long = oldClient.long || '';
             } else {
-                data.lat = '';
-                data.long = '';
+                updatedData.lat = '';
+                updatedData.long = '';
             }
         } else {
-            data.lat = '';
-            data.long = '';
+            updatedData.lat = '';
+            updatedData.long = '';
         }
         
         // Atualiza a memória local (db) imediatamente
         const idx = db.findIndex(x => x.ID.toString().trim() === data.ID.toString().trim());
         if (idx !== -1) {
-            db[idx] = data;
+            db[idx] = updatedData;
         } else {
-            db.push(data);
+            db.push(updatedData);
         }
         
         // Salva cache local
@@ -6006,9 +6228,9 @@
         updateSemEnderecoBadge();
         render();
         modal.hide();
-
+ 
         // Envia para o backend em background
-        apiPost('save', data).catch(e => console.error("Erro ao salvar cliente em background:", e));
+        apiPost('save', updatedData).catch(e => console.error("Erro ao salvar cliente em background:", e));
     }
 
     async function excluir() {
@@ -6060,6 +6282,13 @@
 
     // Iniciar data do roteiro com o dia de hoje e sincronizar
     updateSelectedDate(getLocalDateStr(), true);
+
+    const fCnpjEl = document.getElementById('f-cnpj');
+    if (fCnpjEl) {
+        fCnpjEl.addEventListener('blur', function() {
+            this.value = formatCnpj(this.value);
+        });
+    }
 
     window.onload = function() {
         initTheme();
