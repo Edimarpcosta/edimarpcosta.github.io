@@ -2759,26 +2759,37 @@
                 // Recarrega a lista para atualizar ETAs calculados
                 renderizarListaClientesArrastavel();
 
-                // Aviso de trechos com falha parcial (rota calculada mas incompleta)
-                const erros = parsed.trechosComErro;
-                if (erros && erros.length > 0) {
-                    console.warn('[Rota Parcial] Trechos não calculados:', erros);
-                    const listaErros = erros.map(e => `• ${e.de} → ${e.para}`).join('<br>');
+                // Toast de Avisos (Combina trechos com erro e clientes sem geolocalização)
+                const erros = parsed.trechosComErro || [];
+                const ignorados = parsed.clientesIgnorados || [];
+                
+                if (erros.length > 0 || ignorados.length > 0) {
+                    let htmlAviso = '';
+                    
+                    if (ignorados.length > 0) {
+                        const listaIgnorados = ignorados.map(c => `• <strong>${c.nome}</strong> (${c.motivo})`).join('<br>');
+                        htmlAviso += `<strong>Clientes ignorados (Sem GPS):</strong><br>${listaIgnorados}<br><br>`;
+                    }
+                    
+                    if (erros.length > 0) {
+                        const listaErros = erros.map(e => `• ${e.de} → ${e.para}`).join('<br>');
+                        htmlAviso += `<strong>Trechos não traçados no mapa:</strong><br>${listaErros}`;
+                    }
+
                     const toastEl = document.getElementById('toast-container');
                     if (toastEl) {
                         toastEl.innerHTML = `<div class="toast align-items-start text-bg-warning border-0 show" role="alert"
-                            style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;min-width:300px;max-width:90vw;">
-                            <div class="d-flex align-items-start p-2 gap-2">
-                                <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
-                                <div class="toast-body p-0 small">
-                                    <strong>Rota parcial calculada</strong><br>
-                                    ${erros.length} trecho(s) não puderam ser calculados:<br>
-                                    ${listaErros}
+                            style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;width:340px;max-width:90vw;">
+                            <div class="d-flex align-items-start p-3 gap-2">
+                                <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0" style="color: #664d03;"></i>
+                                <div class="toast-body p-0 small text-dark">
+                                    ${htmlAviso}
                                 </div>
                                 <button type="button" class="btn-close ms-auto flex-shrink-0" onclick="this.closest('.toast').remove()"></button>
                             </div>
                         </div>`;
-                        setTimeout(() => { const t = toastEl.querySelector('.toast'); if(t) t.remove(); }, 8000);
+                        // Aumentamos o tempo para 12 segundos para dar tempo de ler as informações importantes
+                        setTimeout(() => { const t = toastEl.querySelector('.toast'); if(t) t.remove(); }, 12000);
                     }
                 }
             } else {
