@@ -2758,10 +2758,33 @@
                 
                 // Recarrega a lista para atualizar ETAs calculados
                 renderizarListaClientesArrastavel();
+
+                // Aviso de trechos com falha parcial (rota calculada mas incompleta)
+                const erros = parsed.trechosComErro;
+                if (erros && erros.length > 0) {
+                    console.warn('[Rota Parcial] Trechos não calculados:', erros);
+                    const listaErros = erros.map(e => `• ${e.de} → ${e.para}`).join('<br>');
+                    const toastEl = document.getElementById('toast-container');
+                    if (toastEl) {
+                        toastEl.innerHTML = `<div class="toast align-items-start text-bg-warning border-0 show" role="alert"
+                            style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;min-width:300px;max-width:90vw;">
+                            <div class="d-flex align-items-start p-2 gap-2">
+                                <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+                                <div class="toast-body p-0 small">
+                                    <strong>Rota parcial calculada</strong><br>
+                                    ${erros.length} trecho(s) não puderam ser calculados:<br>
+                                    ${listaErros}
+                                </div>
+                                <button type="button" class="btn-close ms-auto flex-shrink-0" onclick="this.closest('.toast').remove()"></button>
+                            </div>
+                        </div>`;
+                        setTimeout(() => { const t = toastEl.querySelector('.toast'); if(t) t.remove(); }, 8000);
+                    }
+                }
             } else {
                 const detalheStr = parsed.detalhes ? JSON.stringify(parsed.detalhes, null, 2) : '(sem detalhes)';
                 console.error("Erro no retorno da API do Google Routes:", parsed.error, "\nDetalhes:", detalheStr);
-                // Exibe toast de erro para o usuário saber que a rota falhou
+                // Exibe toast de erro para o usuário saber que a rota falhou totalmente
                 const toastEl = document.getElementById('toast-container');
                 if (toastEl) {
                     toastEl.innerHTML = `<div class="toast align-items-center text-bg-danger border-0 show" role="alert" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;min-width:280px;">
@@ -2770,6 +2793,7 @@
                     setTimeout(() => { const t = toastEl.querySelector('.toast'); if(t) t.remove(); }, 5000);
                 }
             }
+
         } catch (err) {
             console.error("Erro ao calcular rota:", err);
         } finally {
