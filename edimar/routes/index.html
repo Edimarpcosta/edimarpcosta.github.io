@@ -2567,6 +2567,15 @@
             // Links de ação rápida
             const linksHtml = `
                 <div class="d-flex flex-wrap gap-1 mt-2">
+                    ${visitado ? 
+                        `<button onclick="toggleVisita('${cliente.ID}', event, null, 'delete')" class="btn btn-xs btn-success py-0 px-2 text-white border-0" style="font-size:0.65rem; border-radius:6px;" title="Remover Visita"><i class="fas fa-check-double me-1"></i>Visitado (Excluir)</button>` : 
+                      ausente ? 
+                        `<button onclick="toggleVisita('${cliente.ID}', event, null, 'delete')" class="btn btn-xs btn-warning py-0 px-2 text-white border-0" style="font-size:0.65rem; border-radius:6px; background-color: #ffc107;" title="Remover status de Ausente"><i class="fas fa-user-slash me-1"></i>Ausente (Excluir)</button>` : 
+                        `
+                        <button onclick="toggleVisita('${cliente.ID}', event, null, 'Visita')" class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:0.65rem; border-radius:6px;" title="Marcar como visitado"><i class="far fa-check-circle me-1"></i>Visitar</button>
+                        <button onclick="toggleVisita('${cliente.ID}', event, null, 'Não Encontrado')" class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:0.65rem; border-radius:6px; color: #b58100; border-color: #ffc107;" title="Marcar como Ausente"><i class="fas fa-user-slash me-1"></i>Ausente</button>
+                        `
+                    }
                     ${(cliente.gmaps_url || cliente.place_id) ? `<a href="${cliente.gmaps_url ? cliente.gmaps_url : `https://www.google.com/maps/search/?api=1&query=Estabelecimento&query_place_id=${cliente.place_id}`}" target="_blank" class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fas fa-map-marked-alt me-1"></i>Maps</a>` : ''}
                     ${cliente.instagram ? `<a href="${cliente.instagram}" target="_blank" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fab fa-instagram me-1"></i>Instagram</a>` : ''}
                     ${cliente.facebook ? `<a href="${cliente.facebook}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.65rem; border-radius:6px;"><i class="fab fa-facebook-f me-1"></i>Facebook</a>` : ''}
@@ -2714,8 +2723,16 @@
             if (parsed.success) {
                 currentRouteData = parsed;
                 
-                // Decodifica a polilinha comprimida enviada pelo Google
-                const coords = polyline.decode(parsed.polyline);
+                // Decodifica a polilinha comprimida enviada pelo Google (suporta única ou array de polilinhas)
+                let coords = [];
+                if (parsed.polylines && Array.isArray(parsed.polylines)) {
+                    parsed.polylines.forEach(p => {
+                        const decoded = polyline.decode(p);
+                        coords = coords.concat(decoded);
+                    });
+                } else if (parsed.polyline) {
+                    coords = polyline.decode(parsed.polyline);
+                }
                 const isDark = document.body.classList.contains('dark-theme');
                 
                 if (activePolyline && leafletMap) leafletMap.removeLayer(activePolyline);
@@ -3337,6 +3354,17 @@
 
     // Carregar dados via Fetch API (com autenticação e suporte a cache local)
     async function load() {
+        // Inicializar configurações padrão do mapa no localStorage se não existirem
+        if (localStorage.getItem('map_start_type') === null) {
+            localStorage.setItem('map_start_type', 'gps');
+        }
+        if (localStorage.getItem('map_back_type') === null) {
+            localStorage.setItem('map_back_type', 'planilha');
+        }
+        if (localStorage.getItem('map_omit_whats') === null) {
+            localStorage.setItem('map_omit_whats', 'true');
+        }
+
         const user = localStorage.getItem('pref_user');
         const psw = localStorage.getItem('pref_psw');
         if (!user || !psw) {
