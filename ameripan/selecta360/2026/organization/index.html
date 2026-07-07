@@ -948,7 +948,7 @@
         
         <!-- Filtros -->
         <div class="filter-wrapper">
-          <input type="text" id="txtSearch" class="input-field" placeholder="Pesquisar por Código, Razão, Fantasia, Nome ou Vendedor...">
+          <input type="text" id="txtSearch" class="input-field" placeholder="Pesquisar por Código, Razão, Fantasia, CNPJ, Nome ou Acompanhante...">
           
           <select id="filterEventCity" class="input-field">
             <option value="">Cidade do Evento...</option>
@@ -1622,7 +1622,7 @@
           if (res.success) {
             config.password = pwd;
             localStorage.setItem('selecta360_manager_password', pwd);
-            state.guests = res.guests;
+            state.guests = res.guests.map((g, i) => ({ ...g, _idx: i }));
             state.settings = res.settings;
             state.ameripanClients = res.ameripanClients || [];
             state.eventosPassados = res.eventosPassados || [];
@@ -1749,8 +1749,8 @@
     }
 
     // Modal Functions
-    window.openGuestDetailModal = function(codigo, focusCheckin = false) {
-      const g = state.guests.find(x => x.codigo === codigo);
+    window.openGuestDetailModal = function(idx, focusCheckin = false) {
+      const g = state.guests.find(x => x._idx === idx);
       if (!g) return;
 
       document.getElementById('lblModalCodigo').innerText = g.codigo;
@@ -2188,12 +2188,20 @@
       const statusFilter = filterStatus.value;
 
       return state.guests.filter(g => {
+        const cnpjClean = (g.cnpj || '').replace(/\D/g, '');
+        const queryClean = query.replace(/\D/g, '');
+        const cnpjMatch = queryClean.length > 0 && cnpjClean.includes(queryClean);
+        const companions = getCompanionsList(g);
+        const companionMatch = companions.some(name => name.toLowerCase().includes(query));
+
         const matchesQuery = !query || 
-          g.codigo.toLowerCase().includes(query) ||
-          g.razao_social.toLowerCase().includes(query) ||
-          g.fantasia.toLowerCase().includes(query) ||
-          g.nome_convidado.toLowerCase().includes(query) ||
-          g.vendedor.toLowerCase().includes(query);
+          (g.codigo || '').toLowerCase().includes(query) ||
+          (g.razao_social || '').toLowerCase().includes(query) ||
+          (g.fantasia || '').toLowerCase().includes(query) ||
+          (g.nome_convidado || '').toLowerCase().includes(query) ||
+          (g.vendedor || '').toLowerCase().includes(query) ||
+          cnpjMatch ||
+          companionMatch;
         const matchesCity = !cityFilter || g.cidade_evento === cityFilter;
         const matchesVendor = !vendorFilter || g.vendedor === vendorFilter;
         const matchesStatus = !statusFilter || 
@@ -2228,7 +2236,7 @@
       filtered.forEach(g => {
         const tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
-        tr.onclick = () => openGuestDetailModal(g.codigo);
+        tr.onclick = () => openGuestDetailModal(g._idx);
 
         const companions = getCompanionsList(g);
         
@@ -2277,11 +2285,11 @@
           <td>${statusBadge}</td>
           <td style="text-align: center;">
             <div style="display: flex; gap: 8px; justify-content: center; align-items: center;" onclick="event.stopPropagation();">
-              <button class="btn btn-secondary" style="padding: 6px; border-radius: 6px;" onclick="openGuestDetailModal('${g.codigo}', true)" title="Check-in Detalhado">✓</button>
+              <button class="btn btn-secondary" style="padding: 6px; border-radius: 6px;" onclick="openGuestDetailModal(${g._idx}, true)" title="Check-in Detalhado">✓</button>
               <a href="${waLink}" target="_blank" class="btn btn-secondary" style="padding: 6px; border-radius: 6px; border-color: rgba(37,211,102,0.3); color: #25d366;" title="WhatsApp">
                 <svg style="width:14px; height:14px; fill:currentColor;" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.734-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.03-5.114-2.905-6.99C16.458 1.875 13.985 1.85 11.35 1.85c-5.438 0-9.863 4.42-9.867 9.863-.001 1.73.457 3.419 1.323 4.925l-.993 3.626 3.734-.979zm12.39-5.187c-.268-.134-1.583-.78-1.829-.868-.244-.09-.422-.134-.6.134-.178.269-.691.867-.847 1.046-.156.179-.311.2-.58.066-.268-.134-1.134-.418-2.162-1.336-.799-.712-1.337-1.592-1.494-1.861-.156-.269-.016-.414.118-.547.121-.12.268-.314.402-.471.134-.157.179-.269.268-.449.09-.179.045-.336-.022-.471-.067-.134-.6-1.446-.823-1.984-.217-.523-.437-.453-.6-.462-.156-.008-.336-.01-.515-.01-.179 0-.47.067-.716.336-.246.269-.94.92-.94 2.24 0 1.32.96 2.596 1.096 2.775.134.179 1.89 2.887 4.578 4.043.639.276 1.138.44 1.527.564.642.204 1.226.175 1.688.107.514-.076 1.583-.647 1.807-1.27.224-.624.224-1.161.157-1.272-.067-.112-.246-.179-.515-.312z"/></svg>
               </a>
-              <button class="btn btn-danger" style="padding: 6px; border-radius: 6px;" onclick="deleteGuestConfirm('${g.codigo}', '${(g.fantasia || g.razao_social).replace(/'/g, "\\'")}', event)" title="Excluir">✕</button>
+              <button class="btn btn-danger" style="padding: 6px; border-radius: 6px;" onclick="deleteGuestConfirm('${g.codigo}', '${(g.fantasia || g.razao_social).replace(/'/g, "\\'")}', event, ${g._idx})" title="Excluir">✕</button>
             </div>
           </td>
         `;
@@ -2289,7 +2297,7 @@
       });
     }
 
-    window.deleteGuestConfirm = function(codigo, empresa, event) {
+    window.deleteGuestConfirm = function(codigo, empresa, event, idx) {
       if (event) event.stopPropagation();
       if (!confirm(`Tem certeza de que deseja EXCLUIR a inscrição de "${empresa}"?\n\nEsta ação é permanente!`)) return;
       fetch(config.scriptUrl, {
@@ -2301,7 +2309,14 @@
       .then(res => {
         if (res.success) {
           showToast('Inscrição excluída!');
-          state.guests = state.guests.filter(x => x.codigo !== codigo);
+          // Remove pelo _idx exato para não afetar outros com mesmo codigo (ex: AUTO_CRED_CLIENTE)
+          if (idx !== undefined) {
+            state.guests = state.guests.filter(x => x._idx !== idx);
+          } else {
+            state.guests = state.guests.filter(x => x.codigo !== codigo);
+          }
+          // Reatribui _idx após remoção
+          state.guests = state.guests.map((g, i) => ({ ...g, _idx: i }));
           renderAll();
         } else {
           showToast(res.message || 'Erro ao excluir.', 'error');
