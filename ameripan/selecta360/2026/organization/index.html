@@ -1198,8 +1198,14 @@
 
         <!-- Tabela Geral de CNPJs -->
         <div class="section-title" style="margin-top: 35px;">📋 Base de CNPJs e Status de Enriquecimento</div>
-        <div class="search-filter-wrapper" style="margin-bottom: 15px;">
-          <input type="text" id="inputIntelTableSearch" class="input-field" placeholder="Pesquisar tabela por CNPJ, Razão, Bairro, Cidade ou Status...">
+        <div class="search-filter-wrapper" style="margin-bottom: 15px; display: flex; gap: 10px;">
+          <input type="text" id="inputIntelTableSearch" class="input-field" placeholder="Pesquisar tabela por CNPJ, Razão, Bairro, Cidade..." style="flex-grow: 1;">
+          <select id="selectIntelTableStatus" class="input-field" style="width: auto; min-width: 180px;">
+            <option value="ALL">Mostrar Todos</option>
+            <option value="PENDING">Apenas Pendentes</option>
+            <option value="ENRICHED">Apenas Enriquecidos</option>
+            <option value="ERROR">Apenas com Erro</option>
+          </select>
         </div>
         <div style="overflow-x: auto; max-height: 400px; border: 1px solid var(--glass-border); border-radius: 16px; margin-bottom: 30px;">
           <table class="table" style="width: 100%;">
@@ -1532,6 +1538,15 @@
       const inputSearchTable = document.getElementById('inputIntelTableSearch');
       if (inputSearchTable) {
         inputSearchTable.addEventListener('input', () => {
+          const uniqueCnpjs = getUniqueCnpjsFromGuests();
+          const enrichedMap = getEnrichedCnpjMap();
+          renderIntelTable(uniqueCnpjs, enrichedMap);
+        });
+      }
+
+      const selectStatusTable = document.getElementById('selectIntelTableStatus');
+      if (selectStatusTable) {
+        selectStatusTable.addEventListener('change', () => {
           const uniqueCnpjs = getUniqueCnpjsFromGuests();
           const enrichedMap = getEnrichedCnpjMap();
           renderIntelTable(uniqueCnpjs, enrichedMap);
@@ -3184,27 +3199,42 @@
         url: (cnpj) => `https://api.opencnpj.org/${cnpj}?dataset=receita`,
         parse: (data) => {
           if (!data || !data.cnpj) throw new Error('Cnpj missing');
-          const estab = data.estabelecimento || {};
+          const estab = data.estabelecimento || data || {};
+          
+          var tel1 = '';
+          var tel2 = '';
+          if (data.telefones && data.telefones.length > 0) {
+            tel1 = (data.telefones[0].ddd || '') + (data.telefones[0].numero || '');
+            if (data.telefones.length > 1) {
+              tel2 = (data.telefones[1].ddd || '') + (data.telefones[1].numero || '');
+            }
+          } else if (estab.ddd1 && estab.telefone1) {
+            tel1 = estab.ddd1 + estab.telefone1;
+            if (estab.ddd2 && estab.telefone2) {
+              tel2 = estab.ddd2 + estab.telefone2;
+            }
+          }
+          
           return {
             cnpj: data.cnpj,
             razao_social_cnpj: data.razao_social,
-            nome_fantasia_cnpj: estab.nome_fantasia || data.razao_social,
-            logradouro: estab.logradouro ? estab.logradouro.nome : '',
-            numero: estab.numero,
-            complemento: estab.complemento,
-            bairro: estab.bairro ? estab.bairro.nome : '',
-            municipio: estab.municipio ? estab.municipio.nome : '',
-            uf: estab.estado ? estab.estado.sigla : '',
-            cep: estab.cep,
-            telefone_cnpj: (estab.ddd1 && estab.telefone1) ? `${estab.ddd1}${estab.telefone1}` : '',
-            telefone_2_cnpj: (estab.ddd2 && estab.telefone2) ? `${estab.ddd2}${estab.telefone2}` : '',
-            email_cnpj: estab.email,
-            cnae_principal: estab.atividade_principal ? estab.atividade_principal.id : '',
-            descricao_cnae: estab.atividade_principal ? estab.atividade_principal.secao : '',
-            natureza_juridica: data.natureza_juridica ? data.natureza_juridica.id : '',
-            capital_social: data.capital_social,
-            porte: data.porte ? data.porte.descricao : '',
-            situacao_cadastral: estab.situacao_cadastral || '',
+            nome_fantasia_cnpj: data.nome_fantasia || estab.nome_fantasia || data.razao_social,
+            logradouro: typeof estab.logradouro === 'object' ? (estab.logradouro ? estab.logradouro.nome : '') : (estab.logradouro || ''),
+            numero: estab.numero || '',
+            complemento: estab.complemento || '',
+            bairro: typeof estab.bairro === 'object' ? (estab.bairro ? estab.bairro.nome : '') : (estab.bairro || ''),
+            municipio: typeof estab.municipio === 'object' ? (estab.municipio ? estab.municipio.nome : '') : (estab.municipio || ''),
+            uf: typeof estab.estado === 'object' ? (estab.estado ? estab.estado.sigla : '') : (estab.uf || estab.estado || ''),
+            cep: estab.cep || '',
+            telefone_cnpj: tel1,
+            telefone_2_cnpj: tel2,
+            email_cnpj: data.email || estab.email || '',
+            cnae_principal: typeof estab.atividade_principal === 'object' ? (estab.atividade_principal ? estab.atividade_principal.id : '') : (data.cnae_principal || estab.cnae_principal || ''),
+            descricao_cnae: typeof estab.atividade_principal === 'object' ? (estab.atividade_principal ? estab.atividade_principal.secao : '') : '',
+            natureza_juridica: typeof data.natureza_juridica === 'object' ? (data.natureza_juridica ? data.natureza_juridica.id : '') : (data.natureza_juridica || ''),
+            capital_social: data.capital_social || '',
+            porte: typeof data.porte === 'object' ? (data.porte ? data.porte.descricao : '') : (data.porte || ''),
+            situacao_cadastral: data.situacao_cadastral || estab.situacao_cadastral || '',
             api_origem: 'OpenCNPJ'
           };
         }
@@ -3258,7 +3288,10 @@
     function getUniqueCnpjsFromGuests() {
       const cnpjs = {};
       state.guests.forEach(g => {
-        const clean = String(g.cnpj || "").replace(/\D/g, "");
+        let clean = String(g.cnpj || "").replace(/\D/g, "");
+        if (clean && clean.length < 14) {
+          clean = clean.padStart(14, '0');
+        }
         if (clean && clean.length === 14) {
           if (!cnpjs[clean]) {
             cnpjs[clean] = {
@@ -3275,7 +3308,10 @@
     function getEnrichedCnpjMap() {
       const enriched = {};
       state.clienteData.forEach(cd => {
-        const clean = String(cd.cnpj || "").replace(/\D/g, "");
+        let clean = String(cd.cnpj || "").replace(/\D/g, "");
+        if (clean && clean.length < 14) {
+          clean = clean.padStart(14, '0');
+        }
         if (clean) {
           enriched[clean] = cd;
         }
@@ -3324,6 +3360,7 @@
       if (!tbody) return;
       
       const query = (document.getElementById('inputIntelTableSearch').value || "").trim().toLowerCase();
+      const statusFilter = (document.getElementById('selectIntelTableStatus')?.value || "ALL");
       tbody.innerHTML = '';
       
       let rowsHtml = '';
@@ -3334,6 +3371,7 @@
         const cd = enrichedMap[cleanCnpj];
         
         let statusBadge = '<span class="companion-badge" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: var(--accent-color);">⏳ Pendente</span>';
+        let statusType = 'PENDING';
         let razaoSocial = g.razao_social || g.fantasia || '—';
         let cidadeOrigem = g.cidade_cliente || '—';
         let bairro = '—';
@@ -3341,14 +3379,21 @@
         if (cd) {
           if (cd.api_origem && cd.api_origem.toLowerCase().indexOf('erro') !== -1) {
             statusBadge = '<span class="companion-badge" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: var(--error-color);">❌ Erro</span>';
+            statusType = 'ERROR';
             razaoSocial = g.razao_social || g.fantasia;
             cidadeOrigem = g.cidade_cliente || '—';
           } else {
             statusBadge = '<span class="companion-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: var(--success-color);">✅ Enriquecido</span>';
+            statusType = 'ENRICHED';
             razaoSocial = cd.razao_social_cnpj || cd.nome_fantasia_cnpj || cd.fantasia_convidados || razaoSocial;
             cidadeOrigem = cd.municipio || cidadeOrigem;
             bairro = cd.bairro || '—';
           }
+        }
+        
+        // Aplica o filtro de status selecionado
+        if (statusFilter !== 'ALL' && statusType !== statusFilter) {
+          return;
         }
         
         const matchesQuery = !query || 
@@ -3385,7 +3430,8 @@
       const enrichedMap = getEnrichedCnpjMap();
       
       state.guests.forEach(g => {
-        const cleanCnpj = String(g.cnpj || "").replace(/\D/g, "");
+        let cleanCnpj = String(g.cnpj || "").replace(/\D/g, "");
+        if (cleanCnpj && cleanCnpj.length < 14) cleanCnpj = cleanCnpj.padStart(14, '0');
         const cd = enrichedMap[cleanCnpj];
         
         const city = (cd && cd.municipio ? cd.municipio : (g.cidade_cliente || 'Desconhecido')).trim().toUpperCase();
@@ -3504,7 +3550,10 @@
     }
 
     async function queryCnpjWithFallbacks(cnpj) {
-      const clean = String(cnpj || "").replace(/\D/g, "");
+      let clean = String(cnpj || "").replace(/\D/g, "");
+      if (clean && clean.length < 14) {
+        clean = clean.padStart(14, '0');
+      }
       if (clean.length !== 14) {
         throw new Error('CNPJ inválido (deve possuir 14 dígitos)');
       }
