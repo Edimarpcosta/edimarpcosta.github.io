@@ -10,6 +10,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
+    <!-- jsPDF para exportação dinâmica de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
         /* ===== TEMAS DE CORES (VARIÁVEIS CSS) ===== */
         :root {
@@ -1204,8 +1207,8 @@
 
                     <!-- Ações de Exportação -->
                     <div class="export-actions-row">
-                        <button class="btn-export btn-export-pdf" onclick="window.print()">
-                            <i class="fa-solid fa-file-pdf"></i> Imprimir Ficha / Salvar PDF
+                        <button class="btn-export btn-export-pdf" onclick="exportPdfProfissional()">
+                            <i class="fa-solid fa-file-pdf"></i> Gerar PDF Profissional
                         </button>
                         <button class="btn-export" onclick="exportDataJson()">
                             <i class="fa-solid fa-code"></i> Exportar JSON
@@ -2688,6 +2691,443 @@
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
+        }
+
+        // ===== EXPORTAÇÃO PDF PROFISSIONAL (jsPDF) =====
+        function exportPdfProfissional() {
+            if (!state.cnpjData) return;
+            const d = state.cnpjData;
+            
+            const btn = document.querySelector('.btn-export-pdf');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner spinner"></i> Gerando PDF...'; }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                
+                const W = 210;
+                const MARGIN = 14;
+                const CONTENT_W = W - MARGIN * 2;
+                const PAGE_H = 297;
+                const FOOTER_H = 12;
+                const MAX_Y = PAGE_H - FOOTER_H - 8; // safe bottom
+                let y = 0;
+                const nowStr = new Date().toLocaleString('pt-BR');
+                
+                // Sanitize: strip non-latin1 chars jsPDF cannot render
+                const safe = (str) => String(str || '').replace(/[^\x00-\xFF]/g, '');
+
+                const drawFooter = (pageNum, totalPages) => {
+                    doc.setFillColor(30, 30, 60);
+                    doc.rect(0, PAGE_H - FOOTER_H, W, FOOTER_H, 'F');
+                    doc.setFontSize(7);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(160, 160, 210);
+                    doc.text('Buscador CNPJ - Resiliencia Maxima | Ameripan Prospecta', MARGIN, PAGE_H - 4);
+                    doc.text(`Pag. ${pageNum} / ${totalPages}  |  ${nowStr}`, W - MARGIN, PAGE_H - 4, { align: 'right' });
+                };
+
+                const addPage = () => {
+                    doc.addPage();
+                    y = 15;
+                };
+                
+                const checkY = (neededHeight = 20) => {
+                    if (y + neededHeight > MAX_Y) addPage();
+                };
+                
+                const sectionTitle = (title, r = 99, g = 102, b = 241) => {
+                    checkY(16);
+                    doc.setFillColor(r, g, b);
+                    doc.rect(MARGIN, y, CONTENT_W, 8, 'F');
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text(safe(title), MARGIN + 4, y + 5.5);
+                    y += 12;
+                    doc.setTextColor(30, 30, 30);
+                };
+                
+                const row = (label, value) => {
+                    const valStr = safe(String(value || ''));
+                    if (!valStr || valStr === '-' || valStr === 'R$ 0,00') return;
+                    checkY(9);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(110, 110, 130);
+                    doc.text(safe(label), MARGIN + 2, y);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(20, 20, 40);
+                    const lines = doc.splitTextToSize(valStr, CONTENT_W - 52);
+                    doc.text(lines, MARGIN + 52, y);
+                    y += 6 * lines.length + 1;
+                };
+
+                const divider = () => {
+                    checkY(5);
+                    doc.setDrawColor(210, 210, 225);
+                    doc.line(MARGIN, y, W - MARGIN, y);
+                    y += 4;
+                };
+
+                // ──────────────────────────────────────────────────────────────
+                // PAGE 1 HEADER (compact + razão social inside)
+                // ──────────────────────────────────────────────────────────────
+                // Pre-calc razao social lines to size the header dynamically
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                const razaoLines = doc.splitTextToSize(safe(d.razao_social || 'N/A'), CONTENT_W - 10);
+                const razaoLineH = 6.5;
+                const razaoBlockH = razaoLines.length * razaoLineH;
+                
+                let nfLines = null;
+                const hasFantasia = d.nome_fantasia && d.nome_fantasia.trim() !== '' && d.nome_fantasia !== d.razao_social;
+                if (hasFantasia) {
+                    doc.setFontSize(9);
+                    nfLines = doc.splitTextToSize(`"${safe(d.nome_fantasia)}"`, CONTENT_W - 10);
+                }
+                const nfBlockH = nfLines ? nfLines.length * 5.5 + 2 : 0;
+
+                // Total header height: top bar (30mm) + razão social + fantasia + padding
+                const HDR_TOP = 30;  // meta-info block height
+                const HDR_H = HDR_TOP + razaoBlockH + nfBlockH + 10; // 10 = padding bottom
+
+                // Dark background
+                doc.setFillColor(22, 22, 52);
+                doc.rect(0, 0, W, HDR_H, 'F');
+                // Accent strip right (only top 30mm)
+                doc.setFillColor(50, 25, 90);
+                doc.rect(W - 55, 0, 55, HDR_TOP, 'F');
+
+                // Logo box
+                doc.setFillColor(99, 102, 241);
+                doc.roundedRect(MARGIN, 8, 11, 11, 2, 2, 'F');
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text('C', MARGIN + 3.5, 16);
+
+                // Title "Ficha Cadastral CNPJ"
+                doc.setFontSize(13);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(220, 220, 255);
+                doc.text('Ficha Cadastral CNPJ', MARGIN + 15, 14);
+
+                // CNPJ number
+                doc.setFontSize(9.5);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(160, 160, 210);
+                doc.text(safe(formatCnpj(d.cnpj || '')), MARGIN + 15, 21);
+
+                // Status badge
+                const statusText = safe(String(d.situacao_cadastral || 'ATIVA').toUpperCase());
+                const statusIsAtiva = statusText.includes('ATIVA');
+                const sBadgeW = 22;
+                doc.setFillColor(statusIsAtiva ? 34 : 239, statusIsAtiva ? 197 : 68, statusIsAtiva ? 94 : 68);
+                doc.roundedRect(MARGIN + 15, 23.5, sBadgeW, 5.5, 1, 1, 'F');
+                doc.setFontSize(6.5);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text(statusText, MARGIN + 15 + sBadgeW / 2, 27.5, { align: 'center' });
+
+                // Date/origin (top-right)
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(130, 130, 175);
+                doc.text(`Gerado: ${nowStr}`, W - MARGIN, 11, { align: 'right' });
+                doc.text(`Origem: ${safe(d.api_origem || 'N/A')}`, W - MARGIN, 17.5, { align: 'right' });
+
+                // ── Divider line inside header ─────────────────────────────
+                doc.setDrawColor(60, 60, 100);
+                doc.line(MARGIN, HDR_TOP - 0.5, W - MARGIN, HDR_TOP - 0.5);
+
+                // ── Razão Social (white, inside header) ───────────────────
+                let hy = HDR_TOP + 7; // start below divider line
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text(razaoLines, MARGIN, hy);
+                hy += razaoBlockH;
+
+                // ── Nome Fantasia (italic, light purple) ──────────────────
+                if (nfLines) {
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(180, 170, 230);
+                    doc.text(nfLines, MARGIN, hy + 2);
+                    hy += nfBlockH;
+                }
+
+                // ── Lead Score strip ──────────────────────────────────────
+                const leadInfo = calculateLeadScore(d);
+                const score = leadInfo.score || 0;
+                const [sR, sG, sB] = score >= 70 ? [239, 68, 68] : score >= 40 ? [245, 158, 11] : [148, 163, 184];
+                const STRIP_Y = HDR_H;
+                const STRIP_H = 9;
+
+                doc.setFillColor(14, 14, 38);
+                doc.rect(0, STRIP_Y, W, STRIP_H, 'F');
+
+                const barTotalW = CONTENT_W * 0.5;
+                const barH = 3;
+                const bX = MARGIN;
+                const bY = STRIP_Y + 3;
+                doc.setFillColor(40, 40, 72);
+                doc.roundedRect(bX, bY, barTotalW, barH, 0.7, 0.7, 'F');
+                if (score > 0) {
+                    doc.setFillColor(sR, sG, sB);
+                    const fillW = Math.max(barTotalW * (score / 100), 2);
+                    doc.roundedRect(bX, bY, fillW, barH, 0.7, 0.7, 'F');
+                }
+                doc.setFontSize(7.5);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(sR, sG, sB);
+                doc.text(`Lead Score: ${score}/100 - ${safe(leadInfo.temperatura)}`, bX + barTotalW + 4, bY + 2.5);
+
+                // ── Content starts safely below the dark area ─────────────
+                y = STRIP_Y + STRIP_H + 8;
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 1: DADOS GERAIS
+                // ──────────────────────────────────────────────────────────────
+                sectionTitle('DADOS GERAIS');
+                row('Data de Abertura:', d.data_abertura ? formatDate(d.data_abertura) : '-');
+                row('Porte:', d.porte);
+                row('Natureza Juridica:', d.natureza_juridica);
+                if (d.capital_social && Number(d.capital_social) > 0) {
+                    row('Capital Social:', `R$ ${Number(d.capital_social).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+                }
+                
+                // Filial alert box
+                const cnpjClean = String(d.cnpj || '').replace(/\D/g, '');
+                if (cnpjClean && cnpjClean.substring(8, 12) !== '0001') {
+                    checkY(12);
+                    doc.setFillColor(230, 240, 255);
+                    doc.roundedRect(MARGIN, y, CONTENT_W, 9, 1, 1, 'F');
+                    doc.setDrawColor(99, 130, 220);
+                    doc.roundedRect(MARGIN, y, CONTENT_W, 9, 1, 1, 'S');
+                    doc.setFontSize(8.5);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(50, 70, 190);
+                    const matrizFmt = safe(formatCnpj(getMatrizCnpj(cnpjClean) || ''));
+                    doc.text(`[FILIAL] CNPJ da Matriz: ${matrizFmt}`, MARGIN + 4, y + 6);
+                    y += 12;
+                }
+
+                y += 2;
+                divider();
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 2: ENDERECO
+                // ──────────────────────────────────────────────────────────────
+                sectionTitle('ENDERECO');
+                const endParts = [d.logradouro, d.numero, d.complemento].filter(v => v && v !== '-');
+                if (endParts.length > 0) row('Logradouro:', endParts.join(', '));
+                row('Bairro:', d.bairro);
+                if (d.municipio || d.uf) row('Cidade/UF:', `${d.municipio || '-'} - ${d.uf || '-'}`);
+                row('CEP:', d.cep ? formatCep(d.cep) : null);
+                y += 2;
+                divider();
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 3: CONTATOS
+                // ──────────────────────────────────────────────────────────────
+                sectionTitle('CANAIS DE CONTATO', 14, 165, 233);
+                row('Telefone 1:', d.ddd_telefone_1 ? formatPhone(d.ddd_telefone_1) : null);
+                if (d.ddd_telefone_2) row('Telefone 2:', formatPhone(d.ddd_telefone_2));
+                row('E-mail:', d.email);
+                const presDigital = extrairPresencaDigital(d.email);
+                if (presDigital && presDigital.isCorporativo) {
+                    row('Website:', presDigital.site);
+                    row('Instagram:', presDigital.instagram);
+                }
+                y += 2;
+                divider();
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 4: QSA
+                // ──────────────────────────────────────────────────────────────
+                sectionTitle('QUADRO SOCIETARIO (QSA)', 16, 185, 129);
+                if (d.qsa && d.qsa.length > 0) {
+                    d.qsa.forEach((s, i) => {
+                        checkY(10);
+                        doc.setFillColor(i % 2 === 0 ? 246 : 240, i % 2 === 0 ? 246 : 240, i % 2 === 0 ? 255 : 250);
+                        doc.roundedRect(MARGIN, y - 1, CONTENT_W, 9, 0.8, 0.8, 'F');
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(8.5);
+                        doc.setTextColor(20, 20, 50);
+                        // Truncate long names
+                        const nomeLines = doc.splitTextToSize(safe(s.nome_socio || 'N/A'), CONTENT_W * 0.6);
+                        doc.text(nomeLines[0], MARGIN + 4, y + 5);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(7.5);
+                        doc.setTextColor(100, 100, 135);
+                        const qualLines = doc.splitTextToSize(safe(s.qualificacao_socio || 'Socio'), CONTENT_W * 0.35);
+                        doc.text(qualLines[0], W - MARGIN - 3, y + 5, { align: 'right' });
+                        y += 10;
+                    });
+                } else {
+                    checkY(8);
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(160, 160, 170);
+                    doc.setFont('helvetica', 'italic');
+                    doc.text('Nenhum socio informado nesta origem.', MARGIN + 2, y);
+                    y += 8;
+                }
+                y += 2;
+                divider();
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 5: ATIVIDADES ECONOMICAS
+                // ──────────────────────────────────────────────────────────────
+                sectionTitle('ATIVIDADES ECONOMICAS', 234, 88, 12);
+                if (d.cnae_principal && d.cnae_principal !== '-') {
+                    checkY(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(8);
+                    doc.setTextColor(80, 50, 10);
+                    doc.text('Atividade Principal:', MARGIN + 2, y);
+                    y += 5;
+                    doc.setFillColor(255, 248, 237);
+                    const cnpLines = doc.splitTextToSize(safe(d.cnae_principal), CONTENT_W - 4);
+                    doc.rect(MARGIN, y - 2, CONTENT_W, 5.5 * cnpLines.length + 2, 'F');
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(30, 20, 5);
+                    doc.text(cnpLines, MARGIN + 3, y + 3);
+                    y += 5.5 * cnpLines.length + 4;
+                }
+                
+                if (d.cnaes_secundarios && d.cnaes_secundarios.length > 0) {
+                    checkY(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(8);
+                    doc.setTextColor(100, 100, 120);
+                    doc.text(`Atividades Secundarias (${d.cnaes_secundarios.length}):`, MARGIN + 2, y);
+                    y += 6;
+                    d.cnaes_secundarios.forEach((c, i) => {
+                        const cnaeStr = safe(`${c.codigo} - ${c.descricao}`);
+                        const cnaeLines = doc.splitTextToSize(cnaeStr, CONTENT_W - 6);
+                        const rowH = 5.5 * cnaeLines.length + 2;
+                        checkY(rowH + 2);
+                        doc.setFillColor(i % 2 === 0 ? 252 : 246, i % 2 === 0 ? 252 : 246, i % 2 === 0 ? 252 : 246);
+                        doc.rect(MARGIN, y - 1.5, CONTENT_W, rowH, 'F');
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(8);
+                        doc.setTextColor(40, 40, 60);
+                        doc.text(cnaeLines, MARGIN + 3, y + 3);
+                        y += rowH + 1;
+                    });
+                }
+                y += 3;
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 6: OBRAS CNO (se houver)
+                // ──────────────────────────────────────────────────────────────
+                if (d.cno && d.cno.obras && d.cno.obras.length > 0) {
+                    divider();
+                    sectionTitle('OBRAS - CADASTRO NACIONAL DE OBRAS (CNO)', 185, 28, 28);
+                    d.cno.obras.forEach((o, i) => {
+                        checkY(16);
+                        const situacaoObra = safe(o.situacao?.descricao || 'N/A');
+                        const obraAtiva = situacaoObra.toUpperCase().includes('ATIVA');
+                        doc.setFillColor(obraAtiva ? 235 : 245, obraAtiva ? 255 : 245, obraAtiva ? 235 : 245);
+                        doc.roundedRect(MARGIN, y, CONTENT_W, 14, 1, 1, 'F');
+                        doc.setDrawColor(obraAtiva ? 100 : 200, obraAtiva ? 200 : 200, obraAtiva ? 100 : 200);
+                        doc.roundedRect(MARGIN, y, CONTENT_W, 14, 1, 1, 'S');
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(8.5);
+                        doc.setTextColor(20, 60, 20);
+                        doc.text(`Obra ${i + 1}: ${safe(o.cno || '-')}`, MARGIN + 4, y + 5.5);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(8);
+                        doc.setTextColor(70, 70, 70);
+                        doc.text(`Situacao: ${situacaoObra}   Responsavel: ${safe(o.responsavel?.nome || '-')}`, MARGIN + 4, y + 10.5);
+                        y += 16;
+                    });
+                    y += 2;
+                }
+
+                // ──────────────────────────────────────────────────────────────
+                // SEC 7: LEAD SCORE BREAKDOWN
+                // ──────────────────────────────────────────────────────────────
+                divider();
+                sectionTitle('ANALISE COMERCIAL B2B - LEAD SCORE', sR, sG, sB);
+                checkY(28);
+                
+                // Score circle
+                doc.setFillColor(sR, sG, sB);
+                doc.circle(MARGIN + 13, y + 12, 11, 'F');
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text(String(score), MARGIN + 13, y + 13.5, { align: 'center' });
+                doc.setFontSize(6.5);
+                doc.text('SCORE', MARGIN + 13, y + 19, { align: 'center' });
+                
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(sR, sG, sB);
+                doc.text(safe(leadInfo.temperatura), MARGIN + 28, y + 11);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 100, 120);
+                doc.text(`Classificacao de prioridade de prospecção B2B`, MARGIN + 28, y + 17);
+                y += 28;
+                
+                if (leadInfo.reasons && leadInfo.reasons.length > 0) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(8);
+                    doc.setTextColor(90, 90, 110);
+                    doc.text('Fatores de Pontuacao:', MARGIN + 2, y);
+                    y += 6;
+                    leadInfo.reasons.forEach(r => {
+                        checkY(9);
+                        const isPos = r.startsWith('+');
+                        const fR = isPos ? 235 : 255;
+                        const fG = isPos ? 255 : 235;
+                        const fB = isPos ? 235 : 235;
+                        doc.setFillColor(fR, fG, fB);
+                        doc.roundedRect(MARGIN, y - 2, CONTENT_W, 8, 0.5, 0.5, 'F');
+                        doc.setDrawColor(isPos ? 150 : 220, isPos ? 220 : 150, isPos ? 150 : 150);
+                        doc.roundedRect(MARGIN, y - 2, CONTENT_W, 8, 0.5, 0.5, 'S');
+                        doc.setFontSize(8.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(isPos ? 20 : 180, isPos ? 140 : 30, isPos ? 60 : 30);
+                        doc.text(isPos ? '[+]' : '[-]', MARGIN + 3, y + 4);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(30, 30, 50);
+                        const rText = safe(r.substring(4));
+                        const rLines = doc.splitTextToSize(rText, CONTENT_W - 16);
+                        doc.text(rLines, MARGIN + 12, y + 4);
+                        y += 9 * rLines.length;
+                    });
+                }
+                
+                // ──────────────────────────────────────────────────────────────
+                // FOOTER em todas as páginas
+                // ──────────────────────────────────────────────────────────────
+                const totalPages = doc.internal.getNumberOfPages();
+                for (let pg = 1; pg <= totalPages; pg++) {
+                    doc.setPage(pg);
+                    drawFooter(pg, totalPages);
+                }
+
+                // Save
+                const cnpjNum = String(d.cnpj || '').replace(/\D/g, '');
+                const razaoSlug = safe(d.razao_social || 'ficha')
+                    .replace(/[^a-zA-Z0-9 ]/g, '')
+                    .trim()
+                    .replace(/\s+/g, '_')
+                    .substring(0, 30);
+                doc.save(`CNPJ_${cnpjNum}_${razaoSlug}.pdf`);
+
+            } catch (err) {
+                console.error('Erro ao gerar PDF:', err);
+                alert(`Erro ao gerar PDF: ${err.message}`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Gerar PDF Profissional'; }
+            }
         }
     </script>
 </body>
