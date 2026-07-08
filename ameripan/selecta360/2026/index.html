@@ -952,14 +952,29 @@
         url: (cnpj) => `https://api.opencnpj.org/${cnpj}?dataset=receita`,
         parse: (data) => {
           if (!data || !data.cnpj) throw new Error('Cnpj missing');
-          const estab = data.estabelecimento || {};
+          const estab = data.estabelecimento || data || {};
+          
+          var tel1 = '';
+          var tel2 = '';
+          if (data.telefones && data.telefones.length > 0) {
+            tel1 = (data.telefones[0].ddd || '') + (data.telefones[0].numero || '');
+            if (data.telefones.length > 1) {
+              tel2 = (data.telefones[1].ddd || '') + (data.telefones[1].numero || '');
+            }
+          } else if (estab.ddd1 && estab.telefone1) {
+            tel1 = estab.ddd1 + estab.telefone1;
+            if (estab.ddd2 && estab.telefone2) {
+              tel2 = estab.ddd2 + estab.telefone2;
+            }
+          }
+          
           return {
             cnpj: data.cnpj,
             razao_social: data.razao_social,
-            nome_fantasia: estab.nome_fantasia || data.razao_social,
-            telefone: (estab.ddd1 && estab.telefone1) ? `${estab.ddd1}${estab.telefone1}` : '',
-            telefone2: (estab.ddd2 && estab.telefone2) ? `${estab.ddd2}${estab.telefone2}` : '',
-            email: estab.email || ''
+            nome_fantasia: data.nome_fantasia || estab.nome_fantasia || data.razao_social,
+            telefone: tel1,
+            telefone2: tel2,
+            email: data.email || estab.email || ''
           };
         }
       },
