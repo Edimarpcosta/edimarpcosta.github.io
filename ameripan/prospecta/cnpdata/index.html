@@ -317,8 +317,78 @@
             color: var(--danger);
         }
 
+        .validation-subtext.warning {
+            color: var(--warning);
+        }
+
         .validation-subtext.valid {
             color: var(--success);
+        }
+
+        /* ===== PAINEL DE CONFIGURAÇÕES DA CASCATA ===== */
+        .settings-card {
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 1rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--color-primary);
+            user-select: none;
+        }
+
+        .settings-api-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .settings-api-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .settings-api-actions {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+
+        .btn-order {
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 0.65rem;
+            line-height: 1;
+        }
+
+        .btn-order:hover:not(:disabled) {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+
+        .btn-order:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
         }
 
         /* ===== LAYOUT DO DASHBOARD + TERMINAL ===== */
@@ -765,6 +835,7 @@
             header,
             .search-section,
             .terminal-card,
+            .settings-card,
             .theme-toggle-btn,
             .export-actions-row,
             .quick-action-btn,
@@ -870,18 +941,42 @@
         <!-- Layout de Exibição -->
         <section class="main-grid">
             
-            <!-- Terminal de Logs (Fila de Fallback) -->
-            <div class="glass-card terminal-card">
-                <div class="terminal-header">
-                    <span><i class="fa-solid fa-terminal"></i> Rastreamento de Cascata</span>
-                    <div class="terminal-dots">
-                        <div class="terminal-dot dot-red"></div>
-                        <div class="terminal-dot dot-yellow"></div>
-                        <div class="terminal-dot dot-green"></div>
+            <!-- Coluna Lateral (Logs e Configurações) -->
+            <div class="sidebar-column" style="display: flex; flex-direction: column;">
+                
+                <!-- Card de Configuração da Cascata -->
+                <div class="glass-card settings-card">
+                    <div class="settings-header" onclick="toggleSettingsPanel()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fa-solid fa-sliders"></i> Orquestrador de Cascata</span>
+                        <span id="settingsToggleIcon" class="collapsible-indicator"><i class="fa-solid fa-chevron-down"></i></span>
+                    </div>
+                    <div id="settingsPanelBody" class="settings-body hidden" style="margin-top: 1rem;">
+                        <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 0.75rem;">Ative, desative ou reordene as APIs abaixo para personalizar o fluxo da busca em cascata.</p>
+                        
+                        <div class="settings-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                            <button id="btnSettingsPing" class="quick-action-btn" style="margin: 0; width: 100%; font-size: 0.75rem;"><i class="fa-solid fa-network-wired"></i> Testar Pings</button>
+                            <button id="btnSettingsReset" class="quick-action-btn" style="margin: 0; width: 100%; font-size: 0.75rem;"><i class="fa-solid fa-rotate-left"></i> Padrão</button>
+                        </div>
+                        
+                        <ul id="settingsApiList" style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; padding: 0; margin: 0;">
+                            <!-- Dinâmico -->
+                        </ul>
                     </div>
                 </div>
-                <div class="terminal-body" id="terminalLogs">
-                    <div class="log-entry"><span class="log-time">00:00:00</span><span class="log-info">Aguardando comando...</span></div>
+
+                <!-- Terminal de Logs (Fila de Fallback) -->
+                <div class="glass-card terminal-card" style="flex: 1; min-height: 250px;">
+                    <div class="terminal-header">
+                        <span><i class="fa-solid fa-terminal"></i> Rastreamento de Cascata</span>
+                        <div class="terminal-dots">
+                            <div class="terminal-dot dot-red"></div>
+                            <div class="terminal-dot dot-yellow"></div>
+                            <div class="terminal-dot dot-green"></div>
+                        </div>
+                    </div>
+                    <div class="terminal-body" id="terminalLogs" style="max-height: 380px;">
+                        <div class="log-entry"><span class="log-time">00:00:00</span><span class="log-info">Aguardando comando...</span></div>
+                    </div>
                 </div>
             </div>
 
@@ -908,6 +1003,11 @@
                             <h2 id="resRazaoSocial">Razão Social Exemplo Ltda</h2>
                             <p class="cnpj-display" id="resCnpj">CNPJ: 00.000.000/0001-91</p>
                         </div>
+                    </div>
+
+                    <!-- Alerta de Auto-Correção de Dígito -->
+                    <div id="correctionAlertCard" class="accounting-warning hidden" style="margin-top: 1rem; border-color: var(--warning) !important; background-color: rgba(245, 158, 11, 0.1); color: var(--warning); padding: 0.75rem 1rem; border-radius: 0.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; border: 1px solid rgba(245, 158, 11, 0.3);">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="font-size: 1.1rem;"></i> <span><strong>CNPJ Auto-Corrigido:</strong> O dígito verificador original era inválido e foi corrigido de <strong id="correctionFromVal"></strong> para <strong id="correctionToVal"></strong>.</span>
                     </div>
 
                     <!-- Details Grid -->
@@ -1078,6 +1178,8 @@
             cnpjData: null,
             theme: 'dark',
             pingResults: {},
+            correctedFrom: '',
+            correctedTo: '',
             apis: [
                 { id: 'brasilapi',       name: 'BrasilAPI',       url: 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',                                        proxyByDefault: false, active: true },
                 { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                proxyByDefault: false, active: true },
@@ -1092,31 +1194,65 @@
         };
 
         const PROXIES = [
-            { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, parse: (res) => res.contents },
-            { name: 'CORSProxy.io', wrap: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`, parse: (res) => res }
+            { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, parse: (res) => res.contents }
         ];
+
+        // ===== AUXILIARES DE FORMATAÇÃO E MÁSCARA =====
+        function formatInputVal(v) {
+            if (v.length <= 11) {
+                // Formato CPF
+                if (v.length > 9) {
+                    return v.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, "$1.$2.$3-$4");
+                } else if (v.length > 6) {
+                    return v.replace(/^(\d{3})(\d{3})(\d{1,3})$/, "$1.$2.$3");
+                } else if (v.length > 3) {
+                    return v.replace(/^(\d{3})(\d{1,3})$/, "$1.$2");
+                }
+                return v;
+            } else {
+                // Formato CNPJ
+                if (v.length > 12) {
+                    return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})$/, "$1.$2.$3/$4-$5");
+                } else if (v.length > 8) {
+                    return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})$/, "$1.$2.$3/$4");
+                } else if (v.length > 5) {
+                    return v.replace(/^(\d{2})(\d{3})(\d{1,3})$/, "$1.$2.$3");
+                } else if (v.length > 2) {
+                    return v.replace(/^(\d{2})(\d{1,3})$/, "$1.$2");
+                }
+                return v;
+            }
+        }
 
         // ===== INICIALIZAÇÃO =====
         document.addEventListener('DOMContentLoaded', () => {
             initDom();
             runPings();
+            renderSettingsApiList();
             
-            // Mask input CNPJ
+            // Mask input CNPJ / CPF dinâmico
             elements.cnpjInput.addEventListener('input', e => {
                 let v = e.target.value.replace(/\D/g, '');
                 if (v.length > 14) v = v.substring(0, 14);
                 
-                if (v.length > 12) {
-                    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-                } else if (v.length > 8) {
-                    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})$/, "$1.$2.$3/$4");
-                } else if (v.length > 5) {
-                    v = v.replace(/^(\d{2})(\d{3})(\d{0,3})$/, "$1.$2.$3");
-                } else if (v.length > 2) {
-                    v = v.replace(/^(\d{2})(\d{0,3})$/, "$1.$2");
-                }
-                e.target.value = v;
+                e.target.value = formatInputVal(v);
                 validateCnpjInput(e.target.value);
+            });
+
+            // Blur event to apply Auto Zero Left padding
+            elements.cnpjInput.addEventListener('blur', e => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v.length > 0) {
+                    if (v.length === 11) {
+                        e.target.value = formatInputVal(v);
+                        validateCnpjInput(e.target.value);
+                    } else if (v.length < 14) {
+                        v = v.padStart(14, '0');
+                        e.target.value = formatInputVal(v);
+                        validateCnpjInput(e.target.value);
+                        addTerminalLog(`Preenchido automaticamente com zeros à esquerda (Zero-Left): ${e.target.value}`, 'warn');
+                    }
+                }
             });
 
             // Enter key trigger search
@@ -1129,6 +1265,40 @@
 
             elements.searchBtn.addEventListener('click', triggerSearch);
             elements.themeToggleBtn.addEventListener('click', toggleTheme);
+
+            // Settings Listeners
+            document.getElementById('btnSettingsPing').addEventListener('click', async () => {
+                const btn = document.getElementById('btnSettingsPing');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner spinner"></i> Pingando...';
+                await runPings();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-network-wired"></i> Testar Pings';
+            });
+
+            const DEFAULT_APIS = [
+                { id: 'brasilapi',       name: 'BrasilAPI',       url: 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',                                        proxyByDefault: false, active: true },
+                { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                proxyByDefault: false, active: true },
+                { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    proxyByDefault: false, active: true },
+                { id: 'opencnpj_alt',    name: 'OpenCNPJ (Alt)',  url: 'https://api.opencnpj.com/cnpj/{cnpj}',                                                proxyByDefault: false, active: true },
+                { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     proxyByDefault: false, active: true },
+                { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', proxyByDefault: false, active: true },
+                { id: 'cnpja',           name: 'CNPJa',           url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            proxyByDefault: true,  active: true },
+                { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         proxyByDefault: true,  active: true },
+                { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                     proxyByDefault: true,  active: true }
+            ];
+
+            document.getElementById('btnSettingsReset').addEventListener('click', () => {
+                state.apis = JSON.parse(JSON.stringify(DEFAULT_APIS));
+                addTerminalLog('[Cascata] Configurações da cascata restauradas para o padrão.', 'succ');
+                renderSettingsApiList();
+                reorderBadgesInUI();
+                
+                state.apis.forEach(api => {
+                    const badge = document.getElementById(`ping-${api.id}`);
+                    if (badge) badge.classList.remove('hidden');
+                });
+            });
         });
 
         const elements = {};
@@ -1142,6 +1312,8 @@
             elements.terminalLogs = document.getElementById('terminalLogs');
             elements.statePlaceholder = document.getElementById('statePlaceholder');
             elements.resultDashboard = document.getElementById('resultDashboard');
+            elements.settingsPanelBody = document.getElementById('settingsPanelBody');
+            elements.settingsToggleIcon = document.getElementById('settingsToggleIcon');
         }
 
         // ===== CONTROLE DE LOGS DO TERMINAL =====
@@ -1164,45 +1336,58 @@
             addTerminalLog('Efetuando teste de latência de APIs (Ping)...', 'info');
             
             for (const api of state.apis) {
+                if (!api.active) continue;
+                
                 if (api.proxyByDefault) {
-                    updatePingBadge(api.id, 'online');
-                    state.pingResults[api.id] = true;
+                    updatePingBadge(api.id, 'online', 'Proxy');
+                    state.pingResults[api.id] = 'Proxy';
                     continue;
                 }
 
+                const startTime = performance.now();
                 try {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 4000);
                     
                     const url = api.url.replace('{cnpj}', testCnpj);
-                    // Add query param to avoid cache
                     const cacheBuster = url.includes('?') ? `&_=${Date.now()}` : `?_=${Date.now()}`;
                     
                     const res = await fetch(url + cacheBuster, { signal: controller.signal });
                     clearTimeout(timeoutId);
                     
+                    const duration = Math.round(performance.now() - startTime);
+                    
                     if (res.ok) {
-                        updatePingBadge(api.id, 'online');
-                        state.pingResults[api.id] = true;
+                        updatePingBadge(api.id, 'online', `${duration}ms`);
+                        state.pingResults[api.id] = duration;
                     } else {
-                        updatePingBadge(api.id, 'offline');
+                        updatePingBadge(api.id, 'offline', 'Erro');
                         state.pingResults[api.id] = false;
                     }
                 } catch (e) {
-                    updatePingBadge(api.id, 'offline');
+                    updatePingBadge(api.id, 'offline', 'Timeout');
                     state.pingResults[api.id] = false;
                 }
             }
             addTerminalLog('Ping concluído. APIs sinalizadas.', 'succ');
+            if (typeof renderSettingsApiList === 'function') {
+                renderSettingsApiList();
+            }
         }
 
-        function updatePingBadge(apiId, status) {
+        function updatePingBadge(apiId, status, label) {
             const el = document.getElementById(`ping-${apiId}`);
             if (!el) return;
+            
+            const apiDef = state.apis.find(a => a.id === apiId);
+            const apiName = apiDef ? apiDef.name : apiId;
+            
             if (status === 'online') {
                 el.className = 'ping-badge online';
+                el.innerHTML = `<i class="fa-solid fa-circle"></i> ${apiName} <span style="font-size:0.65rem; opacity:0.8;">(${label})</span>`;
             } else {
                 el.className = 'ping-badge offline';
+                el.innerHTML = `<i class="fa-solid fa-circle"></i> ${apiName} <span style="font-size:0.65rem; opacity:0.8;">(${label})</span>`;
             }
         }
 
@@ -1238,28 +1423,104 @@
             return true;
         }
 
+        function calculateCnpjCheckDigits(base12) {
+            base12 = String(base12).replace(/\D/g, '').substring(0, 12);
+            if (base12.length < 12) return '';
+            
+            // Primeiro dígito verificador
+            let tamanho = 12;
+            let numeros = base12;
+            let soma = 0;
+            let pos = 5;
+            for (let i = tamanho; i >= 1; i--) {
+                soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                if (pos < 2) pos = 9;
+            }
+            let digito1 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+            
+            // Segundo dígito verificador
+            numeros = base12 + digito1;
+            tamanho = 13;
+            soma = 0;
+            pos = 6;
+            for (let i = tamanho; i >= 1; i--) {
+                soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                if (pos < 2) pos = 9;
+            }
+            let digito2 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+            
+            return `${digito1}${digito2}`;
+        }
+
+        function isValidCpf(cpf) {
+            cpf = String(cpf).replace(/\D/g, '');
+            if (cpf.length !== 11) return false;
+            if (/^(\d)\1{10}$/.test(cpf)) return false;
+            
+            let soma = 0;
+            for (let i = 1; i <= 9; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+            }
+            let resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(9, 10))) return false;
+            
+            soma = 0;
+            for (let i = 1; i <= 10; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+            }
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(10, 11))) return false;
+            
+            return true;
+        }
+
         function validateCnpjInput(value) {
             const clean = value.replace(/\D/g, '');
             if (clean.length === 0) {
                 elements.validationSubtext.classList.add('hidden');
                 return true;
             }
-            if (clean.length < 14) {
+            
+            if (clean.length <= 11) {
+                if (clean.length < 11) {
+                    elements.validationSubtext.classList.remove('hidden');
+                    elements.validationSubtext.className = 'validation-subtext invalid';
+                    elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Documento incompleto (CPF 11 dg. ou CNPJ 14 dg.).';
+                    return false;
+                }
+                if (isValidCpf(clean)) {
+                    elements.validationSubtext.classList.remove('hidden');
+                    elements.validationSubtext.className = 'validation-subtext warning';
+                    elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--warning)"></i> CPF matemático válido. Nota: Consultas de CPF não são suportadas por APIs de CNPJ.';
+                    return true;
+                } else {
+                    elements.validationSubtext.classList.remove('hidden');
+                    elements.validationSubtext.className = 'validation-subtext invalid';
+                    elements.validationSubtext.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> CPF inválido.';
+                    return false;
+                }
+            } else {
+                if (clean.length < 14) {
+                    elements.validationSubtext.classList.remove('hidden');
+                    elements.validationSubtext.className = 'validation-subtext invalid';
+                    elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> CNPJ incompleto (mínimo 14 dígitos).';
+                    return false;
+                }
+                if (!isValidCnpj(clean)) {
+                    const base12 = clean.substring(0, 12);
+                    const correctDV = calculateCnpjCheckDigits(base12);
+                    elements.validationSubtext.classList.remove('hidden');
+                    elements.validationSubtext.className = 'validation-subtext warning';
+                    elements.validationSubtext.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> DV incorreto. Será corrigido de <strong>-${clean.substring(12)}</strong> para <strong>-${correctDV}</strong> ao consultar.`;
+                    return false;
+                }
                 elements.validationSubtext.classList.remove('hidden');
-                elements.validationSubtext.className = 'validation-subtext invalid';
-                elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> CNPJ incompleto (mínimo 14 dígitos).';
-                return false;
+                elements.validationSubtext.className = 'validation-subtext valid';
+                elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-check"></i> CNPJ matematicamente válido.';
+                return true;
             }
-            if (!isValidCnpj(clean)) {
-                elements.validationSubtext.classList.remove('hidden');
-                elements.validationSubtext.className = 'validation-subtext invalid';
-                elements.validationSubtext.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> CNPJ matematicamente inválido (dígitos verificadores incorretos).';
-                return false;
-            }
-            elements.validationSubtext.classList.remove('hidden');
-            elements.validationSubtext.className = 'validation-subtext valid';
-            elements.validationSubtext.innerHTML = '<i class="fa-solid fa-circle-check"></i> CNPJ matematicamente válido.';
-            return true;
         }
 
         // ===== NORMALIZAÇÃO DE PAYLOADS =====
@@ -1708,6 +1969,15 @@
             elements.statePlaceholder.classList.add('hidden');
             elements.resultDashboard.classList.remove('hidden');
 
+            const correctionAlertCard = document.getElementById('correctionAlertCard');
+            if (state.correctedFrom && state.correctedTo) {
+                correctionAlertCard.classList.remove('hidden');
+                document.getElementById('correctionFromVal').textContent = state.correctedFrom;
+                document.getElementById('correctionToVal').textContent = state.correctedTo;
+            } else {
+                correctionAlertCard.classList.add('hidden');
+            }
+
             const statusBadge = document.getElementById('resStatusBadge');
             const statusUpper = String(data.situacao_cadastral || 'ATIVA').toUpperCase();
             statusBadge.textContent = statusUpper;
@@ -1914,13 +2184,137 @@
             }
         }
 
+        // ===== AUXILIARES DE CONFIGURAÇÃO DE CASCATA =====
+        function toggleSettingsPanel() {
+            const body = elements.settingsPanelBody;
+            const icon = elements.settingsToggleIcon;
+            if (body.classList.contains('hidden')) {
+                body.classList.remove('hidden');
+                icon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+                renderSettingsApiList();
+            } else {
+                body.classList.add('hidden');
+                icon.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+            }
+        }
+
+        function renderSettingsApiList() {
+            const listEl = document.getElementById('settingsApiList');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+            
+            state.apis.forEach((api, index) => {
+                const li = document.createElement('li');
+                li.className = 'settings-api-item';
+                
+                const latency = state.pingResults[api.id] !== undefined 
+                    ? (typeof state.pingResults[api.id] === 'number' ? `${state.pingResults[api.id]}ms` : state.pingResults[api.id])
+                    : '-';
+                
+                const pingClass = state.pingResults[api.id] !== undefined
+                    ? (state.pingResults[api.id] === false ? 'offline' : 'online')
+                    : '';
+                
+                li.innerHTML = `
+                    <div class="settings-api-info">
+                        <input type="checkbox" id="chk-${api.id}" ${api.active ? 'checked' : ''} onchange="toggleApiActive('${api.id}')" style="cursor: pointer;">
+                        <span style="font-weight: 600; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; max-width: 110px;">${api.name}</span>
+                        <span class="ping-badge ${pingClass}" style="font-size: 0.6rem; padding: 1px 4px; margin-left: auto;">${latency}</span>
+                    </div>
+                    <div class="settings-api-actions">
+                        <button class="btn-order" onclick="moveApi(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Mover para cima">▲</button>
+                        <button class="btn-order" onclick="moveApi(${index}, 1)" ${index === state.apis.length - 1 ? 'disabled' : ''} title="Mover para baixo">▼</button>
+                    </div>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function toggleApiActive(apiId) {
+            const api = state.apis.find(a => a.id === apiId);
+            if (api) {
+                const chk = document.getElementById(`chk-${apiId}`);
+                api.active = chk.checked;
+                addTerminalLog(`[Cascata] API ${api.name} ${api.active ? 'ativada' : 'desativada'}.`, 'info');
+                
+                const badge = document.getElementById(`ping-${apiId}`);
+                if (badge) {
+                    if (!api.active) {
+                        badge.classList.add('hidden');
+                    } else {
+                        badge.classList.remove('hidden');
+                    }
+                }
+                renderSettingsApiList();
+            }
+        }
+
+        function moveApi(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= state.apis.length) return;
+            
+            const temp = state.apis[index];
+            state.apis[index] = state.apis[newIndex];
+            state.apis[newIndex] = temp;
+            
+            addTerminalLog(`[Cascata] Fila reorganizada: ${temp.name} movido para posição ${newIndex + 1}.`, 'info');
+            
+            renderSettingsApiList();
+            reorderBadgesInUI();
+        }
+
+        function reorderBadgesInUI() {
+            const container = document.getElementById('pingBadgesContainer');
+            if (!container) return;
+            state.apis.forEach(api => {
+                const badge = document.getElementById(`ping-${api.id}`);
+                if (badge) {
+                    container.appendChild(badge);
+                }
+            });
+        }
+
         async function triggerSearch() {
-            const cnpjVal = elements.cnpjInput.value.replace(/\D/g, '');
-            if (!cnpjVal) return alert('Por favor, digite um CNPJ para pesquisar.');
+            state.correctedFrom = '';
+            state.correctedTo = '';
+
+            let cnpjVal = elements.cnpjInput.value.replace(/\D/g, '');
+            if (!cnpjVal) return alert('Por favor, digite um documento para pesquisar.');
+            
+            // Tratamento específico se for CPF
+            if (cnpjVal.length <= 11) {
+                alert('A consulta de CPFs não é suportada pelas APIs públicas de CNPJ da Receita Federal. Por favor, insira um CNPJ válido de 14 dígitos.');
+                return;
+            }
+            
+            // Auto pad zeros à esquerda (Zero Left) se for menor que 14 dígitos (CNPJ)
+            if (cnpjVal.length > 11 && cnpjVal.length < 14) {
+                addTerminalLog(`Completando zeros à esquerda (Zero-Left): ${cnpjVal.length} dígitos para 14 dígitos.`, 'warn');
+                cnpjVal = cnpjVal.padStart(14, '0');
+                elements.cnpjInput.value = formatInputVal(cnpjVal);
+                validateCnpjInput(elements.cnpjInput.value);
+            }
             
             if (!isValidCnpj(cnpjVal)) {
-                alert('CNPJ matematicamente inválido. Por favor, confira os números.');
-                return;
+                if (cnpjVal.length === 14) {
+                    const base12 = cnpjVal.substring(0, 12);
+                    const correctDV = calculateCnpjCheckDigits(base12);
+                    const originalFormatted = formatCnpj(cnpjVal);
+                    const correctCnpj = base12 + correctDV;
+                    const correctFormatted = formatCnpj(correctCnpj);
+                    
+                    state.correctedFrom = originalFormatted;
+                    state.correctedTo = correctFormatted;
+                    
+                    addTerminalLog(`[CORREÇÃO] CNPJ com dígito verificador incorreto. Corrigido de ${originalFormatted} para ${correctFormatted}.`, 'warn');
+                    
+                    cnpjVal = correctCnpj;
+                    elements.cnpjInput.value = correctFormatted;
+                    validateCnpjInput(correctFormatted);
+                } else {
+                    alert('CNPJ matematicamente inválido. Por favor, confira os números.');
+                    return;
+                }
             }
 
             elements.searchBtn.disabled = true;
