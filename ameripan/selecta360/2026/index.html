@@ -644,6 +644,18 @@
       color: var(--accent-color);
       letter-spacing: 1px;
       margin-bottom: 12px;
+    .cnpj-loader {
+      position: absolute;
+      right: 15px;
+      border: 2px solid rgba(255,255,255,0.1);
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border-left-color: var(--accent-color);
+      animation: spin 0.8s linear infinite;
+      display: none;
+      pointer-events: none;
+      z-index: 10;
     }
   </style>
 </head>
@@ -746,9 +758,10 @@
 
         <!-- CNPJ (Campos com Toggle Confirmar) -->
         <div class="enrich-field-wrapper">
-          <div class="enrich-input-container">
+          <div class="enrich-input-container" style="position: relative;">
             <span class="enrich-input-label">CNPJ</span>
             <input type="text" id="regCnpj" class="enrich-input" disabled>
+            <div class="cnpj-loader" id="cnpjLoader"></div>
           </div>
           <div class="toggle-container">
             <span class="toggle-label">Confirmar</span>
@@ -911,6 +924,187 @@
 
     const companionsContainer = document.getElementById('companionsContainer');
     const btnAddCompanion = document.getElementById('btnAddCompanion');
+
+    // CNPJ/CPF VALIDATION & MULTI-API ENRICHMENT
+    let lastQueriedCnpj = '';
+    let isQueryingCnpj = false;
+    let lastInvalidDocumentSubmitted = '';
+
+    const enrichmentApis = [
+      {
+        name: 'BrasilAPI',
+        url: (cnpj) => `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
+        parse: (data) => {
+          if (!data || data.message) throw new Error(data.message || 'API error');
+          return {
+            cnpj: data.cnpj,
+            razao_social: data.razao_social,
+            nome_fantasia: data.nome_fantasia || data.razao_social,
+            telefone: data.ddd_telefone_1 || data.telefone || '',
+            telefone2: data.ddd_telefone_2 || '',
+            email: data.email || ''
+          };
+        }
+      },
+      {
+        name: 'OpenCNPJ',
+        url: (cnpj) => `https://api.opencnpj.org/${cnpj}?dataset=receita`,
+        parse: (data) => {
+          if (!data || !data.cnpj) throw new Error('Cnpj missing');
+          const estab = data.estabelecimento || {};
+          return {
+            cnpj: data.cnpj,
+            razao_social: data.razao_social,
+            nome_fantasia: estab.nome_fantasia || data.razao_social,
+            telefone: (estab.ddd1 && estab.telefone1) ? `${estab.ddd1}${estab.telefone1}` : '',
+            telefone2: (estab.ddd2 && estab.telefone2) ? `${estab.ddd2}${estab.telefone2}` : '',
+            email: estab.email || ''
+          };
+        }
+      },
+      {
+        name: 'minhaReceita',
+        url: (cnpj) => `https://minhareceita.org/${cnpj}`,
+        parse: (data) => {
+          if (!data || data.message) throw new Error(data.message || 'API error');
+          return {
+            cnpj: data.cnpj,
+            razao_social: data.razao_social,
+            nome_fantasia: data.nome_fantasia || data.razao_social,
+            telefone: data.ddd_telefone_1 || '',
+            telefone2: data.ddd_telefone_2 || '',
+            email: data.email || ''
+          };
+        }
+      }
+    ];
+
+    function setCnpjLoading(isLoading) {
+      isQueryingCnpj = isLoading;
+      const loader = document.getElementById('cnpjLoader');
+      if (loader) {
+        loader.style.display = isLoading ? 'block' : 'none';
+      }
+    }
+
+    function isValidCnpj(cnpj) {
+      cnpj = String(cnpj).replace(/\D/g, '');
+      if (cnpj.length < 14) {
+        cnpj = cnpj.padStart(14, '0');
+      }
+      if (cnpj.length !== 14) return false;
+      if (/^(\d)\1{13}$/.test(cnpj)) return false;
+      
+      let tamanho = cnpj.length - 2;
+      let numeros = cnpj.substring(0, tamanho);
+      let digitos = cnpj.substring(tamanho);
+      let soma = 0;
+      let pos = tamanho - 7;
+      for (let i = tamanho; i >= 1; i--) {
+        soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+        if (pos < 2) pos = 9;
+      }
+      let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+      if (resultado !== parseInt(digitos.charAt(0))) return false;
+      
+      tamanho = tamanho + 1;
+      numeros = cnpj.substring(0, tamanho);
+      soma = 0;
+      pos = tamanho - 7;
+      for (let i = tamanho; i >= 1; i--) {
+        soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+        if (pos < 2) pos = 9;
+      }
+      resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+      if (resultado !== parseInt(digitos.charAt(1))) return false;
+      
+      return true;
+    }
+
+    function isValidCpf(cpf) {
+      cpf = String(cpf).replace(/\D/g, '');
+      if (cpf.length !== 11) return false;
+      if (/^(\d)\1{10}$/.test(cpf)) return false;
+      
+      let soma = 0;
+      let resto;
+      for (let i = 1; i <= 9; i++) {
+        soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+      }
+      resto = (soma * 10) % 11;
+      if ((resto === 10) || (resto === 11)) resto = 0;
+      if (resto !== parseInt(cpf.substring(9, 10))) return false;
+      
+      soma = 0;
+      for (let i = 1; i <= 10; i++) {
+        soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+      }
+      resto = (soma * 10) % 11;
+      if ((resto === 10) || (resto === 11)) resto = 0;
+      if (resto !== parseInt(cpf.substring(10, 11))) return false;
+      
+      return true;
+    }
+
+    async function queryCnpjWithFallbacks(cnpj) {
+      let clean = String(cnpj || "").replace(/\D/g, "");
+      if (clean.length < 14) {
+        clean = clean.padStart(14, '0');
+      }
+      if (clean.length !== 14) {
+        throw new Error('CNPJ inválido (deve possuir 14 dígitos)');
+      }
+      
+      let lastErr = null;
+      for (const api of enrichmentApis) {
+        try {
+          const response = await fetch(api.url(clean));
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const rawData = await response.json();
+          const parsed = api.parse(rawData);
+          parsed.api_origem = api.name;
+          return parsed;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw new Error(`Todas as APIs falharam. Último erro: ${lastErr ? lastErr.message : 'Desconhecido'}`);
+    }
+
+    async function triggerCnpjLookup(cnpj) {
+      const clean = String(cnpj || "").replace(/\D/g, "");
+      if (clean === lastQueriedCnpj || isQueryingCnpj) return;
+      if (!isValidCnpj(clean)) {
+        return;
+      }
+      
+      lastQueriedCnpj = clean;
+      setCnpjLoading(true);
+      
+      try {
+        const data = await queryCnpjWithFallbacks(clean);
+        if (data) {
+          if (data.razao_social && !regRazaoSocial.value.trim()) {
+            regRazaoSocial.value = data.razao_social;
+          }
+          if (data.nome_fantasia && !regFantasia.value.trim()) {
+            regFantasia.value = data.nome_fantasia;
+            if (chkFantasia) {
+              chkFantasia.checked = false;
+              regFantasia.disabled = false;
+            }
+          }
+          showToast('Dados do CNPJ auto-preenchidos!');
+        }
+      } catch (err) {
+        console.warn('Erro ao enriquecer CNPJ:', err.message);
+        showToast('Não foi possível carregar os dados deste CNPJ automaticamente.', 'error');
+      } finally {
+        setCnpjLoading(false);
+      }
+    }
 
     // DYNAMIC COMPANIONS LOGIC
     function addCompanionInput(name = '') {
@@ -1403,6 +1597,37 @@
     setupToggleLogic(chkTelefone, regTelefone, 'telefone');
     setupToggleLogic(chkTelefone2, regTelefone2, 'telefone2');
 
+    // CNPJ AUTO-MASK & LOOKUP TRIGGER IN index.html
+    regCnpj.addEventListener('input', (e) => {
+      let val = e.target.value.replace(/\D/g, '');
+      if (val.length > 14) {
+        val = val.substring(0, 14);
+      }
+      
+      if (val.length > 12) {
+        e.target.value = `${val.substring(0, 2)}.${val.substring(2, 5)}.${val.substring(5, 8)}/${val.substring(8, 12)}-${val.substring(12, 14)}`;
+      } else if (val.length > 8) {
+        e.target.value = `${val.substring(0, 2)}.${val.substring(2, 5)}.${val.substring(5, 8)}/${val.substring(8)}`;
+      } else if (val.length > 5) {
+        e.target.value = `${val.substring(0, 2)}.${val.substring(2, 5)}.${val.substring(5)}`;
+      } else if (val.length > 2) {
+        e.target.value = `${val.substring(0, 2)}.${val.substring(2)}`;
+      } else {
+        e.target.value = val;
+      }
+
+      if (val.length === 14) {
+        triggerCnpjLookup(val);
+      }
+    });
+
+    regCnpj.addEventListener('blur', () => {
+      const val = regCnpj.value.replace(/\D/g, '');
+      if (val.length === 14) {
+        triggerCnpjLookup(val);
+      }
+    });
+
     // BOTÃO VOLTAR / SELECIONAR OUTRO CLIENTE
     btnCancelRegister.addEventListener('click', () => {
       inputSearchClient.value = '';
@@ -1464,6 +1689,34 @@
         showToast('Selecione o local e data do evento.', 'error');
         selectEventCity.focus();
         return;
+      }
+
+      // Validação de CPF ou CNPJ matemático com bypass
+      const cnpjVal = regCnpj.value.trim();
+      if (cnpjVal) {
+        const cleanDoc = cnpjVal.replace(/\D/g, '');
+        let isDocValid = true;
+        let docLabel = 'documento';
+        
+        if (cleanDoc.length === 11) {
+          isDocValid = isValidCpf(cleanDoc);
+          docLabel = 'CPF';
+        } else if (cleanDoc.length === 14) {
+          isDocValid = isValidCnpj(cleanDoc);
+          docLabel = 'CNPJ';
+        } else {
+          isDocValid = false;
+          docLabel = 'CPF ou CNPJ';
+        }
+        
+        if (!isDocValid) {
+          if (lastInvalidDocumentSubmitted !== cleanDoc) {
+            lastInvalidDocumentSubmitted = cleanDoc;
+            showToast(`O ${docLabel} digitado parece inválido. Se você tem certeza de que está correto, clique em "Salvar inscrição" novamente para enviar.`, 'error');
+            regCnpj.focus();
+            return;
+          }
+        }
       }
 
       setLoading(btnSaveGuest, true, 'Salvando inscrição...');
