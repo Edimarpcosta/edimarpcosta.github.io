@@ -1707,6 +1707,18 @@
                 .filter(x => !isNaN(x) && x >= 1 && x <= totalParticipants);
     }
 
+    // Returns { present: [names], absent: [names] } for a guest record
+    function getCheckinNamesSummary(g) {
+      const comps = getCompanionsList(g);
+      const presents = getPresentParticipants(g);
+      const allParticipants = [];
+      if (g.nome_convidado) allParticipants.push({ idx: 1, name: g.nome_convidado });
+      comps.forEach((name, i) => allParticipants.push({ idx: i + 2, name }));
+      const present = allParticipants.filter(p => presents.includes(p.idx)).map(p => p.name);
+      const absent  = allParticipants.filter(p => !presents.includes(p.idx)).map(p => p.name);
+      return { present, absent };
+    }
+
     function getVendorClientsList(vendedorName) {
       const registeredGuests = state.guests.filter(g => (g.vendedor || 'Sem Vendedor') === vendedorName);
       
@@ -2734,9 +2746,12 @@
         totalPessoas += total;
         
         const presents = getPresentParticipants(g);
+        const names = getCheckinNamesSummary(g);
         let checkinText = '—';
         if (presents.length > 0) {
-          checkinText = `✓ (${presents.length}/${total})`;
+          const presentNames = names.present.join(', ');
+          const absentNames  = names.absent.length  ? ` | Ausentes: ${names.absent.join(', ')}` : '';
+          checkinText = `✓ (${presents.length}/${total})<br><small style="color:#86efac">▶ ${presentNames}</small>${absentNames ? `<br><small style="color:#fca5a5">${absentNames.replace('| Ausentes: ','✗ ')}</small>` : ''}`;
         }
         rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${compsText}</td><td>${g.vendedor || 'N/A'}</td><td style="text-align:center;">${checkinText}</td></tr>`;
       });
@@ -2779,7 +2794,12 @@
         const total = (g.nome_convidado ? 1 : 0) + comps.length;
         let checkinVal = 'NÃO';
         if (presents.length > 0) {
-          checkinVal = presents.length === total ? 'SIM' : `PARCIAL (${presents.length}/${total})`;
+          const names = getCheckinNamesSummary(g);
+          const presentStr = names.present.join('; ');
+          const absentStr  = names.absent.length ? ` | Ausentes: ${names.absent.join('; ')}` : '';
+          checkinVal = presents.length === total
+            ? `SIM — ${presentStr}`
+            : `PARCIAL (${presents.length}/${total}) — Presentes: ${presentStr}${absentStr}`;
         }
         row.push(g.vendedor, checkinVal);
         wsData.push(row);
@@ -2804,8 +2824,11 @@
         const comps = getCompanionsList(g);
         const total = (g.nome_convidado ? 1 : 0) + comps.length;
         const presents = getPresentParticipants(g);
+        const names = getCheckinNamesSummary(g);
         const statusText = presents.length === total ? 'Completo' : `Parcial (${presents.length}/${total})`;
-        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${g.cidade_evento}</td><td>${g.vendedor || 'N/A'}</td><td>${g.telefone}</td><td style="text-align:center;">${statusText}</td></tr>`;
+        const presentLine = names.present.length ? `<br><small style="color:#86efac">▶ Presentes: ${names.present.join(', ')}</small>` : '';
+        const absentLine  = names.absent.length  ? `<br><small style="color:#fca5a5">✗ Ausentes: ${names.absent.join(', ')}</small>`  : '';
+        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${g.cidade_evento}</td><td>${g.vendedor || 'N/A'}</td><td>${g.telefone}</td><td style="text-align:center;">${statusText}${presentLine}${absentLine}</td></tr>`;
       });
 
       const body = `
@@ -2899,7 +2922,12 @@
         const total = (g.nome_convidado ? 1 : 0) + comps.length;
         let checkinVal = 'NÃO';
         if (presents.length > 0) {
-          checkinVal = presents.length === total ? 'SIM' : `PARCIAL (${presents.length}/${total})`;
+          const names = getCheckinNamesSummary(g);
+          const presentStr = names.present.join('; ');
+          const absentStr  = names.absent.length ? ` | Ausentes: ${names.absent.join('; ')}` : '';
+          checkinVal = presents.length === total
+            ? `SIM — ${presentStr}`
+            : `PARCIAL (${presents.length}/${total}) — Presentes: ${presentStr}${absentStr}`;
         }
         row.push(checkinVal);
         credData.push(row);
@@ -2992,14 +3020,17 @@
 
       let rows = '';
       filtered.forEach(g => {
-        const comps = getCompanionsList(g).join(', ') || '—';
+        const comps2 = getCompanionsList(g);
         const presents = getPresentParticipants(g);
-        const total = (g.nome_convidado ? 1 : 0) + getCompanionsList(g).length;
+        const total = (g.nome_convidado ? 1 : 0) + comps2.length;
+        const names = getCheckinNamesSummary(g);
         let checkinText = '—';
         if (presents.length > 0) {
-          checkinText = `✓ (${presents.length}/${total})`;
+          const presentNames = names.present.join(', ');
+          const absentLine   = names.absent.length ? `<br><small style="color:#fca5a5">✗ ${names.absent.join(', ')}</small>` : '';
+          checkinText = `✓ (${presents.length}/${total})<br><small style="color:#86efac">▶ ${presentNames}</small>${absentLine}`;
         }
-        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${g.telefone}</td><td>${comps}</td><td>${g.cidade_evento.split(' (')[0]}</td><td>${g.vendedor||'N/A'}</td><td style="text-align:center;">${checkinText}</td></tr>`;
+        rows += `<tr><td>${g.codigo}</td><td>${g.fantasia || g.razao_social}</td><td>${g.nome_convidado}</td><td>${g.telefone}</td><td>${comps2.join(', ') || '—'}</td><td>${g.cidade_evento.split(' (')[0]}</td><td>${g.vendedor||'N/A'}</td><td style="text-align:center;">${checkinText}</td></tr>`;
       });
 
       const filtersText = activeFilters.length > 0 ? `Filtros: ${activeFilters.join(' | ')}` : 'Sem filtros aplicados (lista completa)';
@@ -3088,7 +3119,20 @@
         for (let i = 0; i < maxCompsCount; i++) {
           row.push(comps[i] || '');
         }
-        row.push(g.compareceu?'SIM':'NÃO');
+        const presents = getPresentParticipants(g);
+        const total2 = (g.nome_convidado ? 1 : 0) + comps.length;
+        let checkinVal2;
+        if (!presents.length) {
+          checkinVal2 = 'NÃO';
+        } else {
+          const names = getCheckinNamesSummary(g);
+          const presentStr = names.present.join('; ');
+          const absentStr  = names.absent.length ? ` | Ausentes: ${names.absent.join('; ')}` : '';
+          checkinVal2 = presents.length === total2
+            ? `SIM — ${presentStr}`
+            : `PARCIAL (${presents.length}/${total2}) — Presentes: ${presentStr}${absentStr}`;
+        }
+        row.push(checkinVal2);
         wsData.push(row);
       });
       downloadXLSX(wsData, 'Credenciados_Selecta360.xlsx', 'Credenciados');
