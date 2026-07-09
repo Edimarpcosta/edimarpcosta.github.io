@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Autorização de Retirada - Ameripan (v11.0 CNPJ+QSA)</title>
+    <title>Autorização de Retirada - Ameripan (v11.1 CNPJ+QSA)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <style>
@@ -197,7 +197,7 @@
     <script>
         'use strict';
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM v11.0 CNPJ+QSA - Completo");
+            console.log("DOM v11.1 CNPJ+QSA - Completo");
             // --- Elementos DOM ---
             const canvas = document.getElementById('signature-pad'), signatureMessage = document.getElementById('signature-message'), clearButton = document.getElementById('clear-signature'), expandButton = document.getElementById('expand-signature'), signatureContainer = document.getElementById('signature-container'), generateSharePdfButtonMain = document.getElementById('generate-share-pdf-main'), modalOverlay = document.getElementById('signature-modal-overlay'), modalCanvas = document.getElementById('signature-modal-canvas'), modalMessage = document.getElementById('signature-modal-message'), modalConfirmBtn = document.getElementById('modal-confirm'), modalClearBtn = document.getElementById('modal-clear'), modalCancelBtn = document.getElementById('modal-cancel'), toastMessageElement = document.getElementById('toast-message'), printIframeContainer = document.getElementById('print-iframe-container');
             const cpfInput = document.getElementById('cpf'), valorInput = document.getElementById('valor'), diaInput = document.getElementById('dia'), mesInput = document.getElementById('mes'), anoInput = document.getElementById('ano'), nomeInput = document.getElementById('nome'), empresaInput = document.getElementById('empresa'), autorizadoInput = document.getElementById('autorizado'), pedidosInput = document.getElementById('pedidos'), cidadeInput = document.getElementById('cidade'), whatsappProprietarioInput = document.getElementById('whatsapp-proprietario'), formContainer = document.getElementById('form-container'), ownerNameDisplay = document.getElementById('owner-name-display'), companyLogo = document.getElementById('company-logo');
@@ -364,15 +364,19 @@
                 }
                 
                 if (!isFormValid) {
-                    console.log("Inválido.");
-                    if (firstInvalidElement) {
-                        try { firstInvalidElement.focus(); } catch(e) {}
-                    }
-                    alert('Corrija os campos e forneça a assinatura.');
-                } else {
-                    console.log("Válido.");
-                }
-                return isFormValid;
+                     console.log("Inválido.");
+                     if (firstInvalidElement) {
+                         try { firstInvalidElement.focus(); } catch(e) {}
+                     }
+                     alert('Corrija os campos e forneça a assinatura.');
+                 } else {
+                     if (!checkSocioCpf()) {
+                         isFormValid = false;
+                     } else {
+                         console.log("Válido.");
+                     }
+                 }
+                 return isFormValid;
             }
             function clearErrorOnInput(event){ const input = event.target; const parentField = input.closest('.field'); if (parentField && parentField.classList.contains('invalid')) { parentField.classList.remove('invalid'); const errorMsgElement = parentField.querySelector('.error-message'); if (errorMsgElement) errorMsgElement.style.display = 'none'; } generatedPdfBlob = null; generatedPdfFilename = ''; }
 
@@ -479,7 +483,11 @@
                         cnpj: data.cnpj || '',
                         razao_social: data.razao_social || '',
                         municipio: data.municipio || '',
-                        qsa: data.qsa?.map(s => ({ nome_socio: s.nome_socio, qualificacao_socio: s.qualificacao_socio })) || [],
+                        qsa: data.qsa?.map(s => ({ 
+                            nome_socio: s.nome_socio, 
+                            qualificacao_socio: s.qualificacao_socio,
+                            cnpj_cpf_socio: s.cnpj_cpf_do_socio || s.cnpj_cpf_socio || s.cpf_cnpj_socio || ''
+                        })) || [],
                         api_origem: 'BrasilAPI'
                     };
                 },
@@ -489,7 +497,11 @@
                         cnpj: est.cnpj || '',
                         razao_social: data.razao_social || '',
                         municipio: est.cidade?.nome || '',
-                        qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao_socio?.descricao || s.qualificacao || '' })) || [],
+                        qsa: data.socios?.map(s => ({ 
+                            nome_socio: s.nome, 
+                            qualificacao_socio: s.qualificacao_socio?.descricao || s.qualificacao || '',
+                            cnpj_cpf_socio: s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cnpj_cpf_socio || ''
+                        })) || [],
                         api_origem: 'Publica CNPJ WS'
                     };
                 },
@@ -503,7 +515,11 @@
                         cnpj: String(data.cnpj || '').replace(/\D/g, ''),
                         razao_social: data.nome || '',
                         municipio: data.municipio || '',
-                        qsa: data.qsa?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qual })) || [],
+                        qsa: data.qsa?.map(s => ({ 
+                            nome_socio: s.nome, 
+                            qualificacao_socio: s.qual || '',
+                            cnpj_cpf_socio: s.cnpj_cpf_do_socio || s.cnpj_cpf_socio || s.cpf_cnpj_socio || ''
+                        })) || [],
                         api_origem: 'ReceitaWS'
                     };
                 },
@@ -511,7 +527,11 @@
                     cnpj: data.cnpj || '',
                     razao_social: data.razao_social || '',
                     municipio: data.endereco?.municipio || '',
-                    qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao })) || [],
+                    qsa: data.socios?.map(s => ({ 
+                        nome_socio: s.nome, 
+                        qualificacao_socio: s.qualificacao || '',
+                        cnpj_cpf_socio: s.cnpj_cpf_socio || s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || ''
+                    })) || [],
                     api_origem: 'Invertexto'
                 }),
                 opencnpj: (data) => {
@@ -519,7 +539,11 @@
                         cnpj: data.cnpj ? String(data.cnpj).replace(/\D/g, '') : '',
                         razao_social: data.razao_social || '',
                         municipio: data.municipio || '',
-                        qsa: data.QSA?.map(s => ({ nome_socio: s.nome_socio, qualificacao_socio: s.qualificacao_socio || '' })) || [],
+                        qsa: data.QSA?.map(s => ({ 
+                            nome_socio: s.nome_socio, 
+                            qualificacao_socio: s.qualificacao_socio || '',
+                            cnpj_cpf_socio: s.cnpj_cpf_socio || s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || ''
+                        })) || [],
                         api_origem: 'OpenCNPJ'
                     };
                 },
@@ -567,7 +591,8 @@
                     const company = office.company || {};
                     const formattedQsa = company.members ? company.members.map(m => ({
                         nome_socio: m?.person?.name || '',
-                        qualificacao_socio: m?.role?.text || ''
+                        qualificacao_socio: m?.role?.text || '',
+                        cnpj_cpf_socio: m?.person?.taxId || m?.person?.cnpj_cpf_socio || m?.person?.cpf_cnpj_socio || ''
                     })).filter(s => s.nome_socio) : [];
                     
                     return {
@@ -999,11 +1024,76 @@
                  const y = (clientY - rect.top) * (targetCanvas.height / rect.height);
                  return { x, y };
              }
+             function isCpfMatch(typedCpf, mask) {
+                 if (!typedCpf || !mask) return true;
+                 const cleanCpf = typedCpf.replace(/\D/g, '');
+                 const cleanMask = mask.replace(/[\.\-\/]/g, '');
+                 if (cleanCpf.length !== 11) return false;
+                 
+                 if (cleanMask.length === 11) {
+                     for (let i = 0; i < 11; i++) {
+                         if (cleanMask[i] !== '*' && cleanMask[i] !== cleanCpf[i]) {
+                             return false;
+                         }
+                     }
+                     return true;
+                 }
+                 
+                 const regexPattern = '^' + cleanMask.split('').map(char => {
+                     return char === '*' ? '\\d' : char;
+                 }).join('') + '$';
+                 
+                 try {
+                     const regex = new RegExp(regexPattern);
+                     return regex.test(cleanCpf);
+                 } catch (e) {
+                     return true;
+                 }
+             }
+             function checkSocioCpf() {
+                 if (!cpfInput || !qsaSelect) return true;
+                 const cpfVal = cpfInput.value.trim();
+                 if (!cpfVal) return true;
+                 
+                 const selectedIdx = qsaSelect.value;
+                 if (selectedIdx === '' || selectedIdx === '__manual__') return true;
+                 
+                 const socio = qsaList[selectedIdx];
+                 if (!socio || !socio.cnpj_cpf_socio) return true;
+                 
+                 if (!isCpfMatch(cpfVal, socio.cnpj_cpf_socio)) {
+                     const friendlyMask = socio.cnpj_cpf_socio;
+                     const msg = `O CPF digitado não corresponde ao sócio selecionado (${socio.nome_socio}).\n\n` +
+                                 `O CPF cadastrado nos dados públicos da Receita Federal para este sócio tem o formato: ${friendlyMask}\n\n` +
+                                 `Deseja preencher as informações manualmente (Outro Sócio)?`;
+                                 
+                     const changeToManual = confirm(msg);
+                     if (changeToManual) {
+                         qsaSelect.value = '__manual__';
+                         qsaSelect.dispatchEvent(new Event('change'));
+                         nomeInput.value = '';
+                         nomeInput.disabled = false;
+                         cpfInput.value = '';
+                         setTimeout(() => {
+                             nomeInput.focus();
+                             adjustInputWidth(nomeInput);
+                         }, 50);
+                     } else {
+                         cpfInput.value = '';
+                         setTimeout(() => {
+                             cpfInput.focus();
+                             adjustInputWidth(cpfInput);
+                         }, 50);
+                     }
+                     return false;
+                 }
+                 return true;
+             }
             // ========================================= TEXTO FORMATADO PDF (HELPER) =========================================
             const addFormattedText = (pdf, segments, x, y, maxWidth, lineSpacing = 6) => { let currentX = x; let currentLineY = y; pdf.setFontSize(11); segments.forEach(segment => { pdf.setFont('helvetica', segment.style || 'normal'); const text = segment.text + (segment.spaceAfter ? ' ' : ''); const textWidth = pdf.getStringUnitWidth(text) * pdf.getFontSize() / pdf.internal.scaleFactor; if (currentX + textWidth > x + maxWidth && currentX > x) { currentLineY += lineSpacing; currentX = x; } if (textWidth > maxWidth) { const splitText = pdf.splitTextToSize(text, maxWidth); pdf.text(splitText, currentX, currentLineY); currentLineY += lineSpacing * (splitText.length -1) ; currentX = x; } else { pdf.text(text, currentX, currentLineY); currentX += textWidth; } }); pdf.setFont('helvetica', 'normal'); return currentLineY; };
             // ============================================= GERAÇÃO PDF CENTRAL ============================================
             async function generateAndStorePdf(callingButton){
-                 console.log("Gerando PDF (v11.0)...");
+                 console.log("Gerando PDF (v11.1)...");
                  const originalButtonHtml = callingButton ? callingButton.innerHTML : ''; const buttonsToDisable = [generateSharePdfButtonMain]; isProcessing = true; buttonsToDisable.forEach(btn => { if(btn) btn.disabled = true; }); if (callingButton) { callingButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-repeat spinner" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41m-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.5 6.5 0 1 1 2.343 6H.5a.5.5 0 0 1 0-1h3.975a.5.5 0 0 1 .5.5v3.975a.5.5 0 0 1-1 0V6.45a5.5 5.5 0 1 0 .75-3.357A.5.5 0 1 1 8 3"/></svg> Gerando...`; } document.body.classList.add('pdf-generation-active');
                  try {
                      const { jsPDF } = window.jspdf; if (typeof jsPDF !== 'function') throw new Error("jsPDF fail");
@@ -1031,21 +1121,55 @@
                      // Authorized Signature Area
                      currentY += extraSpaceBeforeAuthSign; const authorizedSignatureY = currentY; pdf.setLineWidth(0.3); pdf.line(signatureX, authorizedSignatureY, signatureX + signatureWidth, authorizedSignatureY); currentY = authorizedSignatureY + labelSpacing; pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.text(autorizado.toUpperCase(), signatureX + signatureWidth / 2, currentY, { align: 'center' }); currentY += labelSpacing; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100); pdf.text("(Assinatura Responsável pela Retirada)", signatureX + signatureWidth / 2, currentY, { align: 'center' }); pdf.setTextColor(0); currentY += sectionSpacing;
                      // Footer
-                     const footerY = pageH - margin - 22; if (currentY > footerY - 10) { pdf.addPage(); currentY = margin; } else { currentY = footerY; }
-                     let footerLineY = currentY;
-                     if (qsaList && qsaList.length > 0) {
-                         const qsaText = "Sócios / Administradores: " + qsaList.map(s => `${s.nome_socio} (${s.qualificacao_socio || 'Sócio'})`).join(', ');
-                         pdf.setFontSize(7);
-                         pdf.setTextColor(120);
-                         const splitQsa = pdf.splitTextToSize(qsaText, contentW);
-                         pdf.text(splitQsa, pageW / 2, footerLineY, { align: 'center' });
-                         footerLineY += (splitQsa.length * 3) + 2;
-                     }
-                     pdf.setFontSize(8); pdf.setTextColor(100); const companyInfoLines = document.querySelectorAll('.company-info p');
-                     companyInfoLines.forEach(p => { pdf.text(p.textContent.trim(), pageW / 2, footerLineY, { align: 'center' }); footerLineY += 3.5; }); pdf.setTextColor(0);
+                      const footerHeightNeeded = (qsaList && qsaList.length > 0) ? 35 : 22;
+                      const footerY = pageH - margin - footerHeightNeeded; 
+                      if (currentY > footerY - 5) { 
+                          pdf.addPage(); 
+                          currentY = margin; 
+                      } else { 
+                          currentY = footerY; 
+                      }
+                      let footerLineY = currentY;
+                      
+                      if (qsaList && qsaList.length > 0) {
+                          // 1. Nome da empresa autorizante (pequeno, cinza escuro)
+                          const empresaNome = empresa.toUpperCase();
+                          pdf.setFontSize(7.5);
+                          pdf.setFont('helvetica', 'bold');
+                          pdf.setTextColor(100);
+                          pdf.text(empresaNome, pageW / 2, footerLineY, { align: 'center' });
+                          footerLineY += 3.5;
+                          
+                          // 2. Sócios/Administradores
+                          const qsaText = "Sócios / Administradores: " + qsaList.map(s => `${s.nome_socio} (${s.qualificacao_socio || 'Sócio'})`).join(', ');
+                          pdf.setFontSize(6.5);
+                          pdf.setFont('helvetica', 'normal');
+                          pdf.setTextColor(120);
+                          const splitQsa = pdf.splitTextToSize(qsaText, contentW);
+                          pdf.text(splitQsa, pageW / 2, footerLineY, { align: 'center' });
+                          footerLineY += (splitQsa.length * 3) + 2.5;
+                          
+                          // 3. Linha divisória fina
+                          pdf.setLineWidth(0.15);
+                          pdf.setDrawColor(200);
+                          pdf.line(margin + 15, footerLineY, pageW - margin - 15, footerLineY);
+                          pdf.setDrawColor(0); // Reset draw color
+                          footerLineY += 3.5;
+                      }
+                      
+                      // 4. Dados da Ameripan (Distribuidora)
+                      pdf.setFontSize(8); 
+                      pdf.setFont('helvetica', 'normal');
+                      pdf.setTextColor(120); 
+                      const companyInfoLines = document.querySelectorAll('.company-info p');
+                      companyInfoLines.forEach(p => { 
+                          pdf.text(p.textContent.trim(), pageW / 2, footerLineY, { align: 'center' }); 
+                          footerLineY += 3.5; 
+                      }); 
+                      pdf.setTextColor(0);
                      // Filename & Blob
                      const safePedido = pedidos.replace(/[^a-zA-Z0-9,-]/g, '_') || 'N_A'; const safeProprietario = nome.replace(/[^a-zA-Z0-9]/g, '_') || 'Proprietario'; const dataHoje = new Date(); const diaFormatado = dataHoje.getDate().toString().padStart(2, '0'); const mesFormatado = (dataHoje.getMonth() + 1).toString().padStart(2, '0'); const anoFormatado = dataHoje.getFullYear(); const dataFormatada = `${diaFormatado}-${mesFormatado}-${anoFormatado}`; const filename = `Autorizacao_Retirada_pedido${safePedido}_proprietario${safeProprietario}_${dataFormatada}.pdf`;
-                     generatedPdfBlob = pdf.output('blob'); generatedPdfFilename = filename; console.log("PDF gerado (v11.0)."); return true;
+                     generatedPdfBlob = pdf.output('blob'); generatedPdfFilename = filename; console.log("PDF gerado (v11.1)."); return true;
                  } catch (error) { console.error("Erro PDF:", error); alert(`Erro: ${error.message}.`); generatedPdfBlob = null; generatedPdfFilename = ''; return false; }
                  finally { if (callingButton) callingButton.innerHTML = originalButtonHtml; setTimeout(() => { buttonsToDisable.forEach(btn => { if(btn) btn.disabled = false; }); isProcessing = false; document.body.classList.remove('pdf-generation-active'); console.log("Processamento PDF finalizado."); }, 500); }
              }
@@ -1143,7 +1267,7 @@
             // ============================================ LISTENERS EVENTOS ============================================
             function handleResizeOrOrientationChange(){ tempSignatureDataUrl = null; tempMainSignatureDataUrl = null; if (modalOverlay && modalOverlay.style.display === 'flex' && hasModalSignature && modalCanvas) { tempSignatureDataUrl = modalCanvas.toDataURL(); } if (hasSignature && canvas) { tempMainSignatureDataUrl = canvas.toDataURL(); } if (canvas && ctx) resizeCanvas(canvas, ctx, false); if (modalOverlay && modalOverlay.style.display === 'flex' && modalCanvas && modalCtx) { resizeCanvas(modalCanvas, modalCtx, true); } }
             // --- Config Inicial ---
-            console.log("Configurando v11.0..."); if (modalOverlay) { modalOverlay.style.display = 'none'; } if (canvas && ctx) { resizeCanvas(canvas, ctx, false); } else { console.error("Canvas fail!"); } initializeDefaultDate(); updateOwnerNameDisplay(); updateCnpjDisplay(); adjustAllFieldsWidth(); loadFormData(); if (hasSignature && canvas && ctx) { resizeCanvas(canvas, ctx, false); }
+            console.log("Configurando v11.1..."); if (modalOverlay) { modalOverlay.style.display = 'none'; } if (canvas && ctx) { resizeCanvas(canvas, ctx, false); } else { console.error("Canvas fail!"); } initializeDefaultDate(); updateOwnerNameDisplay(); updateCnpjDisplay(); adjustAllFieldsWidth(); loadFormData(); if (hasSignature && canvas && ctx) { resizeCanvas(canvas, ctx, false); }
             // --- Listeners Campos ---
             const btnBuscarCnpj = document.getElementById('btn-buscar-cnpj');
             if (btnBuscarCnpj) {
@@ -1254,7 +1378,7 @@
                      updateSignatureRole(cargoManualInput.value);
                  });
              }
-            if(cpfInput){cpfInput.addEventListener('input', () => { formatCPF(cpfInput); clearErrorOnInput({ target: cpfInput }); }); cpfInput.addEventListener('blur', () => validateField(cpfInput));}
+            if(cpfInput){cpfInput.addEventListener('input', () => { formatCPF(cpfInput); clearErrorOnInput({ target: cpfInput }); }); cpfInput.addEventListener('blur', () => { if(validateField(cpfInput)) { checkSocioCpf(); } });}
             if(valorInput){valorInput.addEventListener('input', () => { formatCurrency(valorInput); clearErrorOnInput({ target: valorInput }); }); valorInput.addEventListener('blur', () => validateField(valorInput));}
             if(whatsappProprietarioInput){whatsappProprietarioInput.addEventListener('input', () => { formatPhone(whatsappProprietarioInput); clearErrorOnInput({ target: whatsappProprietarioInput }); }); whatsappProprietarioInput.addEventListener('blur', () => validateField(whatsappProprietarioInput));}
             ['nome', 'empresa', 'cnpj_empresa', 'autorizado', 'pedidos', 'cidade', 'dia', 'mes', 'ano'].forEach(id => { const i=document.getElementById(id); if(i){ i.addEventListener('input', clearErrorOnInput); i.addEventListener('blur',()=>validateField(i)); }});
@@ -1406,7 +1530,7 @@
                     if (cropOverlay) cropOverlay.style.display = 'none';
                 });
             }
-            console.log("Listeners configurados (v11.0).");
+            console.log("Listeners configurados (v11.1).");
         }); // Fim DOMContentLoaded
     </script>
 </body>
