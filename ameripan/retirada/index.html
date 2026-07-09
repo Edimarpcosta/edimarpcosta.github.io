@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Autorização de Retirada - Ameripan (v10.7 SmartShare)</title>
+    <title>Autorização de Retirada - Ameripan (v11.0 CNPJ+QSA)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <style>
@@ -44,6 +44,14 @@
         .company-info { text-align: center; margin-top: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); color: var(--light-text); font-size: 0.875rem; } .company-info p { margin-bottom: 0.25rem; }
         .no-print { display: revert; } .pdf-generation-active .no-print, .print-iframe-container { display: none !important; position: absolute; top: -9999px; left: -9999px; width: 0; height: 0; overflow: hidden; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spinner { animation: spin 1s linear infinite; }
+        
+        /* Estilos adicionais para CNPJ e QSA */
+        .cnpj-status-indicator { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; font-weight: bold; pointer-events: none; }
+        .cnpj-status-indicator.loading::after { content: "🔄"; display: inline-block; animation: spin 1s linear infinite; }
+        .cnpj-status-indicator.success::after { content: "✓"; color: var(--success-color); }
+        .cnpj-status-indicator.error::after { content: "✗"; color: var(--error-color); }
+        #qsa-selector-block select { border-bottom: 2px solid var(--input-border-color); border-top: none; border-left: none; border-right: none; font-size: 1rem; color: var(--text-color); font-weight: 500; }
+        #qsa-selector-block select:focus { border-bottom-color: var(--primary-color); outline: none; }
     </style>
 </head>
 <body>
@@ -56,13 +64,50 @@
          </div>
          <h1>AUTORIZAÇÃO DE RETIRADA DE MERCADORIA</h1>
          <div class="form-content">
-             Eu, <span class="field"><input type="text" class="field-input" id="nome" placeholder="Nome proprietário/sócio" required><span class="error-message"></span></span>,
-             portador do CPF <span class="field"><input type="text" class="field-input" id="cpf" inputmode="numeric" placeholder="___.___.___-__" required><span class="error-message" id="cpf-error-message"></span></span>,
-             proprietário(a) da empresa <span class="field"><input type="text" class="field-input" id="empresa" placeholder="Nome da empresa" required><span class="error-message"></span></span>,
-             autorizo o(a) Sr(a). <span class="field"><input type="text" class="field-input" id="autorizado" placeholder="Nome autorizado" required><span class="error-message"></span></span>
-             a retirar o(s) pedido(s) nº <span class="field"><input type="text" class="field-input" id="pedidos" placeholder="Números dos pedidos" required><span class="error-message"></span></span>,
-             no valor total de R$ <span class="field"><input type="text" class="field-input" id="valor" inputmode="decimal" placeholder="0,00" required><span class="error-message"></span></span>
-             no Depósito da empresa Ameripan, localizado na Rua Purus, nº 652, Bairro Jd. São Roque.
+              <!-- Bloco de Inserção e Busca de CNPJ no Topo -->
+              <div class="cnpj-lookup-container no-print" style="background: #fbfdff; padding: 16px; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid var(--accent-color); border-left: 5px solid var(--accent-color);">
+                  <label for="cnpj_empresa" style="font-weight: 600; display: block; font-size: 0.95rem; margin-bottom: 8px; color: var(--primary-color);">🏢 CNPJ da Empresa (Preencha primeiro para auto-completar):</label>
+                  <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                      <span class="field" style="flex-grow: 1; margin: 0; min-width: auto; border-bottom: 2px solid var(--input-border-color); display: flex; align-items: center; position: relative;">
+                          <input type="text" class="field-input" id="cnpj_empresa" placeholder="00.000.000/0000-00" required inputmode="numeric" style="padding-right: 25px;">
+                          <span id="cnpj-status" class="cnpj-status-indicator"></span>
+                          <span class="error-message"></span>
+                      </span>
+                      <button type="button" class="button" id="btn-buscar-cnpj" style="min-width: auto; padding: 8px 16px; font-size: 0.85rem; height: 38px; margin: 0; flex-shrink: 0;" title="Buscar CNPJ nas APIs">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16" style="margin-right: 4px;"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
+                          Buscar
+                      </button>
+                  </div>
+                  <div style="font-size: 0.8rem; color: var(--light-text); margin-top: 6px; font-style: italic;">
+                      * A busca inicia automaticamente ao digitar 14 dígitos ou ao clicar em Buscar.
+                  </div>
+              </div>
+
+              <div id="qsa-selector-block" style="display:none; margin-bottom: 1.5rem; padding: 12px; background: #eef2f7; border-left: 4px solid var(--primary-color); border-radius: 4px;">
+                  <label for="qsa-select" style="font-weight: 600; display: block; font-size: 0.9rem; margin-bottom: 6px; color: var(--primary-color);">Quem está preenchendo a informação?</label>
+                  <select id="qsa-select" style="width: 100%; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; font-family: 'Poppins', sans-serif; font-size: 0.95rem; outline: none; background: white;">
+                      <option value="">-- Selecione o sócio/administrador --</option>
+                  </select>
+              </div>
+              <div id="cargo-selector-block" style="display:none; margin-bottom: 1.5rem; padding: 12px; background: #eef2f7; border-left: 4px solid var(--secondary-color); border-radius: 4px;">
+                   <label for="cargo-select" style="font-weight: 600; display: block; font-size: 0.9rem; margin-bottom: 6px; color: var(--secondary-color);">Qual é a função/cargo de quem assina?</label>
+                   <select id="cargo-select" style="width: 100%; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; font-family: 'Poppins', sans-serif; font-size: 0.95rem; outline: none; background: white; margin-bottom: 8px;">
+                       <option value="">-- Selecione a função/cargo --</option>
+                       <option value="Sócio">Sócio</option>
+                       <option value="Sócio/Administrador">Sócio/Administrador</option>
+                       <option value="Gerente">Gerente</option>
+                       <option value="__manual__">✏️ Outro (digitar manualmente...)</option>
+                   </select>
+                   <input type="text" id="cargo-manual-input" placeholder="Digite o cargo/função" style="display:none; width: 100%; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; font-family: 'Poppins', sans-serif; font-size: 0.95rem; outline: none;">
+              </div>
+              Eu, <span class="field"><input type="text" class="field-input" id="nome" placeholder="Nome proprietário/sócio" required><span class="error-message"></span></span>,
+              portador do CPF <span class="field"><input type="text" class="field-input" id="cpf" inputmode="numeric" placeholder="___.___.___-__" required><span class="error-message" id="cpf-error-message"></span></span>,
+              proprietário(a) da empresa <span class="field"><input type="text" class="field-input" id="empresa" placeholder="Nome da empresa" required><span class="error-message"></span></span>,
+              CNPJ <span id="cnpj_display" style="font-weight: 500; font-style: italic; color: var(--light-text); border-bottom: 2px solid var(--input-border-color); padding: 0 5px 2px 5px; margin: 0 3px; display: inline-block; min-width: 150px; text-align: center;">__.___.___/____-__</span>,
+              autorizo o(a) Sr(a). <span class="field"><input type="text" class="field-input" id="autorizado" placeholder="Nome autorizado" required><span class="error-message"></span></span>
+              a retirar o(s) pedido(s) nº <span class="field"><input type="text" class="field-input" id="pedidos" placeholder="Números dos pedidos" required><span class="error-message"></span></span>,
+              no valor total de R$ <span class="field"><input type="text" class="field-input" id="valor" inputmode="decimal" placeholder="0,00" required><span class="error-message"></span></span>
+              no Depósito da empresa Ameripan, localizado na <a href="https://share.google/38KOV7gkfOYjuxSOQ" target="_blank" style="color: var(--link-color); text-decoration: underline; font-weight: 600;" title="Ver empresa no Google Maps">Rua Purus, nº 652, Salão 3, Bairro Jd. São Roque - Americana/SP</a>.
          </div>
          <div class="date-location-row">
               <div class="location-block">
@@ -81,12 +126,12 @@
             <div class="signature-section">
                 <div class="signature-pad-container" id="signature-container">
                     <canvas id="signature-pad"></canvas>
-                    <div class="signature-message" id="signature-message">Assine aqui (Proprietário/Sócio)</div>
+                    <div class="signature-message" id="signature-message">Assine aqui (<span id="signature-msg-role">Proprietário/Sócio</span>)</div>
                 </div>
                  <div class="signature-line"></div>
                  <div class="signature-name-display" id="owner-name-display"></div>
                  <div class="signature-labels-container">
-                     <p>(Assinatura Proprietário/Sócio)</p>
+                     <p>(Assinatura <span id="signature-label-role">Proprietário/Sócio</span>)</p>
                  </div>
                  <div class="controls no-print">
                     <button class="button clear-button" id="clear-signature" title="Limpar Assinatura">
@@ -126,12 +171,24 @@
     <script>
         'use strict';
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM v10.7 SmartShare - Completo");
+            console.log("DOM v11.0 CNPJ+QSA - Completo");
             // --- Elementos DOM ---
             const canvas = document.getElementById('signature-pad'), signatureMessage = document.getElementById('signature-message'), clearButton = document.getElementById('clear-signature'), expandButton = document.getElementById('expand-signature'), signatureContainer = document.getElementById('signature-container'), generateSharePdfButtonMain = document.getElementById('generate-share-pdf-main'), modalOverlay = document.getElementById('signature-modal-overlay'), modalCanvas = document.getElementById('signature-modal-canvas'), modalMessage = document.getElementById('signature-modal-message'), modalConfirmBtn = document.getElementById('modal-confirm'), modalClearBtn = document.getElementById('modal-clear'), modalCancelBtn = document.getElementById('modal-cancel'), toastMessageElement = document.getElementById('toast-message'), printIframeContainer = document.getElementById('print-iframe-container');
             const cpfInput = document.getElementById('cpf'), valorInput = document.getElementById('valor'), diaInput = document.getElementById('dia'), mesInput = document.getElementById('mes'), anoInput = document.getElementById('ano'), nomeInput = document.getElementById('nome'), empresaInput = document.getElementById('empresa'), autorizadoInput = document.getElementById('autorizado'), pedidosInput = document.getElementById('pedidos'), cidadeInput = document.getElementById('cidade'), whatsappProprietarioInput = document.getElementById('whatsapp-proprietario'), formContainer = document.getElementById('form-container'), ownerNameDisplay = document.getElementById('owner-name-display'), companyLogo = document.getElementById('company-logo');
+            const cnpjEmpresaInput = document.getElementById('cnpj_empresa'), cnpjStatus = document.getElementById('cnpj-status'), qsaBlock = document.getElementById('qsa-selector-block'), qsaSelect = document.getElementById('qsa-select');
+            const cargoSelectBlock = document.getElementById('cargo-selector-block'), cargoSelect = document.getElementById('cargo-select'), cargoManualInput = document.getElementById('cargo-manual-input'), signatureMsgRole = document.getElementById('signature-msg-role'), signatureLabelRole = document.getElementById('signature-label-role');
             // --- Estados Globais ---
             const ctx = canvas ? canvas.getContext('2d') : null, modalCtx = modalCanvas ? modalCanvas.getContext('2d') : null; let isDrawing = false, points = [], hasSignature = false, hasModalSignature = false, tempSignatureDataUrl = null, tempMainSignatureDataUrl = null, generatedPdfBlob = null, generatedPdfFilename = '', isProcessing = false;
+            let qsaList = [];
+            let isCnpjSearching = false;
+            let selectedRole = 'Proprietário/Sócio';
+            // --- Funções de Controle de Cargo ---
+            function updateSignatureRole(role) {
+                selectedRole = role || 'Proprietário/Sócio';
+                if (signatureMsgRole) signatureMsgRole.textContent = selectedRole;
+                if (signatureLabelRole) signatureLabelRole.textContent = selectedRole;
+                generatedPdfBlob = null; generatedPdfFilename = '';
+            }
             // --- Constantes ---
             const SIGNATURE_LINE_COLOR = '#005A9C', SIGNATURE_LINE_WIDTH = 2.5;
 
@@ -167,11 +224,558 @@
             function formatCPF(inputElement){ if (!inputElement) return; let value = inputElement.value.replace(/\D/g, '').slice(0, 11); value = value.replace(/(\d{3})(\d)/, '$1.$2'); value = value.replace(/(\d{3})(\d)/, '$1.$2'); value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2'); inputElement.value = value; }
             function formatCurrency(inputElement){ if (!inputElement) return; let value = inputElement.value.replace(/\D/g, ''); if (value === '') { inputElement.value = ''; return; } let numberValue = parseInt(value) / 100; inputElement.value = numberValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
             function formatPhone(inputElement){ if (!inputElement) return; let value = inputElement.value.replace(/\D/g, ''); const len = value.length; if (len === 0) { inputElement.value = ''; } else if (len <= 2) { inputElement.value = `(${value}`; } else if (len <= 6) { inputElement.value = `(${value.substring(0, 2)}) ${value.substring(2)}`; } else if (len <= 10) { inputElement.value = `(${value.substring(0, 2)}) ${value.substring(2, 6)}-${value.substring(6)}`; } else { inputElement.value = `(${value.substring(0, 2)}) ${value.substring(2, 7)}-${value.substring(7, 11)}`; } }
-            function validateField(inputElement){ if (!inputElement) return false; const parentField = inputElement.closest('.field'); const errorMsgElement = parentField ? parentField.querySelector('.error-message') : null; let isValid = true; let errorMessageText = ''; const trimmedValue = inputElement.value.trim(); if (inputElement.required && !trimmedValue) { isValid = false; errorMessageText = 'Obrigatório'; } else if (trimmedValue || inputElement.required) { if (inputElement.id === 'cpf' && !isValidCPF(inputElement.value)) { isValid = false; errorMessageText = 'CPF inválido'; } else if (inputElement.id === 'ano') { const year = parseInt(trimmedValue); const currentYear = new Date().getFullYear(); if (isNaN(year) || year < currentYear - 10 || year > currentYear + 5) { isValid = false; errorMessageText = 'Ano inválido'; } } else if (inputElement.id === 'dia') { const day = parseInt(trimmedValue); if (isNaN(day) || day < 1 || day > 31) { isValid = false; errorMessageText = 'Dia inválido'; } } else if (inputElement.id === 'mes') { const monthValue = trimmedValue.toLowerCase(); const validMonths = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']; if (!validMonths.includes(monthValue)) { isValid = false; errorMessageText = 'Mês inválido'; } } else if (inputElement.id === 'whatsapp-proprietario') { const cleanedPhone = inputElement.value.replace(/\D/g, ''); if (cleanedPhone.length < 10 || cleanedPhone.length > 11) { isValid = false; errorMessageText = 'Telefone inválido'; } } } if (parentField) { if (!isValid) { parentField.classList.add('invalid'); if (errorMsgElement) { errorMsgElement.textContent = errorMessageText; errorMsgElement.style.display = 'inline'; } } else { parentField.classList.remove('invalid'); if (errorMsgElement) { errorMsgElement.style.display = 'none'; } } } return isValid; }
-            function validateForm(){ console.log("Validando..."); let isFormValid = true; let firstInvalidElement = null; const fieldsToValidate = formContainer ? formContainer.querySelectorAll('input[required], select[required], textarea[required]') : []; fieldsToValidate.forEach(input => { if (!validateField(input)) { isFormValid = false; if (!firstInvalidElement) firstInvalidElement = input; } }); console.log("Validando assinatura..."); if (!hasSignature) { console.log("Assinatura ausente."); isFormValid = false; if(signatureContainer) signatureContainer.classList.add('invalid'); if(signatureMessage) { signatureMessage.textContent = 'Assinatura obrigatória'; signatureMessage.style.display = 'block'; } if (!firstInvalidElement) firstInvalidElement = signatureContainer; } else { if(signatureContainer) signatureContainer.classList.remove('invalid'); if(signatureMessage && hasSignature) signatureMessage.style.display = 'none'; } if (!isFormValid) { console.log("Inválido."); if (firstInvalidElement) { try { firstInvalidElement.focus(); } catch(e) {} } alert('Corrija os campos e forneça a assinatura.'); } else { console.log("Válido."); } return isFormValid; }
+            function validateField(inputElement){
+                if (!inputElement) return false;
+                const parentField = inputElement.closest('.field');
+                const errorMsgElement = parentField ? parentField.querySelector('.error-message') : null;
+                let isValid = true;
+                let errorMessageText = '';
+                const trimmedValue = inputElement.value.trim();
+                
+                if (inputElement.required && !trimmedValue) {
+                    isValid = false;
+                    errorMessageText = 'Obrigatório';
+                } else if (trimmedValue || inputElement.required) {
+                    if (inputElement.id === 'cpf' && !isValidCPF(inputElement.value)) {
+                        isValid = false;
+                        errorMessageText = 'CPF inválido';
+                    } else if (inputElement.id === 'cnpj_empresa' && !isValidCnpj(inputElement.value)) {
+                        isValid = false;
+                        errorMessageText = 'CNPJ inválido';
+                    } else if (inputElement.id === 'ano') {
+                        const year = parseInt(trimmedValue);
+                        const currentYear = new Date().getFullYear();
+                        if (isNaN(year) || year < currentYear - 10 || year > currentYear + 5) {
+                            isValid = false;
+                            errorMessageText = 'Ano inválido';
+                        }
+                    } else if (inputElement.id === 'dia') {
+                        const day = parseInt(trimmedValue);
+                        if (isNaN(day) || day < 1 || day > 31) {
+                            isValid = false;
+                            errorMessageText = 'Dia inválido';
+                        }
+                    } else if (inputElement.id === 'mes') {
+                        const monthValue = trimmedValue.toLowerCase();
+                        const validMonths = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+                        if (!validMonths.includes(monthValue)) {
+                            isValid = false;
+                            errorMessageText = 'Mês inválido';
+                        }
+                    } else if (inputElement.id === 'whatsapp-proprietario') {
+                        const cleanedPhone = inputElement.value.replace(/\D/g, '');
+                        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+                            isValid = false;
+                            errorMessageText = 'Telefone inválido';
+                        }
+                    }
+                }
+                
+                if (parentField) {
+                    if (!isValid) {
+                        parentField.classList.add('invalid');
+                        if (errorMsgElement) {
+                            errorMsgElement.textContent = errorMessageText;
+                            errorMsgElement.style.display = 'inline';
+                        }
+                    } else {
+                        parentField.classList.remove('invalid');
+                        if (errorMsgElement) {
+                            errorMsgElement.style.display = 'none';
+                        }
+                    }
+                }
+                return isValid;
+            }
+
+            function validateForm(){
+                console.log("Validando...");
+                let isFormValid = true;
+                let firstInvalidElement = null;
+                const fieldsToValidate = formContainer ? formContainer.querySelectorAll('input[required], select[required], textarea[required]') : [];
+                
+                fieldsToValidate.forEach(input => {
+                    if (!validateField(input)) {
+                        isFormValid = false;
+                        if (!firstInvalidElement) firstInvalidElement = input;
+                    }
+                });
+
+                if (cargoSelectBlock && cargoSelectBlock.style.display !== 'none') {
+                    if (cargoSelect && cargoSelect.value === '') {
+                        isFormValid = false;
+                        cargoSelect.style.borderColor = 'var(--error-color)';
+                        if (!firstInvalidElement) firstInvalidElement = cargoSelect;
+                    } else if (cargoSelect && cargoSelect.value === '__manual__') {
+                        if (cargoManualInput && cargoManualInput.value.trim() === '') {
+                            isFormValid = false;
+                            cargoManualInput.style.borderColor = 'var(--error-color)';
+                            if (!firstInvalidElement) firstInvalidElement = cargoManualInput;
+                        } else if (cargoManualInput) {
+                            cargoManualInput.style.borderColor = 'var(--input-border-color)';
+                        }
+                    } else if (cargoSelect) {
+                        cargoSelect.style.borderColor = 'var(--input-border-color)';
+                    }
+                }
+
+                console.log("Validando assinatura...");
+                if (!hasSignature) {
+                    console.log("Assinatura ausente.");
+                    isFormValid = false;
+                    if(signatureContainer) signatureContainer.classList.add('invalid');
+                    if(signatureMessage) {
+                        signatureMessage.textContent = 'Assinatura obrigatória';
+                        signatureMessage.style.display = 'block';
+                    }
+                    if (!firstInvalidElement) firstInvalidElement = signatureContainer;
+                } else {
+                    if(signatureContainer) signatureContainer.classList.remove('invalid');
+                    if(signatureMessage && hasSignature) signatureMessage.style.display = 'none';
+                }
+                
+                if (!isFormValid) {
+                    console.log("Inválido.");
+                    if (firstInvalidElement) {
+                        try { firstInvalidElement.focus(); } catch(e) {}
+                    }
+                    alert('Corrija os campos e forneça a assinatura.');
+                } else {
+                    console.log("Válido.");
+                }
+                return isFormValid;
+            }
             function clearErrorOnInput(event){ const input = event.target; const parentField = input.closest('.field'); if (parentField && parentField.classList.contains('invalid')) { parentField.classList.remove('invalid'); const errorMsgElement = parentField.querySelector('.error-message'); if (errorMsgElement) errorMsgElement.style.display = 'none'; } generatedPdfBlob = null; generatedPdfFilename = ''; }
+
+            // --- Funções Auxiliares e APIs CNPJ + QSA ---
+            const APIS = [
+                { id: 'brasilapi',       name: 'BrasilAPI',       url: 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',                                        proxyByDefault: false, active: true },
+                { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                proxyByDefault: false, active: true },
+                { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    proxyByDefault: false, active: true },
+                { id: 'opencnpj_alt',    name: 'OpenCNPJ (Alt)',  url: 'https://api.opencnpj.com/cnpj/{cnpj}',                                                proxyByDefault: false, active: true },
+                { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     proxyByDefault: false, active: true },
+                { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', proxyByDefault: false, active: true },
+                { id: 'cnpja',           name: 'CNPJa',           url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            proxyByDefault: true,  active: true },
+                { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         proxyByDefault: true,  active: true },
+                { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                     proxyByDefault: true,  active: true }
+            ];
+
+            const PROXIES = [
+                { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, parse: (res) => res.contents }
+            ];
+
+            function formatCNPJ(inputElement){
+                if (!inputElement) return;
+                let v = inputElement.value.replace(/\D/g, '').slice(0, 14);
+                if (v.length > 12) {
+                    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})$/, "$1.$2.$3/$4-$5");
+                } else if (v.length > 8) {
+                    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})$/, "$1.$2.$3/$4");
+                } else if (v.length > 5) {
+                    v = v.replace(/^(\d{2})(\d{3})(\d{1,3})$/, "$1.$2.$3");
+                } else if (v.length > 2) {
+                    v = v.replace(/^(\d{2})(\d{1,3})$/, "$1.$2");
+                }
+                inputElement.value = v;
+            }
+
+            function isValidCnpj(cnpj) {
+                cnpj = String(cnpj).replace(/\D/g, '');
+                if (cnpj.length !== 14) return false;
+                if (/^(\d)\1{13}$/.test(cnpj)) return false;
+                
+                let tamanho = cnpj.length - 2;
+                let numeros = cnpj.substring(0, tamanho);
+                let digitos = cnpj.substring(tamanho);
+                let soma = 0;
+                let pos = tamanho - 7;
+                for (let i = tamanho; i >= 1; i--) {
+                    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                    if (pos < 2) pos = 9;
+                }
+                let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                if (resultado !== parseInt(digitos.charAt(0))) return false;
+                
+                tamanho = tamanho + 1;
+                numeros = cnpj.substring(0, tamanho);
+                soma = 0;
+                pos = tamanho - 7;
+                for (let i = tamanho; i >= 1; i--) {
+                    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                    if (pos < 2) pos = 9;
+                }
+                resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                if (resultado !== parseInt(digitos.charAt(1))) return false;
+                
+                return true;
+            }
+
+            function calculateCnpjCheckDigits(base12) {
+                base12 = String(base12).replace(/\D/g, '').substring(0, 12);
+                if (base12.length < 12) return '';
+                
+                let tamanho = 12;
+                let numeros = base12;
+                let soma = 0;
+                let pos = 5;
+                for (let i = tamanho; i >= 1; i--) {
+                    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                    if (pos < 2) pos = 9;
+                }
+                let digito1 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                
+                numeros = base12 + digito1;
+                tamanho = 13;
+                soma = 0;
+                pos = 6;
+                for (let i = tamanho; i >= 1; i--) {
+                    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+                    if (pos < 2) pos = 9;
+                }
+                let digito2 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                
+                return `${digito1}${digito2}`;
+            }
+
+            const apiAdapters = {
+                brasilapi: (data) => {
+                    let logr = data.logradouro || '';
+                    if (data.descricao_tipo_de_logradouro && logr) {
+                        const tipo = data.descricao_tipo_de_logradouro.trim();
+                        if (!logr.toUpperCase().startsWith(tipo.toUpperCase())) {
+                            logr = tipo + ' ' + logr;
+                        }
+                    }
+                    return {
+                        cnpj: data.cnpj || '',
+                        razao_social: data.razao_social || '',
+                        municipio: data.municipio || '',
+                        qsa: data.qsa?.map(s => ({ nome_socio: s.nome_socio, qualificacao_socio: s.qualificacao_socio })) || [],
+                        api_origem: 'BrasilAPI'
+                    };
+                },
+                publica_cnpj_ws: (data) => {
+                    const est = data.estabelecimento || {};
+                    return {
+                        cnpj: est.cnpj || '',
+                        razao_social: data.razao_social || '',
+                        municipio: est.cidade?.nome || '',
+                        qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao_socio?.descricao || s.qualificacao || '' })) || [],
+                        api_origem: 'Publica CNPJ WS'
+                    };
+                },
+                minhareceita: (data) => {
+                    const res = apiAdapters.brasilapi(data);
+                    res.api_origem = 'minhaReceita';
+                    return res;
+                },
+                receitaws: (data) => {
+                    return {
+                        cnpj: String(data.cnpj || '').replace(/\D/g, ''),
+                        razao_social: data.nome || '',
+                        municipio: data.municipio || '',
+                        qsa: data.qsa?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qual })) || [],
+                        api_origem: 'ReceitaWS'
+                    };
+                },
+                invertexto: (data) => ({
+                    cnpj: data.cnpj || '',
+                    razao_social: data.razao_social || '',
+                    municipio: data.endereco?.municipio || '',
+                    qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao })) || [],
+                    api_origem: 'Invertexto'
+                }),
+                opencnpj: (data) => {
+                    return {
+                        cnpj: data.cnpj ? String(data.cnpj).replace(/\D/g, '') : '',
+                        razao_social: data.razao_social || '',
+                        municipio: data.municipio || '',
+                        qsa: data.QSA?.map(s => ({ nome_socio: s.nome_socio, qualificacao_socio: s.qualificacao_socio || '' })) || [],
+                        api_origem: 'OpenCNPJ'
+                    };
+                },
+                opencnpj_alt: (data) => {
+                    const res = apiAdapters.opencnpj(data);
+                    res.api_origem = 'OpenCNPJ (Alt)';
+                    return res;
+                },
+                cnpja: (data) => {
+                    if (!data || !data.nodes) throw new Error('Invalid CNPJa response structure');
+                    const dataNode = data.nodes.find(n => n && n.type === 'data' && Array.isArray(n.data));
+                    if (!dataNode) throw new Error('CNPJa SvelteKit data node not found');
+                    const flatList = dataNode.data;
+                    
+                    const cache = new Map();
+                    function resolve(index) {
+                        if (index === null || index === undefined) return null;
+                        if (typeof index !== 'number') return index;
+                        if (cache.has(index)) return cache.get(index);
+                        
+                        const val = flatList[index];
+                        if (val === null || val === undefined) return val;
+                        if (Array.isArray(val)) {
+                            const arr = [];
+                            cache.set(index, arr);
+                            for (const item of val) {
+                                arr.push(resolve(item));
+                            }
+                            return arr;
+                        }
+                        if (typeof val === 'object') {
+                            const obj = {};
+                            cache.set(index, obj);
+                            for (const key in val) {
+                                obj[key] = resolve(val[key]);
+                            }
+                            return obj;
+                        }
+                        return val;
+                    }
+
+                    const root = resolve(0);
+                    const office = root?.office;
+                    if (!office) throw new Error('CNPJa office details not resolved');
+                    const company = office.company || {};
+                    const formattedQsa = company.members ? company.members.map(m => ({
+                        nome_socio: m?.person?.name || '',
+                        qualificacao_socio: m?.role?.text || ''
+                    })).filter(s => s.nome_socio) : [];
+                    
+                    return {
+                        cnpj: office.taxId ? String(office.taxId).replace(/\D/g, '') : '',
+                        razao_social: company.name || '',
+                        municipio: office.address?.city || '',
+                        qsa: formattedQsa,
+                        api_origem: 'CNPJá'
+                    };
+                },
+                casadosdados: (proxyResponse, cleanCnpj) => {
+                    let htmlBruto = '';
+                    if (typeof proxyResponse === 'object' && proxyResponse.contents) {
+                        htmlBruto = proxyResponse.contents;
+                    } else if (typeof proxyResponse === 'string') {
+                        htmlBruto = proxyResponse;
+                    }
+
+                    if (!htmlBruto) throw new Error('O HTML retornado pelo proxy está vazio.');
+
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlBruto, 'text/html');
+                    const scriptNuxt = doc.querySelector('script#__NUXT_DATA__');
+                    if (!scriptNuxt) throw new Error('Script __NUXT_DATA__ não encontrado.');
+
+                    const dados = JSON.parse(scriptNuxt.textContent);
+                    const obterValorNuxt = (chave) => {
+                        if (!dados[4] || dados[4][chave] === undefined) return "";
+                        const idx = dados[4][chave];
+                        return (typeof idx === 'number' && dados[idx] !== undefined) ? dados[idx] : idx;
+                    };
+
+                    return {
+                        cnpj: cleanCnpj,
+                        razao_social: obterValorNuxt('razao_social') || doc.querySelector('h1.title')?.textContent.split(' - ')[0] || "N/A",
+                        municipio: obterValorNuxt('municipio') || "",
+                        qsa: [],
+                        api_origem: 'Casa dos Dados'
+                    };
+                }
+            };
+
+            async function fetchWithFallbackProxy(url, apiId, parseJson = true) {
+                const apiDef = APIS.find(a => a.id === apiId);
+                if (apiDef && !apiDef.proxyByDefault) {
+                    try {
+                        console.log(`[CNPJ] Direct fetch for ${apiDef.name}...`);
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            return parseJson ? await res.json() : await res.text();
+                        }
+                        console.warn(`[CNPJ] Direct fetch failed: HTTP ${res.status}`);
+                    } catch (e) {
+                        console.warn(`[CNPJ] Direct fetch error.`);
+                    }
+                }
+
+                console.log(`[CNPJ] Falling back to CORS Proxies...`);
+                for (const proxy of PROXIES) {
+                    try {
+                        console.log(`[CNPJ] Trying proxy ${proxy.name}...`);
+                        const proxyUrl = proxy.wrap(url);
+                        const res = await fetch(proxyUrl);
+                        if (res.ok) {
+                            const raw = await res.json();
+                            const content = proxy.parse(raw);
+                            console.log(`[CNPJ] Success via proxy ${proxy.name}`);
+                            return parseJson ? (typeof content === 'string' ? JSON.parse(content) : content) : content;
+                        }
+                        console.warn(`[CNPJ] Proxy ${proxy.name} returned status ${res.status}`);
+                    } catch (e) {
+                        console.warn(`[CNPJ] Proxy ${proxy.name} failed: ${e.message}`);
+                    }
+                }
+                throw new Error("Esgotados todos os proxies CORS.");
+            }
+
+            async function queryCnpjWithFallbacks(cnpjRaw) {
+                const clean = String(cnpjRaw || '').replace(/\D/g, '').padStart(14, '0');
+                
+                console.log(`=== INICIANDO BUSCA DE CNPJ ${clean} ===`);
+
+                let lastError = null;
+                let successData = null;
+
+                for (const api of APIS) {
+                    if (!api.active) continue;
+                    console.log(`Fila [${api.name}]: Requisitando dados...`);
+                    try {
+                        const url = api.url.replace('{cnpj}', clean);
+                        let rawData;
+                        
+                        if (api.proxyByDefault) {
+                            rawData = await fetchWithFallbackProxy(url, api.id, api.id !== 'casadosdados');
+                        } else {
+                            try {
+                                const res = await fetch(url);
+                                if (res.ok) {
+                                    rawData = await res.json();
+                                } else {
+                                    if (res.status === 404) {
+                                        console.warn(`[CNPJ] ${api.name} returned 404 (CNPJ não localizado)`);
+                                        throw new Error("404");
+                                    }
+                                    throw new Error(`HTTP ${res.status}`);
+                                }
+                            } catch (directErr) {
+                                if (directErr.message === "404") {
+                                    throw directErr;
+                                }
+                                console.warn(`[CNPJ] Direct fetch failed: ${directErr.message}. Trying proxy fallback...`);
+                                rawData = await fetchWithFallbackProxy(url, api.id, true);
+                            }
+                        }
+
+                        if (rawData && rawData.status === 'ERROR') {
+                            throw new Error(rawData.message || 'API returned internal error');
+                        }
+
+                        if (api.id === 'casadosdados') {
+                            successData = apiAdapters.casadosdados(rawData, clean);
+                        } else {
+                            successData = apiAdapters[api.id](rawData);
+                        }
+
+                        console.log(`[CNPJ] Success via ${api.name}`);
+                        break;
+
+                    } catch (err) {
+                        lastError = err;
+                        if (err.message === "404") {
+                            console.warn(`[CNPJ] ${api.name} confirmed CNPJ does not exist.`);
+                            break;
+                        } else {
+                            console.error(`[CNPJ] ${api.name} failed: ${err.message}`);
+                        }
+                    }
+                }
+
+                if (successData) {
+                    return successData;
+                } else {
+                    throw lastError || new Error("Erro desconhecido");
+                }
+            }
+
+            function capitalizeString(str) {
+                if (!str) return '';
+                return str.toLowerCase().split(' ').map(word => {
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                }).join(' ');
+            }
+
+            async function handleCnpjSearch(cnpjClean) {
+                if (isCnpjSearching) return;
+                isCnpjSearching = true;
+
+                cnpjStatus.className = 'cnpj-status-indicator loading';
+                cnpjStatus.title = 'Buscando dados da empresa...';
+
+                try {
+                    const data = await queryCnpjWithFallbacks(cnpjClean);
+                    cnpjStatus.className = 'cnpj-status-indicator success';
+                    cnpjStatus.title = 'Empresa encontrada!';
+
+                    if (data.razao_social) {
+                        empresaInput.value = data.razao_social;
+                        empresaInput.dispatchEvent(new Event('input'));
+                    }
+
+                    if (data.municipio && cidadeInput) {
+                        cidadeInput.value = capitalizeString(data.municipio);
+                        cidadeInput.dispatchEvent(new Event('input'));
+                    }
+
+                    qsaList = data.qsa || [];
+                    qsaSelect.innerHTML = '<option value="">-- Selecione o sócio/administrador --</option>';
+                    
+                    if (qsaList.length > 0) {
+                        qsaList.forEach((socio, idx) => {
+                            const option = document.createElement('option');
+                            option.value = idx;
+                            option.textContent = `${socio.nome_socio} (${socio.qualificacao_socio || 'Sócio'})`;
+                            qsaSelect.appendChild(option);
+                        });
+                        const optionManual = document.createElement('option');
+                        optionManual.value = '__manual__';
+                        optionManual.textContent = '✏️ Outro (digitar manualmente)';
+                        qsaSelect.appendChild(optionManual);
+
+                        qsaBlock.style.display = 'block';
+                        cargoSelectBlock.style.display = 'none';
+                        nomeInput.disabled = false;
+                    } else {
+                        qsaBlock.style.display = 'none';
+                        qsaList = [];
+                        cargoSelectBlock.style.display = 'block';
+                        cargoSelect.value = '';
+                        cargoManualInput.style.display = 'none';
+                        nomeInput.value = '';
+                        nomeInput.disabled = false;
+                        nomeInput.focus();
+                    }
+
+                } catch (err) {
+                    cnpjStatus.className = 'cnpj-status-indicator error';
+                    cnpjStatus.title = `Erro na busca: ${err.message}`;
+                    showToast('Não foi possível localizar o CNPJ automaticamente.', 4000);
+                    qsaBlock.style.display = 'none';
+                    qsaList = [];
+                    cargoSelectBlock.style.display = 'block';
+                    cargoSelect.value = '';
+                    cargoManualInput.style.display = 'none';
+                    nomeInput.disabled = false;
+                } finally {
+                    isCnpjSearching = false;
+                }
+            }
+
             // ======================================= INICIALIZAÇÃO / UTILITÁRIOS ========================================
             function initializeDefaultDate(){ try { const today = new Date(); const day = today.getDate().toString().padStart(2, '0'); const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']; const month = months[today.getMonth()]; const year = today.getFullYear(); if (diaInput) diaInput.value = day; if (mesInput) mesInput.value = month; if (anoInput) anoInput.value = year; } catch (error) {} }
+            function updateCnpjDisplay() {
+                const display = document.getElementById('cnpj_display');
+                if (display) {
+                    if (cnpjEmpresaInput && cnpjEmpresaInput.value) {
+                        display.textContent = cnpjEmpresaInput.value;
+                        display.style.fontWeight = '600';
+                        display.style.fontStyle = 'normal';
+                        display.style.color = 'var(--text-color)';
+                    } else {
+                        display.textContent = '__.___.___/____-__';
+                        display.style.fontWeight = '500';
+                        display.style.fontStyle = 'italic';
+                        display.style.color = 'var(--light-text)';
+                    }
+                }
+            }
             function updateOwnerNameDisplay(){ if (ownerNameDisplay && nomeInput) { ownerNameDisplay.textContent = nomeInput.value.trim().toUpperCase(); } }
             function getImageDataUrlWithWhiteBackground(url){ return new Promise(async (resolve, reject) => { const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => { const tempCanvas = document.createElement('canvas'); tempCanvas.width = img.naturalWidth; tempCanvas.height = img.naturalHeight; const tempCtx = tempCanvas.getContext('2d'); tempCtx.fillStyle = '#FFFFFF'; tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height); tempCtx.drawImage(img, 0, 0); try { resolve(tempCanvas.toDataURL('image/jpeg', 0.9)); } catch(e) { console.error("JPEG fail:", e); try { resolve(tempCanvas.toDataURL('image/png')); } catch(e2) { reject("Cannot convert logo."); } } }; img.onerror = (err) => { reject(`Error loading logo: ${url}`); }; try { const response = await fetch(url, { mode: 'cors' }); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const blob = await response.blob(); img.src = URL.createObjectURL(blob); } catch (fetchError) { console.warn("CORS fetch failed:", fetchError); img.src = url; } }); }
             function showToast(message, duration = 3000){ if (!toastMessageElement) return; toastMessageElement.textContent = message; toastMessageElement.style.display = 'block'; setTimeout(() => { toastMessageElement.style.display = 'none'; }, duration); }
@@ -179,7 +783,7 @@
             const addFormattedText = (pdf, segments, x, y, maxWidth, lineSpacing = 6) => { let currentX = x; let currentLineY = y; pdf.setFontSize(11); segments.forEach(segment => { pdf.setFont('helvetica', segment.style || 'normal'); const text = segment.text + (segment.spaceAfter ? ' ' : ''); const textWidth = pdf.getStringUnitWidth(text) * pdf.getFontSize() / pdf.internal.scaleFactor; if (currentX + textWidth > x + maxWidth && currentX > x) { currentLineY += lineSpacing; currentX = x; } if (textWidth > maxWidth) { const splitText = pdf.splitTextToSize(text, maxWidth); pdf.text(splitText, currentX, currentLineY); currentLineY += lineSpacing * (splitText.length -1) ; currentX = x; } else { pdf.text(text, currentX, currentLineY); currentX += textWidth; } }); pdf.setFont('helvetica', 'normal'); return currentLineY; };
             // ============================================= GERAÇÃO PDF CENTRAL ============================================
             async function generateAndStorePdf(callingButton){
-                 console.log("Gerando PDF (v10.7)...");
+                 console.log("Gerando PDF (v11.0)...");
                  const originalButtonHtml = callingButton ? callingButton.innerHTML : ''; const buttonsToDisable = [generateSharePdfButtonMain]; isProcessing = true; buttonsToDisable.forEach(btn => { if(btn) btn.disabled = true; }); if (callingButton) { callingButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-repeat spinner" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41m-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.5 6.5 0 1 1 2.343 6H.5a.5.5 0 0 1 0-1h3.975a.5.5 0 0 1 .5.5v3.975a.5.5 0 0 1-1 0V6.45a5.5 5.5 0 1 0 .75-3.357A.5.5 0 1 1 8 3"/></svg> Gerando...`; } document.body.classList.add('pdf-generation-active');
                  try {
                      const { jsPDF } = window.jspdf; if (typeof jsPDF !== 'function') throw new Error("jsPDF fail");
@@ -189,17 +793,17 @@
                      if (companyLogo && companyLogo.complete && companyLogo.naturalWidth > 0) { try { const logoDataUrl = await getImageDataUrlWithWhiteBackground(companyLogo.src); const imgProps = pdf.getImageProperties(logoDataUrl); const logoMaxW = 50; const logoRatio = imgProps.width / imgProps.height; const logoW = Math.min(logoMaxW, contentW * 0.3); const logoH = logoW / logoRatio; const logoX = (pageW - logoW) / 2; pdf.addImage(logoDataUrl, 'JPEG', logoX, currentY, logoW, logoH); currentY += logoH + 5; } catch (imgError) { currentY += 10; } } else { currentY += 10; }
                      const slogan = document.querySelector('.brand-slogan')?.textContent || ''; pdf.setFontSize(11); pdf.setFont('helvetica', 'italic'); pdf.setTextColor(100); pdf.text(slogan, pageW / 2, currentY, { align: 'center' }); currentY += sectionSpacing; pdf.setFont('helvetica', 'normal'); pdf.setTextColor(0);
                      const title = document.querySelector('h1')?.textContent || 'AUTORIZAÇÃO'; pdf.setFontSize(14); pdf.setFont('helvetica', 'bold'); pdf.text(title, pageW / 2, currentY, { align: 'center' }); currentY += sectionSpacing + 5; pdf.setFont('helvetica', 'normal');
-                     pdf.setFontSize(11); const nome = nomeInput.value.trim(), cpf = cpfInput.value.trim(), empresa = empresaInput.value.trim(), autorizado = autorizadoInput.value.trim(), pedidos = pedidosInput.value.trim(), valor = valorInput.value.trim();
+                     pdf.setFontSize(11); const nome = nomeInput.value.trim(), cpf = cpfInput.value.trim(), empresa = empresaInput.value.trim(), cnpj = cnpjEmpresaInput.value.trim(), autorizado = autorizadoInput.value.trim(), pedidos = pedidosInput.value.trim(), valor = valorInput.value.trim();
                      currentY = addFormattedText(pdf, [{ text: 'Eu,', style: 'normal', spaceAfter: true }, { text: nome, style: 'bold', spaceAfter: true }, { text: ', portador do CPF', style: 'normal', spaceAfter: true }, { text: cpf, style: 'bold', spaceAfter: true }, { text: ',', style: 'normal', spaceAfter: false }], margin, currentY, contentW, lineSpacing);
-                     currentY = addFormattedText(pdf, [{ text: 'proprietário(a) da empresa', style: 'normal', spaceAfter: true }, { text: empresa, style: 'bold', spaceAfter: true }, { text: ', autorizo o(a) Sr(a).', style: 'normal', spaceAfter: true }, { text: autorizado, style: 'bold', spaceAfter: false }], margin, currentY + lineSpacing, contentW, lineSpacing);
+                     currentY = addFormattedText(pdf, [{ text: 'proprietário(a) da empresa', style: 'normal', spaceAfter: true }, { text: empresa, style: 'bold', spaceAfter: true }, { text: ', CNPJ', style: 'normal', spaceAfter: true }, { text: cnpj, style: 'bold', spaceAfter: true }, { text: ', autorizo o(a) Sr(a).', style: 'normal', spaceAfter: true }, { text: autorizado, style: 'bold', spaceAfter: false }], margin, currentY + lineSpacing, contentW, lineSpacing);
                      currentY = addFormattedText(pdf, [{ text: 'a retirar o(s) pedido(s) nº', style: 'normal', spaceAfter: true }, { text: pedidos, style: 'bold', spaceAfter: true }, { text: ', no valor total de R$', style: 'normal', spaceAfter: true }, { text: valor, style: 'bold', spaceAfter: false }], margin, currentY + lineSpacing, contentW, lineSpacing);
-                     pdf.setFont('helvetica', 'normal'); const line4Text = 'no Depósito da empresa Ameripan, localizado na Rua Purus, nº 652, Bairro Jd. São Roque.'; const splitLine4 = pdf.splitTextToSize(line4Text, contentW); pdf.text(splitLine4, margin, currentY + lineSpacing); currentY += (lineSpacing * splitLine4.length) + sectionSpacing;
+                     pdf.setFont('helvetica', 'normal'); const line4Text = 'no Depósito da empresa Ameripan, localizado na Rua Purus, nº 652, Salão 3, Bairro Jd. São Roque - Americana/SP.'; const splitLine4 = pdf.splitTextToSize(line4Text, contentW); pdf.text(splitLine4, margin, currentY + lineSpacing); currentY += (lineSpacing * splitLine4.length) + sectionSpacing;
                      const cidade = cidadeInput.value.trim(), dia = diaInput.value.trim(), mes = mesInput.value.trim(), ano = anoInput.value.trim();
                      currentY = addFormattedText(pdf, [{ text: cidade, style: 'bold', spaceAfter: true }, { text: ',', style: 'normal', spaceAfter: true }, { text: dia, style: 'bold', spaceAfter: true }, { text: 'de', style: 'normal', spaceAfter: true }, { text: mes, style: 'bold', spaceAfter: true }, { text: 'de', style: 'normal', spaceAfter: true }, { text: ano, style: 'bold', spaceAfter: true }, { text: '.', style: 'normal', spaceAfter: false }], margin, currentY, contentW, lineSpacing); currentY += sectionSpacing + 5;
                      // Owner Signature
                      const ownerSignatureY = currentY; const signatureWidth = contentW * 0.6; const signatureX = (pageW - signatureWidth) / 2;
                      if (hasSignature) { const signatureDataUrl = canvas.toDataURL('image/png'); const sigProps = pdf.getImageProperties(signatureDataUrl); const sigRatio = sigProps.width / sigProps.height; const sigMaxH = 30; let sigH = Math.min(sigMaxH, signatureWidth / sigRatio); let sigW = sigH * sigRatio; if (sigW > signatureWidth) { sigW = signatureWidth; sigH = sigW / sigRatio; } const sigY = ownerSignatureY; const sigImgX = signatureX + (signatureWidth - sigW) / 2; pdf.addImage(signatureDataUrl, 'PNG', sigImgX, sigY, sigW, sigH); currentY = sigY + sigH + fieldLineOffset; } else { currentY = ownerSignatureY + 25 + fieldLineOffset; }
-                     pdf.setLineWidth(0.3); pdf.line(signatureX, currentY, signatureX + signatureWidth, currentY); currentY += labelSpacing; pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.text(nome.toUpperCase(), signatureX + signatureWidth / 2, currentY, { align: 'center' }); currentY += labelSpacing; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100); pdf.text("(Assinatura Proprietário/Sócio)", signatureX + signatureWidth / 2, currentY, { align: 'center' }); pdf.setTextColor(0);
+                     pdf.setLineWidth(0.3); pdf.line(signatureX, currentY, signatureX + signatureWidth, currentY); currentY += labelSpacing; pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.text(nome.toUpperCase(), signatureX + signatureWidth / 2, currentY, { align: 'center' }); currentY += labelSpacing; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100); pdf.text(`(Assinatura ${selectedRole})`, signatureX + signatureWidth / 2, currentY, { align: 'center' }); pdf.setTextColor(0);
                      // Telefone + Link WhatsApp
                      currentY += sectionSpacing; const telLabel = "Telefone do autorizante a assinar:"; const whatsappNumber = whatsappProprietarioInput.value.trim(); const cleanedPhone = whatsappNumber.replace(/\D/g, ''); const fullWhatsAppUrl = `https://wa.me/55${cleanedPhone}?text=${encodeURIComponent(`_!confirmação de retirada!_\nOlá ${nome}.\nRecebemos sua solicitação de retirada na Ameripan:\n- Responsável: ${autorizado}\n- Valor: R$ ${valor}\n- Pedido(s): ${pedidos}\nPosso autorizar a retirada?`)}`; pdf.setFontSize(9); pdf.setFont('helvetica', 'normal'); pdf.text(telLabel, margin, currentY); const labelWidth = pdf.getStringUnitWidth(telLabel) * pdf.getFontSize() / pdf.internal.scaleFactor; const phoneX = margin + labelWidth + 2; pdf.setTextColor(0, 0, 255); pdf.textWithLink(whatsappNumber, phoneX, currentY, { url: fullWhatsAppUrl }); pdf.setTextColor(0); const phoneWidth = pdf.getStringUnitWidth(whatsappNumber) * pdf.getFontSize() / pdf.internal.scaleFactor; pdf.setLineWidth(0.2); pdf.line(phoneX, currentY + 1, phoneX + phoneWidth, currentY + 1); currentY += lineSpacing;
                      // Disclaimer
@@ -207,10 +811,21 @@
                      // Authorized Signature Area
                      currentY += extraSpaceBeforeAuthSign; const authorizedSignatureY = currentY; pdf.setLineWidth(0.3); pdf.line(signatureX, authorizedSignatureY, signatureX + signatureWidth, authorizedSignatureY); currentY = authorizedSignatureY + labelSpacing; pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.text(autorizado.toUpperCase(), signatureX + signatureWidth / 2, currentY, { align: 'center' }); currentY += labelSpacing; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100); pdf.text("(Assinatura Responsável pela Retirada)", signatureX + signatureWidth / 2, currentY, { align: 'center' }); pdf.setTextColor(0); currentY += sectionSpacing;
                      // Footer
-                     const footerY = pageH - margin - 15; if (currentY > footerY - 10) { pdf.addPage(); currentY = margin; } else { currentY = footerY; } pdf.setFontSize(8); pdf.setTextColor(100); const companyInfoLines = document.querySelectorAll('.company-info p'); let footerLineY = currentY; companyInfoLines.forEach(p => { pdf.text(p.textContent.trim(), pageW / 2, footerLineY, { align: 'center' }); footerLineY += 3.5; }); pdf.setTextColor(0);
+                     const footerY = pageH - margin - 22; if (currentY > footerY - 10) { pdf.addPage(); currentY = margin; } else { currentY = footerY; }
+                     let footerLineY = currentY;
+                     if (qsaList && qsaList.length > 0) {
+                         const qsaText = "Sócios / Administradores: " + qsaList.map(s => `${s.nome_socio} (${s.qualificacao_socio || 'Sócio'})`).join(', ');
+                         pdf.setFontSize(7);
+                         pdf.setTextColor(120);
+                         const splitQsa = pdf.splitTextToSize(qsaText, contentW);
+                         pdf.text(splitQsa, pageW / 2, footerLineY, { align: 'center' });
+                         footerLineY += (splitQsa.length * 3) + 2;
+                     }
+                     pdf.setFontSize(8); pdf.setTextColor(100); const companyInfoLines = document.querySelectorAll('.company-info p');
+                     companyInfoLines.forEach(p => { pdf.text(p.textContent.trim(), pageW / 2, footerLineY, { align: 'center' }); footerLineY += 3.5; }); pdf.setTextColor(0);
                      // Filename & Blob
                      const safePedido = pedidos.replace(/[^a-zA-Z0-9,-]/g, '_') || 'N_A'; const safeProprietario = nome.replace(/[^a-zA-Z0-9]/g, '_') || 'Proprietario'; const dataHoje = new Date(); const diaFormatado = dataHoje.getDate().toString().padStart(2, '0'); const mesFormatado = (dataHoje.getMonth() + 1).toString().padStart(2, '0'); const anoFormatado = dataHoje.getFullYear(); const dataFormatada = `${diaFormatado}-${mesFormatado}-${anoFormatado}`; const filename = `Autorizacao_Retirada_pedido${safePedido}_proprietario${safeProprietario}_${dataFormatada}.pdf`;
-                     generatedPdfBlob = pdf.output('blob'); generatedPdfFilename = filename; console.log("PDF gerado (v10.7)."); return true;
+                     generatedPdfBlob = pdf.output('blob'); generatedPdfFilename = filename; console.log("PDF gerado (v11.0)."); return true;
                  } catch (error) { console.error("Erro PDF:", error); alert(`Erro: ${error.message}.`); generatedPdfBlob = null; generatedPdfFilename = ''; return false; }
                  finally { if (callingButton) callingButton.innerHTML = originalButtonHtml; setTimeout(() => { buttonsToDisable.forEach(btn => { if(btn) btn.disabled = false; }); isProcessing = false; document.body.classList.remove('pdf-generation-active'); console.log("Processamento PDF finalizado."); }, 500); }
              }
@@ -308,12 +923,118 @@
             // ============================================ LISTENERS EVENTOS ============================================
             function handleResizeOrOrientationChange(){ tempSignatureDataUrl = null; tempMainSignatureDataUrl = null; if (modalOverlay && modalOverlay.style.display === 'flex' && hasModalSignature && modalCanvas) { tempSignatureDataUrl = modalCanvas.toDataURL(); } if (hasSignature && canvas) { tempMainSignatureDataUrl = canvas.toDataURL(); } if (canvas && ctx) resizeCanvas(canvas, ctx, false); if (modalOverlay && modalOverlay.style.display === 'flex' && modalCanvas && modalCtx) { resizeCanvas(modalCanvas, modalCtx, true); } }
             // --- Config Inicial ---
-            console.log("Configurando v10.7..."); if (modalOverlay) { modalOverlay.style.display = 'none'; } if (canvas && ctx) { resizeCanvas(canvas, ctx, false); } else { console.error("Canvas fail!"); } initializeDefaultDate(); updateOwnerNameDisplay();
+            console.log("Configurando v11.0..."); if (modalOverlay) { modalOverlay.style.display = 'none'; } if (canvas && ctx) { resizeCanvas(canvas, ctx, false); } else { console.error("Canvas fail!"); } initializeDefaultDate(); updateOwnerNameDisplay(); updateCnpjDisplay();
             // --- Listeners Campos ---
+            const btnBuscarCnpj = document.getElementById('btn-buscar-cnpj');
+            if (btnBuscarCnpj) {
+                btnBuscarCnpj.addEventListener('click', () => {
+                    const clean = cnpjEmpresaInput.value.replace(/\D/g, '');
+                    if (clean.length === 14) {
+                        handleCnpjSearch(clean);
+                    } else {
+                        validateField(cnpjEmpresaInput);
+                        showToast('Digite um CNPJ válido com 14 dígitos.', 3000);
+                    }
+                });
+            }
+            if(cnpjEmpresaInput){
+                cnpjEmpresaInput.addEventListener('input', () => {
+                    formatCNPJ(cnpjEmpresaInput);
+                    clearErrorOnInput({ target: cnpjEmpresaInput });
+                    updateCnpjDisplay();
+                    const clean = cnpjEmpresaInput.value.replace(/\D/g, '');
+                    if (clean.length === 14 && !isCnpjSearching) {
+                        handleCnpjSearch(clean);
+                    }
+                });
+                cnpjEmpresaInput.addEventListener('blur', () => {
+                    let v = cnpjEmpresaInput.value.replace(/\D/g, '');
+                    if (v.length > 0 && v.length < 14) {
+                        v = v.padStart(14, '0');
+                        cnpjEmpresaInput.value = v;
+                        formatCNPJ(cnpjEmpresaInput);
+                        validateField(cnpjEmpresaInput);
+                        updateCnpjDisplay();
+                        const clean = cnpjEmpresaInput.value.replace(/\D/g, '');
+                        if (clean.length === 14 && !isCnpjSearching) {
+                            handleCnpjSearch(clean);
+                        }
+                    } else {
+                        validateField(cnpjEmpresaInput);
+                        updateCnpjDisplay();
+                    }
+                });
+                cnpjEmpresaInput.addEventListener('paste', (e) => {
+                     const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                     const clean = pastedText.replace(/\D/g, '');
+                     if (clean.length > 0 && clean.length < 14) {
+                         e.preventDefault();
+                         const padded = clean.padStart(14, '0');
+                         cnpjEmpresaInput.value = padded;
+                         formatCNPJ(cnpjEmpresaInput);
+                         validateField(cnpjEmpresaInput);
+                         updateCnpjDisplay();
+                         if (!isCnpjSearching) {
+                             handleCnpjSearch(padded);
+                         }
+                     }
+                 });
+             }
+             if(qsaSelect){
+                 qsaSelect.addEventListener('change', function() {
+                     const val = qsaSelect.value;
+                     if (val === '') {
+                         nomeInput.value = '';
+                         nomeInput.disabled = false;
+                         updateOwnerNameDisplay();
+                         cargoSelectBlock.style.display = 'none';
+                         updateSignatureRole('Proprietário/Sócio');
+                     } else if (val === '__manual__') {
+                         nomeInput.value = '';
+                         nomeInput.disabled = false;
+                         nomeInput.focus();
+                         updateOwnerNameDisplay();
+                         cargoSelectBlock.style.display = 'block';
+                         cargoSelect.value = '';
+                         cargoManualInput.style.display = 'none';
+                         updateSignatureRole('Proprietário/Sócio');
+                     } else {
+                         const idx = parseInt(val);
+                         const socio = qsaList[idx];
+                         if (socio) {
+                             nomeInput.value = socio.nome_socio;
+                             nomeInput.disabled = true;
+                             updateOwnerNameDisplay();
+                             cargoSelectBlock.style.display = 'none';
+                             updateSignatureRole(socio.qualificacao_socio || 'Sócio');
+                             cpfInput.focus();
+                         }
+                     }
+                 });
+             }
+             if(cargoSelect){
+                 cargoSelect.addEventListener('change', function() {
+                     const val = cargoSelect.value;
+                     if (val === '__manual__') {
+                         cargoManualInput.style.display = 'block';
+                         cargoManualInput.value = '';
+                         cargoManualInput.focus();
+                         updateSignatureRole('Proprietário/Sócio');
+                     } else {
+                         cargoManualInput.style.display = 'none';
+                         updateSignatureRole(val || 'Proprietário/Sócio');
+                     }
+                 });
+             }
+             if(cargoManualInput){
+                 cargoManualInput.addEventListener('input', function() {
+                     updateSignatureRole(cargoManualInput.value);
+                 });
+             }
             if(cpfInput){cpfInput.addEventListener('input', () => { formatCPF(cpfInput); clearErrorOnInput({ target: cpfInput }); }); cpfInput.addEventListener('blur', () => validateField(cpfInput));}
             if(valorInput){valorInput.addEventListener('input', () => { formatCurrency(valorInput); clearErrorOnInput({ target: valorInput }); }); valorInput.addEventListener('blur', () => validateField(valorInput));}
             if(whatsappProprietarioInput){whatsappProprietarioInput.addEventListener('input', () => { formatPhone(whatsappProprietarioInput); clearErrorOnInput({ target: whatsappProprietarioInput }); }); whatsappProprietarioInput.addEventListener('blur', () => validateField(whatsappProprietarioInput));}
-            ['nome', 'empresa', 'autorizado', 'pedidos', 'cidade', 'dia', 'mes', 'ano'].forEach(id => { const i=document.getElementById(id); if(i){ i.addEventListener('input', clearErrorOnInput); i.addEventListener('blur',()=>validateField(i)); }});
+            ['nome', 'empresa', 'cnpj_empresa', 'autorizado', 'pedidos', 'cidade', 'dia', 'mes', 'ano'].forEach(id => { const i=document.getElementById(id); if(i){ i.addEventListener('input', clearErrorOnInput); i.addEventListener('blur',()=>validateField(i)); }});
             if(nomeInput){nomeInput.addEventListener('input', () => { updateOwnerNameDisplay(); clearErrorOnInput({ target: nomeInput }); });}
             // --- Listeners Canvas/Controles Assinatura ---
             if (canvas && ctx) { canvas.addEventListener('mousedown', (e) => startDrawing(e, canvas, ctx, false)); canvas.addEventListener('mousemove', (e) => draw(e, canvas, ctx)); canvas.addEventListener('mouseup', (e) => stopDrawing(e, ctx)); canvas.addEventListener('mouseout', (e) => { if(isDrawing) stopDrawing(e, ctx); }); canvas.addEventListener('touchstart', (e) => startDrawing(e, canvas, ctx, false), { passive: false }); canvas.addEventListener('touchmove', (e) => draw(e, canvas, ctx), { passive: false }); canvas.addEventListener('touchend', (e) => stopDrawing(e, ctx)); canvas.addEventListener('touchcancel', (e) => stopDrawing(e, ctx)); }
@@ -328,7 +1049,7 @@
             if(modalOverlay){modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeSignatureModal(false); });}
             // --- Listeners Resize/Orientation ---
             let resizeTimeout; window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(handleResizeOrOrientationChange, 150); }); window.addEventListener('orientationchange', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(handleResizeOrOrientationChange, 150); });
-            console.log("Listeners configurados (v10.7).");
+            console.log("Listeners configurados (v11.0).");
         }); // Fim DOMContentLoaded
     </script>
 </body>
