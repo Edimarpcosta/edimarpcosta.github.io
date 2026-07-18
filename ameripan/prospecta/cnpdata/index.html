@@ -1252,6 +1252,7 @@
                                 <h3><i class="fa-solid fa-helmet-safety"></i> Obras Ativas (CNO) <span class="tooltip-trigger" title="Cadastro Nacional de Obras vinculadas à empresa. Obras ativas representam forte demanda de produtos e fornecedores.">ⓘ</span></h3>
                             </div>
                             <div class="qsa-list" id="resCnoContainer"></div>
+                            <button id="btnLoadMoreCno" class="quick-action-btn" style="margin: 0.5rem 0 0 0; width: 100%; display: none; font-size: 0.75rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--color-text); cursor: pointer; border-radius: 0.375rem; padding: 0.5rem;" onclick="loadMoreCnoWorks()">Ver mais obras</button>
                         </div>
 
                     </div> <!-- Fim details-grid -->
@@ -1301,7 +1302,6 @@
         };
 
         const PROXIES = [
-            { name: 'CorsProxyIO', wrap: (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`, parse: (res) => typeof res === 'object' ? JSON.stringify(res) : res },
             { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, parse: (res) => res.contents }
         ];
 
@@ -2013,6 +2013,130 @@
             }
         };
 
+        // ===== AUXILIARES DE RENDERIZAÇÃO DE OBRAS CNO =====
+        function buildCnoMapLinks(o) {
+            // Monta endereço completo para busca no Google Maps
+            const addrParts = [
+                o.tipo_logradouro && o.tipo_logradouro !== 'OUTROS' ? o.tipo_logradouro : '',
+                o.logradouro || '',
+                o.numero && o.numero !== 'sn' && o.numero !== 'SN' ? o.numero : '',
+                o.complemento || '',
+                o.bairro || '',
+                o.municipio || '',
+                o.uf || '',
+                o.cep ? o.cep : ''
+            ].filter(Boolean).join(', ');
+
+            const addressUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addrParts)}`;
+
+            let links = `<a href="${addressUrl}" target="_blank" onclick="event.stopPropagation()"
+                title="Buscar endereço no Google Maps"
+                style="text-decoration:none; color:#60a5fa; font-size:0.7rem; display:inline-flex; align-items:center; gap:0.2rem; background:rgba(96,165,250,0.1); padding:0.15rem 0.35rem; border-radius:0.25rem; border:1px solid rgba(96,165,250,0.2);">
+                <i class="fa-solid fa-map-location-dot"></i> Ver no Mapa
+            </a>`;
+
+            if (o.codigo_localizacao) {
+                // Plus Code: abre diretamente via maps.google.com/?q=PLUS_CODE
+                const plusUrl = `https://maps.google.com/?q=${encodeURIComponent(o.codigo_localizacao)}`;
+                links += ` <a href="${plusUrl}" target="_blank" onclick="event.stopPropagation()"
+                    title="Abrir pelo código de localização: ${o.codigo_localizacao}"
+                    style="text-decoration:none; color:#34d399; font-size:0.7rem; display:inline-flex; align-items:center; gap:0.2rem; background:rgba(52,211,153,0.1); padding:0.15rem 0.35rem; border-radius:0.25rem; border:1px solid rgba(52,211,153,0.2);">
+                    <i class="fa-solid fa-crosshairs"></i> ${o.codigo_localizacao}
+                </a>`;
+            }
+            return links;
+        }
+
+        function createCnoWorkCard(o) {
+            const card = document.createElement('div');
+            card.className = 'cno-work-item';
+            card.onclick = () => toggleCnoDetails(card);
+            card.style.cursor = 'pointer';
+            card.style.transition = 'all 0.2s ease';
+            card.style.marginBottom = '0.50rem';
+            card.style.border = '1px solid transparent';
+            
+            const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'ATIVA';
+            const badgeClass = statusStr.toUpperCase() === 'ATIVA' ? 'badge-status-ativa' : 'badge-status-inativa';
+            const nomeStr = o.nome || o.nome_obra || '-';
+
+            const mapLinks = buildCnoMapLinks(o);
+
+            card.innerHTML = `
+                <div class="cno-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                    <span style="font-weight: 700; color: var(--accent); font-size: 0.8rem;"><i class="fa-solid fa-helmet-safety"></i> CNO: ${o.cno}</span>
+                    <span class="badge ${badgeClass}">${statusStr}</span>
+                </div>
+                <div class="cno-summary">
+                    <div style="font-weight: 600; font-size: 0.8rem; color: var(--color-text); margin-bottom: 0.25rem;">${nomeStr}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.75rem; color: var(--color-text-muted);">
+                        <span><strong>Período:</strong> ${formatDate(o.data_inicio)} até ${o.data_situacao && statusStr.toUpperCase() !== 'ATIVA' ? formatDate(o.data_situacao) : 'Atual'}</span>
+                        <span><strong>Cidade/UF:</strong> ${o.municipio || '-'}/${o.uf || ''}</span>
+                    </div>
+                    <div style="margin-top: 0.35rem; font-size: 0.68rem; color: var(--accent); opacity: 0.7; display: flex; align-items: center; gap: 0.2rem;">
+                        <i class="fa-solid fa-circle-info"></i> Clique para ver endereço, área, datas e localização no mapa
+                    </div>
+                </div>
+                
+                <!-- Detalhes expandidos -->
+                <div class="cno-expanded-details" style="display: none; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed rgba(255,255,255,0.06); font-size: 0.75rem; color: var(--color-text-muted); line-height: 1.45;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.8rem;">
+                        <div style="grid-column: span 2;"><strong>Razão Social:</strong> ${o.nome_empresarial || '-'}</div>
+                        <div style="grid-column: span 2;"><strong>Qualificação Responsável:</strong> ${o.qualificacao_responsavel?.descricao || '-'}</div>
+                        <div style="grid-column: span 2;"><strong>Endereço:</strong> ${[o.tipo_logradouro, o.logradouro, o.numero, o.complemento].filter(Boolean).join(' ')}</div>
+                        <div><strong>Bairro:</strong> ${o.bairro || '-'}</div>
+                        <div><strong>CEP:</strong> ${o.cep ? formatCep(o.cep) : '-'}</div>
+                        <div><strong>Município/UF:</strong> ${o.municipio || '-'}/${o.uf || ''}</div>
+                        <div><strong>Área Total:</strong> ${o.area_total || '-'} ${o.unidade_medida || ''}</div>
+                        <div><strong>Data Registro:</strong> ${o.data_registro ? formatDate(o.data_registro) : '-'}</div>
+                        <div><strong>Início Responsabilidade:</strong> ${o.data_inicio_responsabilidade ? formatDate(o.data_inicio_responsabilidade) : '-'}</div>
+                    </div>
+                    ${o.cno_vinculado ? `<div style="margin-top: 0.3rem;"><strong>CNO Vinculado:</strong> ${o.cno_vinculado}</div>` : ''}
+                    <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">${mapLinks}</div>
+                        <span style="color: var(--accent); font-weight: 600; font-size: 0.7rem;"><i class="fa-solid fa-chevron-up"></i> Recolher</span>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        function toggleCnoDetails(card) {
+            const exp = card.querySelector('.cno-expanded-details');
+            if (exp.style.display === 'none') {
+                exp.style.display = 'block';
+                card.style.borderColor = 'rgba(245, 158, 11, 0.4)'; // amber border
+                card.style.background = 'rgba(245, 158, 11, 0.03)';
+            } else {
+                exp.style.display = 'none';
+                card.style.borderColor = 'transparent';
+                card.style.background = 'rgba(255, 255, 255, 0.02)';
+            }
+        }
+
+        function loadMoreCnoWorks() {
+            const container = document.getElementById('resCnoContainer');
+            const btn = document.getElementById('btnLoadMoreCno');
+            if (!state.cnoObrasSorted || !btn) return;
+            
+            const start = state.cnoObrasDisplayed;
+            const end = Math.min(start + 15, state.cnoObrasSorted.length);
+            
+            for (let i = start; i < end; i++) {
+                const o = state.cnoObrasSorted[i];
+                const card = createCnoWorkCard(o);
+                container.appendChild(card);
+            }
+            
+            state.cnoObrasDisplayed = end;
+            const remaining = state.cnoObrasSorted.length - end;
+            if (remaining > 0) {
+                btn.innerText = `Ver mais obras (+${remaining})`;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
         // ===== ORQUESTRADOR EM PARALELO (MERGE MULTI-API) =====
         async function querySingleApi(api, cleanCnpj) {
             const endpoint = api.url.replace('{cnpj}', cleanCnpj);
@@ -2643,8 +2767,18 @@
                     role.className = 'qsa-role';
                     role.innerText = s.cargo;
 
+                    // Botão "Ver Sociedades" — abre Casa dos Dados com o nome do sócio
+                    const socBtn = document.createElement('a');
+                    const nomeBusca = encodeURIComponent((s.nome || '').trim().replace(/\s+/g, '+'));
+                    socBtn.href = `https://casadosdados.com.br/solucao/cnpj?q=${nomeBusca}`;
+                    socBtn.target = '_blank';
+                    socBtn.title = `Buscar outras empresas de ${s.nome} na Casa dos Dados`;
+                    socBtn.innerHTML = '<i class="fa-solid fa-building-user"></i> Ver Sociedades';
+                    socBtn.style.cssText = 'display:inline-flex;align-items:center;gap:0.25rem;margin-top:0.3rem;font-size:0.65rem;font-weight:700;text-decoration:none;color:#a78bfa;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);padding:0.15rem 0.4rem;border-radius:0.25rem;cursor:pointer;';
+
                     left.appendChild(name);
                     left.appendChild(role);
+                    left.appendChild(socBtn);
                     item.appendChild(left);
 
                     // Detalhes enriquecidos
@@ -2697,33 +2831,36 @@
             // Obras CNO (só renderiza se a consulta estiver habilitada na sidebar e houver obras)
             const cnoCard = document.getElementById('resCnoCard');
             const cnoContainer = document.getElementById('resCnoContainer');
+            const btnLoadMore = document.getElementById('btnLoadMoreCno');
             cnoContainer.innerHTML = '';
+            if (btnLoadMore) btnLoadMore.style.display = 'none';
             
             const shouldQueryCno = document.getElementById('chkEnableCnoQuery')?.checked === true;
             if (shouldQueryCno && d.cno && d.cno.length > 0) {
                 cnoCard.classList.remove('hidden');
-                d.cno.forEach(o => {
-                    const card = document.createElement('div');
-                    card.className = 'cno-work-item';
-                    
-                    const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
-                    const badgeClass = statusStr.toUpperCase() === 'ATIVA' ? 'badge-status-ativa' : 'badge-status-inativa';
-                    const nomeStr = o.nome || o.nome_obra || '-';
-
-                    card.innerHTML = `
-                        <div class="cno-title">
-                            <span>CNO: ${o.cno}</span>
-                            <span class="badge ${badgeClass}">${statusStr}</span>
-                        </div>
-                        <div class="cno-details">
-                            <div><strong>Nome:</strong> ${nomeStr}</div>
-                            <div><strong>Logradouro:</strong> ${o.logradouro || '-'}, ${o.numero || '-'}</div>
-                            <div><strong>Bairro:</strong> ${o.bairro || '-'}</div>
-                            <div><strong>Cidade/UF:</strong> ${o.municipio || '-'}/${o.uf || ''}</div>
-                        </div>
-                    `;
-                    cnoContainer.appendChild(card);
+                
+                // Ordena obras: ATIVA primeiro
+                const sortedObras = [...d.cno].sort((a, b) => {
+                    const aStatus = ((a.situacao && typeof a.situacao === 'object' ? a.situacao.descricao : a.situacao) || '').toUpperCase();
+                    const bStatus = ((b.situacao && typeof b.situacao === 'object' ? b.situacao.descricao : b.situacao) || '').toUpperCase();
+                    if (aStatus === 'ATIVA' && bStatus !== 'ATIVA') return -1;
+                    if (aStatus !== 'ATIVA' && bStatus === 'ATIVA') return 1;
+                    return 0;
                 });
+
+                state.cnoObrasSorted = sortedObras;
+                state.cnoObrasDisplayed = 5;
+
+                const initialLimit = Math.min(5, sortedObras.length);
+                for (let i = 0; i < initialLimit; i++) {
+                    const card = createCnoWorkCard(sortedObras[i]);
+                    cnoContainer.appendChild(card);
+                }
+
+                if (sortedObras.length > 5 && btnLoadMore) {
+                    btnLoadMore.style.display = 'block';
+                    btnLoadMore.innerText = `Ver mais obras (+${sortedObras.length - 5})`;
+                }
             } else {
                 cnoCard.classList.add('hidden');
             }
@@ -3398,15 +3535,24 @@
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(...textColor);
 
-                d.cno.slice(0, 4).forEach(o => {
+                // Ordena obras: ATIVA primeiro
+                const sortedObras = [...d.cno].sort((a, b) => {
+                    const aStatus = ((a.situacao && typeof a.situacao === 'object' ? a.situacao.descricao : a.situacao) || '').toUpperCase();
+                    const bStatus = ((b.situacao && typeof b.situacao === 'object' ? b.situacao.descricao : b.situacao) || '').toUpperCase();
+                    if (aStatus === 'ATIVA' && bStatus !== 'ATIVA') return -1;
+                    if (aStatus !== 'ATIVA' && bStatus === 'ATIVA') return 1;
+                    return 0;
+                });
+
+                sortedObras.slice(0, 4).forEach(o => {
                     const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
                     let obraName = o.nome || o.nome_obra || 'Sem Nome';
                     if (obraName.length > 55) obraName = obraName.substring(0, 52) + '...';
                     doc.text(`• CNO: ${o.cno} | ${obraName} | Status: ${statusStr}`, leftMargin + 2, y);
                     y += 4.5;
                 });
-                if (d.cno.length > 4) {
-                    doc.text(`• ... e mais ${d.cno.length - 4} obras cadastradas.`, leftMargin + 2, y);
+                if (sortedObras.length > 4) {
+                    doc.text(`• ... e mais ${sortedObras.length - 4} obras cadastradas.`, leftMargin + 2, y);
                     y += 5;
                 } else {
                     y += 1;
