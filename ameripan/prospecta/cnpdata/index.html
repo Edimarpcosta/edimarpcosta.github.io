@@ -3166,449 +3166,456 @@
             const d = state.cnpjData;
             if (!d) return;
 
-            addTerminalLog("Montando PDF corporativo em alta fidelidade...", "info");
+            addTerminalLog("Montando PDF corporativo premium...", "info");
 
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4'
-            });
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-            // Cores corporativas 
-            const brandColor = [99, 102, 241]; // Indigo
-            const textColor = [15, 23, 42];     // Slate 900
-            const textMuted = [100, 116, 139];  // Slate 500
-            const borderLine = [226, 232, 240];  // Slate 200
+            // === PALETA DE CORES ===
+            const brand    = [79,  70, 229];
+            const brand2   = [124, 58, 237];
+            const success  = [5,  150,  105];
+            const warning  = [217, 119,   6];
+            const danger   = [220,  38,  38];
+            const dark     = [15,  23,  42];
+            const muted    = [100, 116, 139];
+            const light    = [241, 245, 249];
+            const border   = [203, 213, 225];
+            const white    = [255, 255, 255];
 
-            // Margens
-            let y = 18;
-            const leftMargin = 15;
-            const rightMargin = 195;
+            const LM = 15;
+            const RM = 195;
+            const PW = 180;
+            let y = 0;
+            let pageNum = 1;
 
-            // ==================== PÁGINA 1: FICHA PRINCIPAL E SCORE ====================
-            // HEADER DO RELATÓRIO
-            doc.setFillColor(...brandColor);
-            doc.rect(15, y, 180, 2, 'F');
-            y += 6;
+            function addPage() {
+                pageNum++;
+                doc.addPage();
+                y = 18;
+                doc.setFillColor(...brand);
+                doc.rect(LM, 10, PW, 1, 'F');
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7);
+                doc.setTextColor(...muted);
+                doc.text(`CNPJ: ${formatCnpj(d.cnpj)} | ${(d.razao_social||'').substring(0,50)}`, LM, 289);
+            }
 
-            doc.setTextColor(...textColor);
+            function checkPage(needed) {
+                if (y + needed > 270) addPage();
+            }
+
+            function sectionHeader(num, title) {
+                checkPage(14);
+                doc.setFillColor(...light);
+                doc.rect(LM, y, PW, 8, 'F');
+                doc.setFillColor(...brand);
+                doc.rect(LM, y, 3, 8, 'F');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(...brand);
+                doc.text(`${num}. ${title}`, LM + 6, y + 5.5);
+                y += 12;
+            }
+
+            function kvRow(label, value, x1, x2, maxLen) {
+                checkPage(6);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.setTextColor(...muted);
+                doc.text(label, x1, y);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...dark);
+                let v = String(value || '-');
+                if (maxLen && v.length > maxLen) v = v.substring(0, maxLen - 2) + '..';
+                doc.text(v, x2, y);
+                y += 5;
+            }
+
+            function kvRowFull(label, value, maxLen) {
+                kvRow(label, value, LM, LM + 40, maxLen);
+            }
+
+            function kvRowDouble(label1, val1, label2, val2, maxLen) {
+                checkPage(6);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.setTextColor(...muted);
+                doc.text(label1, LM, y);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...dark);
+                doc.text(String(val1 || '-').substring(0, maxLen || 30), LM + 36, y);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(...muted);
+                doc.text(label2, 108, y);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...dark);
+                doc.text(String(val2 || '-').substring(0, maxLen || 30), 144, y);
+                y += 5;
+            }
+
+            // ══════════════════════════════════════
+            // PAGINA 1
+            // ══════════════════════════════════════
+            doc.setFillColor(...brand);
+            doc.rect(0, 0, 210, 28, 'F');
+            doc.setFillColor(...brand2);
+            doc.rect(130, 0, 80, 28, 'F');
+
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(18);
-            doc.text("FICHA DE INTELIGÊNCIA COMERCIAL B2B", leftMargin, y);
-            y += 5;
+            doc.setFontSize(13);
+            doc.setTextColor(...white);
+            doc.text("FICHA DE INTELIGENCIA COMERCIAL B2B", LM, 11);
 
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.setTextColor(...textMuted);
-            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Buscador CNPJ v2 (Merge Multi-API)`, leftMargin, y);
-            y += 8;
-
-            // CARD DO LEAD SCORE B2B (Destaque elegante)
-            const scoreVal = document.getElementById('leadScoreVal').innerText;
-            const tempVal = document.getElementById('leadTempBadge').innerText;
-            
-            doc.setFillColor(248, 250, 252);
-            doc.setDrawColor(...borderLine);
-            doc.roundedRect(leftMargin, y, 180, 32, 2, 2, 'FD');
-            
-            // Desenha o círculo/quadrado do score
-            doc.setFillColor(241, 245, 249);
-            doc.rect(leftMargin + 5, y + 4, 24, 24, 'F');
-            doc.setTextColor(...brandColor);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(18);
-            doc.text(scoreVal, leftMargin + 17, y + 17, { align: 'center' });
-            doc.setFontSize(6.5);
-            doc.setTextColor(...textMuted);
-            doc.text("SCORE B2B", leftMargin + 17, y + 23, { align: 'center' });
-            
-            // Temperatura e Badge
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.text("Termômetro de Prospecção:", leftMargin + 35, y + 9);
-            
-            // Cor do badge de acordo com a temperatura
-            let badgeColor = [59, 130, 246]; // Azul frio
-            if (scoreVal >= 70) badgeColor = [220, 38, 38]; // Vermelho quente
-            else if (scoreVal >= 35) badgeColor = [217, 119, 6]; // Laranja morno
-            
-            doc.setTextColor(...badgeColor);
-            doc.setFontSize(12);
-            doc.text(tempVal, leftMargin + 35, y + 15);
-            
-            // Fatores resumidos
-            doc.setTextColor(...textColor);
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7.5);
-            
+            doc.setTextColor(200, 200, 240);
+            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Buscador CNPJ Multi-API`, LM, 16);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(...white);
+            let headerName = (d.razao_social || 'SEM RAZAO SOCIAL');
+            if (headerName.length > 70) headerName = headerName.substring(0, 67) + '...';
+            doc.text(headerName, LM, 22);
+
+            y = 35;
+
+            // CARD SCORE
+            const scoreVal = parseInt(document.getElementById('leadScoreVal').innerText) || 0;
+            const tempVal  = document.getElementById('leadTempBadge').innerText || '-';
+            let scoreBg = danger;
+            if (scoreVal >= 70) scoreBg = [220, 38, 38];
+            else if (scoreVal >= 35) scoreBg = [217, 119, 6];
+            else scoreBg = [59, 130, 246];
+
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(...border);
+            doc.roundedRect(LM, y, PW, 30, 2, 2, 'FD');
+
+            doc.setFillColor(...scoreBg);
+            doc.circle(LM + 15, y + 15, 12, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(17);
+            doc.setTextColor(...white);
+            doc.text(String(scoreVal), LM + 15, y + 17, { align: 'center' });
+            doc.setFontSize(5.5);
+            doc.text('SCORE B2B', LM + 15, y + 23, { align: 'center' });
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(...scoreBg);
+            doc.text(tempVal, LM + 34, y + 12);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...muted);
+            doc.text('Termometro de Prospeccao', LM + 34, y + 17);
+
             const reasonsList = Array.from(document.querySelectorAll('#leadReasonsList li')).map(li => li.innerText);
-            let reasonY = y + 20;
-            reasonsList.slice(0, 3).forEach(reason => {
-                doc.text(`• ${reason}`, leftMargin + 35, reasonY);
-                reasonY += 3.5;
+            doc.setFontSize(7);
+            doc.setTextColor(...dark);
+            let ry = y + 11;
+            reasonsList.slice(0, 4).forEach(r => {
+                doc.text(`* ${r.substring(0, 75)}`, LM + 34, ry);
+                ry += 4;
             });
-            if (reasonsList.length > 3) {
-                doc.text(`• ... e outros fatores detalhados no sistema e página 2.`, leftMargin + 35, reasonY);
+            if (reasonsList.length > 4) {
+                doc.setTextColor(...muted);
+                doc.text(`* + ${reasonsList.length - 4} fatores adicionais analisados`, LM + 34, ry);
             }
-            y += 38;
+            y += 36;
 
-            // DADOS GERAIS
+            // 1. IDENTIFICACAO
+            sectionHeader(1, 'IDENTIFICACAO E DADOS PRINCIPAIS');
+            kvRowDouble('RAZAO SOCIAL:', d.razao_social, 'NOME FANTASIA:', d.nome_fantasia, 28);
+            kvRowDouble('CNPJ:', formatCnpj(d.cnpj), 'DATA ABERTURA:', d.abertura || '-');
+
+            checkPage(6);
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...brandColor);
-            doc.text("1. IDENTIFICAÇÃO E DADOS PRINCIPAIS", leftMargin, y);
+            doc.setFontSize(7.5);
+            doc.setTextColor(...muted);
+            doc.text('SITUACAO RFB:', LM, y);
+            const isAtiva = (d.situacao || '').toUpperCase() === 'ATIVA';
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...(isAtiva ? success : danger));
+            doc.text((d.situacao || 'ATIVA').toUpperCase(), LM + 36, y);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...muted);
+            doc.text('PORTE:', 108, y);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...dark);
+            doc.text(d.porte || 'NAO INFORMADO', 144, y);
+            y += 5;
+
+            kvRowDouble('CAPITAL SOCIAL:', formatCurrency(d.capital_social), 'NATUREZA JURIDICA:', d.natureza_juridica, 28);
             y += 2;
-            doc.setDrawColor(...borderLine);
-            doc.line(leftMargin, y, rightMargin, y);
-            y += 5;
 
-            doc.setFontSize(8);
-            doc.setTextColor(...textMuted);
-            doc.setFont('helvetica', 'normal');
-            doc.text("RAZÃO SOCIAL:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
-            doc.text(d.razao_social || '-', 50, y);
-            y += 5;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("CNPJ:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(formatCnpj(d.cnpj), 50, y);
-            
-            doc.setTextColor(...textMuted);
-            doc.text("NOME FANTASIA:", 110, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.nome_fantasia || '-', 145, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("SITUAÇÃO RFB:", leftMargin, y);
-            doc.setTextColor(d.situacao === 'ATIVA' ? 22 : 220, d.situacao === 'ATIVA' ? 197 : 38, d.situacao === 'ATIVA' ? 94 : 38);
-            doc.setFont('helvetica', 'bold');
-            doc.text(d.situacao || 'ATIVA', 50, y);
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("DATA ABERTURA:", 110, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.abertura || '-', 145, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("CAPITAL SOCIAL:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(formatCurrency(d.capital_social), 50, y);
-            
-            doc.setTextColor(...textMuted);
-            doc.text("PORTE EMPRESARIAL:", 110, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.porte || 'NÃO INFORMADO', 145, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("NATUREZA JURÍDICA:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            let nature = d.natureza_juridica || '-';
-            if (nature.length > 65) nature = nature.substring(0, 62) + '...';
-            doc.text(nature, 50, y);
-            y += 8;
-
-            // INTELIGÊNCIA COMERCIAL E TRIBUTÁRIA
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...brandColor);
-            doc.text("2. REGIME TRIBUTÁRIO & IDADE COMERCIAL", leftMargin, y);
-            y += 2;
-            doc.line(leftMargin, y, rightMargin, y);
-            y += 5;
-
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("SIMPLES NACIONAL:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
+            // 2. TRIBUTARIO
+            sectionHeader(2, 'REGIME TRIBUTARIO & IDADE COMERCIAL');
             const simplesOpt = d.simples_nacional?.optante;
-            doc.text(simplesOpt ? `Optante (Opção em ${d.simples_nacional.data_opcao || 'N/D'})` : (simplesOpt === false ? (d.simples_nacional.data_exclusao ? `Excluído em ${d.simples_nacional.data_exclusao}` : 'Não Optante') : 'Sem Informação'), 50, y);
-            y += 5;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("MICROEMPREENDEDOR:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
             const meiOpt = d.mei?.optante;
-            doc.text(meiOpt ? `Optante (MEI em ${d.mei.data_opcao || 'N/D'})` : (meiOpt === false ? (d.mei.data_exclusao ? `Excluído em ${d.mei.data_exclusao}` : 'Não') : 'Sem Informação'), 50, y);
-            y += 5;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("TEMPO DE ATIVIDADE:", leftMargin, y);
-            doc.setTextColor(...textColor);
             const ageVal = calculateAge(d.abertura);
             const ageDesc = getAgeDescription(ageVal);
-            doc.text(ageVal !== null ? `${ageVal} anos (${ageDesc.text})` : 'Não Calculável', 50, y);
-            y += 5;
+            kvRowDouble('SIMPLES NACIONAL:',
+                simplesOpt ? `Optante (${d.simples_nacional.data_opcao || 'N/D'})` : (simplesOpt === false ? (d.simples_nacional?.data_exclusao ? `Excluido ${d.simples_nacional.data_exclusao}` : 'Nao Optante') : 'Sem Informacao'),
+                'MEI:',
+                meiOpt ? `Optante (${d.mei.data_opcao || 'N/D'})` : (meiOpt === false ? 'Nao' : 'Sem Informacao'));
+            kvRowFull('TEMPO DE ATIVIDADE:', ageVal !== null ? `${ageVal} anos (${ageDesc.text})` : 'Nao Calculavel');
 
-            // Observação tributária
-            doc.setFillColor(245, 245, 245);
-            doc.rect(leftMargin, y, 180, 10, 'F');
-            doc.setTextColor(...brandColor);
+            checkPage(10);
+            const taxMsg = (simplesOpt || meiOpt)
+                ? 'Decisao agil: MEI/Simples concentram compras no proprietario. Abordagem direta tem maior conversao.'
+                : 'Estrutura tributaria convencional. Processo decisorio passa por financeiro, fiscal e compras. Preveja ciclo mais longo.';
+            doc.setFillColor(239, 246, 255);
+            doc.setDrawColor(147, 197, 253);
+            doc.roundedRect(LM, y, PW, 8, 1.5, 1.5, 'FD');
             doc.setFont('helvetica', 'italic');
-            doc.setFontSize(7.5);
-            let taxComercial = '';
-            if (simplesOpt || meiOpt) {
-                taxComercial = "Decisão de venda ágil. MEI e Simples Nacional possuem tomada de decisão concentrada e rápida diretamente com os sócios.";
-            } else {
-                taxComercial = "Estrutura tributária padrão. O processo decisório comercial tende a passar por múltiplos departamentos (financeiro, fiscal, compras).";
-            }
-            doc.text(taxComercial, leftMargin + 3, y + 6);
-            y += 15;
+            doc.setFontSize(7);
+            doc.setTextColor(30, 64, 175);
+            doc.text(`Dica: ${taxMsg}`, LM + 3, y + 5);
+            y += 13;
 
-            // CONTATOS E LOCALIZAÇÃO
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...brandColor);
-            doc.text("3. CANAIS DE CONTATO E LOCALIZAÇÃO", leftMargin, y);
-            y += 2;
-            doc.line(leftMargin, y, rightMargin, y);
-            y += 5;
+            // 3. CONTATOS
+            sectionHeader(3, 'CANAIS DE CONTATO E LOCALIZACAO');
+            kvRowFull('LOGRADOURO:', `${d.logradouro || '-'}, No ${d.numero || '-'}${d.complemento ? ' - ' + d.complemento : ''}`, 70);
+            kvRowDouble('BAIRRO:', d.bairro || '-', 'CEP:', formatCep(d.cep));
+            kvRowDouble('MUNICIPIO/UF:', `${d.municipio || '-'}/${d.uf || ''}`, 'REGIAO:', d.uf || '-');
+            kvRowDouble('TELEFONE 1:', d.telefone1 || '-', 'TELEFONE 2:', d.telefone2 || '-');
+            kvRowFull('E-MAIL:', d.email || '-');
 
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("LOGRADOURO:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(`${d.logradouro || '-'}, Nº ${d.numero || '-'} ${d.complemento ? ' - ' + d.complemento : ''}`, 50, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("BAIRRO & CEP:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(`${d.bairro || '-'} - CEP: ${formatCep(d.cep)}`, 50, y);
-            
-            doc.setTextColor(...textMuted);
-            doc.text("CIDADE/UF:", 110, y);
-            doc.setTextColor(...textColor);
-            doc.text(`${d.municipio || '-'}/${d.uf || ''}`, 145, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("TELEFONE 1:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.telefone1 || '-', 50, y);
-            
-            doc.setTextColor(...textMuted);
-            doc.text("TELEFONE 2:", 110, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.telefone2 || '-', 145, y);
-            y += 5;
-
-            doc.setTextColor(...textMuted);
-            doc.text("E-MAIL:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.text(d.email || '-', 50, y);
-
-            // Numeração rodapé pág 1
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7);
-            doc.setTextColor(...textMuted);
-            doc.text("Página 1 de 2", rightMargin - 15, 287);
+            doc.setTextColor(...muted);
+            doc.text('Pagina 1 | Ficha de Inteligencia Comercial B2B', LM, 289);
+            doc.text('Ameripan Distribuidora', RM, 289, { align: 'right' });
 
-            // ==================== PÁGINA 2: DETALHES TÉCNICOS, QSA, CNO E HISTÓRICO ====================
-            doc.addPage();
-            y = 18;
+            // ══════════════════════════════════════
+            // PAGINA 2
+            // ══════════════════════════════════════
+            addPage();
 
-            doc.setFillColor(...brandColor);
-            doc.rect(15, y, 180, 1.5, 'F');
-            y += 5;
-            
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text("DETALHAMENTO TÉCNICO & HISTÓRICO", leftMargin, y);
-            doc.setFontSize(7.5);
-            doc.setTextColor(...textMuted);
-            doc.text(`CNPJ: ${formatCnpj(d.cnpj)} | ${d.razao_social}`, 110, y);
-            y += 8;
-
-            // ATIVIDADES ECONÔMICAS (CNAE)
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...brandColor);
-            doc.text("4. ATIVIDADES ECONÔMICAS (CNAE)", leftMargin, y);
-            y += 2;
-            doc.line(leftMargin, y, rightMargin, y);
-            y += 5;
-
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("CNAE PRINCIPAL:", leftMargin, y);
-            doc.setTextColor(...textColor);
-            doc.setFont('helvetica', 'bold');
+            // 4. CNAE
+            sectionHeader(4, 'ATIVIDADES ECONOMICAS (CNAE)');
             const principal = d.cnae_principal;
             const hasPrincipal = principal && (principal.codigo || principal.descricao);
-            let cnaeP = hasPrincipal ? `${principal.codigo || '-'} - ${principal.descricao || '-'}` : '-';
-            if (cnaeP.length > 70) cnaeP = cnaeP.substring(0, 67) + '...';
-            doc.text(cnaeP, 50, y);
-            y += 5;
+            kvRowFull('CNAE PRINCIPAL:', hasPrincipal ? `${principal.codigo || '-'} - ${principal.descricao || '-'}` : '-', 85);
 
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textMuted);
-            doc.text("SECUNDÁRIAS:", leftMargin, y);
-            doc.setTextColor(...textColor);
-
-            const secCnaes = d.cnae_secundarias || [];
-            const validSec = secCnaes.filter(c => c && (c.codigo || c.descricao));
-            if (validSec.length > 0) {
-                let limit = 4;
-                validSec.slice(0, limit).forEach(c => {
-                    let desc = `${c.codigo || '-'} - ${c.descricao || '-'}`;
-                    if (desc.length > 70) desc = desc.substring(0, 67) + '...';
-                    doc.text(desc, 50, y);
-                    y += 4.5;
-                });
-                if (validSec.length > limit) {
-                    doc.text(`... e mais ${validSec.length - limit} atividades secundárias.`, 50, y);
-                    y += 5;
-                } else {
-                    y += 1;
-                }
-            } else {
-                doc.text("Nenhuma atividade secundária cadastrada.", 50, y);
-                y += 5;
-            }
-            y += 4;
-
-            // QUADRO SOCIETÁRIO (QSA)
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...brandColor);
-            doc.text("5. QUADRO SOCIETÁRIO (QSA)", leftMargin, y);
-            y += 2;
-            doc.line(leftMargin, y, rightMargin, y);
-            y += 5;
-
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textColor);
-
-            if (d.qsa && d.qsa.length > 0) {
-                let limitSocios = 6;
-                d.qsa.slice(0, limitSocios).forEach(s => {
-                    let socioDetails = `• ${s.nome} (${s.cargo || 'Sócio'})`;
-                    if (s.faixa_etaria && s.faixa_etaria !== '-') socioDetails += ` | Faixa: ${s.faixa_etaria}`;
-                    if (s.cpf_mascarado) socioDetails += ` | CPF: ${s.cpf_mascarado}`;
-                    doc.text(socioDetails, leftMargin + 2, y);
-                    y += 4.5;
-                });
-                if (d.qsa.length > limitSocios) {
-                    doc.text(`• ... e mais ${d.qsa.length - limitSocios} sócios cadastrados.`, leftMargin + 2, y);
-                    y += 5;
-                } else {
-                    y += 1;
-                }
-            } else {
-                doc.setTextColor(...textMuted);
-                doc.text("Nenhum sócio informado nas bases capturadas.", leftMargin + 2, y);
-                y += 5;
-            }
-            y += 4;
-
-            // OBRAS CNO SE HOUVER E HABILITADO
-            const isCnoEnabled = document.getElementById('chkEnableCnoQuery')?.checked === true;
-            if (isCnoEnabled && d.cno && d.cno.length > 0) {
+            const secCnaes = (d.cnae_secundarias || []).filter(c => c && (c.codigo || c.descricao));
+            if (secCnaes.length > 0) {
+                checkPage(6);
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(10);
-                doc.setTextColor(...brandColor);
-                doc.text(`6. OBRAS ATIVAS (CNO) - DETECTADO ${d.cno.length} OBRA(S)`, leftMargin, y);
-                y += 2;
-                doc.line(leftMargin, y, rightMargin, y);
-                y += 5;
+                doc.setFontSize(7.5);
+                doc.setTextColor(...muted);
+                doc.text('SECUNDARIAS:', LM, y);
+                y += 4;
+                secCnaes.slice(0, 6).forEach(c => {
+                    checkPage(5);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(...dark);
+                    doc.setFontSize(7.5);
+                    let desc = `  - ${c.codigo || '-'} - ${c.descricao || '-'}`;
+                    if (desc.length > 90) desc = desc.substring(0, 87) + '...';
+                    doc.text(desc, LM, y);
+                    y += 4.5;
+                });
+                if (secCnaes.length > 6) {
+                    doc.setTextColor(...muted);
+                    doc.text(`  - ... e mais ${secCnaes.length - 6} atividades secundarias.`, LM, y);
+                    y += 5;
+                }
+            } else {
+                kvRowFull('SECUNDARIAS:', 'Nenhuma atividade secundaria cadastrada.');
+            }
+            y += 2;
 
-                doc.setFontSize(8);
+            // 5. QSA
+            sectionHeader(5, 'QUADRO SOCIETARIO (QSA)');
+            if (d.qsa && d.qsa.length > 0) {
+                d.qsa.forEach((s, i) => {
+                    checkPage(12);
+                    if (i % 2 === 0) {
+                        doc.setFillColor(248, 250, 252);
+                        doc.rect(LM, y - 1, PW, 10, 'F');
+                    }
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(8);
+                    doc.setTextColor(...brand);
+                    doc.text(s.nome || '-', LM + 2, y + 3);
+
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(7);
+                    doc.setTextColor(...dark);
+                    let details = s.cargo || 'Socio';
+                    if (s.faixa_etaria && s.faixa_etaria !== '-') details += ` | Faixa: ${s.faixa_etaria}`;
+                    if (s.cpf_mascarado) details += ` | CPF: ${s.cpf_mascarado}`;
+                    if (s.data_entrada) details += ` | Entrada: ${formatDate(s.data_entrada)}`;
+                    doc.text(details, LM + 2, y + 8);
+                    y += 12;
+                });
+            } else {
                 doc.setFont('helvetica', 'normal');
-                doc.setTextColor(...textColor);
+                doc.setFontSize(7.5);
+                doc.setTextColor(...muted);
+                doc.text('Nenhum socio informado nas bases capturadas.', LM + 2, y);
+                y += 6;
+            }
+            y += 3;
 
-                // Ordena obras: ATIVA primeiro
-                const sortedObras = [...d.cno].sort((a, b) => {
-                    const aStatus = ((a.situacao && typeof a.situacao === 'object' ? a.situacao.descricao : a.situacao) || '').toUpperCase();
-                    const bStatus = ((b.situacao && typeof b.situacao === 'object' ? b.situacao.descricao : b.situacao) || '').toUpperCase();
-                    if (aStatus === 'ATIVA' && bStatus !== 'ATIVA') return -1;
-                    if (aStatus !== 'ATIVA' && bStatus === 'ATIVA') return 1;
+            // 6. OBRAS CNO
+            const isCnoEnabled = document.getElementById('chkEnableCnoQuery')?.checked === true;
+            const obras = (d.cno && d.cno.length > 0) ? d.cno : null;
+            if (isCnoEnabled && obras) {
+                const sortedObras = [...obras].sort((a, b) => {
+                    const aS = ((a.situacao && typeof a.situacao === 'object' ? a.situacao.descricao : a.situacao) || '').toUpperCase();
+                    const bS = ((b.situacao && typeof b.situacao === 'object' ? b.situacao.descricao : b.situacao) || '').toUpperCase();
+                    if (aS === 'ATIVA' && bS !== 'ATIVA') return -1;
+                    if (aS !== 'ATIVA' && bS === 'ATIVA') return 1;
                     return 0;
                 });
 
-                sortedObras.slice(0, 4).forEach(o => {
-                    const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
-                    let obraName = o.nome || o.nome_obra || 'Sem Nome';
-                    if (obraName.length > 55) obraName = obraName.substring(0, 52) + '...';
-                    doc.text(`• CNO: ${o.cno} | ${obraName} | Status: ${statusStr}`, leftMargin + 2, y);
-                    y += 4.5;
-                });
-                if (sortedObras.length > 4) {
-                    doc.text(`• ... e mais ${sortedObras.length - 4} obras cadastradas.`, leftMargin + 2, y);
-                    y += 5;
+                const ativas = sortedObras.filter(o => ((o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || '').toUpperCase() === 'ATIVA');
+                const inativas = sortedObras.filter(o => ((o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || '').toUpperCase() !== 'ATIVA');
+
+                sectionHeader(6, `OBRAS (CNO) - ${sortedObras.length} total | ${ativas.length} ativas | ${inativas.length} inativas`);
+
+                const DETAIL_MODE = sortedObras.length <= 5;
+
+                if (!DETAIL_MODE) {
+                    // MODO RESUMO
+                    checkPage(6);
+                    doc.setFont('helvetica', 'italic');
+                    doc.setFontSize(7);
+                    doc.setTextColor(...muted);
+                    doc.text(`Exibicao resumida (empresa com ${sortedObras.length} obras). Detalhes completos disponiveis com ate 5 obras.`, LM + 2, y);
+                    y += 6;
+
+                    sortedObras.slice(0, 10).forEach(o => {
+                        checkPage(9);
+                        const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
+                        const isObAtiva = statusStr.toUpperCase() === 'ATIVA';
+                        const rowColor = isObAtiva ? [236, 253, 245] : [249, 250, 251];
+                        doc.setFillColor(...rowColor);
+                        doc.rect(LM, y - 1, PW, 8, 'F');
+                        doc.setFillColor(...(isObAtiva ? success : muted));
+                        doc.rect(LM, y - 1, 2.5, 8, 'F');
+
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(7.5);
+                        doc.setTextColor(isObAtiva ? success[0] : muted[0], isObAtiva ? success[1] : muted[1], isObAtiva ? success[2] : muted[2]);
+                        doc.text(statusStr.toUpperCase(), LM + 5, y + 3);
+
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(...dark);
+                        doc.setFontSize(7.5);
+                        let obraName = o.nome || o.nome_obra || 'Sem Nome';
+                        if (obraName.length > 42) obraName = obraName.substring(0, 39) + '...';
+                        doc.text(`CNO: ${o.cno}  |  ${obraName}`, LM + 22, y + 3);
+
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(...muted);
+                        doc.setFontSize(6.5);
+                        doc.text(`${o.municipio || '-'}/${o.uf || ''}  |  ${formatDate(o.data_inicio)} ate ${isObAtiva ? 'Atual' : (o.data_situacao ? formatDate(o.data_situacao) : '-')}`, LM + 22, y + 7);
+                        y += 10;
+                    });
+                    if (sortedObras.length > 10) {
+                        doc.setTextColor(...muted);
+                        doc.setFontSize(7);
+                        doc.text(`... e mais ${sortedObras.length - 10} obras cadastradas no sistema.`, LM + 2, y);
+                        y += 6;
+                    }
                 } else {
-                    y += 1;
+                    // MODO DETALHADO (ate 5 obras)
+                    sortedObras.forEach((o, idx) => {
+                        const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
+                        const isObAtiva = statusStr.toUpperCase() === 'ATIVA';
+                        checkPage(52);
+
+                        // Header da obra
+                        doc.setFillColor(...(isObAtiva ? success : [107, 114, 128]));
+                        doc.rect(LM, y, PW, 8, 'F');
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(8.5);
+                        doc.setTextColor(...white);
+                        let obraTitleName = o.nome || o.nome_obra || 'Sem Nome';
+                        if (obraTitleName.length > 50) obraTitleName = obraTitleName.substring(0, 47) + '...';
+                        doc.text(`OBRA ${idx + 1}: CNO ${o.cno}`, LM + 3, y + 5.5);
+                        doc.text(`[${statusStr.toUpperCase()}]`, RM - 3, y + 5.5, { align: 'right' });
+                        y += 11;
+
+                        kvRowFull('NOME DA OBRA:', obraTitleName, 72);
+                        kvRowFull('RAZAO SOCIAL:', o.nome_empresarial || '-', 72);
+                        kvRowDouble('INICIO:', formatDate(o.data_inicio), 'FIM / SITUACAO:', isObAtiva ? 'Em andamento (ATIVA)' : (o.data_situacao ? formatDate(o.data_situacao) : '-'));
+                        kvRowDouble('DATA REGISTRO:', o.data_registro ? formatDate(o.data_registro) : '-', 'INICIO RESPONSAB.:', o.data_inicio_responsabilidade ? formatDate(o.data_inicio_responsabilidade) : '-');
+                        kvRowDouble('AREA TOTAL:', `${o.area_total || '-'} ${o.unidade_medida || ''}`, 'QUALIF. RESPONSAVEL:', (o.qualificacao_responsavel?.descricao || '-').substring(0, 22));
+                        const endFull = [o.tipo_logradouro, o.logradouro, o.numero].filter(Boolean).join(' ');
+                        kvRowFull('ENDERECO:', endFull || '-', 70);
+                        kvRowDouble('BAIRRO:', o.bairro || '-', 'CEP:', o.cep ? formatCep(o.cep) : '-');
+                        kvRowDouble('MUNICIPIO/UF:', `${o.municipio || '-'}/${o.uf || ''}`, 'PLUS CODE:', o.codigo_localizacao || 'Nao informado');
+                        if (o.cno_vinculado) kvRowFull('CNO VINCULADO:', o.cno_vinculado);
+
+                        y += 3;
+                        if (idx < sortedObras.length - 1) {
+                            doc.setDrawColor(...border);
+                            doc.setLineDash([2, 2]);
+                            doc.line(LM, y, RM, y);
+                            doc.setLineDash([]);
+                            y += 5;
+                        }
+                    });
                 }
                 y += 4;
             }
 
-            // SNAPSHOT MUDANÇAS RECENTES (Se houver)
+            // 7. HISTORICO
             const cleanCnpj = cleanCnpjStr(d.cnpj);
             const lastSnap = loadSnapshot(cleanCnpj);
             if (lastSnap) {
                 const diffs = compareSnapshots(lastSnap, d);
                 if (diffs.length > 0) {
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(9);
-                    doc.setTextColor(220, 100, 30); // Laranja aviso
-                    doc.text("7. HISTÓRICO / ALTERAÇÕES DETECTADAS DESDE A ÚLTIMA CONSULTA", leftMargin, y);
-                    y += 2;
-                    doc.line(leftMargin, y, rightMargin, y);
+                    checkPage(18);
+                    sectionHeader(7, 'ALTERACOES DETECTADAS DESDE A ULTIMA CONSULTA');
+                    const diffBoxH = Math.min(diffs.length, 5) * 5 + 6;
+                    doc.setFillColor(255, 247, 237);
+                    doc.setDrawColor(253, 186, 116);
+                    doc.roundedRect(LM, y, PW, diffBoxH, 1.5, 1.5, 'FD');
                     y += 5;
-
-                    doc.setFontSize(7.5);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(...textColor);
-                    diffs.slice(0, 4).forEach(diff => {
-                        doc.text(`[MUDANÇA] ${diff.campo}: de "${diff.anterior}" para "${diff.novo}"`, leftMargin + 2, y);
-                        y += 4;
+                    diffs.slice(0, 5).forEach(diff => {
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(7);
+                        doc.setTextColor(120, 53, 15);
+                        doc.text(`[MUDANCA] ${diff.campo}: "${diff.anterior}" => "${diff.novo}"`, LM + 3, y);
+                        y += 5;
                     });
-                    y += 2;
+                    y += 4;
                 }
             }
 
-            // GLOSSÁRIO EXPLICATIVO NO RODAPÉ DA PÁGINA 2
+            // GLOSSARIO
+            checkPage(26);
             doc.setFillColor(248, 250, 252);
-            doc.rect(leftMargin, 258, 180, 22, 'F');
+            doc.setDrawColor(...border);
+            doc.roundedRect(LM, y, PW, 26, 1.5, 1.5, 'FD');
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
-            doc.setTextColor(...brandColor);
-            doc.text("GLOSSÁRIO & APOIO COMERCIAL:", leftMargin + 3, 262);
-
+            doc.setTextColor(...brand);
+            doc.text('GLOSSARIO & APOIO COMERCIAL:', LM + 3, y + 5);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...textColor);
-            doc.setFontSize(6.5);
-            doc.text("• Situação RFB: Regularidade legal. Empresas inaptas/suspensas representam alto risco para concessão de crédito.", leftMargin + 3, 266);
-            doc.text("• Capital Social: Medida de porte inicial da empresa. Útil para balizar limites de faturamento e limites operacionais.", leftMargin + 3, 269);
-            doc.text("• CNAE Foco : Alvo primário — 5611-2/03 (Sorveteria/Açaí/Sucos), 4721-1/04 (Doces/Sorvete), 1053-8/00 (Fabricação de gelados). Alvo adjacente — 4721-1/02 (Padaria+Confeitaria), 1091-1/02 (Confeitaria produção própria), 4721-1/03 (Laticínios). Canal indireto — 4712-1/00 (Minimercado), 5612-1/00 (Ambulante).", leftMargin + 3, 272);
-            doc.text("• Regime Tributário: MEI/Simples costumam ter compras aprovadas mais rápido (contato direto com o proprietário/decisor).", leftMargin + 3, 275);
+            doc.setTextColor(...dark);
+            doc.setFontSize(6.3);
+            doc.text('Situacao RFB: Empresas inaptas/suspensas representam alto risco para concessao de credito e venda.', LM + 3, y + 10);
+            doc.text('Capital Social: Medida de porte inicial. Baliza limites de faturamento e capacidade operacional.', LM + 3, y + 14);
+            doc.text('CNAE Foco Ameripan: 5611-2/03 (Sorveteria/Acai), 4721-1/04 (Doces/Sorvete), 1053-8/00 (Gelados), 4721-1/02 (Padaria+Confeitaria).', LM + 3, y + 18);
+            doc.text('CNO: Cadastro Nacional de Obras. Indica obras registradas na Receita Federal vinculadas ao CNPJ.', LM + 3, y + 22);
+            y += 30;
 
-            // Numeração rodapé pág 2
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7);
-            doc.setTextColor(...textMuted);
-            doc.text("Página 2 de 2", rightMargin - 15, 287);
+            doc.setTextColor(...muted);
+            doc.text(`Pagina ${pageNum} | Ficha de Inteligencia Comercial B2B`, LM, 289);
+            doc.text('Ameripan Distribuidora', RM, 289, { align: 'right' });
 
-            // Salva PDF
             doc.save(`CNPJ_${cleanCnpj}.pdf`);
+            addTerminalLog(`PDF premium salvo: CNPJ_${cleanCnpj}.pdf`, 'succ');
         }
 
 
