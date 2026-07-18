@@ -924,7 +924,7 @@
                             <input type="text" id="webhookUrlInput" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; font-size: 0.75rem; padding: 0.45rem 0.6rem; border-radius: 0.375rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-card); color: var(--color-text); outline: none;">
                         </div>
                         <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="chkEnableCnoQuery" style="cursor: pointer;" onchange="saveCnoConfig()">
+                            <input type="checkbox" id="chkEnableCnoQuery" style="cursor: pointer;" onchange="saveCnoConfig()" checked>
                             <label for="chkEnableCnoQuery" style="font-size: 0.68rem; color: var(--color-text-muted); font-weight: 700; cursor: pointer; user-select: none; text-transform: uppercase;">Consultar Obras (CNO) extra</label>
                         </div>
 
@@ -1301,6 +1301,7 @@
         };
 
         const PROXIES = [
+            { name: 'CorsProxyIO', wrap: (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`, parse: (res) => typeof res === 'object' ? JSON.stringify(res) : res },
             { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, parse: (res) => res.contents }
         ];
 
@@ -2022,13 +2023,17 @@
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout por API
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout por API
 
             try {
                 const response = await fetch(fetchUrl, { signal: controller.signal });
                 clearTimeout(timeoutId);
 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    const err = new Error(`HTTP ${response.status}`);
+                    err.status = response.status;
+                    throw err;
+                }
                 let json = await response.json();
 
                 if (api.proxyByDefault) {
@@ -2045,22 +2050,38 @@
                 throw new Error("Normalização de dados vazia/inválida.");
             } catch (err) {
                 clearTimeout(timeoutId);
-                // Se falhou com proxy ou sem proxy, tenta o fallback com proxy alternado
-                if (!api.proxyByDefault) {
-                    try {
-                        const proxyUrl = PROXIES[0].wrap(endpoint);
-                        const altResponse = await fetch(proxyUrl);
-                        if (altResponse.ok) {
-                            let altJson = await altResponse.json();
-                            const rawText = PROXIES[0].parse(altJson);
-                            const parsed = JSON.parse(rawText);
-                            const normalized = apiAdapters[api.id](parsed);
-                            if (normalized) {
-                                return { apiId: api.id, data: normalized, success: true };
+
+                const isTimeout = err.name === 'AbortError';
+                const isHttpError = err.status !== undefined;
+                const isDefinitiveError = isHttpError && [400, 404, 429].includes(err.status);
+
+                // Se falhou e não for timeout ou erro definitivo, tenta os proxies sequencialmente
+                if (!isTimeout && !isDefinitiveError) {
+                    const proxiesToTry = [];
+                    if (!api.proxyByDefault) {
+                        proxiesToTry.push(PROXIES[0]);
+                        if (PROXIES[1]) proxiesToTry.push(PROXIES[1]);
+                    } else {
+                        // Se o primeiro proxy já falhou, tenta o segundo
+                        if (PROXIES[1]) proxiesToTry.push(PROXIES[1]);
+                    }
+
+                    for (const proxy of proxiesToTry) {
+                        try {
+                            const proxyUrl = proxy.wrap(endpoint);
+                            const altResponse = await fetch(proxyUrl);
+                            if (altResponse.ok) {
+                                let altJson = await altResponse.json();
+                                const rawText = proxy.parse(altJson);
+                                const parsed = JSON.parse(rawText);
+                                const normalized = apiAdapters[api.id](parsed);
+                                if (normalized) {
+                                    return { apiId: api.id, data: normalized, success: true };
+                                }
                             }
+                        } catch (e) {
+                            // tenta próximo
                         }
-                    } catch (e) {
-                        // ignora falha secundária
                     }
                 }
                 return { apiId: api.id, error: err.message, success: false };
@@ -2069,10 +2090,14 @@
 
         // Busca dados extras de Obras CNO
         async function queryCnoData(cleanCnpj) {
+            const url = `https://api.opencnpj.org/${cleanCnpj}?dataset=cno`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout para CNO
+
             try {
-                // Tenta chamar o endpoint da OpenCNPJ para buscar obras CNO
-                const url = `https://api.opencnpj.org/${cleanCnpj}?dataset=cno`;
-                const response = await fetch(url);
+                // Tenta chamar diretamente
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.cno && data.cno.obras) {
@@ -2080,7 +2105,28 @@
                     }
                 }
             } catch (e) {
-                console.log("Erro ao buscar CNO: ", e);
+                clearTimeout(timeoutId);
+                const isTimeout = e.name === 'AbortError';
+                
+                // Fallback via proxies se não foi cancelado por timeout
+                if (!isTimeout) {
+                    for (const proxy of PROXIES) {
+                        try {
+                            const proxyUrl = proxy.wrap(url);
+                            const response = await fetch(proxyUrl);
+                            if (response.ok) {
+                                let json = await response.json();
+                                const rawText = proxy.parse(json);
+                                const data = JSON.parse(rawText);
+                                if (data && data.cno && data.cno.obras) {
+                                    return data.cno.obras;
+                                }
+                            }
+                        } catch (err) {
+                            console.log(`Erro ao buscar CNO com proxy ${proxy.name}: `, err);
+                        }
+                    }
+                }
             }
             return null;
         }
@@ -2622,19 +2668,27 @@
             }
 
             // Atividades Econômicas (CNAE)
-            document.getElementById('resCnaePrincipal').innerText = d.cnae_principal ? `${d.cnae_principal.codigo} - ${d.cnae_principal.descricao}` : '-';
+            const principal = d.cnae_principal;
+            const hasPrincipal = principal && (principal.codigo || principal.descricao);
+            document.getElementById('resCnaePrincipal').innerText = hasPrincipal ? `${principal.codigo || '-'} - ${principal.descricao || '-'}` : '-';
             
             const secCount = document.getElementById('resSecCnaeCount');
             const secList = document.getElementById('resSecCnaeList');
             secList.innerHTML = '';
             
             if (d.cnae_secundarias && d.cnae_secundarias.length > 0) {
-                secCount.innerText = d.cnae_secundarias.length;
-                d.cnae_secundarias.forEach(c => {
-                    const li = document.createElement('li');
-                    li.innerText = `${c.codigo} - ${c.descricao}`;
-                    secList.appendChild(li);
-                });
+                // Filtra secundárias que possuam código ou descrição definidos
+                const validSec = d.cnae_secundarias.filter(c => c && (c.codigo || c.descricao));
+                secCount.innerText = validSec.length;
+                if (validSec.length > 0) {
+                    validSec.forEach(c => {
+                        const li = document.createElement('li');
+                        li.innerText = `${c.codigo || '-'} - ${c.descricao || '-'}`;
+                        secList.appendChild(li);
+                    });
+                } else {
+                    secList.innerHTML = '<li style="list-style:none; color:var(--color-text-muted)">Nenhuma atividade secundária cadastrada.</li>';
+                }
             } else {
                 secCount.innerText = '0';
                 secList.innerHTML = '<li style="list-style:none; color:var(--color-text-muted)">Nenhuma atividade secundária cadastrada.</li>';
@@ -2966,6 +3020,7 @@
                 alert(`Erro ao conectar com webhook do CRM: ${e.message}`);
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
+                btn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
             }
         }
 
@@ -2983,7 +3038,7 @@
                 format: 'a4'
             });
 
-            // Cores corporativas 
+            // Cores corporativas Ameripan
             const brandColor = [99, 102, 241]; // Indigo
             const textColor = [15, 23, 42];     // Slate 900
             const textMuted = [100, 116, 139];  // Slate 500
@@ -2994,6 +3049,7 @@
             const leftMargin = 15;
             const rightMargin = 195;
 
+            // ==================== PÁGINA 1: FICHA PRINCIPAL E SCORE ====================
             // HEADER DO RELATÓRIO
             doc.setFillColor(...brandColor);
             doc.rect(15, y, 180, 2, 'F');
@@ -3002,7 +3058,7 @@
             doc.setTextColor(...textColor);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(18);
-            doc.text("FICHA DE INTELIGÊNCIA CADASTRAL", leftMargin, y);
+            doc.text("FICHA DE INTELIGÊNCIA COMERCIAL B2B", leftMargin, y);
             y += 5;
 
             doc.setFont('helvetica', 'normal');
@@ -3010,6 +3066,56 @@
             doc.setTextColor(...textMuted);
             doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Buscador CNPJ v2 (Merge Multi-API)`, leftMargin, y);
             y += 8;
+
+            // CARD DO LEAD SCORE B2B (Destaque elegante)
+            const scoreVal = document.getElementById('leadScoreVal').innerText;
+            const tempVal = document.getElementById('leadTempBadge').innerText;
+            
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(...borderLine);
+            doc.roundedRect(leftMargin, y, 180, 32, 2, 2, 'FD');
+            
+            // Desenha o círculo/quadrado do score
+            doc.setFillColor(241, 245, 249);
+            doc.rect(leftMargin + 5, y + 4, 24, 24, 'F');
+            doc.setTextColor(...brandColor);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.text(scoreVal, leftMargin + 17, y + 17, { align: 'center' });
+            doc.setFontSize(6.5);
+            doc.setTextColor(...textMuted);
+            doc.text("SCORE B2B", leftMargin + 17, y + 23, { align: 'center' });
+            
+            // Temperatura e Badge
+            doc.setTextColor(...textColor);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text("Termômetro de Prospecção:", leftMargin + 35, y + 9);
+            
+            // Cor do badge de acordo com a temperatura
+            let badgeColor = [59, 130, 246]; // Azul frio
+            if (scoreVal >= 70) badgeColor = [220, 38, 38]; // Vermelho quente
+            else if (scoreVal >= 35) badgeColor = [217, 119, 6]; // Laranja morno
+            
+            doc.setTextColor(...badgeColor);
+            doc.setFontSize(12);
+            doc.text(tempVal, leftMargin + 35, y + 15);
+            
+            // Fatores resumidos
+            doc.setTextColor(...textColor);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            
+            const reasonsList = Array.from(document.querySelectorAll('#leadReasonsList li')).map(li => li.innerText);
+            let reasonY = y + 20;
+            reasonsList.slice(0, 3).forEach(reason => {
+                doc.text(`• ${reason}`, leftMargin + 35, reasonY);
+                reasonY += 3.5;
+            });
+            if (reasonsList.length > 3) {
+                doc.text(`• ... e outros fatores detalhados no sistema e página 2.`, leftMargin + 35, reasonY);
+            }
+            y += 38;
 
             // DADOS GERAIS
             doc.setFont('helvetica', 'bold');
@@ -3023,6 +3129,7 @@
 
             doc.setFontSize(8);
             doc.setTextColor(...textMuted);
+            doc.setFont('helvetica', 'normal');
             doc.text("RAZÃO SOCIAL:", leftMargin, y);
             doc.setTextColor(...textColor);
             doc.setFont('helvetica', 'bold');
@@ -3068,7 +3175,6 @@
             doc.setTextColor(...textMuted);
             doc.text("NATUREZA JURÍDICA:", leftMargin, y);
             doc.setTextColor(...textColor);
-            // Trunca se muito longo para não quebrar layout
             let nature = d.natureza_juridica || '-';
             if (nature.length > 65) nature = nature.substring(0, 62) + '...';
             doc.text(nature, 50, y);
@@ -3111,13 +3217,12 @@
             doc.text(ageVal !== null ? `${ageVal} anos (${ageDesc.text})` : 'Não Calculável', 50, y);
             y += 5;
 
-            // Adiciona observação tributária de decisão
+            // Observação tributária
             doc.setFillColor(245, 245, 245);
             doc.rect(leftMargin, y, 180, 10, 'F');
             doc.setTextColor(...brandColor);
             doc.setFont('helvetica', 'italic');
             doc.setFontSize(7.5);
-            
             let taxComercial = '';
             if (simplesOpt || meiOpt) {
                 taxComercial = "Decisão de venda ágil. MEI e Simples Nacional possuem tomada de decisão concentrada e rápida diretamente com os sócios.";
@@ -3170,13 +3275,35 @@
             doc.text("E-MAIL:", leftMargin, y);
             doc.setTextColor(...textColor);
             doc.text(d.email || '-', 50, y);
+
+            // Numeração rodapé pág 1
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...textMuted);
+            doc.text("Página 1 de 2", rightMargin - 15, 287);
+
+            // ==================== PÁGINA 2: DETALHES TÉCNICOS, QSA, CNO E HISTÓRICO ====================
+            doc.addPage();
+            y = 18;
+
+            doc.setFillColor(...brandColor);
+            doc.rect(15, y, 180, 1.5, 'F');
+            y += 5;
+            
+            doc.setTextColor(...textColor);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text("DETALHAMENTO TÉCNICO & HISTÓRICO", leftMargin, y);
+            doc.setFontSize(7.5);
+            doc.setTextColor(...textMuted);
+            doc.text(`CNPJ: ${formatCnpj(d.cnpj)} | ${d.razao_social}`, 110, y);
             y += 8;
 
-            // ATIVIDADE ECONÔMICA E SÓCIOS
+            // ATIVIDADES ECONÔMICAS (CNAE)
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(10);
             doc.setTextColor(...brandColor);
-            doc.text("4. ATIVIDADES ECONÔMICAS (CNAE) & QUADRO SOCIETÁRIO (QSA)", leftMargin, y);
+            doc.text("4. ATIVIDADES ECONÔMICAS (CNAE)", leftMargin, y);
             y += 2;
             doc.line(leftMargin, y, rightMargin, y);
             y += 5;
@@ -3187,57 +3314,104 @@
             doc.text("CNAE PRINCIPAL:", leftMargin, y);
             doc.setTextColor(...textColor);
             doc.setFont('helvetica', 'bold');
-            let cnaeP = d.cnae_principal ? `${d.cnae_principal.codigo} - ${d.cnae_principal.descricao}` : '-';
+            const principal = d.cnae_principal;
+            const hasPrincipal = principal && (principal.codigo || principal.descricao);
+            let cnaeP = hasPrincipal ? `${principal.codigo || '-'} - ${principal.descricao || '-'}` : '-';
             if (cnaeP.length > 70) cnaeP = cnaeP.substring(0, 67) + '...';
             doc.text(cnaeP, 50, y);
-            y += 6;
+            y += 5;
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(...textMuted);
-            doc.text("SÓCIOS (QSA):", leftMargin, y);
+            doc.text("SECUNDÁRIAS:", leftMargin, y);
             doc.setTextColor(...textColor);
-            
-            if (d.qsa && d.qsa.length > 0) {
-                let count = 0;
-                d.qsa.forEach(s => {
-                    if (count < 3) { // Limita a 3 no PDF para não quebrar a página
-                        let socioDetails = `${s.nome} (${s.cargo || 'Sócio'})`;
-                        if (s.faixa_etaria && s.faixa_etaria !== '-') socioDetails += ` | Faixa: ${s.faixa_etaria}`;
-                        doc.text(socioDetails, 50, y + (count * 4.5));
-                        count++;
-                    }
+
+            const secCnaes = d.cnae_secundarias || [];
+            const validSec = secCnaes.filter(c => c && (c.codigo || c.descricao));
+            if (validSec.length > 0) {
+                let limit = 4;
+                validSec.slice(0, limit).forEach(c => {
+                    let desc = `${c.codigo || '-'} - ${c.descricao || '-'}`;
+                    if (desc.length > 70) desc = desc.substring(0, 67) + '...';
+                    doc.text(desc, 50, y);
+                    y += 4.5;
                 });
-                if (d.qsa.length > 3) {
-                    doc.text(`... e mais ${d.qsa.length - 3} sócios listados no sistema.`, 50, y + (count * 4.5));
-                    y += (count * 4.5) + 5;
+                if (validSec.length > limit) {
+                    doc.text(`... e mais ${validSec.length - limit} atividades secundárias.`, 50, y);
+                    y += 5;
                 } else {
-                    y += (count * 4.5) + 2;
+                    y += 1;
                 }
             } else {
-                doc.text("Nenhum sócio informado nas bases capturadas.", 50, y);
-                y += 6;
+                doc.text("Nenhuma atividade secundária cadastrada.", 50, y);
+                y += 5;
             }
+            y += 4;
 
-            // OBRAS CNO SE HOUVER
-            if (d.cno && d.cno.length > 0) {
-                y += 2;
+            // QUADRO SOCIETÁRIO (QSA)
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.setTextColor(...brandColor);
+            doc.text("5. QUADRO SOCIETÁRIO (QSA)", leftMargin, y);
+            y += 2;
+            doc.line(leftMargin, y, rightMargin, y);
+            y += 5;
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...textColor);
+
+            if (d.qsa && d.qsa.length > 0) {
+                let limitSocios = 6;
+                d.qsa.slice(0, limitSocios).forEach(s => {
+                    let socioDetails = `• ${s.nome} (${s.cargo || 'Sócio'})`;
+                    if (s.faixa_etaria && s.faixa_etaria !== '-') socioDetails += ` | Faixa: ${s.faixa_etaria}`;
+                    if (s.cpf_mascarado) socioDetails += ` | CPF: ${s.cpf_mascarado}`;
+                    doc.text(socioDetails, leftMargin + 2, y);
+                    y += 4.5;
+                });
+                if (d.qsa.length > limitSocios) {
+                    doc.text(`• ... e mais ${d.qsa.length - limitSocios} sócios cadastrados.`, leftMargin + 2, y);
+                    y += 5;
+                } else {
+                    y += 1;
+                }
+            } else {
+                doc.setTextColor(...textMuted);
+                doc.text("Nenhum sócio informado nas bases capturadas.", leftMargin + 2, y);
+                y += 5;
+            }
+            y += 4;
+
+            // OBRAS CNO SE HOUVER E HABILITADO
+            const isCnoEnabled = document.getElementById('chkEnableCnoQuery')?.checked === true;
+            if (isCnoEnabled && d.cno && d.cno.length > 0) {
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(9);
+                doc.setFontSize(10);
                 doc.setTextColor(...brandColor);
-                doc.text(`OBRAS ATIVAS (CNO) - DETECTADO ${d.cno.length} OBRA(S)`, leftMargin, y);
+                doc.text(`6. OBRAS ATIVAS (CNO) - DETECTADO ${d.cno.length} OBRA(S)`, leftMargin, y);
                 y += 2;
                 doc.line(leftMargin, y, rightMargin, y);
-                y += 4;
+                y += 5;
 
                 doc.setFontSize(8);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(...textColor);
 
-                d.cno.slice(0, 3).forEach(o => {
-                    doc.text(`• CNO: ${o.cno} | ${o.nome || o.nome_obra || 'Sem Nome'} | Município: ${o.municipio || '-'}/${o.uf || ''}`, leftMargin + 2, y);
+                d.cno.slice(0, 4).forEach(o => {
+                    const statusStr = (o.situacao && typeof o.situacao === 'object' ? o.situacao.descricao : o.situacao) || 'Ativa';
+                    let obraName = o.nome || o.nome_obra || 'Sem Nome';
+                    if (obraName.length > 55) obraName = obraName.substring(0, 52) + '...';
+                    doc.text(`• CNO: ${o.cno} | ${obraName} | Status: ${statusStr}`, leftMargin + 2, y);
                     y += 4.5;
                 });
-                y += 2;
+                if (d.cno.length > 4) {
+                    doc.text(`• ... e mais ${d.cno.length - 4} obras cadastradas.`, leftMargin + 2, y);
+                    y += 5;
+                } else {
+                    y += 1;
+                }
+                y += 4;
             }
 
             // SNAPSHOT MUDANÇAS RECENTES (Se houver)
@@ -3246,44 +3420,51 @@
             if (lastSnap) {
                 const diffs = compareSnapshots(lastSnap, d);
                 if (diffs.length > 0) {
-                    y += 3;
                     doc.setFont('helvetica', 'bold');
                     doc.setFontSize(9);
                     doc.setTextColor(220, 100, 30); // Laranja aviso
-                    doc.text("HISTÓRICO / ALTERAÇÕES DETECTADAS DESDE A ÚLTIMA CONSULTA LOCAL", leftMargin, y);
+                    doc.text("7. HISTÓRICO / ALTERAÇÕES DETECTADAS DESDE A ÚLTIMA CONSULTA", leftMargin, y);
                     y += 2;
                     doc.line(leftMargin, y, rightMargin, y);
-                    y += 4;
+                    y += 5;
 
                     doc.setFontSize(7.5);
                     doc.setFont('helvetica', 'normal');
-                    diffs.forEach(diff => {
+                    doc.setTextColor(...textColor);
+                    diffs.slice(0, 4).forEach(diff => {
                         doc.text(`[MUDANÇA] ${diff.campo}: de "${diff.anterior}" para "${diff.novo}"`, leftMargin + 2, y);
                         y += 4;
                     });
+                    y += 2;
                 }
             }
 
-            // GLOSSÁRIO EXPLICATIVO NO RODAPÉ
+            // GLOSSÁRIO EXPLICATIVO NO RODAPÉ DA PÁGINA 2
             doc.setFillColor(248, 250, 252);
-            doc.rect(leftMargin, 260, 180, 20, 'F');
+            doc.rect(leftMargin, 258, 180, 22, 'F');
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
             doc.setTextColor(...brandColor);
-            doc.text("GLOSSÁRIO & APOIO COMERCIAL:", leftMargin + 3, 264);
+            doc.text("GLOSSÁRIO & APOIO COMERCIAL:", leftMargin + 3, 262);
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(...textColor);
             doc.setFontSize(6.5);
-            doc.text("• Situação RFB: Regularidade legal. Empresas inaptas/suspensas representam alto risco para concessão de crédito.", leftMargin + 3, 268);
-            doc.text("• Capital Social: Medida de porte inicial da empresa. Útil para balizar limites de faturamento e limites operacionais.", leftMargin + 3, 271);
-            doc.text("• CNAE Foco: Alvo primário — 5611-2/03 (Sorveteria/Açaí/Sucos), 4721-1/04 (Doces/Sorvete), 1053-8/00 (Fabricação de gelados). Alvo adjacente — 4721-1/02 (Padaria+Confeitaria), 1091-1/02 (Confeitaria produção própria), 4721-1/03 (Laticínios). Canal indireto — 4712-1/00 (Minimercado), 5612-1/00 (Ambulante).", leftMargin + 3, 274);
-            doc.text("• Regime Tributário: MEI/Simples costumam ter compras aprovadas mais rápido (contato direto com o proprietário/decisor).", leftMargin + 3, 277);
+            doc.text("• Situação RFB: Regularidade legal. Empresas inaptas/suspensas representam alto risco para concessão de crédito.", leftMargin + 3, 266);
+            doc.text("• Capital Social: Medida de porte inicial da empresa. Útil para balizar limites de faturamento e limites operacionais.", leftMargin + 3, 269);
+            doc.text("• CNAE Foco (Ameripan): Alvo primário — 5611-2/03 (Sorveteria/Açaí/Sucos), 4721-1/04 (Doces/Sorvete), 1053-8/00 (Fabricação de gelados). Alvo adjacente — 4721-1/02 (Padaria+Confeitaria), 1091-1/02 (Confeitaria produção própria), 4721-1/03 (Laticínios). Canal indireto — 4712-1/00 (Minimercado), 5612-1/00 (Ambulante).", leftMargin + 3, 272);
+            doc.text("• Regime Tributário: MEI/Simples costumam ter compras aprovadas mais rápido (contato direto com o proprietário/decisor).", leftMargin + 3, 275);
+
+            // Numeração rodapé pág 2
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...textMuted);
+            doc.text("Página 2 de 2", rightMargin - 15, 287);
 
             // Salva PDF
             doc.save(`CNPJ_${cleanCnpj}.pdf`);
-            addTerminalLog(`PDF salvo com sucesso: CNPJ_${cleanCnpj}.pdf`, 'succ');
         }
+
 
         // ===== AUXILIARES DE CONFIGURAÇÃO DE CASCATA / MERGE =====
         function initTheme() {
@@ -3354,7 +3535,7 @@
             if (cnoCached !== null) {
                 document.getElementById('chkEnableCnoQuery').checked = cnoCached === 'true';
             } else {
-                document.getElementById('chkEnableCnoQuery').checked = false; // Padrão desativado
+                document.getElementById('chkEnableCnoQuery').checked = true; // Padrão ativado
             }
 
             document.getElementById('btnSettingsReset').onclick = () => {
