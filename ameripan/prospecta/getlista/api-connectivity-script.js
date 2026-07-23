@@ -33,16 +33,17 @@ const state = {
 
     deepMergeEnabled: false,
 
-    // §1.1 — Fila de APIs na ordem customizável pelo usuário
+    // §1.1 — Fila de APIs na ordem customizável pelo usuário (Nova Ordem de Prioridade)
     apis: [
         { id: 'brasilapi',       name: 'BrasilAPI',       url: 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',                                        active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
-        { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
+        { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
+        { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
-        { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'cnpja',           name: 'CNPJa',           url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
-        { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 }
+        { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
+        { id: 'cnpjfacil_ie',    name: 'CNPJ Fácil (IE)', url: 'https://www.cnpjfacil.com/api/cnpj-ie?cnpj={cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true }
     ]
 };
 
@@ -242,6 +243,12 @@ const utils = {
             reasons.push(`+20 ${item.cno.obras.length} obra(s) vinculada(s) no CNO.`);
         }
 
+        // Inscrição Estadual (+5)
+        if (item.inscricao_estadual && item.inscricao_estadual !== '-') {
+            score += 5;
+            reasons.push('+5 Inscrição Estadual (IE) cadastrada.');
+        }
+
         // Geocodificação / Haversine (se CEP de Origem estiver configurado)
         const cepOrig = stripNums(scoreCfg.cepOrigem);
         const cepDest = stripNums(item.cep);
@@ -403,6 +410,8 @@ const utils = {
     // ===== MESCLAGEM DE DADOS (DEEP MERGE MULTI-API) =====
     mergeCnpjData(base, incoming) {
         if (!base || !incoming) return base || incoming;
+        if ((!base.inscricao_estadual || base.inscricao_estadual === '-') && incoming.inscricao_estadual && incoming.inscricao_estadual !== '-') base.inscricao_estadual = incoming.inscricao_estadual;
+        if (!base.registrations && incoming.registrations) base.registrations = incoming.registrations;
         if (!base.nome_fantasia && incoming.nome_fantasia) base.nome_fantasia = incoming.nome_fantasia;
         if (!base.email && incoming.email) base.email = incoming.email;
         if (!base.ddd_telefone_1 && incoming.ddd_telefone_1) base.ddd_telefone_1 = incoming.ddd_telefone_1;
@@ -665,6 +674,38 @@ const apiAdapters = {
             cnaes_secundarios: data.cnaes_secundarios || [],
             api_origem: 'Casa dos Dados'
         };
+    },
+
+    cnpjfacil_ie: (data) => {
+        if (!data) return null;
+        let ieFormatted = '-';
+        let ieList = [];
+        if (data && Array.isArray(data.registrations) && data.registrations.length > 0) {
+            ieList = data.registrations.map(r => {
+                const num = r.number || '';
+                const uf = r.state || '';
+                const status = r.statusText || (r.enabled ? 'Sem restrição' : 'Inativa');
+                return `${num} (${uf} - ${status})`;
+            });
+            ieFormatted = ieList.join(' | ');
+        }
+
+        let sociosMapped = [];
+        if (data && Array.isArray(data.socios)) {
+            sociosMapped = data.socios.map(s => ({
+                nome_socio: s.nome || '',
+                qualificacao_socio: s.qualificacao || '',
+                data_entrada_sociedade: s.dataEntrada || ''
+            }));
+        }
+
+        return {
+            inscricao_estadual: ieFormatted,
+            registrations: data.registrations || [],
+            descricao_situacao_cadastral: data.situacaoCadastral || '',
+            qsa: sociosMapped,
+            api_origem: 'CNPJ Fácil (IE)'
+        };
     }
 };
 
@@ -761,37 +802,51 @@ const dataHandlers = {
         return null;
     },
 
-    // §1.2 — Teste de conectividade "Ping" com CNPJ do Banco do Brasil
+    // §1.2 — Teste de conectividade "Ping" com medição de latência em tempo real
     async testApisConnection() {
         const testCnpj = '00000000000191';
         const results = {};
         let passCount = 0;
 
+        utils.updateStatus('⚡ Testando conexão e medindo pings de todas as APIs...');
+
         for (const api of state.apis) {
             try {
                 const ctrl = new AbortController();
-                const tid = setTimeout(() => ctrl.abort(), 5000);
+                const tid = setTimeout(() => ctrl.abort(), 6000);
                 const url = api.url.replace('{cnpj}', testCnpj);
                 const fetchUrl = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+                
+                const t0 = performance.now();
                 const res = await fetch(fetchUrl, { signal: ctrl.signal });
+                const t1 = performance.now();
                 clearTimeout(tid);
+
+                const pingMs = Math.round(t1 - t0);
+                api.ping = pingMs;
 
                 if (res.ok) {
                     results[api.name] = true;
                     api.consecutiveFailures = 0;
                     api.active = true;
                     passCount++;
-                    console.log(`✅ ${api.name} OK`);
+                    console.log(`✅ ${api.name} OK (${pingMs}ms)`);
                 } else {
                     results[api.name] = false;
-                    console.warn(`⚠️ ${api.name} → ${res.status}`);
+                    console.warn(`⚠️ ${api.name} → HTTP ${res.status} (${pingMs}ms)`);
                 }
             } catch (e) {
                 results[api.name] = false;
+                api.ping = null;
                 console.warn(`❌ ${api.name} → ${e.message}`);
             }
         }
 
+        if (typeof uiControllers !== 'undefined' && uiControllers.renderApiQueueStatus) {
+            uiControllers.renderApiQueueStatus();
+        }
+
+        utils.updateStatus('✅ Teste de Pings concluído!');
         return { results, anyWorking: passCount > 0 };
     },
 

@@ -62,34 +62,18 @@ Object.assign(dataHandlers, {
             .filter(l => l.length === 14);
     },
 
-    // ====== FILTRO COMPARTILHADO (respeita checkboxes de Situação Cadastral) ======
+    // ====== FILTRO COMPARTILHADO (respeita todos os filtros avançados da tela) ======
     _getFilteredResults() {
-        const exportAll = document.getElementById('exportAll')?.checked ?? true;
-        const allowedStatuses = Array.from(document.querySelectorAll('.export-status:checked')).map(cb => cb.value.toLowerCase());
-
         const successRows = [];
         const errorRows = [];
         const apiStats = {};
 
-        state.results.forEach(result => {
+        const filteredList = (typeof uiControllers !== 'undefined' && uiControllers.getFilteredResults)
+            ? uiControllers.getFilteredResults()
+            : state.results.filter(r => r && !r.error);
+
+        filteredList.forEach(result => {
             if (!result) return;
-
-            // Filtro por CNO Obras Ativas
-            if (!result.error) {
-                const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
-                const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
-                if (cnoEnabled && cnoOnlyActive) {
-                    const hasActive = result.cno && result.cno.obras && result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
-                    if (!hasActive) return;
-                }
-            }
-
-            // Filtro por situação cadastral
-            if (!result.error && !exportAll) {
-                const statusVal = (result.descricao_situacao_cadastral || '').toLowerCase();
-                const matchesStatus = allowedStatuses.some(s => statusVal.includes(s));
-                if (!matchesStatus) return;
-            }
 
             if (result.error) {
                 errorRows.push({
@@ -247,6 +231,7 @@ Object.assign(dataHandlers, {
                 Object.assign(row, {
                     'CNPJ': result.cnpj,
                     'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+                    'Inscrição Estadual (IE)': result.inscricao_estadual || '',
                     'Score B2B': scoreInfo.score || 0,
                     'Temperatura Lead': scoreInfo.temp || 'Frio ❄️',
                     'Score Motivos': (scoreInfo.reasons || []).join(' | '),

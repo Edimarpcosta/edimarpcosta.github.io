@@ -705,7 +705,10 @@
                 <div id="apiManagerPanel" class="hidden p-4 rounded-lg mb-3" style="background:var(--bg-card); border:1px solid var(--border-card);">
                     <div class="flex justify-between items-center mb-3">
                         <span class="text-xs font-semibold" style="color:var(--color-accent)">Ordem de Prioridade das APIs (Use ↑ ↓ para reordenar):</span>
-                        <button type="button" onclick="utils.loadApiOrder(); uiControllers.renderApiQueueStatus();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">🔄 Restaurar Salvo</button>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="utils.loadApiOrder(); uiControllers.renderApiQueueStatus();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">🔄 Restaurar Salvo</button>
+                            <button type="button" onclick="localStorage.removeItem('cnpj_apis_order'); location.reload();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">⚡ Restaurar Padrão</button>
+                        </div>
                     </div>
                     <div id="apiOrderingList" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
                 </div>
@@ -762,13 +765,19 @@
                     </div>
                 </div>
 
-                <!-- Modo Enriquecimento Profundo Opção -->
-                <div class="mt-3 pt-3 border-t border-gray-700/30 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                    <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;">
-                        <input type="checkbox" id="deepMergeEnabledCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.deepMergeEnabled = this.checked">
-                        🔍 Iniciar no Modo Enriquecimento Profundo (Multi-API)
-                    </label>
-                    <span class="text-xs" style="color:var(--color-text-muted)">⚠️ Consulta múltiplas APIs ativas por CNPJ para preencher campos ausentes (sócios, e-mails, telefones). Leva mais tempo.</span>
+                <!-- Modo Enriquecimento Profundo Opção & IE -->
+                <div class="mt-3 pt-3 border-t border-gray-700/30 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;">
+                            <input type="checkbox" id="deepMergeEnabledCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.deepMergeEnabled = this.checked">
+                            🔍 Modo Enriquecimento Profundo (Multi-API)
+                        </label>
+                        <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;" title="Consulta Inscrição Estadual e sócios via API CNPJ Fácil">
+                            <input type="checkbox" id="ieEnabledCheck" checked class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.ieEnabled = this.checked">
+                            🏢 Consultar Inscrição Estadual (IE - CNPJ Fácil)
+                        </label>
+                    </div>
+                    <span class="text-xs" style="color:var(--color-text-muted)">⚠️ Consulta múltiplas APIs ativas por CNPJ para enriquecer Inscrição Estadual, sócios e contatos.</span>
                 </div>
             </div>
 
@@ -801,7 +810,7 @@
             <div id="statsPanel" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 hidden">
                 <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
                 <div class="stat-card"><div class="stat-value" id="statSuccess" style="color:#4ade80">0</div><div class="stat-label">Sucesso</div></div>
-                <div class="stat-card"><div class="stat-value" id="statError" style="color:#f87171">0</div><div class="stat-label">Erros</div></div>
+                <div class="stat-card cursor-pointer hover:border-red-500 transition-colors" onclick="uiControllers.showFailedCnpjsModal()" title="Clique para ver os CNPJs com falha e opções de re-tentativa"><div class="stat-value" id="statError" style="color:#f87171">0</div><div class="stat-label">Erros (Re-tentar)</div></div>
                 <div class="stat-card"><div class="stat-value" id="statPending" style="color:#facc15">0</div><div class="stat-label">Pendentes</div></div>
             </div>
 
@@ -815,6 +824,7 @@
                 <button id="exportMaposcopeBtn" class="btn-primary btn-export opacity-50" disabled>🗺️ Exportar Maposcope</button>
                 <button id="exportCompletoBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#6366f1,#4f46e5)">📊 Exportar Completo (PT-BR)</button>
                 <button id="reenrichBtn" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="dataHandlers.reenrichWithDeepMerge()">🔍 Reenriquecer Lista (Modo Profundo)</button>
+                <button id="retryFailedBtn" class="btn-primary" style="background:linear-gradient(135deg,#dc2626,#b91c1c);" onclick="uiControllers.showFailedCnpjsModal()">⚠️ Re-tentar Falhas</button>
             </div>
         </div>
 
@@ -849,6 +859,99 @@
                         <input type="checkbox" id="expandResultsDefault" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> 
                         Manter expandidos (padrão colapsado)
                     </label>
+                </div>
+            </div>
+
+            <!-- Painel de Filtros Avançados dos Resultados (Tempo Real) -->
+            <div id="advancedFiltersPanel" class="mb-4 p-4 rounded-lg" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                <div class="flex items-center justify-between cursor-pointer select-none mb-3" onclick="const p = document.getElementById('filterFieldsContainer'); const icon = this.querySelector('.filter-toggle-icon'); if (p.classList.contains('hidden')) { p.classList.remove('hidden'); icon.textContent = '▲'; } else { p.classList.add('hidden'); icon.textContent = '▼'; }">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-bold" style="color:var(--color-accent)">🔍 Filtros em Tempo Real</span>
+                        <span id="filteredResultsCounter" class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(99,102,241,0.15); color:#6366f1">Exibindo todos os resultados</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="text-xs px-2.5 py-1 rounded font-semibold" style="background:var(--bg-button-secondary); border:1px solid var(--border-card); color:var(--color-text); cursor:pointer;" onclick="event.stopPropagation(); uiControllers.resetFilters()">🧹 Limpar Filtros</button>
+                        <span class="filter-toggle-icon text-xs font-bold" style="color:var(--color-text-muted)">▲</span>
+                    </div>
+                </div>
+
+                <!-- Grid de Inputs de Filtro -->
+                <div id="filterFieldsContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <!-- Temperatura Lead -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Temperatura Lead</label>
+                        <div class="flex items-center gap-2 flex-wrap pt-1">
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempQuente" class="filter-input" style="accent-color:#16a34a" onchange="uiControllers.applyFilters()"> 🔥 Quente
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempMorno" class="filter-input" style="accent-color:#eab308" onchange="uiControllers.applyFilters()"> ⚡ Morno
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempFrio" class="filter-input" style="accent-color:#3b82f6" onchange="uiControllers.applyFilters()"> ❄️ Frio
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Nome / Fantasia / Razão Social -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Razão Social / Fantasia</label>
+                        <input type="text" id="filterEmpresa" placeholder="Ex: Sorvetes, Borelli..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Nome do Sócio (QSA) -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Nome do Sócio (QSA)</label>
+                        <input type="text" id="filterSocio" placeholder="Ex: Fabio, Silva..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Raiz CNPJ / CNPJ -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">CNPJ ou Raiz (8 dígitos)</label>
+                        <input type="text" id="filterCnpj" placeholder="Ex: 97554300..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Cidade / Bairro -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Cidade / Bairro / UF</label>
+                        <input type="text" id="filterLocal" placeholder="Ex: Ribeirão Preto, SP..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- CNAE Principal / Secundário -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">CNAE (Código/Texto)</label>
+                        <input type="text" id="filterCnae" placeholder="Ex: 5611, Lanchonetes..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Capital Social Mínimo / Máximo -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Capital Social (R$ Min - Max)</label>
+                        <div class="flex gap-1">
+                            <input type="number" id="filterCapitalMin" placeholder="Mín R$" class="w-1/2 px-2 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                            <input type="number" id="filterCapitalMax" placeholder="Máx R$" class="w-1/2 px-2 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                        </div>
+                    </div>
+
+                    <!-- Obras CNO -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Obras CNO</label>
+                        <select id="filterObras" class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" onchange="uiControllers.applyFilters()">
+                            <option value="todos">Todos os leads</option>
+                            <option value="com_obras">Apenas com Obras CNO</option>
+                            <option value="obras_ativas">Apenas com Obras Ativas</option>
+                            <option value="sem_obras">Apenas sem Obras CNO</option>
+                        </select>
+                    </div>
+
+                    <!-- Inscrição Estadual -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Inscrição Estadual (IE)</label>
+                        <select id="filterIe" class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" onchange="uiControllers.applyFilters()">
+                            <option value="todos">Todas as IEs</option>
+                            <option value="com_ie">Apenas com IE Cadastrada</option>
+                            <option value="sem_ie">Sem IE / Não informada</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

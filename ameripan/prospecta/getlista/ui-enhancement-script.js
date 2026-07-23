@@ -394,31 +394,196 @@ const uiControllers = {
         }
     },
 
-    applyTableFilters() {
+    // ===== FILTRAGEM DINÂMICA EM TEMPO REAL =====
+    getFilteredResults() {
+        if (!state.results || state.results.length === 0) return [];
+
+        // 1. Filtros de Situação Cadastral (topo)
+        const exportAll = document.getElementById('exportAll')?.checked ?? true;
+        const selectedStatuses = new Set(
+            Array.from(document.querySelectorAll('.export-status:checked')).map(cb => cb.value.toUpperCase())
+        );
+
+        // 2. Temperatura Lead
+        const tempQuente = document.getElementById('filterTempQuente')?.checked;
+        const tempMorno = document.getElementById('filterTempMorno')?.checked;
+        const filterTempFrio = document.getElementById('filterTempFrio')?.checked;
+        const hasTempFilter = (tempQuente || tempMorno || filterTempFrio) && !(tempQuente && tempMorno && filterTempFrio);
+
+        // 3. Inputs de Filtro
+        const empresaTerm = (document.getElementById('filterEmpresa')?.value || '').trim().toLowerCase();
+        const socioTerm = (document.getElementById('filterSocio')?.value || '').trim().toLowerCase();
+        const cnpjTerm = (document.getElementById('filterCnpj')?.value || '').trim().replace(/\D/g, '');
+        const localTerm = (document.getElementById('filterLocal')?.value || '').trim().toLowerCase();
+        const cnaeTerm = (document.getElementById('filterCnae')?.value || '').trim().toLowerCase();
+        const capMinInput = document.getElementById('filterCapitalMin')?.value;
+        const capMaxInput = document.getElementById('filterCapitalMax')?.value;
+        const capMin = capMinInput !== undefined && capMinInput !== '' ? parseFloat(capMinInput) : NaN;
+        const capMax = capMaxInput !== undefined && capMaxInput !== '' ? parseFloat(capMaxInput) : NaN;
+        const obrasFilter = document.getElementById('filterObras')?.value || 'todos';
+        const ieFilter = document.getElementById('filterIe')?.value || 'todos';
+
+        // Suporte a CNO Obras Ativas
         const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
         const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
-        
+
+        return state.results.filter(r => {
+            if (!r || r.error) return false;
+
+            // CNO Obras Ativas (configuração global)
+            if (cnoEnabled && cnoOnlyActive) {
+                const hasActive = r.cno && r.cno.obras && r.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+                if (!hasActive) return false;
+            }
+
+            // Situação Cadastral
+            if (!exportAll && selectedStatuses.size > 0) {
+                const st = (r.descricao_situacao_cadastral || r.situacao || '').toUpperCase();
+                if (!selectedStatuses.has(st)) return false;
+            }
+
+            // Temperatura Lead
+            if (hasTempFilter) {
+                const score = r.scoreInfo?.score || 0;
+                let passTemp = false;
+                if (tempQuente && score >= 70) passTemp = true;
+                if (tempMorno && score >= 35 && score < 70) passTemp = true;
+                if (filterTempFrio && score < 35) passTemp = true;
+                if (!passTemp) return false;
+            }
+
+            // Empresa (Razão Social / Nome Fantasia)
+            if (empresaTerm) {
+                const rs = (r.razao_social || '').toLowerCase();
+                const fant = (r.nome_fantasia || '').toLowerCase();
+                if (!rs.includes(empresaTerm) && !fant.includes(empresaTerm)) return false;
+            }
+
+            // Sócio (QSA)
+            if (socioTerm) {
+                const hasSocioMatch = Array.isArray(r.qsa) && r.qsa.some(s => {
+                    const nome = (s.nome_socio || s.nome || '').toLowerCase();
+                    return nome.includes(socioTerm);
+                });
+                if (!hasSocioMatch) return false;
+            }
+
+            // CNPJ / Raiz
+            if (cnpjTerm) {
+                const cleanCnpj = String(r.cnpj || '').replace(/\D/g, '');
+                if (!cleanCnpj.includes(cnpjTerm)) return false;
+            }
+
+            // Local (Cidade / Bairro / UF / Logradouro)
+            if (localTerm) {
+                const mun = (r.municipio || '').toLowerCase();
+                const uf = (r.uf || '').toLowerCase();
+                const bairro = (r.bairro || '').toLowerCase();
+                const logr = (r.logradouro || '').toLowerCase();
+                if (!mun.includes(localTerm) && !uf.includes(localTerm) && !bairro.includes(localTerm) && !logr.includes(localTerm)) return false;
+            }
+
+            // CNAE
+            if (cnaeTerm) {
+                const cnaeCod = String(r.cnae_fiscal || '').toLowerCase();
+                const cnaeDesc = (r.cnae_fiscal_descricao || '').toLowerCase();
+                let hasCnaeSec = false;
+                if (Array.isArray(r.cnaes_secundarios)) {
+                    hasCnaeSec = r.cnaes_secundarios.some(c => 
+                        String(c.codigo || '').toLowerCase().includes(cnaeTerm) ||
+                        (c.descricao || '').toLowerCase().includes(cnaeTerm)
+                    );
+                }
+                if (!cnaeCod.includes(cnaeTerm) && !cnaeDesc.includes(cnaeTerm) && !hasCnaeSec) return false;
+            }
+
+            // Capital Social
+            const cap = Number(r.capital_social) || 0;
+            if (!isNaN(capMin) && cap < capMin) return false;
+            if (!isNaN(capMax) && cap > capMax) return false;
+
+            // Obras CNO
+            if (obrasFilter === 'com_obras') {
+                if (!r.cno || !r.cno.obras || r.cno.obras.length === 0) return false;
+            } else if (obrasFilter === 'obras_ativas') {
+                const hasActive = r.cno && r.cno.obras && r.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
+                if (!hasActive) return false;
+            } else if (obrasFilter === 'sem_obras') {
+                if (r.cno && r.cno.obras && r.cno.obras.length > 0) return false;
+            }
+
+            // Inscrição Estadual
+            if (ieFilter === 'com_ie') {
+                if (!r.inscricao_estadual || r.inscricao_estadual === '-') return false;
+            } else if (ieFilter === 'sem_ie') {
+                if (r.inscricao_estadual && r.inscricao_estadual !== '-') return false;
+            }
+
+            return true;
+        });
+    },
+
+    applyFilters() {
+        const filtered = this.getFilteredResults();
+        const filteredSet = new Set(filtered);
+
+        // 1. Atualiza visibilidade da tabela principal
         state.results.forEach((result, index) => {
             if (!result) return;
             const row = document.querySelector(`.result-row-${index}`);
             if (!row) return;
-
-            let show = true;
-            if (!result.error && cnoEnabled && cnoOnlyActive) {
-                const hasActive = result.cno && result.cno.obras && result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
-                if (!hasActive) show = false;
-            }
-
-            if (show) {
+            if (filteredSet.has(result)) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
             }
         });
+
+        // 2. Atualiza contador e estatísticas
+        const counterEl = document.getElementById('filteredResultsCounter');
+        const total = state.results.filter(r => r && !r.error).length;
+        if (counterEl) {
+            if (filtered.length === total) {
+                counterEl.textContent = `Exibindo todos os ${total} resultados`;
+                counterEl.style.background = 'rgba(99,102,241,0.15)';
+                counterEl.style.color = '#6366f1';
+            } else {
+                counterEl.textContent = `Filtrados: ${filtered.length} de ${total} resultados`;
+                counterEl.style.background = 'rgba(234,179,8,0.2)';
+                counterEl.style.color = '#ca8a04';
+            }
+        }
+
+        // 3. Atualiza agrupamentos com apenas os itens filtrados
+        this.renderGroupedResults(filtered);
+    },
+
+    resetFilters() {
+        const setCb = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+
+        setCb('filterTempQuente', false);
+        setCb('filterTempMorno', false);
+        setCb('filterTempFrio', false);
+        setVal('filterEmpresa', '');
+        setVal('filterSocio', '');
+        setVal('filterCnpj', '');
+        setVal('filterLocal', '');
+        setVal('filterCnae', '');
+        setVal('filterCapitalMin', '');
+        setVal('filterCapitalMax', '');
+        setVal('filterObras', 'todos');
+        setVal('filterIe', 'todos');
+        
+        this.applyFilters();
+    },
+
+    applyTableFilters() {
+        this.applyFilters();
     },
 
     // ===== §4.4 — RENDERIZAÇÃO DE GRUPOS (FASE 2) =====
-    renderGroupedResults() {
+    renderGroupedResults(filteredList = null) {
         const groupRoot = document.getElementById('groupRoot')?.checked;
         const groupCity = document.getElementById('groupCity')?.checked;
         const container = document.getElementById('groupedResultsContainer');
@@ -436,17 +601,11 @@ const uiControllers = {
         const highContrastColors = ['#FF4136', '#0074D9', '#2ECC40', '#FF851B', '#B10DC9', '#3D9970', '#FFDC00', '#F012BE', '#7FDBFF', '#39CCCC', '#FF6347', '#4682B4'];
         
         const groups = new Map();
-        
-        const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
-        const cnoOnlyActive = document.getElementById('cnoOnlyActive')?.checked;
+        const listToGroup = filteredList || this.getFilteredResults();
 
-        state.results.forEach((r, idx) => {
+        listToGroup.forEach((r) => {
             if (!r || r.error) return;
-            
-            if (cnoEnabled && cnoOnlyActive) {
-                const hasActive = r.cno && r.cno.obras && r.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
-                if (!hasActive) return;
-            }
+            const idx = state.results.indexOf(r);
             
             let root = groupRoot ? String(r.cnpj).replace(/\D/g, '').substring(0, 8) : '';
             let city = groupCity ? (r.municipio || 'SEM CIDADE').toUpperCase() : '';
@@ -585,6 +744,7 @@ const uiControllers = {
                 <div class="space-y-2 text-sm">
                     <p><span style="color:var(--color-text-muted); font-weight:600">CNPJ:</span> <span style="color:var(--color-text); font-weight:600">${utils.formatCnpjForDisplay(result.cnpj)}</span></p>
                     <p><span style="color:var(--color-text-muted); font-weight:600">Razão Social:</span> <span style="color:var(--color-text); font-weight:600">${result.razao_social || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Inscrição Estadual (IE):</span> <span style="color:var(--color-text); font-weight:700">${result.inscricao_estadual || '-'}</span></p>
                     <p><span style="color:var(--color-text-muted); font-weight:600">Nome Fantasia:</span> <span style="color:var(--color-text); font-weight:600">${result.nome_fantasia || '-'}</span></p>
                     <p><span style="color:var(--color-text-muted); font-weight:600">Natureza Jurídica:</span> <span style="color:var(--color-text); font-weight:600">${result.natureza_juridica || '-'}</span></p>
                     <p><span style="color:var(--color-text-muted); font-weight:600">Porte:</span> <span style="color:var(--color-text); font-weight:600">${result.porte || '-'}</span></p>
@@ -759,8 +919,9 @@ const uiControllers = {
                 }
 
                 const icon = api.active ? '✓' : '✗';
+                const pingStr = api.ping ? ` ⚡${api.ping}ms` : '';
                 const used = api.totalUsed > 0 ? ` [${api.totalUsed}]` : '';
-                return `<span class="api-badge ${cls}">${icon} ${api.name}${extraStatus}${used}</span>`;
+                return `<span class="api-badge ${cls}" title="${api.name}: ${api.ping ? api.ping + 'ms' : 'Sem ping medido'}">${icon} ${api.name}${pingStr}${extraStatus}${used}</span>`;
             }).join('');
         }
 
@@ -783,6 +944,134 @@ const uiControllers = {
                 </div>`;
             }).join('');
         }
+    },
+
+    // ===== §4.5 — RE-TENTATIVA INTELIGENTE DE CNPJs COM FALHA =====
+    showFailedCnpjsModal() {
+        const failedItems = state.results.filter(r => r && r.error);
+        if (failedItems.length === 0) {
+            alert('Excelente! Nenhum CNPJ apresentou erro ou falha no lote atual.');
+            return;
+        }
+
+        const modal = document.getElementById('detailsModal');
+        const content = document.getElementById('detailsContent');
+        if (!modal || !content) return;
+
+        let html = `
+        <div class="flex items-center justify-between pb-3 border-b border-gray-700/30">
+            <div>
+                <h2 class="text-xl font-bold" style="color:#ef4444">⚠️ CNPJs com Falha de Consulta (${failedItems.length})</h2>
+                <p class="text-xs" style="color:var(--color-text-muted)">Escolha como deseja re-tentar a busca destes CNPJs nas APIs disponíveis:</p>
+            </div>
+            <button onclick="uiControllers.closeDetails()" class="text-gray-400 hover:text-white font-bold text-lg px-2">✕</button>
+        </div>
+
+        <div class="my-4 flex flex-wrap gap-2">
+            <button onclick="uiControllers.retryFailedCnpjs('untried_only')" class="px-3 py-2 rounded text-xs font-bold text-white shadow" style="background:linear-gradient(135deg,#0284c7,#0369a1); cursor:pointer;">
+                🔄 Re-tentar apenas com APIs NÃO consultadas (ex: Casa dos Dados, CNPJa, Invertexto)
+            </button>
+            <button onclick="uiControllers.retryFailedCnpjs('all_apis')" class="px-3 py-2 rounded text-xs font-bold text-white shadow" style="background:linear-gradient(135deg,#6366f1,#4f46e5); cursor:pointer;">
+                ⚡ Re-tentar TODAS as APIs novamente
+            </button>
+        </div>
+
+        <div class="space-y-3 max-h-96 overflow-y-auto pr-1">`;
+
+        failedItems.forEach(item => {
+            const formattedCnpj = utils.formatCnpjForDisplay(item.cnpj);
+            
+            html += `
+            <div class="p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                <div>
+                    <span class="font-bold text-sm" style="color:var(--color-text)">${formattedCnpj}</span>
+                    <span class="ml-2 font-semibold" style="color:#ef4444">${item.errorMessage || 'Falhou nas APIs'}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="uiControllers.retrySingleCnpj('${item.cnpj}', 'untried_only')" class="px-2.5 py-1 rounded text-xs font-bold text-white" style="background:#0284c7; cursor:pointer;" title="Re-testa usando APIs ainda não tentadas para este CNPJ (ex: Casa dos Dados)">
+                        🔄 Apenas Não Usadas
+                    </button>
+                    <button onclick="uiControllers.retrySingleCnpj('${item.cnpj}', 'all_apis')" class="px-2.5 py-1 rounded text-xs font-bold text-white" style="background:#6366f1; cursor:pointer;" title="Força a busca em todas as APIs ativas">
+                        ⚡ Todas APIs
+                    </button>
+                </div>
+            </div>`;
+        });
+
+        html += `</div>`;
+        content.innerHTML = html;
+        modal.style.display = 'flex';
+    },
+
+    async retrySingleCnpj(cnpj, mode = 'untried_only') {
+        const index = state.results.findIndex(r => r && r.cnpj === cnpj);
+        if (index === -1) return;
+
+        const target = state.results[index];
+        utils.updateStatus(`🔄 Re-tentando CNPJ ${utils.formatCnpjForDisplay(cnpj)} (${mode === 'untried_only' ? 'APIs não usadas' : 'todas as APIs'})...`);
+
+        if (mode === 'all_apis') {
+            state.apis.forEach(a => {
+                a.active = true;
+                a.consecutiveFailures = 0;
+                a.cooldownUntil = null;
+            });
+        }
+
+        const formattedCnpj = utils.formatCnpjForApi(cnpj);
+        let apisToTry = state.apis.filter(a => a.active);
+
+        // Se untried_only, prioriza APIs como Casa dos Dados / CNPJa / Invertexto ou APIs que ainda não haviam falhado para este CNPJ
+        if (mode === 'untried_only' && target.failures && target.failures.length > 0) {
+            const triedNames = target.failures.map(f => f.split(':')[0].trim());
+            const untried = apisToTry.filter(a => !triedNames.includes(a.name));
+            if (untried.length > 0) {
+                apisToTry = untried;
+            } else {
+                apisToTry = state.apis.filter(a => a.id === 'casadosdados' || a.id === 'cnpja' || a.id === 'invertexto' || a.id === 'opencnpj');
+            }
+        }
+
+        let successData = null;
+        for (const api of apisToTry) {
+            try {
+                const data = await dataHandlers.fetchWithApi(api, formattedCnpj);
+                if (data) {
+                    successData = data;
+                    break;
+                }
+            } catch (err) {
+                console.warn(`[Retry Single] ${api.name} → ${cnpj}: ${err.message}`);
+            }
+        }
+
+        if (successData) {
+            const scoreInfo = utils.calculateB2bScore(successData);
+            successData.scoreInfo = scoreInfo;
+            state.results[index] = successData;
+            this.addResultToTable(successData, index);
+            utils.updateStatus(`✅ CNPJ ${utils.formatCnpjForDisplay(cnpj)} recuperado com sucesso via ${successData.api_origem}!`);
+        } else {
+            utils.updateStatus(`❌ CNPJ ${utils.formatCnpjForDisplay(cnpj)} não pôde ser recuperado nas APIs consultadas.`);
+        }
+
+        utils.updateStats();
+        this.applyFilters();
+    },
+
+    async retryFailedCnpjs(mode = 'untried_only') {
+        const failedItems = state.results.filter(r => r && r.error);
+        if (failedItems.length === 0) return alert('Nenhum CNPJ com falha para re-tentar.');
+
+        this.closeDetails();
+        utils.updateStatus(`🔄 Re-tentando ${failedItems.length} CNPJs com falha...`);
+
+        for (const item of failedItems) {
+            await this.retrySingleCnpj(item.cnpj, mode);
+            await utils.sleep(300);
+        }
+
+        utils.updateStatus('✅ Re-tentativa de CNPJs com falha concluída!');
     }
 };
 
