@@ -309,48 +309,94 @@ const apiAdapters = {
 // ========================= HANDLERS DE REQUISIÇÃO =========================
 const dataHandlers = {
     // Requisição individual a uma API específica
-    async fetchWithApi(apiDef, formattedCnpj, signal) {
+    async fetchWithApi(apiDef, formattedCnpj, parentSignal) {
         const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
         const url = apiDef.url.replace('{cnpj}', cleanCnpj);
-        const response = await fetch(url, { signal });
-
-        if (!response.ok) {
-            if (response.status === 404) {
-                // Tenta ler body pra confirmar se é "não encontrado" real
-                try {
-                    const text = await response.text();
-                    if (text.includes('não encontrado') || text.includes('CNPJ rejeitado') || text.includes('not found') || apiDef.id === 'minhareceita' || apiDef.id === 'cnpja') {
-                        throw new Error('404_NOT_FOUND');
-                    }
-                } catch (e) {
-                    if (e.message === '404_NOT_FOUND') throw e;
-                }
-            }
-            throw new Error(`HTTP_${response.status}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de timeout máximo por API
+        
+        const onParentAbort = () => controller.abort();
+        if (parentSignal) {
+            parentSignal.addEventListener('abort', onParentAbort);
         }
 
-        const data = await response.json();
-        // ReceitaWS retorna 200 com status: "ERROR"
-        if (data.status === 'ERROR') throw new Error(data.message || 'API_ERROR');
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (parentSignal) {
+                parentSignal.removeEventListener('abort', onParentAbort);
+            }
 
-        return apiAdapters[apiDef.id](data);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    try {
+                        const text = await response.text();
+                        if (text.includes('não encontrado') || text.includes('CNPJ rejeitado') || text.includes('not found') || apiDef.id === 'minhareceita' || apiDef.id === 'cnpja') {
+                            throw new Error('404_NOT_FOUND');
+                        }
+                    } catch (e) {
+                        if (e.message === '404_NOT_FOUND') throw e;
+                    }
+                }
+                throw new Error(`HTTP_${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.status === 'ERROR') throw new Error(data.message || 'API_ERROR');
+            return apiAdapters[apiDef.id](data);
+        } catch (err) {
+            clearTimeout(timeoutId);
+            if (parentSignal) {
+                parentSignal.removeEventListener('abort', onParentAbort);
+            }
+            if (err.name === 'AbortError') {
+                if (parentSignal && parentSignal.aborted) {
+                    throw new Error('pausado');
+                } else {
+                    throw new Error('TIMEOUT');
+                }
+            }
+            throw err;
+        }
     },
 
     async fetchCnoData(formattedCnpj) {
+        const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
+        const directUrl = `https://api.opencnpj.org/${cleanCnpj}?dataset=cno`;
+        
+        // Tenta chamada direta com timeout de 4 segundos
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 4000);
         try {
-            const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
-            const url = `https://api.opencnpj.org/${cleanCnpj}?dataset=cno`;
-            const response = await fetch(url, { signal: ctrl.signal });
+            const response = await fetch(directUrl, { signal: ctrl.signal });
             clearTimeout(tid);
-            if (!response.ok) return null;
-            return await response.json();
+            if (response.ok) {
+                return await response.json();
+            }
         } catch (e) {
             clearTimeout(tid);
-            console.warn(`[CNO] Erro ao buscar CNO para ${formattedCnpj}: ${e.message}`);
-            return null;
+            console.warn(`[CNO Direto] Falhou ou deu timeout para ${cleanCnpj}. Tentando proxy AllOrigins...`);
         }
+
+        // Tenta via AllOrigins Proxy como fallback
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(directUrl)}`;
+        const ctrlProxy = new AbortController();
+        const tidProxy = setTimeout(() => ctrlProxy.abort(), 4000);
+        try {
+            const response = await fetch(proxyUrl, { signal: ctrlProxy.signal });
+            clearTimeout(tidProxy);
+            if (response.ok) {
+                const wrapper = await response.json();
+                if (wrapper && wrapper.contents) {
+                    return JSON.parse(wrapper.contents);
+                }
+            }
+        } catch (e) {
+            clearTimeout(tidProxy);
+            console.warn(`[CNO Proxy] Falhou ao buscar CNO via proxy: ${e.message}`);
+        }
+        return null;
     },
 
     // §1.2 — Teste de conectividade "Ping" com CNPJ do Banco do Brasil
