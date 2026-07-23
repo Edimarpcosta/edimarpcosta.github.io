@@ -1371,7 +1371,7 @@ const MiningEngine = {
             // CNAEs permanecem intocados, como solicitado
             if (this._chipRefreshers.termos) this._chipRefreshers.termos();
             this.buildPayload();
-            this.log(`🏭 Ramo Ameripan carregado: ${val}. Termos atualizados, CNAEs mantidos opcionais.`, 'succ');
+            this.log(`🏭 Ramo de Atividade carregado: ${val}. Termos atualizados, CNAEs mantidos opcionais.`, 'succ');
         });
 
         // Cidades Panel

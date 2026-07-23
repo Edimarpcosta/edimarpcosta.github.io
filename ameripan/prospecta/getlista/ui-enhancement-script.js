@@ -72,6 +72,7 @@ const uiControllers = {
         // Re-ativar APIs que foram desativadas em rodadas anteriores
         state.apis.forEach(api => { api.active = true; api.consecutiveFailures = 0; });
 
+        state.globalRequestCounter = 0;
         if (typeof backoffStrategy !== 'undefined') backoffStrategy.reset();
         if (state.autoPauseTimer) { clearTimeout(state.autoPauseTimer); state.autoPauseTimer = null; }
 
@@ -703,7 +704,7 @@ const uiControllers = {
         const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
 
         let html = `
-        <!-- CARD DE SCORE B2B AMERIPAN -->
+        <!-- CARD DE SCORE B2B -->
         <div style="background:var(--bg-header); border:1px solid var(--border-header); border-radius:0.75rem; padding:1.25rem;" class="mb-5">
             <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div class="flex items-center gap-4">
@@ -890,6 +891,17 @@ const uiControllers = {
                     <h3 class="font-bold text-base flex items-center gap-2" style="color:var(--color-accent)">🏗️ Cadastro Nacional de Obras (CNO)</h3>
                 </div>
                 <div class="text-xs font-semibold mt-1" style="color:var(--color-text-muted)">Nenhuma obra localizada para este CNPJ.</div>
+            </div>`;
+        }
+
+        // Histórico de Enriquecimento Profundo (Multi-API)
+        if (result.deepMergeLogs && result.deepMergeLogs.length > 0) {
+            html += `
+            <div class="mt-6" style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
+                <h3 class="font-bold text-base mb-2 flex items-center gap-2" style="color:var(--color-accent)">🔍 Histórico de Enriquecimento Profundo (Multi-API)</h3>
+                <ul class="space-y-1.5 text-xs font-semibold" style="color:var(--color-text)">
+                    ${result.deepMergeLogs.map(log => `<li class="flex items-center gap-1">${log}</li>`).join('')}
+                </ul>
             </div>`;
         }
 

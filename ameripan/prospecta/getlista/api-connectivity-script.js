@@ -41,7 +41,7 @@ const state = {
         { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
-        { id: 'cnpja',           name: 'CNPJa',           url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
+        { id: 'cnpja',           name: 'CNPJa (IE/CNPJ)', url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true },
         { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'cnpjfacil_ie',    name: 'CNPJ Fácil (IE)', url: 'https://www.cnpjfacil.com/api/cnpj-ie?cnpj={cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true }
     ]
@@ -171,7 +171,7 @@ const utils = {
             return result;
         } catch (_) { return null; }
     },
-    // Motor de Score B2B Ameripan em Lote
+    // Motor de Score B2B em Lote
     async calculateB2bScore(item) {
         if (!item || item.error) return { score: 0, temp: 'Frio ❄️', reasons: [], age: null, isAccounting: false };
         let score = 0;
@@ -407,6 +407,19 @@ const utils = {
         return (hasEmail || hasPhone1) && hasQsa && (hasCapital || isEmpresarioOuMei) && (hasPhone2 || hasCnaesSec || hasFantasia);
     },
 
+    getMissingFields(data) {
+        if (!data) return ['Todos os dados'];
+        const missing = [];
+        if (!data.ddd_telefone_1 && !data.telefone) missing.push('Telefone');
+        if (!data.email) missing.push('E-mail');
+        if (!data.inscricao_estadual || data.inscricao_estadual === '-') missing.push('Inscrição Estadual (IE)');
+        if (!data.qsa || data.qsa.length === 0) missing.push('Quadro Societário (QSA)');
+        if (!data.cnaes_secundarios || data.cnaes_secundarios.length === 0) missing.push('CNAEs Secundários');
+        if (!data.capital_social) missing.push('Capital Social');
+        if (!data.nome_fantasia) missing.push('Nome Fantasia');
+        return missing;
+    },
+
     // ===== MESCLAGEM DE DADOS (DEEP MERGE MULTI-API) =====
     mergeCnpjData(base, incoming) {
         if (!base || !incoming) return base || incoming;
@@ -620,10 +633,23 @@ const apiAdapters = {
         const tel2 = office.phones && office.phones[1] ? `${office.phones[1].area || ''}${office.phones[1].number || ''}`.replace(/\D/g, '') : '';
         const email = office.emails && office.emails[0] ? office.emails[0].address || '' : '';
         
+        let ieFormatted = '-';
+        const regs = office.registrations || office.stateRegistrations || office.inscriptions || office.taxRegistrations || [];
+        if (Array.isArray(regs) && regs.length > 0) {
+            const ieList = regs.map(r => {
+                const num = r?.number || r?.id || r?.registration || '';
+                const uf = r?.state?.acronym || r?.state || r?.uf || '';
+                const status = r?.status?.text || r?.status || (r?.enabled ? 'Habilitada' : '');
+                return `${num}${uf ? ' (' + uf + (status ? ' - ' + status : '') + ')' : ''}`;
+            }).filter(s => s.trim().length > 3);
+            if (ieList.length > 0) ieFormatted = ieList.join(' | ');
+        }
+
         return {
             cnpj: office.taxId ? String(office.taxId).replace(/\D/g, '') : '',
             razao_social: company.name || '',
             nome_fantasia: office.alias || company.name || '',
+            inscricao_estadual: ieFormatted,
             descricao_situacao_cadastral: office.status?.text || (typeof office.status === 'string' ? office.status : 'Ativa'),
             data_inicio_atividade: office.founded || '',
             cnae_fiscal: principalCnae,
@@ -643,7 +669,7 @@ const apiAdapters = {
             porte: company.size?.acronym || company.size?.text || '',
             qsa: formattedQsa,
             cnaes_secundarios: secCnaes,
-            api_origem: 'CNPJa'
+            api_origem: 'CNPJa (IE/CNPJ)'
         };
     },
 
@@ -866,8 +892,20 @@ const dataHandlers = {
         let notFoundCount = 0;
         const failures = [];
 
-        // Ordenação respeita a ordem definida pelo usuário em state.apis
-        const sortedApis = state.apis.filter(a => a.active);
+        state.globalRequestCounter = (state.globalRequestCounter || 0) + 1;
+
+        // §1.3 — Equilíbrio de Carga em Lote (Round-Robin Quota Balancer a cada 30 requisições)
+        const activeApis = state.apis.filter(a => a.active);
+        const primaryApis = activeApis.filter(a => !a.isFallback);
+        const fallbackApis = activeApis.filter(a => a.isFallback);
+
+        let sortedApis = activeApis;
+        if (primaryApis.length > 1) {
+            const batchSize = parseInt(document.getElementById('batchRotationSize')?.value || '30', 10);
+            const rotationOffset = Math.floor((state.globalRequestCounter - 1) / batchSize) % primaryApis.length;
+            const rotatedPrimary = [...primaryApis.slice(rotationOffset), ...primaryApis.slice(0, rotationOffset)];
+            sortedApis = [...rotatedPrimary, ...fallbackApis];
+        }
 
         if (sortedApis.length === 0) {
             state.pendingRequests = state.pendingRequests.filter(r => r !== requestEntry);
@@ -902,11 +940,34 @@ const dataHandlers = {
 
                     if (!successData) {
                         successData = data;
+                        successData.deepMergeLogs = [`✓ Origem: ${api.name}`];
                         console.log(`[✓] ${cnpj} via ${api.name}`);
+                        
+                        if (state.deepMergeEnabled) {
+                            const missing = utils.getMissingFields(successData);
+                            if (missing.length > 0) {
+                                utils.updateStatus(`🔍 [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)} (${(successData.razao_social || '').substring(0, 25)}): Faltando [${missing.join(', ')}]. Consultando próximas APIs...`);
+                            }
+                        }
                     } else {
                         // Modo Profundo: mescla dados adicionais obtidos de outras APIs
+                        const beforeMissing = utils.getMissingFields(successData);
                         utils.mergeCnpjData(successData, data);
-                        console.log(`[🔍 Deep Merge] ${cnpj} enriquecido via ${api.name}`);
+                        const afterMissing = utils.getMissingFields(successData);
+
+                        const recovered = beforeMissing.filter(m => !afterMissing.includes(m));
+                        successData.deepMergeLogs = successData.deepMergeLogs || [];
+
+                        if (recovered.length > 0) {
+                            const logEntry = `✅ ${api.name}: Resgatou [${recovered.join(', ')}]`;
+                            successData.deepMergeLogs.push(logEntry);
+                            utils.updateStatus(`✅ [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)}: ${api.name} RESGATOU [${recovered.join(', ')}]!`);
+                            console.log(`[🔍 Deep Merge Sucesso] ${cnpj} ${api.name} resgatou:`, recovered);
+                        } else {
+                            const logEntry = `ℹ️ ${api.name}: Consultada (sem dados novos)`;
+                            successData.deepMergeLogs.push(logEntry);
+                            utils.updateStatus(`ℹ️ [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)}: ${api.name} consultada (nenhum dado novo).`);
+                        }
                     }
 
                     // Se não estiver no modo Enriquecimento Profundo, encerra na 1ª API com sucesso
@@ -915,9 +976,9 @@ const dataHandlers = {
                     }
 
                     // Encerramento Inteligente no Modo Profundo:
-                    // Se o CNPJ já obteve 100% dos dados essenciais (contato, QSA, capital), evita chamadas desnecessárias nas demais APIs!
                     if (utils.isCnpjDataComplete(successData)) {
-                        console.log(`[✨ Modo Profundo Completo] ${cnpj} obteve 100% dos dados essenciais. Encerrando consultas adicionais.`);
+                        utils.updateStatus(`✨ [Modo Profundo Completo] ${utils.formatCnpjForDisplay(cnpj)}: 100% dos dados resgatados!`);
+                        console.log(`[✨ Modo Profundo Completo] ${cnpj} obteve 100% dos dados essenciais.`);
                         break;
                     }
                 }
@@ -980,7 +1041,7 @@ const dataHandlers = {
                 successData.apis_consultadas = usedApis;
             }
 
-            // Recalcula Score B2B Ameripan para o resultado final
+            // Recalcula Score B2B para o resultado final
             try {
                 successData.scoreInfo = await utils.calculateB2bScore(successData);
             } catch (scoreErr) {
@@ -1010,17 +1071,25 @@ const dataHandlers = {
         if (!state.results || state.results.length === 0) {
             return alert('Nenhum resultado para reenriquecer.');
         }
-        const confirmRun = confirm('Deseja consultar APIs secundárias para preencher dados faltantes nos leads já carregados?\n\nEste processo pode levar alguns segundos.');
+        const confirmRun = confirm('Deseja consultar APIs secundárias para preencher dados faltantes nos leads já carregados?\n\nO sistema irá diagnosticar os campos faltantes de cada CNPJ (IE, Telefone, QSA, etc.) e buscar nas APIs secundárias.');
         if (!confirmRun) return;
 
         const prevDeep = state.deepMergeEnabled;
         state.deepMergeEnabled = true;
-        utils.updateStatus('🔍 Reenriquecendo lista com Modo Profundo...');
+        utils.updateStatus('🔍 Iniciando Reenriquecimento Profundo...');
 
         let updatedCount = 0;
         for (let i = 0; i < state.results.length; i++) {
             const item = state.results[i];
             if (!item || item.error || !item.cnpj) continue;
+
+            const missingBefore = utils.getMissingFields(item);
+            if (missingBefore.length === 0) {
+                console.log(`[Modo Profundo] ${item.cnpj} já possui 100% dos dados. Pulando.`);
+                continue;
+            }
+
+            utils.updateStatus(`🔍 [Modo Profundo ${i + 1}/${state.results.length}] ${utils.formatCnpjForDisplay(item.cnpj)} (${(item.razao_social || '').substring(0, 20)}): Faltando [${missingBefore.join(', ')}]...`);
 
             // Apaga cache para forçar requisições faltantes
             const formattedCnpj = utils.formatCnpjForApi(item.cnpj);
@@ -1038,13 +1107,14 @@ const dataHandlers = {
             } catch (e) {
                 console.warn(`Falha ao reenriquecer CNPJ ${item.cnpj}: ${e.message}`);
             }
+            await utils.sleep(300);
         }
 
         state.deepMergeEnabled = prevDeep;
         if (typeof uiControllers !== 'undefined') {
-            uiControllers.renderGroupedResults();
+            uiControllers.applyFilters();
         }
         utils.updateStatus(`✅ Reenriquecimento concluído! ${updatedCount} leads atualizados.`);
-        alert(`✅ Reenriquecimento concluído! ${updatedCount} leads foram complementados via Modo Profundo.`);
+        alert(`✅ Reenriquecimento concluído! ${updatedCount} leads foram enriquecidos nas APIs secundárias.`);
     }
 };
