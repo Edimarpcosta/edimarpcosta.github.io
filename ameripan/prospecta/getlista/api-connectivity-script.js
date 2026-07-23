@@ -39,7 +39,7 @@ const state = {
         { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
-        { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
+        { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'cnpja',           name: 'CNPJa (IE/CNPJ)', url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true },
         { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
@@ -737,13 +737,13 @@ const apiAdapters = {
 
 // ========================= HANDLERS DE REQUISIÇÃO =========================
 const dataHandlers = {
-    // Requisição individual a uma API específica
+    // Requisição individual a uma API específica (com fallback automático via CORS Proxy se necessário)
     async fetchWithApi(apiDef, formattedCnpj, parentSignal) {
         const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
         const url = apiDef.url.replace('{cnpj}', cleanCnpj);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de timeout máximo por API
+        const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5 segundos de timeout máximo por API
         
         const onParentAbort = () => controller.abort();
         if (parentSignal) {
@@ -751,7 +751,26 @@ const dataHandlers = {
         }
 
         try {
-            const response = await fetch(url, { signal: controller.signal });
+            let response;
+            try {
+                response = await fetch(url, { signal: controller.signal });
+            } catch (directErr) {
+                // Se falhou por erro de CORS/rede no navegador ("Failed to fetch") e não foi pausado pelo usuário
+                if ((directErr.name === 'TypeError' || (directErr.message && directErr.message.includes('Failed to fetch'))) && (!parentSignal || !parentSignal.aborted)) {
+                    try {
+                        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                        const proxyResp = await fetch(proxyUrl, { signal: controller.signal });
+                        if (proxyResp.ok) {
+                            const data = await proxyResp.json();
+                            clearTimeout(timeoutId);
+                            if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
+                            if (data && data.status !== 'ERROR') return apiAdapters[apiDef.id](data);
+                        }
+                    } catch (_) {}
+                }
+                throw directErr;
+            }
+
             clearTimeout(timeoutId);
             if (parentSignal) {
                 parentSignal.removeEventListener('abort', onParentAbort);
@@ -838,20 +857,13 @@ const dataHandlers = {
 
         for (const api of state.apis) {
             try {
-                const ctrl = new AbortController();
-                const tid = setTimeout(() => ctrl.abort(), 6000);
-                const url = api.url.replace('{cnpj}', testCnpj);
-                const fetchUrl = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
-                
                 const t0 = performance.now();
-                const res = await fetch(fetchUrl, { signal: ctrl.signal });
+                const data = await this.fetchWithApi(api, testCnpj);
                 const t1 = performance.now();
-                clearTimeout(tid);
-
                 const pingMs = Math.round(t1 - t0);
                 api.ping = pingMs;
 
-                if (res.ok) {
+                if (data) {
                     results[api.name] = true;
                     api.consecutiveFailures = 0;
                     api.active = true;
@@ -859,7 +871,7 @@ const dataHandlers = {
                     console.log(`✅ ${api.name} OK (${pingMs}ms)`);
                 } else {
                     results[api.name] = false;
-                    console.warn(`⚠️ ${api.name} → HTTP ${res.status} (${pingMs}ms)`);
+                    console.warn(`⚠️ ${api.name} → Sem dados (${pingMs}ms)`);
                 }
             } catch (e) {
                 results[api.name] = false;
