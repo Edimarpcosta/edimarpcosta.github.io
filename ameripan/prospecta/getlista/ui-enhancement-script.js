@@ -47,7 +47,7 @@ const uiControllers = {
     },
 
     // ===== PROCESSAMENTO =====
-    async startProcessing() {
+    async startProcessing(forceDeepMode = false) {
         if (state.isProcessing) return;
         if (state.cnpjList.length === 0) return alert('Carregue CNPJs primeiro.');
 
@@ -56,6 +56,14 @@ const uiControllers = {
         state.maxParallelRequests = parseInt(elements.maxParallelRequestsInput?.value) || 3;
         state.autoPauseEnabled = elements.autoPauseEnabledCheckbox?.checked ?? true;
         state.autoPauseDelay = parseInt(elements.autoPauseDelayInput?.value) || 30;
+
+        const deepCheck = document.getElementById('deepMergeEnabledCheck');
+        if (forceDeepMode) {
+            state.deepMergeEnabled = true;
+            if (deepCheck) deepCheck.checked = true;
+        } else {
+            state.deepMergeEnabled = deepCheck?.checked ?? false;
+        }
 
         state.isProcessing = true;
         state.isPaused = false;
@@ -70,28 +78,33 @@ const uiControllers = {
         const alert_el = document.getElementById('autoPauseAlert');
         if (alert_el) alert_el.style.display = 'none';
 
-        elements.startBtn.classList.add('hidden');
+        const startDeepBtn = document.getElementById('startDeepBtn');
+        elements.startBtn?.classList.add('hidden');
+        if (startDeepBtn) startDeepBtn.classList.add('hidden');
+
         elements.pauseBtn.classList.remove('hidden');
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.remove('hidden');
 
         utils.showLoading();
 
+        const modeMsg = state.deepMergeEnabled ? ' 🔍 (Modo Profundo Multi-API)' : '';
         // §1.2 — Testar conexões antes de iniciar
-        utils.updateStatus('Testando conexões das APIs...');
+        utils.updateStatus(`Testando conexões das APIs${modeMsg}...`);
         const testResult = await dataHandlers.testApisConnection();
         this.renderApiQueueStatus();
 
         if (!testResult.anyWorking) {
             utils.updateStatus('⚠ Nenhuma API respondeu. Verifique sua conexão.');
             utils.hideLoading();
-            elements.startBtn.classList.remove('hidden');
+            elements.startBtn?.classList.remove('hidden');
+            if (startDeepBtn) startDeepBtn.classList.remove('hidden');
             elements.pauseBtn.classList.add('hidden');
             state.isProcessing = false;
             return;
         }
 
-        utils.updateStatus('Iniciando consultas...');
+        utils.updateStatus(`Iniciando consultas${modeMsg}...`);
         await this.processNextBatch();
     },
 
@@ -114,6 +127,7 @@ const uiControllers = {
             [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
                 if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
             });
+            this.renderGroupedResults();
         }
     },
 
@@ -177,6 +191,7 @@ const uiControllers = {
         utils.updateStatus('Processamento parado. Dados limpos.');
         
         elements.startBtn.classList.remove('hidden');
+        document.getElementById('startDeepBtn')?.classList.remove('hidden');
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.add('hidden');
@@ -209,6 +224,7 @@ const uiControllers = {
             [elements.exportMaposcopeBtn, elements.exportCompletoBtn].forEach(btn => {
                 if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
             });
+            this.renderGroupedResults();
         }
 
         let delay = state.autoPauseDelay;
@@ -294,6 +310,7 @@ const uiControllers = {
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.add('hidden');
         elements.startBtn.classList.remove('hidden');
+        document.getElementById('startDeepBtn')?.classList.remove('hidden');
         utils.hideLoading();
 
         const total = state.results.filter(r => r !== undefined).length;
@@ -326,7 +343,6 @@ const uiControllers = {
         }
 
         if (!row && elements.resultsBody.children.length >= MAX_VISIBLE_ROWS) {
-            // Atualiza info mas não renderiza a linha
             const infoEl = document.getElementById('tableInfoRow');
             if (infoEl) {
                 const total = state.results.filter(r => r !== undefined).length;
@@ -338,17 +354,29 @@ const uiControllers = {
 
         if (!row) {
             row = document.createElement('tr');
-            row.className = `result-row-${index}`;
+            row.className = `result-row-${index} hover-row cursor-pointer`;
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                uiControllers.showDetails(result);
+            });
             elements.resultsBody.appendChild(row);
         }
 
         if (result.error) {
             row.innerHTML = `
+                <td><span class="badge badge-status-inativa">-</span></td>
                 <td>${utils.formatCnpjForDisplay(result.cnpj)}</td>
                 <td colspan="6" style="color:#f87171">${result.errorMessage}</td>
                 <td></td>`;
         } else {
+            const scoreInfo = result.scoreInfo || { score: 0, temp: 'Frio ❄️' };
+            let badgeClass = 'badge-status-inativa';
+            if (scoreInfo.score >= 70) badgeClass = 'badge-status-ativa';
+            else if (scoreInfo.score >= 35) badgeClass = 'badge-origin';
+
             row.innerHTML = `
+                <td><span class="badge ${badgeClass}" title="${(scoreInfo.reasons || []).join(' | ')}">${scoreInfo.score || 0} ${scoreInfo.temp || ''}</span></td>
                 <td>${utils.formatCnpjForDisplay(result.cnpj)}</td>
                 <td>${result.razao_social || '-'}</td>
                 <td>${result.nome_fantasia || '-'}</td>
@@ -450,11 +478,20 @@ const uiControllers = {
             const color = highContrastColors[colorIndex % highContrastColors.length];
             colorIndex++;
             
+            // Pega a razão social da primeira empresa do grupo
+            const firstCompany = groupData.members[0]?.result;
+            const companyName = firstCompany?.razao_social || firstCompany?.nome_fantasia || '';
+            
+            let headerText = key;
+            if (groupRoot && companyName) {
+                headerText = `${key} — ${companyName}`;
+            }
+
             html += `<div class="cnpj-group">
                 <div class="cnpj-group-header cursor-pointer select-none" onclick="const list = this.nextElementSibling; const ind = this.querySelector('.group-indicator'); if (list.style.display === 'none') { list.style.display = 'block'; ind.textContent = '▼'; } else { list.style.display = 'none'; ind.textContent = '▶'; }">
                     <span class="count" style="background-color: ${color};">${groupData.members.length}x</span>
-                    <span>${key}</span>
-                    <span class="group-indicator ml-auto text-xs" style="color: #64748b;">${indicator}</span>
+                    <span class="font-bold" style="color:var(--color-text)">${headerText}</span>
+                    <span class="group-indicator ml-auto text-xs font-bold" style="color:var(--color-text-muted)">${indicator}</span>
                 </div>
                 <ul class="cnpj-members-list" style="display: ${displayStyle};">`;
                 
@@ -467,13 +504,13 @@ const uiControllers = {
                     cnpjDisplay = `<mark style="background-color: ${color};">${cnpjFormatted.substring(0, 10)}</mark>${cnpjFormatted.substring(10)}`;
                 }
                 
-                html += `<li>
+                html += `<li onclick="uiControllers.showDetails(state.results[${member.index}])" class="cursor-pointer">
                     <div>
-                        ${cnpjDisplay} - <span style="color:#e2e8f0">${r.razao_social || 'Sem Nome'}</span>
+                        ${cnpjDisplay} - <span style="color:var(--color-text); font-weight:600">${r.razao_social || 'Sem Nome'}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="text-xs" style="color:#64748b">${r.municipio || ''}/${r.uf || ''}</span>
-                        <button class="details-btn px-2 py-1 text-xs rounded hover:bg-gray-600" style="background:rgba(255,255,255,0.1); border:none; color:white; cursor:pointer;" data-index="${member.index}">Ver</button>
+                        <span class="text-xs font-medium" style="color:var(--color-text-muted)">${r.municipio || ''}/${r.uf || ''}</span>
+                        <button class="details-btn px-2 py-1 text-xs rounded font-bold" style="background:var(--bg-details-btn); border:1px solid var(--border-details-btn); color:var(--color-details-btn); cursor:pointer;" data-index="${member.index}" onclick="event.stopPropagation(); uiControllers.showDetails(state.results[${member.index}])">Ver</button>
                     </div>
                 </li>`;
             });
@@ -482,78 +519,114 @@ const uiControllers = {
         });
         
         container.innerHTML = html;
-        
-        container.querySelectorAll('.details-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                if (!isNaN(idx)) uiControllers.showDetails(state.results[idx]);
-            });
-        });
     },
 
     // ===== MODAL DE DETALHES COMPLETO =====
     showDetails(result) {
         if (!result || result.error) return;
 
+        window._currentModalData = result;
+
         const modal = document.getElementById('detailsModal');
         const title = document.getElementById('modalTitle');
         const content = document.getElementById('modalContent');
 
-        title.textContent = `${result.razao_social || 'Detalhes'} — ${utils.formatCnpjForDisplay(result.cnpj)}`;
+        if (title) {
+            title.innerHTML = `<span style="color:var(--color-text); font-weight:700">${result.razao_social || 'Detalhes'}</span> <span style="color:var(--color-text-muted); font-size:0.9em">— ${utils.formatCnpjForDisplay(result.cnpj)}</span>`;
+        }
 
         const tel1 = utils.cleanPhone(result.ddd_telefone_1);
         const tel2 = utils.cleanPhone(result.ddd_telefone_2);
 
+        const scoreInfo = result.scoreInfo || { score: 0, temp: 'Frio ❄️', reasons: [] };
+        const ageVal = utils.calculateAge(result.data_inicio_atividade || result.abertura);
+        const ageDesc = utils.getAgeDescription(ageVal);
+        const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
+
         let html = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
-                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                    <h3 class="font-medium text-indigo-300">Informações Básicas</h3>
-                    <span class="sec-ind text-xs text-gray-500">▼</span>
+        <!-- CARD DE SCORE B2B AMERIPAN -->
+        <div style="background:var(--bg-header); border:1px solid var(--border-header); border-radius:0.75rem; padding:1.25rem;" class="mb-5">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; font-weight:800; box-shadow:0 4px 12px rgba(99,102,241,0.4)">
+                        <span style="font-size:1.2rem; line-height:1">${scoreInfo.score || 0}</span>
+                        <span style="font-size:0.5rem; text-transform:uppercase">SCORE</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-base font-bold" style="color:var(--color-text)">${scoreInfo.temp || 'Frio ❄️'}</span>
+                            <span class="text-xs px-2.5 py-0.5 rounded font-bold" style="background:var(--bg-badge); border:1px solid var(--border-card); color:var(--color-accent)">${ageDesc.text}</span>
+                            ${isAccounting ? '<span class="text-xs px-2.5 py-0.5 rounded font-bold" style="background:rgba(245,158,11,0.2); border:1px solid rgba(245,158,11,0.4); color:#d97706">⚠️ Contato Contábil</span>' : ''}
+                        </div>
+                        <p class="text-xs font-medium mt-1" style="color:var(--color-text-muted)">${ageDesc.commercial}</p>
+                    </div>
                 </div>
-                <div class="space-y-2 text-sm" style="color:#cbd5e1">
-                    <p><span style="color:#94a3b8">CNPJ:</span> ${utils.formatCnpjForDisplay(result.cnpj)}</p>
-                    <p><span style="color:#94a3b8">Razão Social:</span> ${result.razao_social || '-'}</p>
-                    <p><span style="color:#94a3b8">Nome Fantasia:</span> ${result.nome_fantasia || '-'}</p>
-                    <p><span style="color:#94a3b8">Natureza Jurídica:</span> ${result.natureza_juridica || '-'}</p>
-                    <p><span style="color:#94a3b8">Porte:</span> ${result.porte || '-'}</p>
-                    <p><span style="color:#94a3b8">Situação:</span> ${result.descricao_situacao_cadastral || '-'}</p>
-                    <p><span style="color:#94a3b8">Abertura:</span> ${result.data_inicio_atividade || '-'}</p>
-                    <p><span style="color:#94a3b8">Capital Social:</span> ${result.capital_social ? 'R$ ' + Number(result.capital_social).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'}</p>
-                    <p><span style="color:#94a3b8">Fonte:</span> <span class="api-badge api-active">${result.api_origem || '?'}</span></p>
+                <div class="flex gap-2">
+                    <button onclick="dataHandlers.exportPdfProfissional(window._currentModalData)" class="btn-primary" style="font-size:0.75rem; padding:0.4rem 0.8rem; background:linear-gradient(135deg,#a855f7,#7c3aed)">📄 Exportar PDF</button>
+                    <button onclick="dataHandlers.injetarLeadNoCRM(window._currentModalData)" class="btn-primary btn-warning" style="font-size:0.75rem; padding:0.4rem 0.8rem">🚀 Injetar no CRM</button>
                 </div>
             </div>
-            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+            ${scoreInfo.reasons && scoreInfo.reasons.length > 0 ? `
+            <div class="mt-3 pt-3 border-t text-xs" style="border-color:var(--border-card);">
+                <p class="font-bold mb-1" style="color:var(--color-accent)">Aceleradores de Venda Detectados:</p>
+                <ul class="list-disc pl-4 space-y-0.5 font-medium" style="color:var(--color-text)">
+                    ${scoreInfo.reasons.map(r => `<li>${r}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Informações Básicas -->
+            <div style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
                 <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                    <h3 class="font-medium text-indigo-300">Endereço & Contato</h3>
-                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                    <h3 class="font-bold text-base" style="color:var(--color-accent)">Informações Básicas</h3>
+                    <span class="sec-ind text-xs font-bold" style="color:var(--color-text-muted)">▼</span>
                 </div>
-                <div class="space-y-2 text-sm" style="color:#cbd5e1">
-                    <p><span style="color:#94a3b8">Endereço:</span> ${result.logradouro || ''}, ${result.numero || 'S/N'}</p>
-                    <p><span style="color:#94a3b8">Complemento:</span> ${result.complemento || '-'}</p>
-                    <p><span style="color:#94a3b8">Bairro:</span> ${result.bairro || '-'}</p>
-                    <p><span style="color:#94a3b8">Cidade/UF:</span> ${result.municipio || '-'} / ${result.uf || '-'}</p>
-                    <p><span style="color:#94a3b8">CEP:</span> ${result.cep || '-'}</p>
-                    <p><span style="color:#94a3b8">Telefone 1:</span> ${result.ddd_telefone_1 || '-'}
-                        ${tel1.length >= 10 ? `<a href="https://wa.me/55${tel1}" target="_blank" style="color:#4ade80; margin-left:8px">📱 WhatsApp</a>` : ''}</p>
-                    <p><span style="color:#94a3b8">Telefone 2:</span> ${result.ddd_telefone_2 || '-'}
-                        ${tel2.length >= 10 ? `<a href="https://wa.me/55${tel2}" target="_blank" style="color:#4ade80; margin-left:8px">📱 WhatsApp</a>` : ''}</p>
-                    <p><span style="color:#94a3b8">Email:</span> ${result.email || '-'}</p>
+                <div class="space-y-2 text-sm">
+                    <p><span style="color:var(--color-text-muted); font-weight:600">CNPJ:</span> <span style="color:var(--color-text); font-weight:600">${utils.formatCnpjForDisplay(result.cnpj)}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Razão Social:</span> <span style="color:var(--color-text); font-weight:600">${result.razao_social || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Nome Fantasia:</span> <span style="color:var(--color-text); font-weight:600">${result.nome_fantasia || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Natureza Jurídica:</span> <span style="color:var(--color-text); font-weight:600">${result.natureza_juridica || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Porte:</span> <span style="color:var(--color-text); font-weight:600">${result.porte || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Situação:</span> <span style="color:var(--color-text); font-weight:600">${result.descricao_situacao_cadastral || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Abertura:</span> <span style="color:var(--color-text); font-weight:600">${result.data_inicio_atividade || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Capital Social:</span> <span style="color:var(--color-text); font-weight:600">${result.capital_social ? 'R$ ' + Number(result.capital_social).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Fonte API:</span> <span class="api-badge api-active">${result.api_origem || '?'}</span></p>
+                </div>
+            </div>
+
+            <!-- Endereço & Contato -->
+            <div style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
+                    <h3 class="font-bold text-base" style="color:var(--color-accent)">Endereço & Contato</h3>
+                    <span class="sec-ind text-xs font-bold" style="color:var(--color-text-muted)">▼</span>
+                </div>
+                <div class="space-y-2 text-sm">
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Endereço:</span> <span style="color:var(--color-text); font-weight:600">${result.logradouro || ''}, ${result.numero || 'S/N'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Complemento:</span> <span style="color:var(--color-text); font-weight:600">${result.complemento || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Bairro:</span> <span style="color:var(--color-text); font-weight:600">${result.bairro || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Cidade/UF:</span> <span style="color:var(--color-text); font-weight:600">${result.municipio || '-'} / ${result.uf || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">CEP:</span> <span style="color:var(--color-text); font-weight:600">${result.cep || '-'}</span></p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Telefone 1:</span> <span style="color:var(--color-text); font-weight:600">${result.ddd_telefone_1 || '-'}</span>
+                        ${tel1.length >= 10 ? `<a href="https://wa.me/55${tel1}" target="_blank" style="color:#16a34a; font-weight:700; margin-left:8px; text-decoration:underline;">📱 WhatsApp</a>` : ''}</p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Telefone 2:</span> <span style="color:var(--color-text); font-weight:600">${result.ddd_telefone_2 || '-'}</span>
+                        ${tel2.length >= 10 ? `<a href="https://wa.me/55${tel2}" target="_blank" style="color:#16a34a; font-weight:700; margin-left:8px; text-decoration:underline;">📱 WhatsApp</a>` : ''}</p>
+                    <p><span style="color:var(--color-text-muted); font-weight:600">Email:</span> <span style="color:var(--color-text); font-weight:600">${result.email || '-'}</span></p>
                 </div>
             </div>
         </div>`;
 
         // Atividades Econômicas
         html += `
-        <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+        <div class="mt-6" style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
             <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                <h3 class="font-medium text-indigo-300">Atividades Econômicas</h3>
-                <span class="sec-ind text-xs text-gray-500">▼</span>
+                <h3 class="font-bold text-base" style="color:var(--color-accent)">Atividades Econômicas</h3>
+                <span class="sec-ind text-xs font-bold" style="color:var(--color-text-muted)">▼</span>
             </div>
-            <div class="text-sm" style="color:#cbd5e1">
-                <p><span style="color:#94a3b8">Principal:</span> ${result.cnae_fiscal || ''} — ${result.cnae_fiscal_descricao || '-'}</p>`;
+            <div class="text-sm">
+                <p><span style="color:var(--color-text-muted); font-weight:600">Principal:</span> <span style="color:var(--color-text); font-weight:600">${result.cnae_fiscal || ''} — ${result.cnae_fiscal_descricao || '-'}</span></p>`;
         if (result.cnaes_secundarios && result.cnaes_secundarios.length > 0) {
-            html += `<p style="color:#94a3b8; margin-top:8px">Secundárias:</p><ul style="list-style:disc; padding-left:1.5rem; margin-top:4px">`;
+            html += `<p style="color:var(--color-text-muted); font-weight:600; margin-top:8px">Secundárias:</p><ul style="list-style:disc; padding-left:1.5rem; margin-top:4px; color:var(--color-text); font-weight:500">`;
             result.cnaes_secundarios.forEach(c => {
                 html += `<li>${c.codigo || ''} — ${c.descricao || '-'}</li>`;
             });
@@ -564,16 +637,24 @@ const uiControllers = {
         // Quadro Societário
         if (result.qsa && result.qsa.length > 0) {
             html += `
-            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+            <div class="mt-6" style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
                 <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                    <h3 class="font-medium text-indigo-300">Quadro Societário</h3>
-                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                    <h3 class="font-bold text-base" style="color:var(--color-accent)">Quadro Societário</h3>
+                    <span class="sec-ind text-xs font-bold" style="color:var(--color-text-muted)">▼</span>
                 </div>
                 <div class="space-y-3">`;
             result.qsa.forEach(s => {
-                html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:0.75rem;" class="text-sm" >
-                     <p style="color:#e2e8f0; font-weight:500">${s.nome_socio || '-'}</p>
-                     <p style="color:#94a3b8">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
+                const nomeBusca = encodeURIComponent((s.nome_socio || '').trim().replace(/\s+/g, '+'));
+                const socUrl = `https://casadosdados.com.br/solucao/cnpj?q=${nomeBusca}`;
+
+                html += `<div style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.75rem;" class="text-sm">
+                     <p style="color:var(--color-text); font-weight:700">${s.nome_socio || '-'}</p>
+                     <p style="color:var(--color-text-muted); font-weight:500">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
+                     <div style="margin-top:0.4rem;">
+                         <a href="${socUrl}" target="_blank" title="Buscar outras empresas de ${s.nome_socio} na Casa dos Dados" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.75rem;font-weight:700;text-decoration:none;color:#6366f1;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);padding:0.2rem 0.5rem;border-radius:0.25rem;cursor:pointer;">
+                             🏢 Ver Sociedades na Casa dos Dados
+                         </a>
+                     </div>
                 </div>`;
             });
             html += `</div></div>`;
@@ -582,42 +663,73 @@ const uiControllers = {
         // Cadastro Nacional de Obras (CNO)
         if (result.cno && result.cno.obras && result.cno.obras.length > 0) {
             const hasActiveWorks = result.cno.obras.some(o => o.situacao?.descricao?.toUpperCase() === 'ATIVA');
-            const statusColor = hasActiveWorks ? '#4ade80' : '#f87171';
+            const statusColor = hasActiveWorks ? '#16a34a' : '#dc2626';
             html += `
-            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
+            <div class="mt-6" style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
                 <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                    <h3 class="font-medium text-indigo-300 flex items-center gap-2">
+                    <h3 class="font-bold text-base flex items-center gap-2" style="color:var(--color-accent)">
                         🏗️ Cadastro Nacional de Obras (CNO)
-                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(255,255,255,0.08); color:${statusColor}">
+                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:var(--bg-badge); border:1px solid var(--border-card); color:${statusColor}">
                             ${result.cno.obras.length} obra(s) (${hasActiveWorks ? 'Possui Obras Ativas' : 'Sem Obras Ativas'})
                         </span>
                     </h3>
-                    <span class="sec-ind text-xs text-gray-500">▼</span>
+                    <span class="sec-ind text-xs font-bold" style="color:var(--color-text-muted)">▼</span>
                 </div>
                 <div class="space-y-3">`;
             result.cno.obras.forEach(o => {
                 const isAct = o.situacao?.descricao?.toUpperCase() === 'ATIVA';
-                const sColor = isAct ? '#22c55e' : '#ef4444';
-                html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:0.75rem;" class="text-sm">
+                const sColor = isAct ? '#16a34a' : '#dc2626';
+
+                const addrParts = [
+                    o.tipo_logradouro && o.tipo_logradouro !== 'OUTROS' ? o.tipo_logradouro : '',
+                    o.logradouro || '',
+                    o.numero && o.numero !== 'sn' && o.numero !== 'SN' ? o.numero : '',
+                    o.complemento || '',
+                    o.bairro || '',
+                    o.municipio || '',
+                    o.uf || '',
+                    o.cep ? o.cep : ''
+                ].filter(Boolean).join(', ');
+
+                const addressUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addrParts)}`;
+
+                let mapLinks = `<a href="${addressUrl}" target="_blank"
+                    title="Buscar endereço no Google Maps"
+                    style="text-decoration:none; color:#0284c7; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:0.2rem; background:rgba(2,132,199,0.1); padding:0.2rem 0.5rem; border-radius:0.25rem; border:1px solid rgba(2,132,199,0.3); margin-right: 0.35rem;">
+                    📍 Ver no Mapa
+                </a>`;
+
+                if (o.codigo_localizacao) {
+                    const plusUrl = `https://maps.google.com/?q=${encodeURIComponent(o.codigo_localizacao)}`;
+                    mapLinks += `<a href="${plusUrl}" target="_blank"
+                        title="Abrir pelo código de localização: ${o.codigo_localizacao}"
+                        style="text-decoration:none; color:#059669; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:0.2rem; background:rgba(5,150,105,0.1); padding:0.2rem 0.5rem; border-radius:0.25rem; border:1px solid rgba(5,150,105,0.3);">
+                        🎯 Plus Code: ${o.codigo_localizacao}
+                    </a>`;
+                }
+
+                html += `<div style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.75rem;" class="text-sm">
                     <div class="flex justify-between items-start mb-1">
-                        <p style="color:#e2e8f0; font-weight:600">${o.nome || o.nome_empresarial || 'Obra sem nome'}</p>
-                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(0,0,0,0.3); color:${sColor}">
+                        <p style="color:var(--color-text); font-weight:700">${o.nome || o.nome_empresarial || 'Obra sem nome'}</p>
+                        <span class="text-xs px-2 py-0.5 rounded font-bold" style="background:var(--bg-badge); border:1px solid var(--border-card); color:${sColor}">
                             ${o.situacao?.descricao || 'ATIVA'}
                         </span>
                     </div>
-                    <p style="color:#94a3b8">CNO: <span style="color:#cbd5e1">${o.cno || '-'}</span> • Início: <span style="color:#cbd5e1">${o.data_inicio || '-'}</span> • Área: <span style="color:#cbd5e1">${o.area_total || '0'} ${o.unidade_medida || 'm²'}</span></p>
-                    <p style="color:#94a3b8" class="text-xs mt-1">Endereço: ${o.tipo_logradouro || ''} ${o.logradouro || ''}, ${o.numero || ''} ${o.complemento ? '(' + o.complemento + ')' : ''} - ${o.bairro || ''}, ${o.municipio || ''}/${o.uf || ''}</p>
+                    <p style="color:var(--color-text-muted); font-weight:500">CNO: <span style="color:var(--color-text); font-weight:600">${o.cno || '-'}</span> • Início: <span style="color:var(--color-text); font-weight:600">${o.data_inicio || '-'}</span> • Área: <span style="color:var(--color-text); font-weight:600">${o.area_total || '0'} ${o.unidade_medida || 'm²'}</span></p>
+                    <p style="color:var(--color-text-muted); font-weight:500" class="text-xs mt-1">Endereço: ${o.tipo_logradouro || ''} ${o.logradouro || ''}, ${o.numero || ''} ${o.complemento ? '(' + o.complemento + ')' : ''} - ${o.bairro || ''}, ${o.municipio || ''}/${o.uf || ''}</p>
+                    <div style="margin-top:0.4rem;">
+                        ${mapLinks}
+                    </div>
                 </div>`;
             });
             html += `</div></div>`;
         } else if (document.getElementById('cnoEnabled')?.checked) {
             html += `
-            <div class="mt-6" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:0.5rem; padding:1rem;">
-                <div class="flex justify-between items-center cursor-pointer select-none mb-3" onclick="const s = this.nextElementSibling; const ind = this.querySelector('.sec-ind'); if (s.classList.contains('hidden')) { s.classList.remove('hidden'); ind.textContent = '▼'; } else { s.classList.add('hidden'); ind.textContent = '▶'; }">
-                    <h3 class="font-medium text-indigo-300">🏗️ Cadastro Nacional de Obras (CNO)</h3>
-                    <span class="sec-ind text-xs text-gray-500">▼</span>
+            <div class="mt-6" style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
+                <div class="flex justify-between items-center cursor-pointer select-none mb-1">
+                    <h3 class="font-bold text-base flex items-center gap-2" style="color:var(--color-accent)">🏗️ Cadastro Nacional de Obras (CNO)</h3>
                 </div>
-                <div class="text-xs text-gray-500 mt-1">Nenhuma obra localizada para este CNPJ.</div>
+                <div class="text-xs font-semibold mt-1" style="color:var(--color-text-muted)">Nenhuma obra localizada para este CNPJ.</div>
             </div>`;
         }
 
@@ -633,21 +745,54 @@ const uiControllers = {
     // ===== §1.2 — UI DA FILA DE APIs =====
     renderApiQueueStatus() {
         const container = document.getElementById('apiQueueStatus');
-        if (!container) return;
+        if (container) {
+            container.innerHTML = state.apis.map(api => {
+                let cls = api.active ? 'api-active' : 'api-inactive';
+                if (api.isFallback && api.active) cls = 'api-fallback';
+                
+                let extraStatus = '';
+                if (api.cooldownUntil && Date.now() < api.cooldownUntil) {
+                    cls = 'api-fallback';
+                    extraStatus = ' (⏳ Cooldown 429)';
+                } else if (api.consecutiveFailures > 0) {
+                    extraStatus = ` (${api.consecutiveFailures}✗)`;
+                }
 
-        container.innerHTML = state.apis.map(api => {
-            let cls = api.active ? 'api-active' : 'api-inactive';
-            if (api.isFallback && api.active) cls = 'api-fallback';
-            const icon = api.active ? '✓' : '✗';
-            const fails = api.consecutiveFailures > 0 ? ` (${api.consecutiveFailures}✗)` : '';
-            const used = api.totalUsed > 0 ? ` [${api.totalUsed}]` : '';
-            return `<span class="api-badge ${cls}">${icon} ${api.name}${fails}${used}</span>`;
-        }).join('');
+                const icon = api.active ? '✓' : '✗';
+                const used = api.totalUsed > 0 ? ` [${api.totalUsed}]` : '';
+                return `<span class="api-badge ${cls}">${icon} ${api.name}${extraStatus}${used}</span>`;
+            }).join('');
+        }
+
+        const orderingList = document.getElementById('apiOrderingList');
+        if (orderingList) {
+            orderingList.innerHTML = state.apis.map((api, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === state.apis.length - 1;
+                return `
+                <div class="flex items-center justify-between p-2 rounded" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                    <label class="flex items-center gap-2 cursor-pointer text-sm font-medium" style="color:var(--color-text)">
+                        <input type="checkbox" ${api.active ? 'checked' : ''} onchange="utils.toggleApiActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#6366f1">
+                        <span>${idx + 1}. ${api.name}</span>
+                        ${api.isFallback ? '<span class="text-xs px-1.5 py-0.5 rounded" style="background:rgba(245,158,11,0.15); color:#f59e0b">Fallback</span>' : ''}
+                    </label>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="utils.moveApiUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2.5 py-1 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↑</button>
+                        <button type="button" onclick="utils.moveApiDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2.5 py-1 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↓</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
     }
 };
 
 // ========================= INICIALIZAÇÃO =========================
 function init() {
+    // Carrega ordem customizada de APIs se existir
+    if (typeof utils !== 'undefined' && utils.loadApiOrder) {
+        utils.loadApiOrder();
+    }
+
     // Theme Switcher Logic
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeToggleIcon = document.getElementById('themeToggleIcon');

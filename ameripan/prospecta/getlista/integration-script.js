@@ -234,6 +234,10 @@ Object.assign(dataHandlers, {
             const rows = successRows.map(({ result, apiUsed }) => {
                 const tel1 = utils.cleanPhone(result.ddd_telefone_1);
                 const tel2 = utils.cleanPhone(result.ddd_telefone_2);
+                const scoreInfo = result.scoreInfo || {};
+                const age = utils.calculateAge(result.data_inicio_atividade || result.abertura);
+                const ageDesc = utils.getAgeDescription(age);
+                const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
 
                 const row = {};
                 if (groupRoot) {
@@ -243,6 +247,12 @@ Object.assign(dataHandlers, {
                 Object.assign(row, {
                     'CNPJ': result.cnpj,
                     'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+                    'Score B2B': scoreInfo.score || 0,
+                    'Temperatura Lead': scoreInfo.temp || 'Frio ❄️',
+                    'Score Motivos': (scoreInfo.reasons || []).join(' | '),
+                    'Estágio Comercial': ageDesc.text,
+                    'Idade (Anos)': age !== null ? age : '',
+                    'Contato Contábil?': isAccounting ? 'SIM' : 'NÃO',
                     'Razão Social': result.razao_social || '',
                     'Nome Fantasia': result.nome_fantasia || '',
                     'Situação Cadastral': result.descricao_situacao_cadastral || '',
@@ -274,8 +284,10 @@ Object.assign(dataHandlers, {
                 // Sócios como colunas extras
                 if (result.qsa && result.qsa.length > 0) {
                     result.qsa.forEach((s, i) => {
-                        row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || '';
-                        row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || '';
+                        row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                        row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
+                        row['Sócio ' + (i + 1) + ' - Faixa Etária'] = s.faixa_etaria || '';
+                        row['Sócio ' + (i + 1) + ' - Entrada'] = s.data_entrada_sociedade || s.data_entrada || '';
                     });
                 }
 
@@ -305,5 +317,214 @@ Object.assign(dataHandlers, {
             console.error('Erro na exportação completa:', err);
             alert('Erro ao exportar: ' + err.message);
         }
+    },
+
+    // ====== 📄 EXPORTAR PDF DOSSIÊ CORPORATIVO ======
+    exportPdfProfissional(d) {
+        if (!d) return alert('Nenhum dado selecionado.');
+        if (!window.jspdf) return alert('Biblioteca jsPDF não carregada.');
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        const brand = [79, 70, 229], brand2 = [124, 58, 237], success = [5, 150, 105], warning = [217, 119, 6], danger = [220, 38, 38], dark = [15, 23, 42], muted = [100, 116, 139], light = [241, 245, 249], border = [203, 213, 225], white = [255, 255, 255];
+        const LM = 15, RM = 195, PW = 180;
+        let y = 0, pageNum = 1;
+
+        function addPage() {
+            pageNum++;
+            doc.addPage();
+            y = 18;
+            doc.setFillColor(...brand);
+            doc.rect(LM, 10, PW, 1, 'F');
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...muted);
+            doc.text(`CNPJ: ${utils.formatCnpjForDisplay(d.cnpj)} | ${(d.razao_social||'').substring(0,50)}`, LM, 289);
+        }
+
+        function checkPage(needed) { if (y + needed > 270) addPage(); }
+
+        function sectionHeader(num, title) {
+            checkPage(14);
+            doc.setFillColor(...light);
+            doc.rect(LM, y, PW, 8, 'F');
+            doc.setFillColor(...brand);
+            doc.rect(LM, y, 3, 8, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(...brand);
+            doc.text(`${num}. ${title}`, LM + 6, y + 5.5);
+            y += 12;
+        }
+
+        function kvRow(label, value, x1, x2, maxLen) {
+            checkPage(6);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...muted);
+            doc.text(label, x1, y);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...dark);
+            let v = String(value || '-');
+            if (maxLen && v.length > maxLen) v = v.substring(0, maxLen - 2) + '..';
+            doc.text(v, x2, y);
+            y += 5;
+        }
+
+        function kvRowFull(label, value, maxLen) { kvRow(label, value, LM, LM + 40, maxLen); }
+
+        function kvRowDouble(label1, val1, label2, val2, maxLen) {
+            checkPage(6);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...muted);
+            doc.text(label1, LM, y);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...dark);
+            doc.text(String(val1 || '-').substring(0, maxLen || 30), LM + 36, y);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...muted);
+            doc.text(label2, 108, y);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...dark);
+            doc.text(String(val2 || '-').substring(0, maxLen || 30), 144, y);
+            y += 5;
+        }
+
+        // Header
+        doc.setFillColor(...brand); doc.rect(0, 0, 210, 28, 'F');
+        doc.setFillColor(...brand2); doc.rect(130, 0, 80, 28, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...white);
+        doc.text("FICHA DE INTELIGÊNCIA COMERCIAL B2B", LM, 11);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(200, 200, 240);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | GetLista Prospecta Multi-API`, LM, 16);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...white);
+        let headerName = (d.razao_social || 'SEM RAZAO SOCIAL');
+        if (headerName.length > 70) headerName = headerName.substring(0, 67) + '...';
+        doc.text(headerName, LM, 22);
+
+        y = 35;
+
+        // Card Score
+        const scoreInfo = d.scoreInfo || {};
+        const scoreVal = scoreInfo.score || 0;
+        const tempVal = scoreInfo.temp || 'Frio ❄️';
+        let scoreBg = danger;
+        if (scoreVal >= 70) scoreBg = [220, 38, 38];
+        else if (scoreVal >= 35) scoreBg = [217, 119, 6];
+        else scoreBg = [59, 130, 246];
+
+        doc.setFillColor(248, 250, 252); doc.setDrawColor(...border); doc.roundedRect(LM, y, PW, 30, 2, 2, 'FD');
+        doc.setFillColor(...scoreBg); doc.circle(LM + 15, y + 15, 12, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(...white);
+        doc.text(String(scoreVal), LM + 15, y + 17, { align: 'center' });
+        doc.setFontSize(5.5); doc.text('SCORE B2B', LM + 15, y + 23, { align: 'center' });
+
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...scoreBg);
+        doc.text(tempVal, LM + 34, y + 12);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+        doc.text('Termômetro de Prospecção Ameripan', LM + 34, y + 17);
+
+        const reasonsList = scoreInfo.reasons || [];
+        doc.setFontSize(7); doc.setTextColor(...dark);
+        let ry = y + 11;
+        reasonsList.slice(0, 4).forEach(r => { doc.text(`* ${r.substring(0, 75)}`, LM + 34, ry); ry += 4; });
+        y += 36;
+
+        // 1. Identificação
+        sectionHeader(1, 'IDENTIFICAÇÃO E DADOS PRINCIPAIS');
+        kvRowDouble('RAZÃO SOCIAL:', d.razao_social, 'NOME FANTASIA:', d.nome_fantasia, 28);
+        kvRowDouble('CNPJ:', utils.formatCnpjForDisplay(d.cnpj), 'DATA ABERTURA:', d.data_inicio_atividade || d.abertura || '-');
+        kvRowDouble('SITUAÇÃO RFB:', d.descricao_situacao_cadastral || 'ATIVA', 'PORTE:', d.porte || 'NÃO INFORMADO', 28);
+        kvRowDouble('CAPITAL SOCIAL:', `R$ ${(d.capital_social || 0).toLocaleString('pt-BR')}`, 'NATUREZA JURÍDICA:', d.natureza_juridica, 28);
+        y += 2;
+
+        // 2. Tributário
+        sectionHeader(2, 'REGIME TRIBUTÁRIO & MATURIDADE');
+        const ageVal = utils.calculateAge(d.data_inicio_atividade || d.abertura);
+        const ageDesc = utils.getAgeDescription(ageVal);
+        kvRowDouble('SIMPLES / MEI:', d.simples_nacional?.optante ? 'Optante Simples' : 'Lucro Presumido/Real', 'IDADE COMERCIAL:', ageVal !== null ? `${ageVal} anos (${ageDesc.text})` : 'N/D');
+
+        // 3. Contatos
+        sectionHeader(3, 'CANAIS DE CONTATO E LOCALIZAÇÃO');
+        kvRowFull('ENDEREÇO:', `${d.logradouro || '-'}, Nº ${d.numero || '-'}${d.complemento ? ' - ' + d.complemento : ''}`, 70);
+        kvRowDouble('BAIRRO:', d.bairro || '-', 'CEP:', d.cep || '-');
+        kvRowDouble('MUNICÍPIO/UF:', `${d.municipio || '-'}/${d.uf || ''}`, 'FONE 1:', d.ddd_telefone_1 || '-');
+        kvRowDouble('FONE 2:', d.ddd_telefone_2 || '-', 'E-MAIL:', d.email || '-');
+
+        // Página 2: CNAE & QSA
+        addPage();
+        sectionHeader(4, 'ATIVIDADES ECONÔMICAS (CNAE)');
+        kvRowFull('CNAE PRINCIPAL:', `${d.cnae_fiscal || '-'} - ${d.cnae_fiscal_descricao || '-'}`, 85);
+
+        sectionHeader(5, 'QUADRO SOCIETÁRIO (QSA)');
+        if (d.qsa && d.qsa.length > 0) {
+            d.qsa.forEach((s, i) => {
+                checkPage(10);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...brand);
+                doc.text(s.nome_socio || s.nome || '-', LM + 2, y + 3);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...dark);
+                doc.text(`Cargo: ${s.qualificacao_socio || s.cargo || 'Sócio'} ${s.faixa_etaria ? '| Faixa: ' + s.faixa_etaria : ''}`, LM + 2, y + 7);
+                y += 10;
+            });
+        } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+            doc.text('Nenhum sócio informado nas bases.', LM + 2, y);
+            y += 6;
+        }
+
+        const cleanCnpj = utils.cleanCnpjStr(d.cnpj);
+        doc.save(`CNPJ_${cleanCnpj}.pdf`);
+        utils.updateStatus(`📄 PDF gerado: CNPJ_${cleanCnpj}.pdf`);
+    },
+
+    // ====== 🚀 INJETAR LEAD NO CRM (Google Sheets Webhook) ======
+    async injetarLeadNoCRM(d) {
+        if (!d) return alert('Nenhum lead selecionado.');
+        const webhookUrl = (localStorage.getItem('crm_webhook_url') || '').trim();
+        if (!webhookUrl) {
+            const urlInput = prompt("Digite a URL do Webhook do CRM (Google Apps Script):");
+            if (!urlInput) return;
+            localStorage.setItem('crm_webhook_url', urlInput.trim());
+        }
+
+        const finalUrl = localStorage.getItem('crm_webhook_url');
+        const scoreInfo = d.scoreInfo || {};
+        const age = utils.calculateAge(d.data_inicio_atividade || d.abertura);
+
+        const payload = {
+            cnpj: utils.formatCnpjForDisplay(d.cnpj),
+            cnpj_limpo: utils.cleanCnpjStr(d.cnpj),
+            razao_social: d.razao_social || '',
+            nome_fantasia: d.nome_fantasia || '',
+            situacao: d.descricao_situacao_cadastral || 'ATIVA',
+            abertura: d.data_inicio_atividade || d.abertura || '',
+            idade: age !== null ? `${age} anos` : '',
+            capital_social: d.capital_social || 0,
+            telefone1: d.ddd_telefone_1 || '',
+            telefone2: d.ddd_telefone_2 || '',
+            email: d.email || '',
+            cidade: d.municipio || '',
+            uf: d.uf || '',
+            cep: d.cep || '',
+            cnae_principal: `${d.cnae_fiscal || ''} - ${d.cnae_fiscal_descricao || ''}`,
+            lead_score: scoreInfo.score || 0,
+            lead_temperatura: scoreInfo.temp || 'Frio ❄️',
+            timestamp: new Date().toISOString()
+        };
+
+        try {
+            await fetch(finalUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            alert(`✅ Lead ${utils.formatCnpjForDisplay(d.cnpj)} injetado com sucesso no CRM!`);
+        } catch (e) {
+            alert(`Erro ao enviar para o CRM: ${e.message}`);
+        }
     }
 });
+

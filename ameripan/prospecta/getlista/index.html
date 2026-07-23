@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         /* ===== SYSTEM THEME VARIABLES ===== */
         /* Default: Light Mode (WCAG compliant) */
@@ -299,12 +300,13 @@
         .mine-filter-grid input[type="checkbox"] { accent-color:#f59e0b; width:14px; height:14px; }
 
         /* Agrupamento Fase 2 */
-        .cnpj-group { border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 10px; margin-bottom: 15px; background: rgba(0,0,0,0.2); }
-        .cnpj-group-header { font-weight: 600; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: #cbd5e1; }
-        .cnpj-group-header .count { font-weight: bold; padding: 2px 6px; border-radius: 4px; color: #111; font-size: 0.8rem; }
-        .cnpj-members-list { list-style: none; padding-left: 0; margin: 0; font-size: 0.8rem; color: #94a3b8; }
-        .cnpj-members-list li { margin-bottom: 5px; padding: 5px; border-radius: 4px; background: rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center;}
-        .cnpj-members-list li mark { color: #000; font-weight: bold; padding: 0 2px; border-radius: 2px; }
+        .cnpj-group { border: 1px solid var(--border-card); border-radius: 0.5rem; padding: 12px; margin-bottom: 15px; background: var(--bg-card); }
+        .cnpj-group-header { font-weight: 600; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: var(--color-text); }
+        .cnpj-group-header .count { font-weight: bold; padding: 2px 8px; border-radius: 4px; color: #ffffff; font-size: 0.8rem; }
+        .cnpj-members-list { list-style: none; padding-left: 0; margin: 0; font-size: 0.85rem; color: var(--color-text-muted); }
+        .cnpj-members-list li { margin-bottom: 6px; padding: 8px 12px; border-radius: 6px; background: var(--bg-badge); border: 1px solid var(--border-card); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.15s; }
+        .cnpj-members-list li:hover { background: var(--hover-row-bg); }
+        .cnpj-members-list li mark { color: #ffffff; font-weight: bold; padding: 1px 4px; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -688,13 +690,25 @@
 
         <!-- Seção 2: Painel Multi-API -->
         <div id="controlsSection" class="glass-card p-6 hidden">
-            <!-- Status das APIs -->
+            <!-- Status e Ordenação das APIs -->
             <div class="mb-5">
                 <div class="flex items-center justify-between mb-3">
-                    <h2 class="text-lg font-semibold text-white">📡 Fila de APIs</h2>
-                    <button id="testAllApisBtn" class="btn-secondary text-xs">🔄 Testar Todas</button>
+                    <h2 class="text-lg font-semibold text-white" style="color:var(--color-text)">📡 Fila de APIs</h2>
+                    <div class="flex gap-2">
+                        <button id="toggleApiManagerBtn" type="button" class="btn-secondary text-xs" onclick="const p = document.getElementById('apiManagerPanel'); p.classList.toggle('hidden');">⚙️ Ordenar APIs</button>
+                        <button id="testAllApisBtn" type="button" class="btn-secondary text-xs">🔄 Testar Pings</button>
+                    </div>
                 </div>
-                <div id="apiQueueStatus" class="flex flex-wrap gap-2"></div>
+                <div id="apiQueueStatus" class="flex flex-wrap gap-2 mb-3"></div>
+
+                <!-- Painel Expansível de Reordenação de APIs (Estilo Print 2) -->
+                <div id="apiManagerPanel" class="hidden p-4 rounded-lg mb-3" style="background:var(--bg-card); border:1px solid var(--border-card);">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-xs font-semibold" style="color:var(--color-accent)">Ordem de Prioridade das APIs (Use ↑ ↓ para reordenar):</span>
+                        <button type="button" onclick="utils.loadApiOrder(); uiControllers.renderApiQueueStatus();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">🔄 Restaurar Salvo</button>
+                    </div>
+                    <div id="apiOrderingList" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+                </div>
             </div>
 
             <!-- Barra de Progresso -->
@@ -708,8 +722,8 @@
 
             <!-- Configurações -->
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:0.75rem; padding:1rem;" class="mb-4">
-                <h3 class="font-medium text-gray-300 mb-3 text-sm">⚙ Configurações</h3>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <h3 class="font-medium text-gray-300 mb-3 text-sm" style="color:var(--color-text)">⚙ Configurações</h3>
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
                     <div>
                         <label class="block text-xs mb-1" style="color:#64748b">Delay (ms)</label>
                         <input type="number" id="apiDelay" value="300" min="100" max="5000" step="100" class="w-full p-2 text-sm">
@@ -721,6 +735,10 @@
                     <div>
                         <label class="block text-xs mb-1" style="color:#64748b">Pausa auto (s)</label>
                         <input type="number" id="autoPauseDelay" value="30" min="5" max="300" class="w-full p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1" style="color:#64748b">CEP Origem (Haversine)</label>
+                        <input type="text" id="scoreCepOrigem" placeholder="Ex: 13400000" class="w-full p-2 text-sm" onchange="state.scoreConfig.cepOrigem = this.value.replace(/\D/g, '')">
                     </div>
                     <div class="flex flex-col justify-end">
                         <label class="flex items-center text-xs" style="color:#94a3b8">
@@ -742,6 +760,15 @@
                             Apenas Obras Ativas
                         </label>
                     </div>
+                </div>
+
+                <!-- Modo Enriquecimento Profundo Opção -->
+                <div class="mt-3 pt-3 border-t border-gray-700/30 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                    <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;">
+                        <input type="checkbox" id="deepMergeEnabledCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.deepMergeEnabled = this.checked">
+                        🔍 Iniciar no Modo Enriquecimento Profundo (Multi-API)
+                    </label>
+                    <span class="text-xs" style="color:var(--color-text-muted)">⚠️ Consulta múltiplas APIs ativas por CNPJ para preencher campos ausentes (sócios, e-mails, telefones). Leva mais tempo.</span>
                 </div>
             </div>
 
@@ -780,12 +807,14 @@
 
             <!-- Botões de Ação -->
             <div class="flex flex-wrap gap-3">
-                <button id="startBtn" class="btn-primary btn-success">▶ Iniciar Consulta</button>
+                <button id="startBtn" class="btn-primary btn-success">▶ Iniciar Consulta Padrão</button>
+                <button id="startDeepBtn" class="btn-primary" style="background:linear-gradient(135deg,#0284c7,#0369a1); font-weight:700" onclick="uiControllers.startProcessing(true)">🚀 Iniciar (Modo Profundo)</button>
                 <button id="pauseBtn" class="btn-primary btn-warning hidden">⏸ Pausar</button>
                 <button id="resumeBtn" class="btn-primary hidden">▶ Continuar</button>
                 <button id="stopBtn" class="btn-primary btn-danger hidden">🛑 Parar</button>
                 <button id="exportMaposcopeBtn" class="btn-primary btn-export opacity-50" disabled>🗺️ Exportar Maposcope</button>
                 <button id="exportCompletoBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#6366f1,#4f46e5)">📊 Exportar Completo (PT-BR)</button>
+                <button id="reenrichBtn" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="dataHandlers.reenrichWithDeepMerge()">🔍 Reenriquecer Lista (Modo Profundo)</button>
             </div>
         </div>
 
@@ -795,29 +824,29 @@
                 <h2 class="text-lg font-semibold text-white">📋 Resultados</h2>
                 
                 <!-- Filtros de Exportação -->
-                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:#cbd5e1; background:rgba(255,255,255,0.05); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.1);">
-                    <span class="font-medium text-indigo-300">Exportar Filtros:</span>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" id="exportAll" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="document.querySelectorAll('.export-status').forEach(cb => cb.disabled = this.checked)"> Todos</label>
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Exportar Filtros:</span>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="exportAll" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="document.querySelectorAll('.export-status').forEach(cb => cb.disabled = this.checked)"> Todos</label>
                     <span class="opacity-50">|</span>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="ativa" disabled style="accent-color:#6366f1"> Ativa</label>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="baixada" disabled style="accent-color:#6366f1"> Baixada</label>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="inapta" disabled style="accent-color:#6366f1"> Inapta</label>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="nula" disabled style="accent-color:#6366f1"> Nula</label>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="suspensa" disabled style="accent-color:#6366f1"> Suspensa</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="ativa" disabled style="accent-color:#6366f1"> Ativa</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="baixada" disabled style="accent-color:#6366f1"> Baixada</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="inapta" disabled style="accent-color:#6366f1"> Inapta</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="nula" disabled style="accent-color:#6366f1"> Nula</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="suspensa" disabled style="accent-color:#6366f1"> Suspensa</label>
                 </div>
                 
                 <!-- Filtros de Agrupamento -->
-                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:#cbd5e1; background:rgba(255,255,255,0.05); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.1);">
-                    <span class="font-medium text-indigo-300">Agrupar por:</span>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" id="groupRoot" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1"> Raiz CNPJ</label>
-                    <label class="flex items-center cursor-pointer hover:text-white"><input type="checkbox" id="groupCity" class="mr-1 h-3 w-3" style="accent-color:#6366f1"> Cidade</label>
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Agrupar por:</span>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="groupRoot" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> Raiz CNPJ</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="groupCity" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> Cidade</label>
                 </div>
 
                 <!-- Configurações de Exibição -->
-                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:#cbd5e1; background:rgba(255,255,255,0.05); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.1);">
-                    <span class="font-medium text-indigo-300">Exibição:</span>
-                    <label class="flex items-center cursor-pointer hover:text-white" style="user-select:none;">
-                        <input type="checkbox" id="expandResultsDefault" class="mr-1 h-3 w-3" style="accent-color:#6366f1"> 
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Exibição:</span>
+                    <label class="flex items-center cursor-pointer" style="user-select:none;">
+                        <input type="checkbox" id="expandResultsDefault" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> 
                         Manter expandidos (padrão colapsado)
                     </label>
                 </div>
@@ -827,6 +856,7 @@
                 <table id="resultsTable">
                     <thead>
                         <tr>
+                            <th>Score B2B</th>
                             <th>CNPJ</th>
                             <th>Razão Social</th>
                             <th>Nome Fantasia</th>
