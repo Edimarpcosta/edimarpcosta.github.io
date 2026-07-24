@@ -593,15 +593,24 @@ Object.assign(dataHandlers, {
         if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) {
             return alert('Blocklist vazia. Nada para enriquecer.');
         }
-        // Filtra apenas CNPJs completos (raízes de 8 dígitos não podem ser enriquecidas diretamente)
-        const cnpjsToEnrich = Array.from(state.cnpjsJaAtendidos).filter(c => c.length === 14);
+
+        // TRAVA RÍGIDA: Filtrar APENAS CNPJs (14 dígitos ou raízes 8 dígitos). Ignorar 100% dos CPFs (11 dígitos).
+        const cnpjsToEnrich = Array.from(state.cnpjsJaAtendidos).filter(item => {
+            const clean = String(item).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (/^\d{11}$/.test(clean)) return false; // CPFs nunca entram em APIs de CNPJ
+            return clean.length === 14 || clean.length === 8;
+        });
 
         if (cnpjsToEnrich.length === 0) {
-            return alert('Nenhum CNPJ completo (14 dígitos) na blocklist para enriquecer.\nAdicione CNPJs completos (não apenas raízes).');
+            return alert('Nenhum CNPJ válido (14 dígitos) na blocklist para enriquecer.\nCPFs e entradas inválidas foram ignorados.');
         }
 
-        utils.updateStatus(`🔄 Fase extra: enriquecendo ${cnpjsToEnrich.length} CNPJs já atendidos...`);
+        // ZERAR BARRA DE PROGRESSO & MEDIDOR VISUAL
+        const total = cnpjsToEnrich.length;
+        utils.updateProgressBar(0, total);
+        utils.updateStatus(`🔄 [Fase 2 - Enriquecer Atendidos] Iniciando 1 de ${total} (0%)...`);
         state.resultsJaAtendidos = [];
+        let count = 0;
 
         for (const cnpj of cnpjsToEnrich) {
             try {
@@ -613,16 +622,69 @@ Object.assign(dataHandlers, {
             } catch (e) {
                 console.warn(`[Blocklist] Erro ao enriquecer ${cnpj}:`, e);
             }
+            count++;
+            const pct = Math.round((count / total) * 100);
+            utils.updateProgressBar(count, total);
+            utils.updateStatus(`🔄 [Enriquecer Atendidos] ${count}/${total} (${pct}%) — ${utils.formatCnpjForDisplay(cnpj)}`);
             await new Promise(r => setTimeout(r, (state.apiDelay || 300)));
         }
 
-        utils.updateStatus(`✅ Já-atendidos enriquecidos: ${state.resultsJaAtendidos.length} CNPJs.`);
+        utils.updateProgressBar(total, total);
+        utils.updateStatus(`✅ Já-atendidos enriquecidos: ${state.resultsJaAtendidos.length} de ${total} CNPJs.`);
 
         // Habilitar botões de exportação dos já-atendidos
         const btnEnr = document.getElementById('downloadAtendidosEnriquecidosBtn');
         const btnAll = document.getElementById('exportCompletoComAtendeBtn');
         if (btnEnr) { btnEnr.disabled = false; btnEnr.classList.remove('hidden'); btnEnr.style.opacity = '1'; }
         if (btnAll) { btnAll.disabled = false; btnAll.classList.remove('hidden'); btnAll.style.opacity = '1'; }
+    },
+
+    // ====== 🏢 FASE 3: ENRIQUECIMENTO EXCLUSIVO DE IES FALTANTES (AO FINAL) ======
+    async processIeFaltantesAtEnd() {
+        if (!state.results || state.results.length === 0) return;
+
+        // Filtrar CNPJs onde IE está vazia/ausente
+        const faltantes = state.results.filter(r => r && !r.error && (!r.inscricao_estadual || r.inscricao_estadual === '-' || r.inscricao_estadual === ''));
+
+        if (faltantes.length === 0) {
+            utils.updateStatus('✅ Todas as Inscrições Estaduais (IE) já estão preenchidas!');
+            return;
+        }
+
+        // ZERAR BARRA DE PROGRESSO & ATIVAR MEDIDOR VISUAL
+        const total = faltantes.length;
+        utils.updateProgressBar(0, total);
+        utils.updateStatus(`🏢 [Fase 3 - IE Faltantes] Iniciando consulta dedicada para ${total} IEs faltantes...`);
+
+        const ieApi = state.apis.find(a => a.id === 'cnpjfacil_ie' || a.id === 'cnpja');
+        if (!ieApi) return;
+
+        let processed = 0;
+        let found = 0;
+
+        for (const item of faltantes) {
+            try {
+                const data = await dataHandlers.fetchWithApi(ieApi, item.cnpj);
+                if (data && data.inscricao_estadual) {
+                    item.inscricao_estadual = data.inscricao_estadual;
+                    found++;
+                }
+            } catch (e) {
+                console.warn(`[Fase 3 IE] Falha ao consultar IE de ${item.cnpj}:`, e.message);
+            }
+
+            processed++;
+            const pct = Math.round((processed / total) * 100);
+            utils.updateProgressBar(processed, total);
+            utils.updateStatus(`🏢 [Fase 3 - IE Faltantes] ${processed}/${total} (${pct}%) — ${utils.formatCnpjForDisplay(item.cnpj)} | IEs encontradas: ${found}`);
+
+            // Delay controlado para respeitar limite da API de IE (2 segundos entre reqs)
+            await new Promise(r => setTimeout(r, 2000));
+        }
+
+        utils.updateProgressBar(total, total);
+        utils.updateStatus(`✅ Fase 3 Concluída! ${found} Inscrições Estaduais resgatadas com sucesso.`);
+        uiControllers.renderGroupedResults();
     },
 
     // ====== 📥 BAIXAR JÁ-ATENDIDOS ENRIQUECIDOS (.xlsx) ======

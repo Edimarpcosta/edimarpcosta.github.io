@@ -1,7 +1,7 @@
 // ========================= API-CONNECTIVITY-SCRIPT.JS =========================
 // Estado global e configuração das APIs (Plano §1 — Roteamento Multi-API)
 
-const state = {
+var state = {
     cnpjList: [],
     results: [],
     rawInputData: null,       // Dados brutos da planilha original para Merge
@@ -53,10 +53,10 @@ const state = {
 };
 
 // DOM Elements Reference — preenchido pelo ui-enhancement na init()
-const elements = {};
+var elements = {};
 
 // ========================= UTILITÁRIOS COMPARTILHADOS =========================
-const utils = {
+var utils = {
     // Preserva suporte a CNPJ Alfanumérico (RFB 2026+)
     cleanCnpjStr(str) {
         if (!str) return '';
@@ -740,15 +740,91 @@ const apiAdapters = {
     }
 };
 
+// ========================= CORS PROXY POOL & RATE LIMIT MANAGER =========================
+const CORS_PROXIES = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://thingproxy.freeboard.io/fetch/${url}`
+];
+let currentProxyIndex = 0;
+
+function getProxyUrl(targetUrl) {
+    return CORS_PROXIES[currentProxyIndex](targetUrl);
+}
+
+function rotateProxyOn429() {
+    currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+    console.warn(`[CORS Proxy] Alternando para o proxy #${currentProxyIndex + 1}`);
+}
+
+const API_RATE_LIMITS = {
+    'publica_cnpj_ws': { maxPerMinute: 3,   windowMs: 60000, requests: [], disabledUntil: 0, label: 'Publica CNPJ WS' },
+    'receitaws':       { maxPerMinute: 3,   windowMs: 60000, requests: [], disabledUntil: 0, label: 'ReceitaWS' },
+    'opencnpj':        { maxPerMinute: 30,  windowMs: 60000, requests: [], disabledUntil: 0, label: 'OpenCNPJ' },
+    'brasilapi':       { maxPerMinute: 120, windowMs: 60000, requests: [], disabledUntil: 0, label: 'BrasilAPI' },
+    'minhareceita':    { maxPerMinute: 120, windowMs: 60000, requests: [], disabledUntil: 0, label: 'minhaReceita' },
+    'cnpja':           { maxPerMinute: 10,  windowMs: 60000, requests: [], disabledUntil: 0, label: 'CNPJa (IE)' },
+    'cnpjfacil_ie':    { maxPerMinute: 10,  windowMs: 60000, requests: [], disabledUntil: 0, label: 'CNPJ Fácil (IE)' }
+};
+
+function canCallApi(apiId) {
+    const config = API_RATE_LIMITS[apiId];
+    if (!config) return true;
+
+    const now = Date.now();
+    if (now < config.disabledUntil) return false;
+
+    // Limpar requisições mais antigas que 60 segundos
+    config.requests = config.requests.filter(t => now - t < config.windowMs);
+
+    if (config.requests.length >= config.maxPerMinute) {
+        const oldestReq = config.requests[0];
+        const waitTime = config.windowMs - (now - oldestReq);
+        config.disabledUntil = now + waitTime;
+        startApiCooldownTimer(apiId, waitTime);
+        return false;
+    }
+    return true;
+}
+
+function recordApiCall(apiId) {
+    const config = API_RATE_LIMITS[apiId];
+    if (config) config.requests.push(Date.now());
+}
+
+function startApiCooldownTimer(apiId, waitTimeMs) {
+    const config = API_RATE_LIMITS[apiId];
+    const seconds = Math.ceil(waitTimeMs / 1000);
+    const label = config?.label || apiId;
+    console.warn(`[Rate Limit] API ${label} atingiu limite (${config?.maxPerMinute}/min). Cooldown por ${seconds}s.`);
+    
+    if (typeof utils !== 'undefined' && utils.updateStatus) {
+        utils.updateStatus(`⏳ API ${label} em pausa por ${seconds}s (limite por min). Reativação automática em breve...`);
+    }
+
+    setTimeout(() => {
+        if (config) config.disabledUntil = 0;
+        console.log(`[Rate Limit] 🟢 API ${label} reativada automaticamente!`);
+        if (typeof utils !== 'undefined' && utils.updateStatus) {
+            utils.updateStatus(`🟢 API ${label} reativada para novas consultas!`);
+        }
+    }, waitTimeMs);
+}
+
 // ========================= HANDLERS DE REQUISIÇÃO =========================
-const dataHandlers = {
-    // Requisição individual a uma API específica (com fallback automático via CORS Proxy se necessário)
+var dataHandlers = window.dataHandlers || {};
+Object.assign(dataHandlers, {
+    // Requisição individual a uma API específica (com fallback automático via CORS Proxy Pool)
     async fetchWithApi(apiDef, formattedCnpj, parentSignal) {
-        const cleanCnpj = String(formattedCnpj).replace(/\D/g, '');
+        if (!canCallApi(apiDef.id)) {
+            throw new Error('RATE_LIMIT_COOLDOWN');
+        }
+
+        const cleanCnpj = utils.cleanCnpjStr(formattedCnpj);
         const url = apiDef.url.replace('{cnpj}', cleanCnpj);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5 segundos de timeout máximo por API
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de timeout máximo por API
         
         const onParentAbort = () => controller.abort();
         if (parentSignal) {
@@ -756,6 +832,7 @@ const dataHandlers = {
         }
 
         try {
+            recordApiCall(apiDef.id);
             let response;
             try {
                 response = await fetch(url, { signal: controller.signal });
@@ -763,8 +840,11 @@ const dataHandlers = {
                 // Se falhou por erro de CORS/rede no navegador ("Failed to fetch") e não foi pausado pelo usuário
                 if ((directErr.name === 'TypeError' || (directErr.message && directErr.message.includes('Failed to fetch'))) && (!parentSignal || !parentSignal.aborted)) {
                     try {
-                        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                        const proxyUrl = getProxyUrl(url);
                         const proxyResp = await fetch(proxyUrl, { signal: controller.signal });
+                        if (proxyResp.status === 429) {
+                            rotateProxyOn429();
+                        }
                         if (proxyResp.ok) {
                             const data = await proxyResp.json();
                             clearTimeout(timeoutId);
@@ -782,6 +862,10 @@ const dataHandlers = {
             }
 
             if (!response.ok) {
+                if (response.status === 429) {
+                    rotateProxyOn429();
+                    throw new Error('RATE_LIMIT_429');
+                }
                 if (response.status === 404) {
                     try {
                         const text = await response.text();
@@ -1093,11 +1177,17 @@ const dataHandlers = {
 
         const prevDeep = state.deepMergeEnabled;
         state.deepMergeEnabled = true;
-        utils.updateStatus('🔍 Iniciando Reenriquecimento Profundo...');
+        
+        const total = state.results.length;
+        utils.updateProgressBar(0, total);
+        utils.updateStatus(`🔍 [Modo Profundo - Reenriquecimento] Iniciando 1 de ${total} (0%)...`);
 
         let updatedCount = 0;
-        for (let i = 0; i < state.results.length; i++) {
+        for (let i = 0; i < total; i++) {
             const item = state.results[i];
+            const pct = Math.round(((i + 1) / total) * 100);
+            utils.updateProgressBar(i + 1, total);
+
             if (!item || item.error || !item.cnpj) continue;
 
             const missingBefore = utils.getMissingFields(item);
@@ -1106,7 +1196,7 @@ const dataHandlers = {
                 continue;
             }
 
-            utils.updateStatus(`🔍 [Modo Profundo ${i + 1}/${state.results.length}] ${utils.formatCnpjForDisplay(item.cnpj)} (${(item.razao_social || '').substring(0, 20)}): Faltando [${missingBefore.join(', ')}]...`);
+            utils.updateStatus(`🔍 [Modo Profundo ${i + 1}/${total} (${pct}%)] ${utils.formatCnpjForDisplay(item.cnpj)} (${(item.razao_social || '').substring(0, 20)}): Faltando [${missingBefore.join(', ')}]...`);
 
             // Apaga cache para forçar requisições faltantes
             const formattedCnpj = utils.formatCnpjForApi(item.cnpj);
@@ -1127,6 +1217,9 @@ const dataHandlers = {
             await utils.sleep(300);
         }
 
+        utils.updateProgressBar(total, total);
+        utils.updateStatus(`✅ Reenriquecimento Profundo Concluído! ${updatedCount} de ${total} leads atualizados.`);
+
         state.deepMergeEnabled = prevDeep;
         if (typeof uiControllers !== 'undefined') {
             uiControllers.applyFilters();
@@ -1134,4 +1227,4 @@ const dataHandlers = {
         utils.updateStatus(`✅ Reenriquecimento concluído! ${updatedCount} leads atualizados.`);
         alert(`✅ Reenriquecimento concluído! ${updatedCount} leads foram enriquecidos nas APIs secundárias.`);
     }
-};
+});

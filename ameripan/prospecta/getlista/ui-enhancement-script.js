@@ -355,6 +355,14 @@ const uiControllers = {
                 }
             }, 800);
         }
+
+        // ===== FASE 3: Enriquecimento Exclusivo de IEs Faltantes (Opção ao Final) =====
+        const ieFetchAtEnd = document.getElementById('ieFetchAtEndCheck')?.checked;
+        if (ieFetchAtEnd && typeof dataHandlers !== 'undefined' && dataHandlers.processIeFaltantesAtEnd) {
+            setTimeout(() => {
+                dataHandlers.processIeFaltantesAtEnd();
+            }, 2000);
+        }
     },
 
 
@@ -1321,8 +1329,14 @@ const blocklistController = {
             return { type: 'cpf', value: clean };
         }
 
-        // CNPJ numérico incompleto (9–13 dígitos): aplica zero-left padStart para 14
-        if (/^\d{9,13}$/.test(clean)) {
+        // CPF sem zero inicial (exatamente 10 dígitos NUMÉRICOS — ex: 7966116883 → 07966116883)
+        // Sistemas como Excel removem o zero inicial de CPFs ao salvar como inteiro.
+        if (/^\d{10}$/.test(clean)) {
+            return { type: 'cpf', value: clean.padStart(11, '0'), wasPadded: true };
+        }
+
+        // CNPJ numérico incompleto (9, 12 ou 13 dígitos): aplica zero-left padStart para 14
+        if (/^\d{9}$/.test(clean) || /^\d{12,13}$/.test(clean)) {
             return { type: 'cnpj', value: clean.padStart(14, '0'), wasPadded: true };
         }
 
