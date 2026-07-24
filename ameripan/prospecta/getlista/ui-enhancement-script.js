@@ -69,6 +69,11 @@ const uiControllers = {
         state.isPaused = false;
         state.consecutiveErrors = 0;
         state.pendingRequests = [];
+        state.deepMergeStats = { totalEnriched: 0, ieCaptured: 0, telefonesCaptured: 0, qsaCaptured: 0, emailCaptured: 0, cnaeCaptured: 0 };
+        
+        // ZERAR BARRA DE PROGRESSO IMEDIATAMENTE (0%)
+        utils.updateProgressBar(0, state.cnpjList.length);
+
         // Re-ativar APIs que foram desativadas em rodadas anteriores
         state.apis.forEach(api => { api.active = true; api.consecutiveFailures = 0; });
 
@@ -316,7 +321,24 @@ const uiControllers = {
 
         const total = state.results.filter(r => r !== undefined).length;
         const errs = state.results.filter(r => r && r.error).length;
-        utils.updateStatus(`✅ Concluído! ${total} processados (${total - errs} ✓ | ${errs} ✗)`);
+
+        // AUDIT LOG & RESUMO DOS GANHOS DO MODO PROFUNDO MULTI-API
+        const stats = state.deepMergeStats;
+        let gainMsg = '';
+        if (state.deepMergeEnabled && stats && stats.totalEnriched > 0) {
+            gainMsg = ` | 🎯 Modo Profundo: Resgatou +${stats.ieCaptured} IEs, +${stats.telefonesCaptured} Fones, +${stats.qsaCaptured} Sócios!`;
+            console.log(`%c🎯 [Resumo de Ganhos do Modo Profundo Multi-API]\n` +
+                        `-----------------------------------------\n` +
+                        `• CNPJs Enriquecidos por APIs Secundárias: ${stats.totalEnriched}\n` +
+                        `• Inscrições Estaduais (IE) Resgatadas: ${stats.ieCaptured}\n` +
+                        `• Telefones Extras Resgatados: ${stats.telefonesCaptured}\n` +
+                        `• Sócios (QSA) Resgatados: ${stats.qsaCaptured}\n` +
+                        `• E-mails Resgatados: ${stats.emailCaptured}\n` +
+                        `• CNAEs Secundários Resgatados: ${stats.cnaeCaptured}`,
+                        'color:#a855f7; font-weight:bold; font-size:12px; background:#1e1b4b; padding:6px; border-radius:4px;');
+        }
+
+        utils.updateStatus(`✅ Concluído! ${total} processados (${total - errs} ✓ | ${errs} ✗)${gainMsg}`);
         utils.updateProgressBar(state.cnpjList.length, state.cnpjList.length);
         utils.updateStats();
 
@@ -979,16 +1001,37 @@ const uiControllers = {
             orderingList.innerHTML = state.apis.map((api, idx) => {
                 const isFirst = idx === 0;
                 const isLast = idx === state.apis.length - 1;
+                const currentReqLimit = (typeof API_RATE_LIMITS !== 'undefined' && API_RATE_LIMITS[api.id]) ? API_RATE_LIMITS[api.id].maxPerMinute : 120;
+                const currentTimeout = api.timeoutMs || 4000;
+
                 return `
-                <div class="flex items-center justify-between p-2 rounded" style="background:var(--bg-badge); border:1px solid var(--border-card);">
-                    <label class="flex items-center gap-2 cursor-pointer text-sm font-medium" style="color:var(--color-text)">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 rounded gap-2 text-xs" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                    <div class="flex items-center gap-2">
                         <input type="checkbox" ${api.active ? 'checked' : ''} onchange="utils.toggleApiActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#6366f1">
-                        <span>${idx + 1}. ${api.name}</span>
+                        <span class="font-bold text-sm" style="color:var(--color-text)">${idx + 1}. ${api.name}</span>
                         ${api.isFallback ? '<span class="text-xs px-1.5 py-0.5 rounded" style="background:rgba(245,158,11,0.15); color:#f59e0b">Fallback</span>' : ''}
-                    </label>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="utils.moveApiUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2.5 py-1 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↑</button>
-                        <button type="button" onclick="utils.moveApiDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2.5 py-1 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↓</button>
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-1" title="Máximo de requisições por minuto para esta API (0 = sem limite)">
+                            <span style="color:var(--color-text-muted)">Req/min:</span>
+                            <input type="number" min="0" max="1000" value="${currentReqLimit >= 99999 ? 0 : currentReqLimit}" 
+                                onchange="utils.saveApiSettingsCustom('${api.id}', this.value, document.getElementById('timeout_${api.id}').value)"
+                                id="req_${api.id}" class="w-16 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
+                        </div>
+
+                        <div class="flex items-center gap-1" title="Timeout máximo em milissegundos para resposta desta API">
+                            <span style="color:var(--color-text-muted)">Timeout:</span>
+                            <input type="number" min="500" max="15000" step="500" value="${currentTimeout}" 
+                                onchange="utils.saveApiSettingsCustom('${api.id}', document.getElementById('req_${api.id}').value, this.value)"
+                                id="timeout_${api.id}" class="w-20 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
+                            <span style="color:var(--color-text-muted)">ms</span>
+                        </div>
+
+                        <div class="flex items-center gap-1 ml-1">
+                            <button type="button" onclick="utils.moveApiUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↑</button>
+                            <button type="button" onclick="utils.moveApiDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↓</button>
+                        </div>
                     </div>
                 </div>`;
             }).join('');

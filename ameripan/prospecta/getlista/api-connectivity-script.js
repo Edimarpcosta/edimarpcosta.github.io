@@ -360,8 +360,43 @@ var utils = {
             localStorage.setItem('cnpj_apis_order', JSON.stringify(orderData));
         } catch (e) {}
     },
+    saveApiSettingsCustom(apiId, reqPerMin, timeoutMs) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('api_settings_custom') || '{}');
+            saved[apiId] = {
+                maxPerMinute: parseInt(reqPerMin) || 0,
+                timeoutMs: parseInt(timeoutMs) || 4000
+            };
+            localStorage.setItem('api_settings_custom', JSON.stringify(saved));
+            
+            if (API_RATE_LIMITS[apiId]) {
+                const limit = parseInt(reqPerMin);
+                API_RATE_LIMITS[apiId].maxPerMinute = limit > 0 ? limit : 99999;
+            }
+            const apiObj = state.apis.find(a => a.id === apiId);
+            if (apiObj) {
+                apiObj.timeoutMs = parseInt(timeoutMs) || 4000;
+            }
+        } catch (e) {}
+    },
+    loadApiSettingsCustom() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('api_settings_custom') || '{}');
+            Object.keys(saved).forEach(apiId => {
+                const conf = saved[apiId];
+                if (API_RATE_LIMITS[apiId] && conf.maxPerMinute !== undefined) {
+                    API_RATE_LIMITS[apiId].maxPerMinute = conf.maxPerMinute > 0 ? conf.maxPerMinute : 99999;
+                }
+                const apiObj = state.apis.find(a => a.id === apiId);
+                if (apiObj && conf.timeoutMs) {
+                    apiObj.timeoutMs = conf.timeoutMs;
+                }
+            });
+        } catch (e) {}
+    },
     loadApiOrder() {
         try {
+            this.loadApiSettingsCustom();
             const saved = localStorage.getItem('cnpj_apis_order');
             if (saved) {
                 const parsed = JSON.parse(saved);
@@ -823,8 +858,9 @@ Object.assign(dataHandlers, {
         const cleanCnpj = utils.cleanCnpjStr(formattedCnpj);
         const url = apiDef.url.replace('{cnpj}', cleanCnpj);
         
+        const timeoutMs = apiDef.timeoutMs || 4000;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de timeout máximo por API
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
         const onParentAbort = () => controller.abort();
         if (parentSignal) {
@@ -1060,10 +1096,18 @@ Object.assign(dataHandlers, {
                         successData.deepMergeLogs = successData.deepMergeLogs || [];
 
                         if (recovered.length > 0) {
+                            state.deepMergeStats = state.deepMergeStats || { totalEnriched: 0, ieCaptured: 0, telefonesCaptured: 0, qsaCaptured: 0, emailCaptured: 0, cnaeCaptured: 0 };
+                            state.deepMergeStats.totalEnriched++;
+                            if (recovered.includes('IE')) state.deepMergeStats.ieCaptured++;
+                            if (recovered.includes('Telefone 1') || recovered.includes('Telefone 2')) state.deepMergeStats.telefonesCaptured++;
+                            if (recovered.includes('QSA')) state.deepMergeStats.qsaCaptured++;
+                            if (recovered.includes('Email')) state.deepMergeStats.emailCaptured++;
+                            if (recovered.includes('CNAE Principal')) state.deepMergeStats.cnaeCaptured++;
+
                             const logEntry = `✅ ${api.name}: Resgatou [${recovered.join(', ')}]`;
                             successData.deepMergeLogs.push(logEntry);
-                            utils.updateStatus(`✅ [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)}: ${api.name} RESGATOU [${recovered.join(', ')}]!`);
-                            console.log(`[🔍 Deep Merge Sucesso] ${cnpj} ${api.name} resgatou:`, recovered);
+                            utils.updateStatus(`✨ [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)}: ${api.name} RESGATOU [${recovered.join(', ')}]!`);
+                            console.log(`%c[✨ Deep Merge Sucesso] ${cnpj} via ${api.name} resgatou: [${recovered.join(', ')}]`, 'color:#a855f7; font-weight:bold;');
                         } else {
                             const logEntry = `ℹ️ ${api.name}: Consultada (sem dados novos)`;
                             successData.deepMergeLogs.push(logEntry);
@@ -1111,9 +1155,17 @@ Object.assign(dataHandlers, {
                     console.warn(`[⏳ Rate Limit 429] ${api.name} colocada em cooldown de 15s e reordenada para o final da fila.`);
                 } else {
                     api.consecutiveFailures++;
-                    if (api.consecutiveFailures >= 3) {
-                        console.error(`[SKIP] ${api.name} desativada temporariamente (${api.consecutiveFailures} falhas)`);
+                    if (api.consecutiveFailures >= 3 && api.active) {
                         api.active = false;
+                        console.error(`[SKIP] ${api.name} desativada temporariamente (${api.consecutiveFailures} falhas). Reativação em 15s...`);
+                        setTimeout(() => {
+                            api.active = true;
+                            api.consecutiveFailures = 0;
+                            console.log(`[🟢 Auto-Recuperação] API ${api.name} reativada automaticamente!`);
+                            if (typeof uiControllers !== 'undefined' && uiControllers.renderApiQueueStatus) {
+                                uiControllers.renderApiQueueStatus();
+                            }
+                        }, 15000);
                     }
                     lastErrorMsg = error.message;
                     lastErrorType = 'connection';
