@@ -568,6 +568,244 @@ Object.assign(dataHandlers, {
         } catch (e) {
             alert(`Erro ao enviar para o CRM: ${e.message}`);
         }
+    },
+
+    // ====== 📥 BAIXAR LISTA RAW DE JÁ-ATENDIDOS (.xlsx simples) ======
+    downloadBlocklistRaw() {
+        if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
+        if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) {
+            return alert('Blocklist vazia. Carregue os CNPJs já atendidos primeiro.');
+        }
+        const workbook = XLSX.utils.book_new();
+        const rows = Array.from(state.cnpjsJaAtendidos).map(cnpj => ({
+            'CNPJ': utils.formatCnpjForDisplay(cnpj),
+            'CNPJ Limpo': cnpj,
+            'Tipo': cnpj.length === 8 ? 'Raiz (todas as filiais)' : 'CNPJ Completo'
+        }));
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Já Atendidos');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        XLSX.writeFile(workbook, `ja_atendidos_${dateStr}.xlsx`);
+        utils.updateStatus(`✅ Planilha de já-atendidos exportada! ${rows.length} CNPJs.`);
+    },
+
+    // ====== 🔄 ENRIQUECER JÁ-ATENDIDOS (fila extra opcional após não-atendidos) ======
+    async enrichAtendidos() {
+        if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) {
+            return alert('Blocklist vazia. Nada para enriquecer.');
+        }
+        // Filtra apenas CNPJs completos (raízes de 8 dígitos não podem ser enriquecidas diretamente)
+        const cnpjsToEnrich = Array.from(state.cnpjsJaAtendidos).filter(c => c.length === 14);
+
+        if (cnpjsToEnrich.length === 0) {
+            return alert('Nenhum CNPJ completo (14 dígitos) na blocklist para enriquecer.\nAdicione CNPJs completos (não apenas raízes).');
+        }
+
+        utils.updateStatus(`🔄 Fase extra: enriquecendo ${cnpjsToEnrich.length} CNPJs já atendidos...`);
+        state.resultsJaAtendidos = [];
+
+        for (const cnpj of cnpjsToEnrich) {
+            try {
+                const result = await dataHandlers.fetchCnpjData(cnpj);
+                if (result && !result.error) {
+                    result._atende = true;
+                    state.resultsJaAtendidos.push(result);
+                }
+            } catch (e) {
+                console.warn(`[Blocklist] Erro ao enriquecer ${cnpj}:`, e);
+            }
+            await new Promise(r => setTimeout(r, (state.apiDelay || 300)));
+        }
+
+        utils.updateStatus(`✅ Já-atendidos enriquecidos: ${state.resultsJaAtendidos.length} CNPJs.`);
+
+        // Habilitar botões de exportação dos já-atendidos
+        const btnEnr = document.getElementById('downloadAtendidosEnriquecidosBtn');
+        const btnAll = document.getElementById('exportCompletoComAtendeBtn');
+        if (btnEnr) { btnEnr.disabled = false; btnEnr.classList.remove('hidden'); btnEnr.style.opacity = '1'; }
+        if (btnAll) { btnAll.disabled = false; btnAll.classList.remove('hidden'); btnAll.style.opacity = '1'; }
+    },
+
+    // ====== 📥 BAIXAR JÁ-ATENDIDOS ENRIQUECIDOS (.xlsx) ======
+    downloadAtendidosEnriquecidos() {
+        if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
+        if (!state.resultsJaAtendidos || state.resultsJaAtendidos.length === 0) {
+            return alert('Nenhum dado enriquecido dos já-atendidos. Execute o enriquecimento primeiro.');
+        }
+        const workbook = XLSX.utils.book_new();
+        const rows = state.resultsJaAtendidos.map(result => this._buildResultRow(result, 'Sim'));
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Já Atendidos Enriquecidos');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        XLSX.writeFile(workbook, `ja_atendidos_enriquecidos_${dateStr}.xlsx`);
+        utils.updateStatus(`✅ Já-atendidos enriquecidos exportados! ${rows.length} CNPJs.`);
+    },
+
+    // ====== 📊 EXPORTAR COMPLETO COM COLUNA "ATENDE" (Sim/Não) ======
+    exportCompletoComAtende() {
+        try {
+            if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
+            if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
+
+            utils.updateStatus('Preparando exportação completa com coluna Atende...');
+            const { successRows } = this._getFilteredResults();
+            const workbook = XLSX.utils.book_new();
+
+            // Não-atendidos = Não
+            const rowsNao = successRows.map(({ result }) => this._buildResultRow(result, 'Não'));
+
+            // Já-atendidos = Sim (se enriquecidos)
+            const rowsSim = (state.resultsJaAtendidos || []).map(result => this._buildResultRow(result, 'Sim'));
+
+            const allRows = [...rowsNao, ...rowsSim];
+
+            if (allRows.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allRows), 'Todos + Atende');
+            } else {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado']]), 'Todos + Atende');
+            }
+
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            XLSX.writeFile(workbook, `getlista_todos_atende_${dateStr}.xlsx`);
+            utils.updateStatus(`✅ Exportação com Atende! ${allRows.length} CNPJs (${rowsNao.length} não-atendidos + ${rowsSim.length} já-atendidos).`);
+        } catch (err) {
+            console.error('Erro na exportação com Atende:', err);
+            alert('Erro ao exportar: ' + err.message);
+        }
+    },
+
+    // ====== 🛠️ Helper: monta linha de resultado para XLSX (com coluna Atende) ======
+    _buildResultRow(result, atendeVal) {
+        if (!result) return { 'Atende': atendeVal };
+        const tel1 = utils.cleanPhone(result.ddd_telefone_1);
+        const tel2 = utils.cleanPhone(result.ddd_telefone_2);
+        const scoreInfo = result.scoreInfo || {};
+        const age = utils.calculateAge(result.data_inicio_atividade || result.abertura);
+        const ageDesc = utils.getAgeDescription ? utils.getAgeDescription(age) : { text: '' };
+
+        const row = {
+            'Atende': atendeVal,
+            'CNPJ': result.cnpj || '',
+            'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+            'Inscrição Estadual (IE)': result.inscricao_estadual || '',
+            'Score B2B': scoreInfo.score || 0,
+            'Temperatura Lead': scoreInfo.temp || 'Frio ❄️',
+            'Estágio Comercial': ageDesc.text || '',
+            'Razão Social': result.razao_social || '',
+            'Nome Fantasia': result.nome_fantasia || '',
+            'Situação Cadastral': result.descricao_situacao_cadastral || '',
+            'Data de Abertura': result.data_inicio_atividade || '',
+            'CNAE Principal': result.cnae_fiscal || '',
+            'Descrição CNAE': result.cnae_fiscal_descricao || '',
+            'Logradouro': result.logradouro || '',
+            'Número': result.numero || '',
+            'Bairro': result.bairro || '',
+            'Município': result.municipio || '',
+            'UF': result.uf || '',
+            'CEP': result.cep || '',
+            'Telefone': result.ddd_telefone_1 || '',
+            'Telefone 2': result.ddd_telefone_2 || '',
+            'Email': result.email || '',
+            'WhatsApp 1': tel1.length >= 10 ? 'https://wa.me/55' + tel1 : '',
+            'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
+            'Capital Social': result.capital_social || '',
+            'Porte': result.porte || '',
+            'API Origem': result.api_origem || ''
+        };
+
+        // Possível Sócio da Lista (match CPF x QSA)
+        const socioMatches = (state.cpfSocioMatches || []).filter(m =>
+            utils.cleanCnpjStr(m.cnpj_empresa) === utils.cleanCnpjStr(result.cnpj)
+        );
+        row['Possível Sócio da Lista'] = socioMatches.map(m => `CPF ${m.cpf_formatado} (${m.nome_socio})`).join(' | ');
+
+        // Sócios (QSA)
+        if (result.qsa && result.qsa.length > 0) {
+            result.qsa.forEach((s, i) => {
+                row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
+            });
+        }
+
+        return row;
+    },
+
+    // ====== 👤 MATCHING DE CPFS DA LISTA COM SÓCIOS (QSA) ======
+    _getCpfPartial(cpf11) {
+        if (!cpf11 || cpf11.length !== 11) return '';
+        return cpf11.substring(3, 9); // Dígitos 3 a 8 (6 caracteres do meio)
+    },
+
+    matchCpfsWithQsa() {
+        if (!state.cpfsJaAtendidos || state.cpfsJaAtendidos.length === 0) return;
+        state.cpfSocioMatches = [];
+
+        const cpfPartials = state.cpfsJaAtendidos.map(cpf => ({
+            cpf,
+            partial: this._getCpfPartial(cpf)
+        })).filter(item => item.partial.length === 6);
+
+        const allResults = [
+            ...(state.results || []).filter(r => r && !r.error),
+            ...(state.resultsJaAtendidos || [])
+        ];
+
+        allResults.forEach(result => {
+            if (!result.qsa || !Array.isArray(result.qsa) || result.qsa.length === 0) return;
+            result.qsa.forEach(socio => {
+                const cpfRaw = socio.cpf_representante_legal
+                            || socio.cpf_socio
+                            || socio.qualificacao_socio_cpf
+                            || socio.doc_socio
+                            || '';
+                const cpfMasked = cpfRaw.replace(/[^0-9*]/g, '');
+                if (!cpfMasked) return;
+
+                cpfPartials.forEach(({ cpf, partial }) => {
+                    if (cpfMasked.includes(partial)) {
+                        state.cpfSocioMatches.push({
+                            cpf_lista:     cpf,
+                            cpf_formatado: cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
+                            partial_usada: partial,
+                            cpf_mascarado: cpfMasked,
+                            nome_socio:    socio.nome_socio || socio.nome || '-',
+                            qualificacao:  socio.qualificacao_socio || socio.cargo || '-',
+                            cnpj_empresa:  result.cnpj,
+                            razao_social:  result.razao_social || '-',
+                            municipio:     result.municipio || '-',
+                            uf:            result.uf || '-',
+                            atende:        result._atende ? 'Sim' : 'Não',
+                            confianca:     'Provável (partial match)'
+                        });
+                    }
+                });
+            });
+        });
+
+        console.log(`[CPF-Sócio Match] ${state.cpfSocioMatches.length} possíveis sócios encontrados.`);
+    },
+
+    // ====== 📥 EXPORTAR RELATÓRIO DE POSSÍVEIS SÓCIOS (.xlsx) ======
+    exportCpfSocioReport() {
+        if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
+        if (!state.cpfSocioMatches || state.cpfSocioMatches.length === 0) {
+            return alert('Nenhum match de CPF × sócio encontrado.\nVerifique se há CPFs na blocklist e se o enriquecimento (Fase 2) foi executado.');
+        }
+        const workbook = XLSX.utils.book_new();
+        const rows = state.cpfSocioMatches.map(m => ({
+            'CPF da Lista': m.cpf_formatado,
+            'CPF Mascarado (QSA)': m.cpf_mascarado,
+            'Nome do Sócio': m.nome_socio,
+            'Cargo / Qualificação': m.qualificacao,
+            'CNPJ Empresa': utils.formatCnpjForDisplay(m.cnpj_empresa),
+            'Razão Social': m.razao_social,
+            'Município': m.municipio,
+            'UF': m.uf,
+            'Atende Atualmente': m.atende,
+            'Nível de Confiança': m.confianca
+        }));
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Possíveis Sócios (QSA)');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        XLSX.writeFile(workbook, `possiveis_socios_qsa_${dateStr}.xlsx`);
+        utils.updateStatus(`✅ Relatório de possíveis sócios exportado! ${rows.length} matches.`);
     }
 });
 

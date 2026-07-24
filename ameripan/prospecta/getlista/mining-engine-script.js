@@ -15,9 +15,10 @@ const MiningEngine = {
         delayBetweenPages: 3000, // ms — prevenção de ban de IP
         maxPages: 0, // 0 = sem limite
         pageTimes: [], // tempos de cada página para ETA
-        seenCnpjs: new Set(), // deduplicação em tempo real
+        seenCnpjs: new Set(), // deduplication em tempo real
         duplicatesSkipped: 0,
         tableExpanded: false,
+        excludedFromBlocklist: 0, // CNPJs excluídos por estar na blocklist
     },
 
     // ===== FILTROS (gerenciados por chip system) =====
@@ -235,6 +236,7 @@ const MiningEngine = {
         const el = (id) => document.getElementById(id);
         if (el('mineStatTotal')) el('mineStatTotal').textContent = this.state.totalRecords;
         if (el('mineStatExtracts')) el('mineStatExtracts').textContent = this.state.leads.length;
+        if (el('mineStatExcluded')) el('mineStatExcluded').textContent = this.state.excludedFromBlocklist;
 
         // Page info with max pages indicator
         const maxLabel = this.state.maxPages > 0 ? ` (máx:${this.state.maxPages})` : '';
@@ -384,6 +386,28 @@ const MiningEngine = {
         Object.keys(this._chipRefreshers).forEach(k => this._chipRefreshers[k]());
     },
 
+    // ========================= BLOCKLIST HELPERS =========================
+    // Normaliza um CNPJ para string alfanumérica maiúscula com zero-padding
+    normalizeCnpjForBlocklist(raw) {
+        if (!raw) return '';
+        const clean = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (/^\d{1,13}$/.test(clean)) return clean.padStart(14, '0');
+        return clean;
+    },
+
+    // Verifica se um CNPJ (14 dígitos) está na blocklist (exato ou por raiz)
+    isInBlocklist(cnpj14) {
+        if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) return false;
+        const clean = this.normalizeCnpjForBlocklist(cnpj14);
+        if (state.cnpjsJaAtendidos.has(clean)) return true;
+        const matchByRoot = document.getElementById('blocklistMatchByRoot')?.checked ?? true;
+        if (matchByRoot && clean.length >= 8) {
+            const root = clean.substring(0, 8);
+            if (state.cnpjsJaAtendidos.has(root)) return true;
+        }
+        return false;
+    },
+
     // ========================= MOTOR DE EXTRAÇÃO =========================
     async startMining() {
         const key = this.els.apiKeyInput?.value?.trim();
@@ -415,6 +439,7 @@ const MiningEngine = {
         this.state.pageTimes = [];
         this.state.seenCnpjs = new Set();
         this.state.duplicatesSkipped = 0;
+        this.state.excludedFromBlocklist = 0;
 
         this.clearLog();
         this.log('=== FASE 1: INICIANDO MINERAÇÃO ===', 'info');
@@ -523,10 +548,16 @@ const MiningEngine = {
                 let addedThisPage = 0;
 
                 pageCnpjs.forEach(item => {
-                    const cleanCnpj = String(item.cnpj).replace(/\D/g, '');
+                    const cleanCnpj = utils.cleanCnpjStr(item.cnpj);
                     if (this.state.seenCnpjs.has(cleanCnpj)) {
                         this.state.duplicatesSkipped++;
                         return; // Ignora duplicados na raiz
+                    }
+                    // === BLOCKLIST CHECK ===
+                    if (this.isInBlocklist(cleanCnpj)) {
+                        this.state.excludedFromBlocklist++;
+                        this.log(`[⛔ SKIP] ${item.cnpj || cleanCnpj} — já atendido (blocklist)`, 'warn');
+                        return;
                     }
                     this.state.seenCnpjs.add(cleanCnpj);
                     

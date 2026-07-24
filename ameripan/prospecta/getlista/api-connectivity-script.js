@@ -20,6 +20,11 @@ const state = {
     errorTypeToHandle: null,
     isAutoPaused: false,
     connectionTestInProgress: false,
+    // ===== BLOCKLIST: CNPJs JÁ ATENDIDOS =====
+    cnpjsJaAtendidos: new Set(),  // Set de CNPJs/raízes normalizados
+    cpfsJaAtendidos: [],          // Array de CPFs (11 dígitos) para matching QSA
+    cpfSocioMatches: [],          // Array de resultados de match CPF x QSA
+    resultsJaAtendidos: [],       // Dados enriquecidos dos já-atendidos (opcional)
     scoreConfig: {
         cepOrigem: '',
         cnaes: [

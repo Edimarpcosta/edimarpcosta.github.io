@@ -327,7 +327,36 @@ const uiControllers = {
 
         // Re-render groups if enabled
         this.renderGroupedResults();
+
+        // ===== BLOCKLIST: Enriquecimento automático dos já-atendidos (opcional) =====
+        const enrichCheck = document.getElementById('enrichAtendidosCheck');
+        if (enrichCheck?.checked && state.cnpjsJaAtendidos && state.cnpjsJaAtendidos.size > 0) {
+            if (typeof dataHandlers !== 'undefined' && dataHandlers.enrichAtendidos) {
+                setTimeout(() => {
+                    utils.updateStatus('🔄 Iniciando enriquecimento dos já-atendidos (opcional)...');
+                    dataHandlers.enrichAtendidos();
+                }, 1500);
+            }
+        }
+
+        // ===== BLOCKLIST: Matching de CPFs da lista com sócios (QSA) =====
+        if (state.cpfsJaAtendidos && state.cpfsJaAtendidos.length > 0) {
+            setTimeout(() => {
+                if (typeof dataHandlers !== 'undefined' && dataHandlers.matchCpfsWithQsa) {
+                    dataHandlers.matchCpfsWithQsa();
+                    const btn = document.getElementById('exportCpfSocioBtn');
+                    if (btn && state.cpfSocioMatches && state.cpfSocioMatches.length > 0) {
+                        btn.disabled = false;
+                        btn.classList.remove('hidden');
+                        btn.style.opacity = '1';
+                        btn.title = `${state.cpfSocioMatches.length} possível(is) sócio(s) encontrado(s)`;
+                        utils.updateStatus(`🔍 ${state.cpfSocioMatches.length} possível(is) sócio(s) detectado(s) via QSA!`);
+                    }
+                }
+            }, 800);
+        }
     },
+
 
     // ===== §4.3 — TABELA COM VIRTUALIZAÇÃO LEVE =====
     addResultToTable(result, index) {
@@ -1250,6 +1279,23 @@ function init() {
         if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
     });
 
+    // Inicializar Blocklist (já-atendidos) — carregar localStorage e wire-up events
+    // Toggle do painel
+    document.getElementById('blocklistToggleBtn')?.addEventListener('click', () => blocklistController.toggle());
+
+    // Botões da blocklist
+    document.getElementById('loadBlocklistBtn')?.addEventListener('click', () => blocklistController.load());
+    document.getElementById('clearBlocklistBtn')?.addEventListener('click', () => blocklistController.clear());
+    document.getElementById('downloadBlocklistRawBtn')?.addEventListener('click', () => dataHandlers.downloadBlocklistRaw());
+
+    // Botões de exportação dos já-atendidos (Fase 2)
+    document.getElementById('downloadAtendidosEnriquecidosBtn')?.addEventListener('click', () => dataHandlers.downloadAtendidosEnriquecidos());
+    document.getElementById('exportCompletoComAtendeBtn')?.addEventListener('click', () => dataHandlers.exportCompletoComAtende());
+    document.getElementById('exportCpfSocioBtn')?.addEventListener('click', () => dataHandlers.exportCpfSocioReport());
+
+    // Carregar blocklist do localStorage ao abrir
+    blocklistController.loadFromStorage();
+
     // Inicializar Mining Engine (Fase 1)
     if (typeof MiningEngine !== 'undefined') {
         MiningEngine.init();
@@ -1259,3 +1305,196 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ========================= BLOCKLIST CONTROLLER =========================
+// Gerencia o estado e a UI dos CNPJs já atendidos (blocklist) e CPFs (possíveis sócios)
+const blocklistController = {
+
+    // Normaliza e classifica uma entrada da lista
+    _normalizeEntry(raw) {
+        if (!raw) return { type: 'invalid', value: null };
+        const clean = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (clean.length === 0) return { type: 'invalid', value: null };
+
+        // CPF: exatamente 11 dígitos NUMÉRICOS
+        if (/^\d{11}$/.test(clean)) {
+            return { type: 'cpf', value: clean };
+        }
+
+        // CNPJ numérico incompleto (9–13 dígitos): aplica zero-left padStart para 14
+        if (/^\d{9,13}$/.test(clean)) {
+            return { type: 'cnpj', value: clean.padStart(14, '0'), wasPadded: true };
+        }
+
+        // CNPJ completo (14 caracteres A-Z0-9, últimos 2 numéricos)
+        if (/^[A-Z0-9]{12}[0-9]{2}$/.test(clean)) {
+            return { type: 'cnpj', value: clean };
+        }
+
+        // Raiz CNPJ (8 caracteres A-Z0-9, exclui todas as filiais)
+        if (/^[A-Z0-9]{8}$/.test(clean)) {
+            return { type: 'root', value: clean };
+        }
+
+        return { type: 'invalid', value: clean };
+    },
+
+    // Carrega a blocklist a partir da textarea, salva no state e no localStorage
+    load() {
+        const textarea = document.getElementById('blocklistTextarea');
+        const raw = textarea?.value?.trim() || '';
+        const lines = raw.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
+
+        state.cnpjsJaAtendidos = new Set();
+        state.cpfsJaAtendidos = [];
+        let stats = { cnpj: 0, root: 0, cpf: 0, invalid: 0, padded: 0 };
+
+        lines.forEach(line => {
+            const { type, value, wasPadded } = this._normalizeEntry(line);
+            if (type === 'cnpj') {
+                state.cnpjsJaAtendidos.add(value);
+                stats.cnpj++;
+                if (wasPadded) stats.padded++;
+            } else if (type === 'root') {
+                state.cnpjsJaAtendidos.add(value);
+                stats.root++;
+            } else if (type === 'cpf') {
+                state.cpfsJaAtendidos.push(value);
+                stats.cpf++;
+            } else {
+                stats.invalid++;
+            }
+        });
+
+        const totalPj = state.cnpjsJaAtendidos.size;
+
+        // Salvar no localStorage
+        localStorage.setItem('getlista_blocklist', JSON.stringify(Array.from(state.cnpjsJaAtendidos)));
+        localStorage.setItem('getlista_blocklist_cpfs', JSON.stringify(state.cpfsJaAtendidos));
+
+        // Atualizar UI
+        this._updateUIStats(totalPj, stats.cpf, stats.invalid);
+
+        // Feedback
+        const msg = `✅ ${totalPj} PJ(s) (${stats.padded} c/ zero-pad, ${stats.root} raízes) e ${stats.cpf} CPF(s) (possíveis sócios) carregados` +
+            (stats.invalid > 0 ? ` | ⚠️ ${stats.invalid} linha(s) inválida(s) ignorada(s).` : '.');
+        this._showStatus(msg);
+
+        if (typeof utils !== 'undefined') {
+            utils.updateStatus(`🚫 Blocklist: ${totalPj} PJs e ${stats.cpf} CPFs carregados.`);
+        }
+    },
+
+    // Limpa toda a blocklist
+    clear() {
+        if (!confirm('Limpar toda a blocklist e lista de CPFs?')) return;
+        state.cnpjsJaAtendidos = new Set();
+        state.cpfsJaAtendidos = [];
+        state.resultsJaAtendidos = [];
+        state.cpfSocioMatches = [];
+        localStorage.removeItem('getlista_blocklist');
+        localStorage.removeItem('getlista_blocklist_cpfs');
+        const textarea = document.getElementById('blocklistTextarea');
+        if (textarea) textarea.value = '';
+        this._updateUIStats(0, 0, 0);
+        this._showStatus('Blocklist limpa. Nenhum CNPJ será excluído e nenhum CPF será cruzado.');
+    },
+
+    // Carrega do localStorage (chamado no init)
+    loadFromStorage() {
+        try {
+            const savedPj = localStorage.getItem('getlista_blocklist');
+            const savedCpf = localStorage.getItem('getlista_blocklist_cpfs');
+
+            if (savedPj) {
+                const arrPj = JSON.parse(savedPj);
+                if (Array.isArray(arrPj) && arrPj.length > 0) {
+                    state.cnpjsJaAtendidos = new Set(arrPj);
+                }
+            }
+            if (savedCpf) {
+                const arrCpf = JSON.parse(savedCpf);
+                if (Array.isArray(arrCpf) && arrCpf.length > 0) {
+                    state.cpfsJaAtendidos = arrCpf;
+                }
+            }
+
+            const totalPj = state.cnpjsJaAtendidos ? state.cnpjsJaAtendidos.size : 0;
+            const totalCpf = state.cpfsJaAtendidos ? state.cpfsJaAtendidos.length : 0;
+
+            if (totalPj > 0 || totalCpf > 0) {
+                const textarea = document.getElementById('blocklistTextarea');
+                if (textarea && textarea.value.trim() === '') {
+                    const allLines = [...Array.from(state.cnpjsJaAtendidos), ...(state.cpfsJaAtendidos || [])];
+                    textarea.value = allLines.join('\n');
+                }
+                this._updateUIStats(totalPj, totalCpf, 0);
+                this._showStatus(`💾 ${totalPj} PJs e ${totalCpf} CPFs carregados do histórico (localStorage).`);
+            }
+        } catch (e) {
+            console.warn('[Blocklist] Erro ao carregar localStorage:', e);
+        }
+    },
+
+    // Atualiza badges e botões da UI
+    _updateUIStats(totalPj, totalCpf, totalInvalid) {
+        const pjBadge = document.getElementById('blocklistCounterBadge');
+        const cpfBadge = document.getElementById('blocklistCpfBadge');
+        const invalidBadge = document.getElementById('blocklistInvalidBadge');
+        const downloadBtn = document.getElementById('downloadBlocklistRawBtn');
+
+        if (pjBadge) {
+            if (totalPj > 0) {
+                pjBadge.textContent = `${totalPj} PJ${totalPj !== 1 ? 's' : ''}`;
+                pjBadge.classList.remove('hidden');
+            } else {
+                pjBadge.classList.add('hidden');
+            }
+        }
+
+        if (cpfBadge) {
+            if (totalCpf > 0) {
+                cpfBadge.textContent = `${totalCpf} CPF${totalCpf !== 1 ? 's' : ''} (sócios)`;
+                cpfBadge.classList.remove('hidden');
+            } else {
+                cpfBadge.classList.add('hidden');
+            }
+        }
+
+        if (invalidBadge) {
+            if (totalInvalid > 0) {
+                invalidBadge.textContent = `${totalInvalid} inválido${totalInvalid !== 1 ? 's' : ''}`;
+                invalidBadge.classList.remove('hidden');
+            } else {
+                invalidBadge.classList.add('hidden');
+            }
+        }
+
+        if (downloadBtn) {
+            const total = totalPj + totalCpf;
+            downloadBtn.disabled = total === 0;
+            downloadBtn.style.opacity = total > 0 ? '1' : '0.5';
+            downloadBtn.title = total > 0 ? `Baixar lista com ${total} registros` : 'Carregue a blocklist primeiro';
+        }
+    },
+
+    // Exibe mensagem de status no painel
+    _showStatus(msg) {
+        const el = document.getElementById('blocklistStatusMsg');
+        if (!el) return;
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        clearTimeout(this._statusTimer);
+        this._statusTimer = setTimeout(() => el.classList.add('hidden'), 8000);
+    },
+
+    // Colapsa/expande o conteúdo do painel
+    toggle() {
+        const content = document.getElementById('blocklistContent');
+        const icon = document.getElementById('blocklistToggleIcon');
+        if (!content) return;
+        const isHidden = content.classList.contains('hidden');
+        content.classList.toggle('hidden');
+        if (icon) icon.textContent = isHidden ? '▼' : '▶';
+    }
+};
