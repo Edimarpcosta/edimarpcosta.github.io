@@ -37,18 +37,19 @@ var state = {
     },
 
     deepMergeEnabled: false,
+    ieEnabled: false,
 
-    // §1.1 — Fila de APIs na ordem customizável pelo usuário (Nova Ordem de Prioridade)
+    // §1.1 — Fila de APIs na ordem customizável pelo usuário (Ordem do Painel)
     apis: [
         { id: 'brasilapi',       name: 'BrasilAPI',       url: 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',                                        active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'minhareceita',    name: 'minhaReceita',    url: 'https://minhareceita.org/{cnpj}',                                                     active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'opencnpj',        name: 'OpenCNPJ',        url: 'https://api.opencnpj.org/{cnpj}?dataset=receita',                                    active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
-        { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
         { id: 'receitaws',       name: 'ReceitaWS',       url: 'https://www.receitaws.com.br/v1/cnpj/{cnpj}',                                         active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'invertexto',      name: 'Invertexto',      url: 'https://api.invertexto.com/v1/cnpj/{cnpj}?token=20128|Wk9IhRx5wlalJlRxy2Vt5KV1bpP0wFtB', active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
         { id: 'cnpja',           name: 'CNPJa (IE/CNPJ)', url: 'https://cnpja.com/office/{cnpj}/__data.json?x-sveltekit-invalidated=001',            active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true },
-        { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 },
-        { id: 'cnpjfacil_ie',    name: 'CNPJ Fácil (IE)', url: 'https://www.cnpjfacil.com/api/cnpj-ie?cnpj={cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true }
+        { id: 'cnpjfacil_ie',    name: 'CNPJ Fácil (IE)', url: 'https://www.cnpjfacil.com/api/cnpj-ie?cnpj={cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0, providesIe: true },
+        { id: 'publica_cnpj_ws', name: 'Publica CNPJ WS', url: 'https://publica.cnpj.ws/cnpj/{cnpj}',                                                active: true, consecutiveFailures: 0, isFallback: false, totalUsed: 0 },
+        { id: 'casadosdados',    name: 'Casa dos Dados',  url: 'https://casadosdados.com.br/solucao/cnpj/{cnpj}',                                    active: true, consecutiveFailures: 0, isFallback: true,  totalUsed: 0 }
     ]
 };
 
@@ -776,20 +777,73 @@ const apiAdapters = {
 };
 
 // ========================= CORS PROXY POOL & RATE LIMIT MANAGER =========================
-const CORS_PROXIES = [
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    url => `https://thingproxy.freeboard.io/fetch/${url}`
+const DEFAULT_CORS_PROXIES = [
+    { id: 'python_local', name: 'Proxy Python Local (127.0.0.1:8000)', template: 'http://127.0.0.1:8000/proxy?url={url}', active: false, apiKey: '' },
+    { id: 'allorigins',    name: 'AllOrigins (Padrão)',                 template: 'https://api.allorigins.win/raw?url={url}', active: true, apiKey: '' },
+    { id: 'corsproxy',     name: 'CORSProxy.io',                        template: 'https://corsproxy.io/?{encoded_url}',      active: true, apiKey: '' },
+    { id: 'thingproxy',    name: 'ThingProxy',                          template: 'https://thingproxy.freeboard.io/fetch/{url}', active: true, apiKey: '' }
 ];
+
+let corsProxiesPool = [...DEFAULT_CORS_PROXIES];
 let currentProxyIndex = 0;
 
+function loadCorsProxiesFromStorage() {
+    try {
+        const saved = localStorage.getItem('getlista_cors_proxies');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                corsProxiesPool = parsed;
+            }
+        }
+    } catch (e) {}
+}
+loadCorsProxiesFromStorage();
+
+function saveCorsProxiesToStorage() {
+    try {
+        localStorage.setItem('getlista_cors_proxies', JSON.stringify(corsProxiesPool));
+    } catch (e) {}
+}
+
+function getActiveProxies() {
+    // Se o Proxy Local Python (127.0.0.1:8000) estiver ativado, ele assume a prioridade total e exclusiva
+    const pythonLocal = corsProxiesPool.find(p => p.id === 'python_local' || (p.template && p.template.includes('127.0.0.1:8000')));
+    if (pythonLocal && pythonLocal.active) {
+        return [pythonLocal];
+    }
+    const active = corsProxiesPool.filter(p => p.active !== false);
+    return active.length > 0 ? active : DEFAULT_CORS_PROXIES;
+}
+
 function getProxyUrl(targetUrl) {
-    return CORS_PROXIES[currentProxyIndex](targetUrl);
+    const active = getActiveProxies();
+    if (currentProxyIndex >= active.length) currentProxyIndex = 0;
+    const proxy = active[currentProxyIndex];
+    if (!proxy || !proxy.template) {
+        return `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+    }
+    
+    let resUrl = proxy.template
+        .replace('{url}', targetUrl)
+        .replace('{encoded_url}', encodeURIComponent(targetUrl));
+        
+    if (proxy.apiKey && proxy.apiKey.trim() !== '') {
+        if (resUrl.includes('?')) {
+            resUrl += `&apiKey=${encodeURIComponent(proxy.apiKey.trim())}`;
+        } else {
+            resUrl += `?apiKey=${encodeURIComponent(proxy.apiKey.trim())}`;
+        }
+    }
+    return resUrl;
 }
 
 function rotateProxyOn429() {
-    currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
-    console.warn(`[CORS Proxy] Alternando para o proxy #${currentProxyIndex + 1}`);
+    const active = getActiveProxies();
+    if (active.length === 0) return;
+    currentProxyIndex = (currentProxyIndex + 1) % active.length;
+    const proxy = active[currentProxyIndex];
+    console.warn(`[CORS Proxy Pool] Alternando para proxy #${currentProxyIndex + 1}: ${proxy?.name || 'Proxy'}`);
 }
 
 const API_RATE_LIMITS = {
@@ -972,36 +1026,80 @@ Object.assign(dataHandlers, {
         return null;
     },
 
-    // §1.2 — Teste de conectividade "Ping" com medição de latência em tempo real
+    // §1.2 — Teste de conectividade "Ping" em 2 Fases (Direto & Proxy) para todas as APIs sem exceção
     async testApisConnection() {
         const testCnpj = '00000000000191';
         const results = {};
         let passCount = 0;
 
-        utils.updateStatus('⚡ Testando conexão e medindo pings de todas as APIs...');
+        utils.updateStatus('⚡ Testando todas as APIs sem exceção (Direto & Proxy)...');
 
         for (const api of state.apis) {
+            let directSuccess = false;
+            let directPing = null;
+            let proxySuccess = false;
+            let proxyPing = null;
+
+            // FASE 1: Testar Direto (sem proxy)
             try {
                 const t0 = performance.now();
-                const data = await this.fetchWithApi(api, testCnpj);
-                const t1 = performance.now();
-                const pingMs = Math.round(t1 - t0);
-                api.ping = pingMs;
-
+                const tempApi = Object.assign({}, api, { useProxy: false });
+                const data = await this.fetchWithApi(tempApi, testCnpj);
+                directPing = Math.round(performance.now() - t0);
                 if (data) {
-                    results[api.name] = true;
-                    api.consecutiveFailures = 0;
-                    api.active = true;
-                    passCount++;
-                    console.log(`✅ ${api.name} OK (${pingMs}ms)`);
-                } else {
-                    results[api.name] = false;
-                    console.warn(`⚠️ ${api.name} → Sem dados (${pingMs}ms)`);
+                    directSuccess = true;
                 }
-            } catch (e) {
+            } catch (directErr) {
+                // Direto falhou
+            }
+
+            // FASE 2: Testar via Proxy (com proxy)
+            try {
+                const t0 = performance.now();
+                const targetUrl = api.url.replace('{cnpj}', testCnpj);
+                const proxyUrl = getProxyUrl(targetUrl);
+                
+                const resp = await fetch(proxyUrl, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                proxyPing = Math.round(performance.now() - t0);
+
+                if (resp.ok) {
+                    const text = await resp.text();
+                    if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                        const rawData = JSON.parse(text);
+                        if (rawData && rawData.status !== 'ERROR') {
+                            proxySuccess = true;
+                        }
+                    }
+                }
+            } catch (proxyErr) {
+                // Proxy falhou
+            }
+
+            // AVALIAÇÃO:
+            // Regra: Se não funcionava direto e passou a funcionar via proxy, habilita para proxy!
+            if (directSuccess) {
+                api.ping = directPing;
+                api.useProxy = false;
+                api.consecutiveFailures = 0;
+                api.active = true;
+                results[api.name] = true;
+                passCount++;
+                console.log(`✅ ${api.name} OK Direto (${directPing}ms)`);
+            } else if (proxySuccess) {
+                api.ping = proxyPing;
+                api.useProxy = true; // Habilita proxy pois apenas via proxy funcionou!
+                api.consecutiveFailures = 0;
+                api.active = true;
+                results[api.name] = true;
+                passCount++;
+                console.log(`✅ ${api.name} OK via Proxy (${proxyPing}ms) — Habilitada para Proxy!`);
+            } else {
                 results[api.name] = false;
                 api.ping = null;
-                console.warn(`❌ ${api.name} → ${e.message}`);
+                api.active = false;
+                console.warn(`❌ ${api.name} → Indisponível (Direto e Proxy falharam)`);
             }
         }
 
@@ -1051,11 +1149,30 @@ Object.assign(dataHandlers, {
 
         let successData = null;
         const usedApis = [];
+        let secondaryAttempts = 0;
 
         for (const api of sortedApis) {
-            // Se a API estiver em cooldown temporário (ex: 429 Rate Limit), pula temporariamente sem marcar falha permanente
+            // Se a API principal já obteve dados no Modo Profundo e já atingimos o teto de 2 tentativas secundárias, encerra
+            if (successData && state.deepMergeEnabled && secondaryAttempts >= 2) {
+                console.log(`[Modo Profundo Limit] ${cnpj}: Teto de 2 APIs secundárias atingido. Finalizando.`);
+                break;
+            }
+
+            // Se já temos dados principais e estamos no Modo Profundo, filtra apenas APIs relevantes para os campos faltantes
+            if (successData && state.deepMergeEnabled) {
+                const missing = utils.getMissingFields(successData);
+                if (missing.length === 0 || utils.isCnpjDataComplete(successData)) {
+                    break;
+                }
+                const isOnlyIeMissing = missing.length === 1 && missing[0].includes('Inscrição Estadual');
+                if (isOnlyIeMissing && !api.providesIe && api.id !== 'cnpjfacil_ie' && api.id !== 'cnpja') {
+                    // Pula silenciosamente APIs que não possuem IE (como BrasilAPI, minhaReceita, ReceitaWS)
+                    continue;
+                }
+            }
+
+            // Se a API estiver em cooldown temporário, pula silenciosamente sem poluir o console
             if (api.cooldownUntil && Date.now() < api.cooldownUntil) {
-                console.log(`[⏳ Cooldown] Pulando ${api.name} para ${cnpj} (cooldown ativo)`);
                 continue;
             }
             if (api.cooldownUntil && Date.now() >= api.cooldownUntil) {
@@ -1065,6 +1182,10 @@ Object.assign(dataHandlers, {
 
             try {
                 if (state.isPaused) throw new Error('pausado');
+
+                if (successData && state.deepMergeEnabled) {
+                    secondaryAttempts++;
+                }
 
                 const data = await this.fetchWithApi(api, formattedCnpj, controller.signal);
 
@@ -1083,7 +1204,7 @@ Object.assign(dataHandlers, {
                         if (state.deepMergeEnabled) {
                             const missing = utils.getMissingFields(successData);
                             if (missing.length > 0) {
-                                utils.updateStatus(`🔍 [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)} (${(successData.razao_social || '').substring(0, 25)}): Faltando [${missing.join(', ')}]. Consultando próximas APIs...`);
+                                utils.updateStatus(`🔍 [Modo Profundo] ${utils.formatCnpjForDisplay(cnpj)} (${(successData.razao_social || '').substring(0, 25)}): Faltando [${missing.join(', ')}]. Consultando API complementar (${api.name})...`);
                             }
                         }
                     } else {

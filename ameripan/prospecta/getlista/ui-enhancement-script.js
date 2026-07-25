@@ -1555,3 +1555,146 @@ const blocklistController = {
         if (icon) icon.textContent = isHidden ? '▼' : '▶';
     }
 };
+
+// ========================= PROXY CONTROLLER =========================
+var proxyController = {
+    openModal() {
+        const modal = document.getElementById('proxySettingsModal');
+        if (!modal) return;
+        this.renderProxyList();
+        modal.style.display = 'flex';
+    },
+
+    renderProxyList() {
+        const container = document.getElementById('proxyListContainer');
+        if (!container) return;
+
+        if (typeof corsProxiesPool === 'undefined' || corsProxiesPool.length === 0) {
+            container.innerHTML = `<span class="text-xs text-gray-500 p-2 block">Nenhum proxy configurado.</span>`;
+            return;
+        }
+
+        container.innerHTML = corsProxiesPool.map((proxy, idx) => {
+            const isFirst = idx === 0;
+            const isLast = idx === corsProxiesPool.length - 1;
+            const isDefault = idx === 0 && proxy.id === 'allorigins';
+
+            return `
+            <div class="p-2.5 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                <div class="flex items-center gap-2 flex-1 overflow-hidden">
+                    <input type="checkbox" ${proxy.active !== false ? 'checked' : ''} onchange="proxyController.toggleActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#10b981">
+                    <div class="truncate">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-white">${idx + 1}. ${proxy.name || 'Proxy Custom'}</span>
+                            ${isDefault ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold border border-emerald-800">Padrão #1</span>' : ''}
+                            ${proxy.apiKey ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 font-bold border border-amber-800">🔑 API Key</span>' : ''}
+                        </div>
+                        <span class="text-[11px] text-gray-400 font-mono block truncate" title="${proxy.template}">${proxy.template}</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 self-end md:self-center">
+                    <button type="button" onclick="proxyController.moveUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↑</button>
+                    <button type="button" onclick="proxyController.moveDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↓</button>
+                    <button type="button" onclick="proxyController.deleteProxy(${idx})" class="px-2 py-1 rounded text-xs font-bold bg-rose-950 text-rose-400 border border-rose-800 hover:bg-rose-900" title="Excluir proxy">🗑</button>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    toggleActive(idx) {
+        if (corsProxiesPool[idx]) {
+            const targetProxy = corsProxiesPool[idx];
+            targetProxy.active = !targetProxy.active;
+            
+            // Se o Proxy Python Local for ativado, desmarca os demais proxies públicos automaticamente
+            if (targetProxy.active && (targetProxy.id === 'python_local' || (targetProxy.template && targetProxy.template.includes('127.0.0.1:8000')))) {
+                corsProxiesPool.forEach((p, i) => {
+                    if (i !== idx) p.active = false;
+                });
+            }
+
+            saveCorsProxiesToStorage();
+            this.renderProxyList();
+        }
+    },
+
+    addProxyFromInput() {
+        const nameInput = document.getElementById('newProxyName');
+        const urlInput = document.getElementById('newProxyUrl');
+        const keyInput = document.getElementById('newProxyApiKey');
+
+        const name = (nameInput?.value || '').trim();
+        let template = (urlInput?.value || '').trim();
+        const apiKey = (keyInput?.value || '').trim();
+
+        if (!template) {
+            return alert('Digite a URL do proxy com o placeholder {url} ou {encoded_url}.');
+        }
+
+        if (!template.includes('{url}') && !template.includes('{encoded_url}')) {
+            if (template.includes('?')) {
+                template += '&url={url}';
+            } else {
+                template += '?url={url}';
+            }
+        }
+
+        const newProxy = {
+            id: 'custom_' + Date.now(),
+            name: name || 'Proxy Customizado',
+            template: template,
+            active: true,
+            apiKey: apiKey
+        };
+
+        // Coloca o novo proxy no topo (1º lugar da fila e novo padrão imediato)
+        corsProxiesPool.unshift(newProxy);
+        if (typeof currentProxyIndex !== 'undefined') currentProxyIndex = 0;
+        saveCorsProxiesToStorage();
+        this.renderProxyList();
+
+        if (nameInput) nameInput.value = '';
+        if (urlInput) urlInput.value = '';
+        if (keyInput) keyInput.value = '';
+        alert(`✅ Proxy "${newProxy.name}" adicionado em 1º lugar e definido como Padrão!`);
+    },
+
+    deleteProxy(idx) {
+        if (corsProxiesPool.length <= 1) {
+            return alert('É necessário manter pelo menos 1 proxy na lista.');
+        }
+        if (confirm(`Deseja remover o proxy #${idx + 1}?`)) {
+            corsProxiesPool.splice(idx, 1);
+            saveCorsProxiesToStorage();
+            this.renderProxyList();
+        }
+    },
+
+    moveUp(idx) {
+        if (idx <= 0) return;
+        const temp = corsProxiesPool[idx];
+        corsProxiesPool[idx] = corsProxiesPool[idx - 1];
+        corsProxiesPool[idx - 1] = temp;
+        saveCorsProxiesToStorage();
+        this.renderProxyList();
+    },
+
+    moveDown(idx) {
+        if (idx >= corsProxiesPool.length - 1) return;
+        const temp = corsProxiesPool[idx];
+        corsProxiesPool[idx] = corsProxiesPool[idx + 1];
+        corsProxiesPool[idx + 1] = temp;
+        saveCorsProxiesToStorage();
+        this.renderProxyList();
+    },
+
+    restoreDefaults() {
+        if (confirm('Deseja restaurar a lista padrão de proxies CORS (AllOrigins em 1º)?')) {
+            corsProxiesPool = [...DEFAULT_CORS_PROXIES];
+            currentProxyIndex = 0;
+            saveCorsProxiesToStorage();
+            this.renderProxyList();
+        }
+    }
+};

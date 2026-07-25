@@ -47,6 +47,12 @@ const MiningEngine = {
         // Checkboxes de filtros avançados
         const getCheck = (id) => document.getElementById(id)?.checked || false;
 
+        // Configuração dos controles de busca textual
+        const tipoBusca = document.getElementById('searchTermTipoBusca')?.value || 'radical';
+        const razaoSocial = document.getElementById('searchTermRazaoSocial')?.checked ?? true;
+        const nomeFantasia = document.getElementById('searchTermNomeFantasia')?.checked ?? true;
+        const nomeSocio = document.getElementById('searchTermNomeSocio')?.checked ?? false;
+
         const payload = {
             "cnpj": [],
             "cnpj_raiz": [],
@@ -78,10 +84,10 @@ const MiningEngine = {
             "pagina": 1,
             "busca_textual": this.filters.termos.length > 0 ? [{
                 "texto": this.filters.termos,
-                "tipo_busca": "radical",
-                "razao_social": true,
-                "nome_fantasia": true,
-                "nome_socio": true
+                "tipo_busca": tipoBusca,
+                "razao_social": razaoSocial,
+                "nome_fantasia": nomeFantasia,
+                "nome_socio": nomeSocio
             }] : []
         };
 
@@ -467,159 +473,42 @@ const MiningEngine = {
         this._miningLoop();
     },
     async _miningLoop() {
-        const headers = {
-            "api-key": this.state.apiKey,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Origin": "https://portal.casadosdados.com.br",
-            "Referer": "https://portal.casadosdados.com.br/"
-        };
-        const miningStartTime = this.state.miningStartTime;
+        this.state.miningStartTime = Date.now();
+        const smartDouble = document.getElementById('smartDoubleMiningCheck')?.checked ?? true;
+        const hasCnaes = this.filters.cnaes && this.filters.cnaes.length > 0;
+        const hasTermos = this.filters.termos && this.filters.termos.length > 0;
+        const isUserJson = this.els.jsonEditor && this.els.jsonEditor._userEditing;
 
         try {
-            let pag = this.state.currentPage + 1;
-            let totalPag = this.state.totalPages || pag; // fallback
+            if (smartDouble && hasCnaes && hasTermos && !isUserJson) {
+                this.log('🔍 [Busca Dupla Inteligente] Ativada! Executando mineração em 2 etapas para extração completa...', 'succ');
+                
+                // Etapa 1: Mineração por CNAE
+                const payloadCnae = this.buildPayload();
+                payloadCnae.busca_textual = [];
+                await this._executeMiningPass(payloadCnae, '=== ETAPA 1/2: MINERAÇÃO POR CNAES ===');
 
-            while (this.state.running && pag <= totalPag) {
-                const iterationStart = Date.now();
-                // Max pages limit
-                if (this.state.maxPages > 0 && pag > this.state.maxPages) {
-                    this.log(`⚡ Limite de ${this.state.maxPages} páginas atingido. Extração parcial.`, 'warn');
-                    break;
+                // Etapa 2: Mineração por Termos de Busca
+                if (this.state.running) {
+                    const payloadTermos = this.buildPayload();
+                    payloadTermos.codigo_atividade_principal = [];
+                    payloadTermos.incluir_atividade_secundaria = false;
+                    await this._executeMiningPass(payloadTermos, '=== ETAPA 2/2: MINERAÇÃO POR TERMOS DE BUSCA ===');
                 }
-
-                // Se o user editou o JSON manualmente, usar o do editor
+            } else {
+                // Mineração padrão em payload único
                 let payload;
-                if (this.els.jsonEditor && this.els.jsonEditor._userEditing) {
-                    payload = this.getPayloadFromEditor();
-                    if (!payload) {
-                        this.log('[ERRO] JSON do editor inválido. Usando filtros visuais.', 'err');
-                        payload = this.buildPayload();
-                    }
+                if (isUserJson) {
+                    payload = this.getPayloadFromEditor() || this.buildPayload();
                 } else {
                     payload = this.buildPayload();
                 }
-                payload.pagina = pag;
-
-                this.log(`→ Requisitando página ${pag}...`, 'info');
-
-                // ===== RETRY COM BACKOFF EXPONENCIAL =====
-                let res = null;
-                const MAX_RETRIES = 5;
-                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                    const pageStart = Date.now();
-                    res = await fetch(this.state.endpoint, {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    if (res.status === 429) {
-                        const baseDelay = 3000 * Math.pow(2, attempt - 1); // 3s, 6s, 12s, 24s, 48s
-                        const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // ±10% jitter
-                        const delay = Math.round(baseDelay + jitter);
-                        this.log(`[Rate Limit] Erro 429 na pág ${pag}. Tentativa ${attempt}/${MAX_RETRIES}. Aguardando ${Math.round(delay/1000)}s...`, 'warn');
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue;
-                    }
-                    if (!res.ok) {
-                        this.log(`[Erro] HTTP ${res.status} na pág ${pag}. Tentativa ${attempt}/${MAX_RETRIES}.`, 'err');
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        continue;
-                    }
-                    break; // Sucesso
-                }
-
-                if (!res || !res.ok) {
-                    this.log(`❌ Falha definitiva na página ${pag} após ${MAX_RETRIES} tentativas.`, 'err');
-                    break;
-                }
-
-                const data = await res.json();
-                
-                if (pag === 1 || this.state.totalPages === 0) {
-                    this.state.totalRecords = data.data?.count || data.total || 0;
-                    this.state.totalPages = data.data?.pageCount || Math.ceil(this.state.totalRecords / 100) || 1;
-                    totalPag = this.state.totalPages;
-                    this.log(`Encontrados: ${this.state.totalRecords} CNPJs em ${totalPag} páginas.`, 'succ');
-                }
-
-                const pageCnpjs = data.data?.cnpj || data.cnpjs || [];
-                let addedThisPage = 0;
-
-                pageCnpjs.forEach(item => {
-                    const cleanCnpj = utils.cleanCnpjStr(item.cnpj);
-                    if (this.state.seenCnpjs.has(cleanCnpj)) {
-                        this.state.duplicatesSkipped++;
-                        return; // Ignora duplicados na raiz
-                    }
-                    // === BLOCKLIST CHECK ===
-                    if (this.isInBlocklist(cleanCnpj)) {
-                        this.state.excludedFromBlocklist++;
-                        this.log(`[⛔ SKIP] ${item.cnpj || cleanCnpj} — já atendido (blocklist)`, 'warn');
-                        return;
-                    }
-                    this.state.seenCnpjs.add(cleanCnpj);
-                    
-                    // Extração Enriquecida
-                    const sit = item.situacao_cadastral || {};
-                    const end = item.endereco || {};
-                    const lead = {
-                        cnpj: item.cnpj,
-                        razao_social: item.razao_social,
-                        nome_fantasia: item.nome_fantasia || '',
-                        situacao: typeof sit === 'object' ? (sit.situacao_atual || '') : sit,
-                        data_situacao: typeof sit === 'object' ? (sit.data || '').split('T')[0] : (item.data_situacao_cadastral || ''),
-                        data_abertura: (item.data_inicio_atividade || item.data_abertura || '').split('T')[0],
-                        natureza_juridica: item.natureza_juridica?.descricao || item.natureza_juridica || '',
-                        cnae_principal: item.atividade_principal?.codigo || item.cnae_principal || '',
-                        cnae_descricao: item.atividade_principal?.descricao || item.cnae_principal_descricao || '',
-                        logradouro: end.logradouro || item.logradouro || '',
-                        numero: end.numero || item.numero || '',
-                        complemento: end.complemento || item.complemento || '',
-                        bairro: end.bairro || item.bairro || '',
-                        municipio: end.municipio || item.municipio || '',
-                        uf: end.uf || item.uf || '',
-                        cep: end.cep || item.cep || '',
-                        telefone1: item.telefone1 || item.ddd_telefone_1 || '',
-                        telefone2: item.telefone2 || item.ddd_telefone_2 || '',
-                        email: item.email || '',
-                        capital_social: item.capital_social || 0,
-                        porte: item.porte?.descricao || item.porte || ''
-                    };
-                    this.state.leads.push(lead);
-                    addedThisPage++;
-                });
-
-                this.state.currentPage = pag;
-                this.saveSession(); // Salva estado para resume (#16)
-
-                // Atualizar tabela prévia periodicamente ou na primeira pág
-                if (pag === 1 || pag % 5 === 0 || pag === totalPag) {
-                    this.renderMineTable();
-                }
-
-                this.updateProgress(pag, totalPag);
-                this.updateMineStats();
-                
-                if (pag < totalPag && this.state.running) {
-                    // Controla o tempo real vs delay desejado
-                    const elapsed = Date.now() - iterationStart;
-                    const remainingDelay = Math.max(0, this.state.delayBetweenPages - elapsed);
-                    if (remainingDelay > 0) {
-                        await new Promise(resolve => setTimeout(resolve, remainingDelay));
-                    }
-                    this.state.pageTimes.push(Date.now() - iterationStart); // armazena tempo real total da iteração
-                    if (this.state.pageTimes.length > 5) this.state.pageTimes.shift(); // keep last 5
-                }
-                
-                pag++;
+                await this._executeMiningPass(payload);
             }
-            
+
             if (!this.state.running) {
                 this.log(`⚠️ Mineração pausada/parada pelo usuário.`, 'warn');
             }
-
         } catch (err) {
             this.log(`❌ Erro crítico: ${err.message}`, 'err');
             console.error(err);
@@ -634,23 +523,146 @@ const MiningEngine = {
                 this.els.transferBtnFase2?.classList.remove('hidden');
                 this.els.clearResultsBtn?.classList.remove('hidden');
                 this.els.exportMineBtn?.classList.remove('hidden');
-                const duration = ((Date.now() - miningStartTime) / 1000).toFixed(0);
-                this.log(`\n=== MINERAÇÃO CONCLUÍDA: ${this.state.leads.length} CNPJs na memória (${duration}s) ===`, 'succ');
+                const duration = ((Date.now() - this.state.miningStartTime) / 1000).toFixed(0);
+                this.log(`\n=== MINERAÇÃO CONCLUÍDA: ${this.state.leads.length} CNPJs únicos na memória (${duration}s) ===`, 'succ');
                 if (this.state.duplicatesSkipped > 0) {
                     this.log(`   ${this.state.duplicatesSkipped} duplicados ignorados.`, 'info');
                 }
-                // Salvar no histórico
                 this.saveToHistory();
-                // Notificação ao concluir (#8)
-                this._notifyComplete();
-                // Limpar sessão pois foi concluída
-                this.clearSession();
-            } else {
-                this.log('=== MINERAÇÃO ENCERRADA SEM RESULTADOS ===', 'warn');
-                this.clearSession();
             }
-            this.updateProgress(this.state.currentPage, this.state.totalPages);
+        }
+    },
+
+    async _executeMiningPass(payloadBase, passTitle) {
+        const headers = {
+            "api-key": this.state.apiKey,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://portal.casadosdados.com.br",
+            "Referer": "https://portal.casadosdados.com.br/"
+        };
+
+        let pag = 1;
+        let totalPag = 1;
+
+        if (passTitle) this.log(passTitle, 'info');
+
+        while (this.state.running && pag <= totalPag) {
+            const iterationStart = Date.now();
+            if (this.state.maxPages > 0 && pag > this.state.maxPages) {
+                this.log(`⚡ Limite de ${this.state.maxPages} páginas atingido nesta etapa.`, 'warn');
+                break;
+            }
+
+            const payload = JSON.parse(JSON.stringify(payloadBase));
+            payload.pagina = pag;
+
+            this.log(`→ Requisitando página ${pag}...`, 'info');
+
+            let res = null;
+            const MAX_RETRIES = 5;
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                res = await fetch(this.state.endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.status === 429) {
+                    const baseDelay = 3000 * Math.pow(2, attempt - 1);
+                    const jitter = baseDelay * 0.2 * (Math.random() - 0.5);
+                    const delay = Math.round(baseDelay + jitter);
+                    this.log(`[Rate Limit] Erro 429 na pág ${pag}. Tentativa ${attempt}/${MAX_RETRIES}. Aguardando ${Math.round(delay/1000)}s...`, 'warn');
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+                if (!res.ok) {
+                    this.log(`[Erro] HTTP ${res.status} na pág ${pag}. Tentativa ${attempt}/${MAX_RETRIES}.`, 'err');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    continue;
+                }
+                break;
+            }
+
+            if (!res || !res.ok) {
+                this.log(`❌ Falha definitiva na página ${pag} após ${MAX_RETRIES} tentativas.`, 'err');
+                break;
+            }
+
+            const data = await res.json();
+            
+            if (pag === 1) {
+                const passTotalRecords = data.data?.count || data.total || 0;
+                totalPag = data.data?.pageCount || Math.ceil(passTotalRecords / 100) || 1;
+                this.state.totalRecords += passTotalRecords;
+                this.state.totalPages = Math.max(this.state.totalPages, totalPag);
+                this.log(`Encontrados: ${passTotalRecords} CNPJs em ${totalPag} páginas nesta etapa.`, 'succ');
+            }
+
+            const pageCnpjs = data.data?.cnpj || data.cnpjs || [];
+
+            pageCnpjs.forEach(item => {
+                const cleanCnpj = utils.cleanCnpjStr(item.cnpj);
+                if (this.state.seenCnpjs.has(cleanCnpj)) {
+                    this.state.duplicatesSkipped++;
+                    return;
+                }
+                if (this.isInBlocklist(cleanCnpj)) {
+                    this.state.excludedFromBlocklist++;
+                    this.log(`[⛔ SKIP] ${item.cnpj || cleanCnpj} — já atendido (blocklist)`, 'warn');
+                    return;
+                }
+                this.state.seenCnpjs.add(cleanCnpj);
+                
+                const sit = item.situacao_cadastral || {};
+                const end = item.endereco || {};
+                const lead = {
+                    cnpj: item.cnpj,
+                    razao_social: item.razao_social,
+                    nome_fantasia: item.nome_fantasia || '',
+                    situacao: typeof sit === 'object' ? (sit.situacao_atual || '') : sit,
+                    data_situacao: typeof sit === 'object' ? (sit.data || '').split('T')[0] : (item.data_situacao_cadastral || ''),
+                    data_abertura: (item.data_inicio_atividade || item.data_abertura || '').split('T')[0],
+                    natureza_juridica: item.natureza_juridica?.descricao || item.natureza_juridica || '',
+                    cnae_principal: item.atividade_principal?.codigo || item.cnae_principal || '',
+                    cnae_descricao: item.atividade_principal?.descricao || item.cnae_principal_descricao || '',
+                    logradouro: end.logradouro || item.logradouro || '',
+                    numero: end.numero || item.numero || '',
+                    complemento: end.complemento || item.complemento || '',
+                    bairro: end.bairro || item.bairro || '',
+                    municipio: end.municipio || item.municipio || '',
+                    uf: end.uf || item.uf || '',
+                    cep: end.cep || item.cep || '',
+                    telefone1: item.telefone1 || item.ddd_telefone_1 || '',
+                    telefone2: item.telefone2 || item.ddd_telefone_2 || '',
+                    email: item.email || '',
+                    capital_social: item.capital_social || 0,
+                    porte: item.porte?.descricao || item.porte || ''
+                };
+                this.state.leads.push(lead);
+            });
+
+            this.state.currentPage = pag;
+            this.saveSession();
+
+            if (pag === 1 || pag % 5 === 0 || pag === totalPag) {
+                this.renderMineTable();
+            }
+
+            this.updateProgress(pag, totalPag);
             this.updateMineStats();
+            
+            if (pag < totalPag && this.state.running) {
+                const elapsed = Date.now() - iterationStart;
+                const remainingDelay = Math.max(0, this.state.delayBetweenPages - elapsed);
+                if (remainingDelay > 0) {
+                    await new Promise(resolve => setTimeout(resolve, remainingDelay));
+                }
+                this.state.pageTimes.push(Date.now() - iterationStart);
+                if (this.state.pageTimes.length > 5) this.state.pageTimes.shift();
+            }
+
+            pag++;
         }
     },
 
@@ -1364,45 +1376,150 @@ const MiningEngine = {
         // === EVENT LISTENERS DAS NOVAS APIS (RAMOS, CIDADES, CNAES) ===
 
         // Ramos Select
+        // ========================= PRESETS DE RAMOS DE ATUAÇÃO =========================
+        // Atualizado com Máxima ABRANGÊNCIA ("Arrastão") e Filtros Linguísticos Anti-Ruído
         const RAMOS_PRESETS = {
+            // 1. Indústria e Atacado de Gelados (Foco em insumos pesados, gorduras, bases e liga)
             gelados_atacado: {
-                termos: ['SORVETE', 'SORVETES', 'GELATO', 'GELADOS COMESTIVEIS', 'ACAI', 'AÇAI', 'PICOLE', 'PICOLÉ', 'PALETA', 'DISTRIBUIDORA DE SORVETE', 'FABRICA DE SORVETE', 'INDUSTRIA DE SORVETE', 'ATACADO DE ACAI', 'DISTRIBUIDORA DE ACAI']
+                termos: [
+                    "SORVETE", "SORVET", "GELATO", "GELAT", "ICE CREAM", "GELADOS COMESTIVEIS",
+                    "ACAI", "AÇAI", "DISTRIBUIDORA DE SORVETE", "FABRICA DE SORVETE", 
+                    "INDÚSTRIA DE SORVETE", "INDUSTRIA DE SORVETE", "ATACADO DE ACAI", 
+                    "ATACADO DE AÇAI", "DISTRIBUIDORA DE ACAI", "DISTRIBUIDORA DE AÇAI",
+                    "FABRICA DE ACAI", "FABRICA DE AÇAI"
+                ]
             },
+
+            // 2. Varejo, Gelaterias, Açaíterias e Sobremesas Geladas (Ponto de venda e balcão)
             gelados_varejo: {
-                termos: ['SORVETERIA', 'GELATERIA', 'MILK SHAKE', 'MILKSHAKE', 'FROZEN YOGURT', 'ACAITERIA', 'AÇAÍTERIA', 'QUIOSQUE', 'SORVETE EXPRESSO', 'SORVETE SOFT', 'PALETERIA', 'LOJA DE ACAI']
+                termos: [
+                    "ACAI", "AÇAI", "SORVETE", "SORVET", "GELATO", "GELAT", "ICE CREAM", 
+                    "GELADOS COMESTIVEIS", "SORBET", "SHERBET", "GRANITA", "RASPADINHA", 
+                    "PICOLE", "PICOLÉ", "PICOLES", "PICOLÉS", "PALETAS", "PALETERIA", 
+                    "GELADINHO", "GELINHO", "JUJU", "SACOLE", "SACOLÉ", "DINDIN", "DIN DIN", 
+                    "CHUPCHUP", "CHUP CHUP", "CHUP-CHUP", "MILKSHAKE", "MILK SHAKE", "SHAKE", 
+                    "FROZEN", "FROZEN YOGURT", "SMOOTHIE", "CASQUINHA", "CASCAO", "CASCÃO", "SUNDAE"
+                ]
             },
+
+            // 3. Gelados Total (Tudo do setor de sorvetes, açaí, gelatos, picolés e geladinhos)
             gelados_total: {
-                termos: ['SORVETE', 'SORVETES', 'GELATO', 'GELADOS COMESTIVEIS', 'ACAI', 'AÇAI', 'PICOLE', 'PICOLÉ', 'PALETA', 'DISTRIBUIDORA DE SORVETE', 'FABRICA DE SORVETE', 'INDUSTRIA DE SORVETE', 'ATACADO DE ACAI', 'DISTRIBUIDORA DE ACAI', 'SORVETERIA', 'GELATERIA', 'MILK SHAKE', 'MILKSHAKE', 'FROZEN YOGURT', 'ACAITERIA', 'AÇAÍTERIA', 'QUIOSQUE', 'SORVETE EXPRESSO', 'SORVETE SOFT', 'PALETERIA', 'LOJA DE ACAI']
+                termos: [
+                    "ACAI", "AÇAI", "SORVETE", "SORVET", "GELATO", "GELAT", "ICE CREAM", 
+                    "GELADOS COMESTIVEIS", "SORBET", "SHERBET", "GRANITA", "RASPADINHA", 
+                    "PICOLE", "PICOLÉ", "PICOLES", "PICOLÉS", "PALETAS", "PALETERIA", 
+                    "GELADINHO", "GELINHO", "JUJU", "SACOLE", "SACOLÉ", "DINDIN", "DIN DIN", 
+                    "CHUPCHUP", "CHUP CHUP", "CHUP-CHUP", "MILKSHAKE", "MILK SHAKE", "SHAKE", 
+                    "FROZEN", "FROZEN YOGURT", "SMOOTHIE", "CASQUINHA", "CASCAO", "CASCÃO", "SUNDAE",
+                    "DISTRIBUIDORA DE SORVETE", "FABRICA DE SORVETE", "INDÚSTRIA DE SORVETE", 
+                    "ATACADO DE ACAI", "DISTRIBUIDORA DE ACAI", "FABRICA DE ACAI"
+                ]
             },
+
+            // 4. Panificação - Sniper (Industrial, Atacado, Moinhos e Fábricas)
             panificacao_atacado: {
-                termos: ['PANIFICADORA', 'PAES', 'PÃES', 'MOINHO', 'DISTRIBUIDORA DE DOCES', 'CONFEITARIA ATACADISTA', 'INDUSTRIA DE ALIMENTOS', 'FABRICA DE PAES', 'DISTRIBUIDORA DE PAES']
+                termos: [
+                    "PANIFICADORA", "PANIFICAÇÃO", "PANIFICACAO", "MOINHO", "MOINHO DE FARINHA", 
+                    "FABRICA DE PAES", "FÁBRICA DE PÃES", "DISTRIBUIDORA DE PAES", "DISTRIBUIDORA DE PÃES", 
+                    "DISTRIBUIDORA DE DOCES", "CONFEITARIA ATACADISTA", "INDUSTRIA DE ALIMENTOS", 
+                    "INDÚSTRIA DE ALIMENTOS", "MASSAS ALIMENTICIAS", "MASSAS ALIMENTÍCIAS"
+                ]
             },
+
+            // 5. Panificação - Arrastão (Padarias de Bairro, Confeiteiras, Docerias e Tortas)
             panificacao_varejo: {
-                termos: ['PADARIA', 'CONFEITARIA', 'DOCERIA', 'BOLO', 'BOLOS', 'PATISSERIE', 'CHURROS', 'DOCES ARTESANAIS', 'BOUTIQUE DE PAES']
+                termos: [
+                    "PADARIA", "PANIFICADORA", "CONFEITARIA", "DOCERIA", "DOCES", "PAES", "PÃES", 
+                    "BOLO", "BOLOS", "PATISSERIE", "PATISSERIA", "CHURROS", "CHURRERIA", 
+                    "DOCES ARTESANAIS", "BOUTIQUE DE PAES", "BOUTIQUE DE PÃES", "BREAD", "CAKE", 
+                    "CAKES", "SONHO", "SONHERIA", "TORTA", "TORTAS"
+                ]
             },
+
+            // 6. Panificação Total (Indústria + Varejo + Padarias + Confeiteiras + Atacado)
             panificacao_total: {
-                termos: ['PANIFICADORA', 'PAES', 'PÃES', 'MOINHO', 'DISTRIBUIDORA DE DOCES', 'CONFEITARIA ATACADISTA', 'INDUSTRIA DE ALIMENTOS', 'FABRICA DE PAES', 'DISTRIBUIDORA DE PAES', 'PADARIA', 'CONFEITARIA', 'DOCERIA', 'BOLO', 'BOLOS', 'PATISSERIE', 'CHURROS', 'DOCES ARTESANAIS', 'BOUTIQUE DE PAES']
+                termos: [
+                    "PADARIA", "PANIFICADORA", "PANIFICAÇÃO", "PANIFICACAO", "CONFEITARIA", "DOCERIA", 
+                    "DOCES", "PAES", "PÃES", "BOLO", "BOLOS", "PATISSERIE", "PATISSERIA", "CHURROS", 
+                    "CHURRERIA", "DOCES ARTESANAIS", "BOUTIQUE DE PAES", "BREAD", "CAKE", "CAKES", 
+                    "SONHO", "SONHERIA", "TORTA", "TORTAS", "MOINHO", "FABRICA DE PAES", 
+                    "DISTRIBUIDORA DE PAES", "DISTRIBUIDORA DE DOCES", "CONFEITARIA ATACADISTA"
+                ]
             },
+
+            // 7. Revenda - Master (Supermercados, Mercados, Atacarejos, Mercearias e Empórios)
             revenda_supermercados: {
-                termos: ['SUPERMERCADO', 'MERCADO', 'MINIMERCADO', 'ATACAREJO', 'MERCEARIA', 'EMPORIO', 'EMPÓRIO', 'ARMAZEM', 'DISTRIBUIDORA DE ALIMENTOS', 'HIPERMERCADO']
+                termos: [
+                    "SUPERMERCADO", "SUPERMERCADOS", "MERCADO", "MERCADOS", "MINIMERCADO", 
+                    "MINIMERCADOS", "ATACAREJO", "MERCEARIA", "EMPORIO", "EMPÓRIO", "ARMAZEM", 
+                    "ARMAZÉM", "HIPERMERCADO", "DISTRIBUIDORA DE ALIMENTOS", "MERCADINHO", "EXPRESS"
+                ]
             },
+
+            // 8. Lazer / Conveniência - Sniper (Postos, Conveniências, Buffets, Lanchonetes, Cafés)
             revenda_conveniencia: {
-                termos: ['CONVENIENCIA', 'CONVENIÊNCIA', 'POSTO', 'BUFFET INFANTIL', 'PARQUE', 'LANCHONETE', 'CANTINA', 'FAST FOOD', 'CAFETERIA', 'HAMBURGUERIA']
+                termos: [
+                    "CONVENIENCIA", "CONVENIÊNCIA", "POSTO DE COMBUSTIVEL", "POSTO DE COMBUSTÍVEL", 
+                    "BUFFET", "BUFFET INFANTIL", "PARQUE", "LANCHONETE", "CANTINA", "FAST FOOD", 
+                    "CAFETERIA", "CAFETERIAS", "HAMBURGUERIA", "CREPERIA", "PASTELARIA", "PIZZARIA", 
+                    "ARENA", "CLUBE"
+                ]
             },
+
+            // 9. A Máquina Total (Dominação Geral - Combinação Completa sem Colisões de Ruído)
             maquina_total: {
-                termos: ['SORVETE', 'SORVETERIA', 'ACAI', 'AÇAI', 'GELATO', 'GELATERIA', 'PICOLE', 'PICOLÉ', 'PALETA', 'MILK SHAKE', 'MILKSHAKE', 'GELADOS COMESTIVEIS', 'ACAITERIA', 'AÇAÍTERIA', 'FROZEN YOGURT', 'PADARIA', 'PANIFICADORA', 'CONFEITARIA', 'DOCERIA', 'PAES', 'PÃES', 'BOLO', 'BOLOS', 'CHURROS', 'CHOCOLATE', 'DOCES', 'SUPERMERCADO', 'MERCADO', 'MINIMERCADO', 'ATACAREJO', 'MERCEARIA', 'EMPORIO', 'EMPÓRIO', 'CONVENIENCIA', 'CONVENIÊNCIA', 'BUFFET', 'LANCHONETE']
+                termos: [
+                    "SORVETE", "SORVET", "GELATO", "GELAT", "ICE CREAM", "GELADOS COMESTIVEIS", 
+                    "ACAI", "AÇAI", "PICOLE", "PICOLÉ", "PICOLES", "PICOLÉS", "PALETAS", "PALETERIA", 
+                    "MILKSHAKE", "MILK SHAKE", "SHAKE", "FROZEN", "FROZEN YOGURT", "PADARIA", 
+                    "PANIFICADORA", "PANIFICAÇÃO", "CONFEITARIA", "DOCERIA", "PAES", "PÃES", 
+                    "BOLO", "BOLOS", "CHURROS", "DOCES", "SUPERMERCADO", "MERCADO", "MINIMERCADO", 
+                    "ATACAREJO", "MERCEARIA", "EMPORIO", "EMPÓRIO", "CONVENIENCIA", "CONVENIÊNCIA", 
+                    "BUFFET", "LANCHONETE", "CAFETERIA", "HAMBURGUERIA"
+                ]
             }
         };
 
         this.els.ramosSelect?.addEventListener('change', (e) => {
             const val = e.target.value;
-            if (!val || !RAMOS_PRESETS[val]) return;
+            if (!val) return;
+
+            const tipoSel = document.getElementById('searchTermTipoBusca');
+            const rsCheck = document.getElementById('searchTermRazaoSocial');
+            const nfCheck = document.getElementById('searchTermNomeFantasia');
+            const nsCheck = document.getElementById('searchTermNomeSocio');
+
+            if (val === 'socio_busca_exata') {
+                if (tipoSel) tipoSel.value = 'exata';
+                if (rsCheck) rsCheck.checked = true;
+                if (nfCheck) nfCheck.checked = true;
+                if (nsCheck) nsCheck.checked = true;
+
+                this.buildPayload();
+                this.log('👨‍💼 Modo de Busca em Sócios ativado: tipo_busca=exata, razao_social=true, nome_fantasia=true, nome_socio=true.', 'succ');
+                return;
+            }
+
+            if (!RAMOS_PRESETS[val]) return;
             const preset = RAMOS_PRESETS[val];
             this.filters.termos = [...preset.termos];
-            // CNAEs permanecem intocados, como solicitado
+
+            // Padrão Empresas ao escolher qualquer ramo normal
+            if (tipoSel) tipoSel.value = 'radical';
+            if (rsCheck) rsCheck.checked = true;
+            if (nfCheck) nfCheck.checked = true;
+            if (nsCheck) nsCheck.checked = false;
+
             if (this._chipRefreshers.termos) this._chipRefreshers.termos();
             this.buildPayload();
             this.log(`🏭 Ramo de Atividade carregado: ${val}. Termos atualizados, CNAEs mantidos opcionais.`, 'succ');
+        });
+
+        // Listeners dos controles de busca textual
+        ['searchTermTipoBusca', 'searchTermRazaoSocial', 'searchTermNomeFantasia', 'searchTermNomeSocio'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                this.buildPayload();
+            });
         });
 
         // Cidades Panel
@@ -1546,14 +1663,18 @@ const MiningEngine = {
 
     async loadCnaeDatabase() {
         if (this._localCnaeDb) return;
+        // Evita erro de CORS quando acessado direto por protocolo file://
+        if (window.location.protocol === 'file:') {
+            return;
+        }
         try {
             const res = await fetch('cnae.json');
             if (res.ok) {
                 this._localCnaeDb = await res.json();
-                console.log(`CNAE database loaded locally: ${this._localCnaeDb.length} items`);
+                console.log(`CNAE database carregado localmente: ${this._localCnaeDb.length} itens`);
             }
         } catch (e) {
-            console.error('Erro ao carregar cnae.json local:', e);
+            // Silencioso em caso de restrição local
         }
     },
 
