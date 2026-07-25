@@ -84,9 +84,8 @@ const uiControllers = {
         const alert_el = document.getElementById('autoPauseAlert');
         if (alert_el) alert_el.style.display = 'none';
 
-        const startDeepBtn = document.getElementById('startDeepBtn');
         elements.startBtn?.classList.add('hidden');
-        if (startDeepBtn) startDeepBtn.classList.add('hidden');
+        elements.startDeepBtn?.classList.add('hidden');
 
         elements.pauseBtn.classList.remove('hidden');
         elements.resumeBtn.classList.add('hidden');
@@ -95,21 +94,6 @@ const uiControllers = {
         utils.showLoading();
 
         const modeMsg = state.deepMergeEnabled ? ' 🔍 (Modo Profundo Multi-API)' : '';
-        // §1.2 — Testar conexões antes de iniciar
-        utils.updateStatus(`Testando conexões das APIs${modeMsg}...`);
-        const testResult = await dataHandlers.testApisConnection();
-        this.renderApiQueueStatus();
-
-        if (!testResult.anyWorking) {
-            utils.updateStatus('⚠ Nenhuma API respondeu. Verifique sua conexão.');
-            utils.hideLoading();
-            elements.startBtn?.classList.remove('hidden');
-            if (startDeepBtn) startDeepBtn.classList.remove('hidden');
-            elements.pauseBtn.classList.add('hidden');
-            state.isProcessing = false;
-            return;
-        }
-
         utils.updateStatus(`Iniciando consultas${modeMsg}...`);
         await this.processNextBatch();
     },
@@ -196,8 +180,8 @@ const uiControllers = {
         utils.hideLoading();
         utils.updateStatus('Processamento parado. Dados limpos.');
         
-        elements.startBtn.classList.remove('hidden');
-        document.getElementById('startDeepBtn')?.classList.remove('hidden');
+        elements.startBtn?.classList.remove('hidden');
+        elements.startDeepBtn?.classList.remove('hidden');
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.add('hidden');
@@ -315,8 +299,8 @@ const uiControllers = {
         elements.pauseBtn.classList.add('hidden');
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.add('hidden');
-        elements.startBtn.classList.remove('hidden');
-        document.getElementById('startDeepBtn')?.classList.remove('hidden');
+        elements.startBtn?.classList.remove('hidden');
+        elements.startDeepBtn?.classList.remove('hidden');
         utils.hideLoading();
 
         const total = state.results.filter(r => r !== undefined).length;
@@ -1167,6 +1151,8 @@ const uiControllers = {
     }
 };
 
+window.uiControllers = uiControllers;
+
 // ========================= INICIALIZAÇÃO =========================
 function init() {
     // Carrega ordem customizada de APIs se existir
@@ -1246,6 +1232,7 @@ function init() {
         statusText: document.getElementById('statusText'),
         loadingSpinner: document.getElementById('loadingSpinner'),
         startBtn: document.getElementById('startBtn'),
+        startDeepBtn: document.getElementById('startDeepBtn'),
         pauseBtn: document.getElementById('pauseBtn'),
         resumeBtn: document.getElementById('resumeBtn'),
         stopBtn: document.getElementById('stopBtn'),
@@ -1262,7 +1249,8 @@ function init() {
     // Event Listeners — botões principais
     elements.loadCsvBtn?.addEventListener('click', () => uiControllers.loadFromCsv());
     elements.loadListBtn?.addEventListener('click', () => uiControllers.loadFromText());
-    elements.startBtn?.addEventListener('click', () => uiControllers.startProcessing());
+    elements.startBtn?.addEventListener('click', () => uiControllers.startProcessing(false));
+    elements.startDeepBtn?.addEventListener('click', () => uiControllers.startProcessing(true));
     elements.pauseBtn?.addEventListener('click', () => uiControllers.pauseProcessing());
     elements.resumeBtn?.addEventListener('click', () => uiControllers.resumeProcessing());
     elements.stopBtn?.addEventListener('click', () => uiControllers.stopProcessing());
@@ -1690,8 +1678,8 @@ var proxyController = {
     },
 
     restoreDefaults() {
-        if (confirm('Deseja restaurar a lista padrão de proxies CORS (AllOrigins em 1º)?')) {
-            corsProxiesPool = [...DEFAULT_CORS_PROXIES];
+        if (confirm('Deseja restaurar a lista padrão de proxies CORS (todos desabilitados por padrão)?')) {
+            corsProxiesPool = DEFAULT_CORS_PROXIES.map(p => ({ ...p, active: false }));
             currentProxyIndex = 0;
             saveCorsProxiesToStorage();
             this.renderProxyList();

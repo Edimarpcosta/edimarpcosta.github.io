@@ -779,9 +779,9 @@ const apiAdapters = {
 // ========================= CORS PROXY POOL & RATE LIMIT MANAGER =========================
 const DEFAULT_CORS_PROXIES = [
     { id: 'python_local', name: 'Proxy Python Local (127.0.0.1:8000)', template: 'http://127.0.0.1:8000/proxy?url={url}', active: false, apiKey: '' },
-    { id: 'allorigins',    name: 'AllOrigins (Padrão)',                 template: 'https://api.allorigins.win/raw?url={url}', active: true, apiKey: '' },
-    { id: 'corsproxy',     name: 'CORSProxy.io',                        template: 'https://corsproxy.io/?{encoded_url}',      active: true, apiKey: '' },
-    { id: 'thingproxy',    name: 'ThingProxy',                          template: 'https://thingproxy.freeboard.io/fetch/{url}', active: true, apiKey: '' }
+    { id: 'allorigins',    name: 'AllOrigins',                          template: 'https://api.allorigins.win/raw?url={url}', active: false, apiKey: '' },
+    { id: 'corsproxy',     name: 'CORSProxy.io',                        template: 'https://corsproxy.io/?{encoded_url}',      active: false, apiKey: '' },
+    { id: 'thingproxy',    name: 'ThingProxy',                          template: 'https://thingproxy.freeboard.io/fetch/{url}', active: false, apiKey: '' }
 ];
 
 let corsProxiesPool = [...DEFAULT_CORS_PROXIES];
@@ -789,20 +789,23 @@ let currentProxyIndex = 0;
 
 function loadCorsProxiesFromStorage() {
     try {
-        const saved = localStorage.getItem('getlista_cors_proxies');
+        const saved = localStorage.getItem('getlista_cors_proxies_v4');
         if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 corsProxiesPool = parsed;
+                return;
             }
         }
     } catch (e) {}
+    // Por padrão todos os proxies iniciam desabilitados
+    corsProxiesPool = DEFAULT_CORS_PROXIES.map(p => ({ ...p, active: false }));
 }
 loadCorsProxiesFromStorage();
 
 function saveCorsProxiesToStorage() {
     try {
-        localStorage.setItem('getlista_cors_proxies', JSON.stringify(corsProxiesPool));
+        localStorage.setItem('getlista_cors_proxies_v4', JSON.stringify(corsProxiesPool));
     } catch (e) {}
 }
 
@@ -812,17 +815,16 @@ function getActiveProxies() {
     if (pythonLocal && pythonLocal.active) {
         return [pythonLocal];
     }
-    const active = corsProxiesPool.filter(p => p.active !== false);
-    return active.length > 0 ? active : DEFAULT_CORS_PROXIES;
+    const active = corsProxiesPool.filter(p => p.active === true);
+    return active;
 }
 
 function getProxyUrl(targetUrl) {
     const active = getActiveProxies();
+    if (!active || active.length === 0) return null;
     if (currentProxyIndex >= active.length) currentProxyIndex = 0;
     const proxy = active[currentProxyIndex];
-    if (!proxy || !proxy.template) {
-        return `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    }
+    if (!proxy || !proxy.template) return null;
     
     let resUrl = proxy.template
         .replace('{url}', targetUrl)
@@ -903,7 +905,7 @@ function startApiCooldownTimer(apiId, waitTimeMs) {
 // ========================= HANDLERS DE REQUISIÇÃO =========================
 var dataHandlers = window.dataHandlers || {};
 Object.assign(dataHandlers, {
-    // Requisição individual a uma API específica (com fallback automático via CORS Proxy Pool)
+    // Requisição individual a uma API específica (com fallback automático via CORS Proxy Pool se ativado)
     async fetchWithApi(apiDef, formattedCnpj, parentSignal) {
         if (!canCallApi(apiDef.id)) {
             throw new Error('RATE_LIMIT_COOLDOWN');
@@ -927,21 +929,23 @@ Object.assign(dataHandlers, {
             try {
                 response = await fetch(url, { signal: controller.signal });
             } catch (directErr) {
-                // Se falhou por erro de CORS/rede no navegador ("Failed to fetch") e não foi pausado pelo usuário
+                // Se falhou por erro de CORS/rede e houver proxy ativado
                 if ((directErr.name === 'TypeError' || (directErr.message && directErr.message.includes('Failed to fetch'))) && (!parentSignal || !parentSignal.aborted)) {
-                    try {
-                        const proxyUrl = getProxyUrl(url);
-                        const proxyResp = await fetch(proxyUrl, { signal: controller.signal });
-                        if (proxyResp.status === 429) {
-                            rotateProxyOn429();
-                        }
-                        if (proxyResp.ok) {
-                            const data = await proxyResp.json();
-                            clearTimeout(timeoutId);
-                            if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
-                            if (data && data.status !== 'ERROR') return apiAdapters[apiDef.id](data);
-                        }
-                    } catch (_) {}
+                    const proxyUrl = getProxyUrl(url);
+                    if (proxyUrl) {
+                        try {
+                            const proxyResp = await fetch(proxyUrl, { signal: controller.signal });
+                            if (proxyResp.status === 429) {
+                                rotateProxyOn429();
+                            }
+                            if (proxyResp.ok) {
+                                const data = await proxyResp.json();
+                                clearTimeout(timeoutId);
+                                if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
+                                if (data && data.status !== 'ERROR') return apiAdapters[apiDef.id](data);
+                            }
+                        } catch (_) {}
+                    }
                 }
                 throw directErr;
             }
@@ -1003,37 +1007,42 @@ Object.assign(dataHandlers, {
             }
         } catch (e) {
             clearTimeout(tid);
-            console.warn(`[CNO Direto] Falhou ou deu timeout para ${cleanCnpj}. Tentando proxy AllOrigins...`);
+            console.warn(`[CNO Direto] Falhou ou deu timeout para ${cleanCnpj}.`);
         }
 
-        // Tenta via AllOrigins Proxy como fallback
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(directUrl)}`;
-        const ctrlProxy = new AbortController();
-        const tidProxy = setTimeout(() => ctrlProxy.abort(), 4000);
-        try {
-            const response = await fetch(proxyUrl, { signal: ctrlProxy.signal });
-            clearTimeout(tidProxy);
-            if (response.ok) {
-                const wrapper = await response.json();
-                if (wrapper && wrapper.contents) {
-                    return JSON.parse(wrapper.contents);
+        // Tenta via Proxy como fallback somente se houver algum proxy ativo
+        const proxyUrl = getProxyUrl(directUrl);
+        if (proxyUrl) {
+            const ctrlProxy = new AbortController();
+            const tidProxy = setTimeout(() => ctrlProxy.abort(), 4000);
+            try {
+                const response = await fetch(proxyUrl, { signal: ctrlProxy.signal });
+                clearTimeout(tidProxy);
+                if (response.ok) {
+                    const wrapper = await response.json();
+                    if (wrapper && wrapper.contents) {
+                        return JSON.parse(wrapper.contents);
+                    } else if (wrapper) {
+                        return wrapper;
+                    }
                 }
+            } catch (e) {
+                clearTimeout(tidProxy);
+                console.warn(`[CNO Proxy] Falhou ao buscar CNO via proxy: ${e.message}`);
             }
-        } catch (e) {
-            clearTimeout(tidProxy);
-            console.warn(`[CNO Proxy] Falhou ao buscar CNO via proxy: ${e.message}`);
         }
         return null;
     },
 
-    // §1.2 — Teste de conectividade "Ping" em 2 Fases (Direto & Proxy) para todas as APIs sem exceção
+    // Teste de conectividade manual das APIs (opcional sob demanda)
     async testApisConnection() {
         const testCnpj = '00000000000191';
         const results = {};
         let passCount = 0;
 
-        utils.updateStatus('⚡ Testando todas as APIs sem exceção (Direto & Proxy)...');
+        utils.updateStatus('⚡ Testando APIs ativas...');
 
+        const activeProxies = getActiveProxies();
         for (const api of state.apis) {
             let directSuccess = false;
             let directPing = null;
@@ -1053,32 +1062,33 @@ Object.assign(dataHandlers, {
                 // Direto falhou
             }
 
-            // FASE 2: Testar via Proxy (com proxy)
-            try {
-                const t0 = performance.now();
-                const targetUrl = api.url.replace('{cnpj}', testCnpj);
-                const proxyUrl = getProxyUrl(targetUrl);
-                
-                const resp = await fetch(proxyUrl, {
-                    headers: { 'Accept': 'application/json' }
-                });
-                proxyPing = Math.round(performance.now() - t0);
+            // FASE 2: Testar via Proxy (somente se houver proxy ativado)
+            if (!directSuccess && activeProxies.length > 0) {
+                try {
+                    const t0 = performance.now();
+                    const targetUrl = api.url.replace('{cnpj}', testCnpj);
+                    const proxyUrl = getProxyUrl(targetUrl);
+                    if (proxyUrl) {
+                        const resp = await fetch(proxyUrl, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        proxyPing = Math.round(performance.now() - t0);
 
-                if (resp.ok) {
-                    const text = await resp.text();
-                    if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-                        const rawData = JSON.parse(text);
-                        if (rawData && rawData.status !== 'ERROR') {
-                            proxySuccess = true;
+                        if (resp.ok) {
+                            const text = await resp.text();
+                            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                                const rawData = JSON.parse(text);
+                                if (rawData && rawData.status !== 'ERROR') {
+                                    proxySuccess = true;
+                                }
+                            }
                         }
                     }
+                } catch (proxyErr) {
+                    // Proxy falhou
                 }
-            } catch (proxyErr) {
-                // Proxy falhou
             }
 
-            // AVALIAÇÃO:
-            // Regra: Se não funcionava direto e passou a funcionar via proxy, habilita para proxy!
             if (directSuccess) {
                 api.ping = directPing;
                 api.useProxy = false;
@@ -1089,7 +1099,7 @@ Object.assign(dataHandlers, {
                 console.log(`✅ ${api.name} OK Direto (${directPing}ms)`);
             } else if (proxySuccess) {
                 api.ping = proxyPing;
-                api.useProxy = true; // Habilita proxy pois apenas via proxy funcionou!
+                api.useProxy = true;
                 api.consecutiveFailures = 0;
                 api.active = true;
                 results[api.name] = true;
@@ -1099,7 +1109,7 @@ Object.assign(dataHandlers, {
                 results[api.name] = false;
                 api.ping = null;
                 api.active = false;
-                console.warn(`❌ ${api.name} → Indisponível (Direto e Proxy falharam)`);
+                console.warn(`❌ ${api.name} → Indisponível`);
             }
         }
 
