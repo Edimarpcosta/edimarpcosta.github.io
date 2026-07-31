@@ -4,6 +4,27 @@
 
 Object.assign(dataHandlers, {
 
+    // Remove propriedades internas (_*) que podem conter referências circulares
+    // (ex: _leadAddrMeta.youngestLead aponta de volta para outro objeto da lista)
+    _sanitizeLead(lead) {
+        const out = {};
+        for (const key of Object.keys(lead)) {
+            if (key.startsWith('_')) continue; // pula metadados computados em memória
+            const val = lead[key];
+            // Arrays de objetos simples (socios, qsa, etc.) — clonar superficialmente
+            if (Array.isArray(val)) {
+                out[key] = val.map(item =>
+                    (item && typeof item === 'object') ? Object.fromEntries(
+                        Object.entries(item).filter(([k]) => !k.startsWith('_'))
+                    ) : item
+                );
+            } else {
+                out[key] = val;
+            }
+        }
+        return out;
+    },
+
     // Transferência direta para o LeadView (Mapa & JSON) sem precisar baixar arquivo
     sendToLeadView() {
         const filtered = typeof uiControllers !== 'undefined' ? uiControllers.getFilteredResults() : state.results;
@@ -20,7 +41,7 @@ Object.assign(dataHandlers, {
                 data_exportacao: new Date().toISOString(),
                 origem: 'GetLista Prospecta'
             },
-            cnpjs_enriquecidos: validList
+            cnpjs_enriquecidos: validList.map(r => this._sanitizeLead(r))
         };
 
         try {
@@ -53,12 +74,11 @@ Object.assign(dataHandlers, {
                 data_exportacao: new Date().toISOString(),
                 origem: 'GetLista Prospecta'
             },
-            cnpjs_enriquecidos: validList
+            cnpjs_enriquecidos: validList.map(r => this._sanitizeLead(r))
         };
 
-        const jsonStr = JSON.stringify(payload, null, 2);
-
         try {
+            const jsonStr = JSON.stringify(payload, null, 2);
             await navigator.clipboard.writeText(jsonStr);
             alert(`✅ JSON de ${validList.length} leads filtrados copiado para a área de transferência!`);
             if (typeof utils !== 'undefined') {
