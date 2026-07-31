@@ -114,7 +114,7 @@ const uiControllers = {
         const done = state.results.filter(r => r !== undefined).length;
         utils.updateStatus(`Pausado. ${done}/${state.cnpjList.length} processados.`);
         if (done > 0) {
-            [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn].forEach(btn => {
+            [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn, elements.sendToLeadViewBtn, elements.copyFilteredJsonBtn].forEach(btn => {
                 if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
             });
             this.renderGroupedResults();
@@ -186,7 +186,7 @@ const uiControllers = {
         elements.resumeBtn.classList.add('hidden');
         elements.stopBtn?.classList.add('hidden');
         
-        [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn].forEach(btn => {
+        [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn, elements.sendToLeadViewBtn, elements.copyFilteredJsonBtn].forEach(btn => {
             if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
         });
         
@@ -211,7 +211,7 @@ const uiControllers = {
         utils.hideLoading();
         const done = state.results.filter(r => r !== undefined).length;
         if (done > 0) {
-            [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn].forEach(btn => {
+            [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn, elements.sendToLeadViewBtn, elements.copyFilteredJsonBtn].forEach(btn => {
                 if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
             });
             this.renderGroupedResults();
@@ -327,7 +327,7 @@ const uiControllers = {
         utils.updateStats();
 
         // Habilita exportação
-        [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn].forEach(btn => {
+        [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn, elements.sendToLeadViewBtn, elements.copyFilteredJsonBtn].forEach(btn => {
             if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
         });
 
@@ -1454,6 +1454,8 @@ function init() {
         exportMaposcopeBtn: document.getElementById('exportMaposcopeBtn'),
         exportCompletoBtn: document.getElementById('exportCompletoBtn'),
         exportCompletoJsonBtn: document.getElementById('exportCompletoJsonBtn'),
+        sendToLeadViewBtn: document.getElementById('sendToLeadViewBtn'),
+        copyFilteredJsonBtn: document.getElementById('copyFilteredJsonBtn'),
         resultsTable: document.getElementById('resultsTable'),
         resultsBody: document.getElementById('resultsBody'),
         apiDelayInput: document.getElementById('apiDelay'),
@@ -1473,6 +1475,8 @@ function init() {
     elements.exportMaposcopeBtn?.addEventListener('click', () => dataHandlers.exportMaposcope());
     elements.exportCompletoBtn?.addEventListener('click', () => dataHandlers.exportCompleto());
     elements.exportCompletoJsonBtn?.addEventListener('click', () => dataHandlers.exportCompletoJson());
+    elements.sendToLeadViewBtn?.addEventListener('click', () => dataHandlers.sendToLeadView());
+    elements.copyFilteredJsonBtn?.addEventListener('click', () => dataHandlers.copyFilteredJson());
 
     // Event Listeners — Agrupamento
     document.getElementById('groupRoot')?.addEventListener('change', () => uiControllers.renderGroupedResults());
@@ -1531,7 +1535,7 @@ function init() {
     });
 
     // Exportação desabilitada inicialmente
-    [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn].forEach(btn => {
+    [elements.exportMaposcopeBtn, elements.exportCompletoBtn, elements.exportCompletoJsonBtn, elements.sendToLeadViewBtn, elements.copyFilteredJsonBtn].forEach(btn => {
         if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
     });
 
