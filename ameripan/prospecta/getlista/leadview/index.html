@@ -474,10 +474,30 @@ input#fileIn{display:none}
             <div class="ti"><label for="tSoc">👥 Sócio em Comum</label><label class="tog"><input type="checkbox" id="tSoc" onchange="toggleLayer('socio')"><span class="tslider"></span></label></div>
             <div class="ti"><label for="tCap">💰 Tamanho por Capital</label><label class="tog"><input type="checkbox" id="tCap" onchange="toggleLayer('capital')"><span class="tslider"></span></label></div>
           </div>
+          <!-- Filtros de Sócios -->
+          <div id="socioFilters" style="margin-top:10px;padding:10px;background:var(--bg3);border:1px solid var(--bord2);border-radius:6px;font-size:11px;display:none">
+            <div style="font-weight:700;color:var(--t1);margin-bottom:7px">🔍 Filtros de Vínculos Societários</div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfCpfNome" checked onchange="drawSocioLines()" style="accent-color:#10b981">
+                <span style="color:#10b981">✅ CPF + Nome confirmado</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfCpfCollision" checked onchange="drawSocioLines()" style="accent-color:#f97316">
+                <span style="color:#f97316">⚠️ CPF bate, nome diferente (possível colisão)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfNomeOnly" checked onchange="drawSocioLines()" style="accent-color:#f59e0b">
+                <span style="color:#f59e0b">❓ Apenas nome (sem CPF)</span>
+              </label>
+            </div>
+            <input type="text" id="sfNomeBusca" placeholder="🔎 Filtrar por nome do sócio..." oninput="drawSocioLines()" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--bord2);border-radius:4px;padding:4px 7px;font-size:11px;color:var(--t1);outline:none">
+            <div id="sfCount" style="margin-top:5px;color:var(--t3);font-size:10px"></div>
+          </div>
         </div>
 
         <div class="wbox">🔗 <strong>Matriz-Filial:</strong> conecta apenas CNPJs minerados neste dataset — não descobre filiais automaticamente.</div>
-        <div class="wbox" style="margin-top:6px">⚠ <strong>Sócio em Comum:</strong> match por nome normalizado. Sem CPF não há confirmação definitiva.</div>
+        <div class="wbox" style="margin-top:6px">👥 <strong>Sócio em Comum:</strong> ✅ Verde = CPF+Nome confirmado · ⚠️ Laranja = CPF bate mas nome diverge · ❓ Âmbar = só por nome</div>
         <button id="btnRst" onclick="resetFilters()">↺ Limpar todos os filtros</button>
       </div>
 
@@ -1198,14 +1218,33 @@ const fmtCap = v => {
 
 function extractSocios(lead) {
   const s = [];
-  for (let i=1; i<=4; i++) {
-    const nome = lead[`Sócio ${i} - Nome`] || '';
-    if (nome.trim()) s.push({
-      nome: nome.trim(), nomeN: normName(nome),
-      qual: lead[`Sócio ${i} - Qualificação`]||'',
-      entrada: lead[`Sócio ${i} - Entrada`]||'',
-      faixa: lead[`Sócio ${i} - Faixa Etária`]||''
+  if (Array.isArray(lead.qsa) && lead.qsa.length > 0) {
+    lead.qsa.forEach(item => {
+      const nome = item.nome_socio || item.nome || '';
+      if (nome.trim()) {
+        s.push({
+          nome: nome.trim(),
+          nomeN: normName(nome),
+          cpf: item.cpf_cnpj_socio || item.cnpj_cpf_do_socio || item.cpf_mascarado || item.cpf || '',
+          qual: item.qualificacao_socio || item.qualificacao || item.cargo || '',
+          entrada: item.data_entrada_sociedade || item.data_entrada || '',
+          faixa: item.faixa_etaria || ''
+        });
+      }
     });
+  } else {
+    for (let i=1; i<=10; i++) {
+      const nome = lead[`Sócio ${i} - Nome`] || lead[`Socio ${i} - Nome`] || '';
+      const cpf = lead[`Sócio ${i} - CPF/CNPJ`] || lead[`Sócio ${i} - CPF`] || lead[`Socio ${i} - CPF`] || '';
+      if (nome.trim()) s.push({
+        nome: nome.trim(),
+        nomeN: normName(nome),
+        cpf: cpf.trim(),
+        qual: lead[`Sócio ${i} - Qualificação`]||'',
+        entrada: lead[`Sócio ${i} - Entrada`]||'',
+        faixa: lead[`Sócio ${i} - Faixa Etária`]||''
+      });
+    }
   }
   return s;
 }
@@ -1408,6 +1447,12 @@ function quickGeoOffline() {
 /* ══════════════════════════════════════════════════════════════════
    LINK ENGINE
 ══════════════════════════════════════════════════════════════════ */
+function _cpfPartial(cpfStr) {
+  // Extrai os dígitos numéricos do CPF mascarado (ex: ***123456** → '123456')
+  if (!cpfStr) return '';
+  return cpfStr.replace(/\D/g,'').substring(0,9); // pega até 9 dígitos numéricos disponíveis
+}
+
 function computeLinks() {
   S.matrizMap = {}; S.socioMap = {};
   S.all.forEach(l => {
@@ -1417,24 +1462,87 @@ function computeLinks() {
   });
   Object.keys(S.matrizMap).forEach(k => { if (S.matrizMap[k].length < 2) delete S.matrizMap[k]; });
 
-  const idx = {};
+  // ──────────────────────────────────────────────────────────
+  // PASSO 1: Índice por CPF parcial (grupo de candidatos)
+  // ──────────────────────────────────────────────────────────
+  const cpfIdx = {}; // cpfPartial -> [{cnpj, nome, nomeN, cpf}]
+  S.all.forEach(l => {
+    (l._socios||[]).forEach(s => {
+      if (!s.cpf || s.cpf.trim().length < 6) return;
+      const key = _cpfPartial(s.cpf);
+      if (key.length < 4) return;
+      if (!cpfIdx[key]) cpfIdx[key] = [];
+      if (!cpfIdx[key].some(e => e.cnpj === l['CNPJ'] && e.nomeN === s.nomeN))
+        cpfIdx[key].push({ cnpj: l['CNPJ'], nome: s.nome, nomeN: s.nomeN, cpf: s.cpf });
+    });
+  });
+
+  // PASSO 2: Cruzar por CPF parcial — comparar nomes para determinar tipo de match
+  const cpfCnpjsPaired = new Set(); // pares já confirmados por CPF+Nome (para não reprocessar no fallback)
+  Object.entries(cpfIdx).forEach(([cpfKey, entries]) => {
+    if (entries.length < 2) return;
+    for (let i=0; i<entries.length; i++) for (let j=i+1; j<entries.length; j++) {
+      const ea=entries[i], eb=entries[j];
+      if (ea.cnpj === eb.cnpj) continue;
+      const a=ea.cnpj, b=eb.cnpj;
+
+      // Determina tipo: CPF parcial bate. Verifica se nomes também batem.
+      const nomesBatem = ea.nomeN && eb.nomeN && ea.nomeN === eb.nomeN;
+      const matchType = nomesBatem ? 'cpf_nome' : 'cpf_collision';
+
+      const label = nomesBatem
+        ? `${ea.nome} · CPF: ${ea.cpf}` // confirmado
+        : `CPF parcial ${ea.cpf} → ${ea.nome} ≠ ${eb.nome}`; // colisão
+
+      const pairKey = [a,b].sort().join('|');
+      if (nomesBatem) cpfCnpjsPaired.add(pairKey + '|' + ea.nomeN);
+
+      [a,b].forEach((src,si) => {
+        const dst = si===0 ? b : a;
+        if (!S.socioMap[src]) S.socioMap[src] = {};
+        if (!S.socioMap[src][dst]) S.socioMap[src][dst] = { entries:[], matchType };
+        // Escalona matchType: cpf_nome > cpf_collision > nome_only
+        const rank = {cpf_nome:2, cpf_collision:1, nome_only:0};
+        if (rank[matchType] > rank[S.socioMap[src][dst].matchType]) S.socioMap[src][dst].matchType = matchType;
+        if (!S.socioMap[src][dst].entries.some(e=>e.label===label))
+          S.socioMap[src][dst].entries.push({ label, matchType, nomeA: ea.nome, nomeB: eb.nome, cpf: ea.cpf });
+      });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // PASSO 3: Fallback por nome normalizado (quando sem CPF)
+  // ──────────────────────────────────────────────────────────
+  const nomeIdx = {}; // nomeN -> [{cnpj, nome, cpf}]
   S.all.forEach(l => {
     (l._socios||[]).forEach(s => {
       if (!s.nomeN || s.nomeN.length < 4) return;
-      if (!idx[s.nomeN]) idx[s.nomeN] = [];
-      if (!idx[s.nomeN].includes(l['CNPJ'])) idx[s.nomeN].push(l['CNPJ']);
+      if (!nomeIdx[s.nomeN]) nomeIdx[s.nomeN] = [];
+      if (!nomeIdx[s.nomeN].some(e => e.cnpj === l['CNPJ']))
+        nomeIdx[s.nomeN].push({ cnpj: l['CNPJ'], nome: s.nome, cpf: s.cpf||'' });
     });
   });
-  Object.entries(idx).forEach(([n, cnpjs]) => {
-    if (cnpjs.length < 2) return;
-    for (let i=0; i<cnpjs.length; i++) for (let j=i+1; j<cnpjs.length; j++) {
-      const a=cnpjs[i], b=cnpjs[j];
-      if (!S.socioMap[a]) S.socioMap[a] = {};
-      if (!S.socioMap[a][b]) S.socioMap[a][b] = [];
-      if (!S.socioMap[a][b].includes(n)) S.socioMap[a][b].push(n);
-      if (!S.socioMap[b]) S.socioMap[b] = {};
-      if (!S.socioMap[b][a]) S.socioMap[b][a] = [];
-      if (!S.socioMap[b][a].includes(n)) S.socioMap[b][a].push(n);
+  Object.entries(nomeIdx).forEach(([nomeN, entries]) => {
+    if (entries.length < 2) return;
+    for (let i=0; i<entries.length; i++) for (let j=i+1; j<entries.length; j++) {
+      const ea=entries[i], eb=entries[j];
+      if (ea.cnpj === eb.cnpj) continue;
+      // Pula se já confirmado por CPF+Nome
+      const pairKey = [ea.cnpj,eb.cnpj].sort().join('|') + '|' + nomeN;
+      if (cpfCnpjsPaired.has(pairKey)) return;
+      // Pula se ambos têm CPF (seria cpf_collision, já tratado acima)
+      if (ea.cpf && eb.cpf) return;
+      const a=ea.cnpj, b=eb.cnpj;
+      const label = `${ea.nome} (por nome)`;
+      [a,b].forEach((src,si) => {
+        const dst = si===0 ? b : a;
+        if (!S.socioMap[src]) S.socioMap[src] = {};
+        if (!S.socioMap[src][dst]) S.socioMap[src][dst] = { entries:[], matchType:'nome_only' };
+        const rank = {cpf_nome:2, cpf_collision:1, nome_only:0};
+        // Não sobrescreve match melhor
+        if (!S.socioMap[src][dst].entries.some(e=>e.label===label))
+          S.socioMap[src][dst].entries.push({ label, matchType:'nome_only', nomeA:ea.nome, nomeB:eb.nome, cpf:'' });
+      });
     }
   });
 }
@@ -1458,22 +1566,74 @@ function drawMatrizLines() {
 function drawSocioLines() {
   S.socioLines.forEach(l=>l.remove()); S.socioLines=[];
   if (!S.layers.socio) return;
+
+  // Mostrar painel de filtros quando a camada está ativa
+  const sfPanel = document.getElementById('socioFilters');
+  if (sfPanel) sfPanel.style.display = 'block';
+
+  const fCpfNome      = document.getElementById('sfCpfNome')?.checked !== false;
+  const fCpfCollision = document.getElementById('sfCpfCollision')?.checked !== false;
+  const fNomeOnly     = document.getElementById('sfNomeOnly')?.checked !== false;
+  const nomeBusca     = (document.getElementById('sfNomeBusca')?.value||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  const STYLES = {
+    cpf_nome:      { color:'#10b981', weight:3,   opacity:0.85, dash:null    },
+    cpf_collision: { color:'#f97316', weight:2.5, opacity:0.8,  dash:'4,3'  },
+    nome_only:     { color:'#f59e0b', weight:2,   opacity:0.65, dash:'8,5'  }
+  };
+
   const drawn = new Set();
+  let visible = 0;
   Object.entries(S.socioMap).forEach(([ca, links]) => {
     const la = S.all.find(l=>l['CNPJ']===ca);
     if (!la||!la._coord||!S.vis.includes(la)) return;
-    Object.entries(links).forEach(([cb, socios]) => {
+    Object.entries(links).forEach(([cb, entry]) => {
       const pk = [ca,cb].sort().join('|');
       if (drawn.has(pk)) return; drawn.add(pk);
       const lb = S.all.find(l=>l['CNPJ']===cb);
       if (!lb||!lb._coord||!S.vis.includes(lb)) return;
+
+      const mt = entry.matchType || 'nome_only';
+      // Filtra por tipo de match
+      if (mt==='cpf_nome'      && !fCpfNome)      return;
+      if (mt==='cpf_collision' && !fCpfCollision) return;
+      if (mt==='nome_only'     && !fNomeOnly)     return;
+
+      // Filtra por nome do sócio
+      const allEntries = entry.entries || [];
+      const matchEntries = nomeBusca
+        ? allEntries.filter(e => {
+            const n = (e.nomeA+' '+e.nomeB).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            return n.includes(nomeBusca);
+          })
+        : allEntries;
+      if (matchEntries.length === 0) return;
+
+      const st = STYLES[mt];
+      const icons = { cpf_nome:'✅', cpf_collision:'⚠️', nome_only:'❓' };
+      const tooltipEntries = matchEntries.map(e=>{
+        let line = `${icons[e.matchType]||''} ${e.label}`;
+        if (e.matchType==='cpf_collision') line += `<br><span style='color:#fca5a5;font-size:10px'>Nomes divergem: "${e.nomeA}" ↔ "${e.nomeB}"</span>`;
+        if (e.matchType==='nome_only') line += `<br><span style='color:#fcd34d;font-size:10px'>Sem CPF — match somente por nome</span>`;
+        return line;
+      }).join('<hr style="margin:4px 0;border-color:rgba(255,255,255,0.1)">');
+
+      const tooltip = tooltipEntries;
       const ln = L.polyline([[la._coord[0],la._coord[1]],[lb._coord[0],lb._coord[1]]],
-        {color:'#f59e0b',weight:2,opacity:.65,dashArray:'6,4'})
-        .bindTooltip(`👥 Possível vínculo societário<br><em>${socios.join(', ')}</em><br><small style='color:#f59e0b'>⚠ Sem CPF — match por nome</small>`,{sticky:true,maxWidth:260})
-        .on('click',()=>showSocioDetail(la,lb,socios));
+        {color:st.color, weight:st.weight, opacity:st.opacity, ...(st.dash?{dashArray:st.dash}:{})})
+        .bindTooltip(tooltip,{sticky:true,maxWidth:300})
+        .on('click',()=>showSocioDetail(la,lb,matchEntries,mt));
       ln.addTo(S.map); S.socioLines.push(ln);
+      visible++;
     });
   });
+  const countEl = document.getElementById('sfCount');
+  if (countEl) countEl.textContent = `${visible} vínculo(s) visível(is)`;
+}
+
+function hideSocioFilters() {
+  const sfPanel = document.getElementById('socioFilters');
+  if (sfPanel) sfPanel.style.display = 'none';
 }
 
 function redrawLinks() { drawMatrizLines(); drawSocioLines(); }
@@ -1965,7 +2125,10 @@ function toggleLayer(key) {
   if (key==='cluster'||key==='capital') rebuildMarkers();
   if (key==='heat') toggleHeatLayer();
   if (key==='matriz') drawMatrizLines();
-  if (key==='socio') drawSocioLines();
+  if (key==='socio') {
+    if (!S.layers.socio) hideSocioFilters();
+    drawSocioLines();
+  }
 }
 
 function toggleLayerBtn(key) {
@@ -2124,7 +2287,7 @@ function openDetailPanel(cnpj) {
       <div class="dst">Quadro Societário</div>
       ${socios.map(s=>`
         <div style="background:var(--bg3);border:1px solid var(--bord2);border-radius:var(--rs);padding:7px 10px;margin-bottom:5px;font-size:11px">
-          <div style="font-weight:600;color:var(--t1)">👤 ${s.nome}</div>
+          <div style="font-weight:600;color:var(--t1)">👤 ${s.nome} ${s.cpf ? `<span style="font-size:10px;font-family:monospace;color:#818cf8;background:rgba(99,102,241,0.15);padding:1px 5px;border-radius:3px;margin-left:4px;border:1px solid rgba(99,102,241,0.3)">CPF: ${s.cpf}</span>` : ''}</div>
           <div style="color:var(--t2)">${s.qual}${s.faixa?` · ${s.faixa}`:''}${s.entrada?` · Entrada: ${s.entrada}`:''}</div>
         </div>
       `).join('')}
@@ -2371,11 +2534,35 @@ function showMatrizDetail(raiz, leds) {
   document.getElementById('panD').classList.add('op');
 }
 
-function showSocioDetail(la, lb, socios) {
-  const h = `<div class="dh"><div><div class="dname">Possível Vínculo Societário</div></div><button class="dcls" onclick="closeDet()">✕</button></div>
-    <div class="wbox">⚠ Match por nome normalizado — sem CPF não é confirmação definitiva</div>
-    <div class="ds" style="margin-top:10px"><div class="dst">Sócio(s) em comum</div>
-    ${socios.map(s=>`<div style="background:var(--bg3);border:1px solid rgba(245,158,11,.3);border-radius:var(--rs);padding:5px 9px;margin-bottom:4px;font-size:12px;color:var(--warm)">👤 ${s}</div>`).join('')}</div>
+function showSocioDetail(la, lb, entries, matchType) {
+  const CFG = {
+    cpf_nome:      { color:'#10b981', bg:'rgba(16,185,129,0.12)', border:'rgba(16,185,129,0.35)', txt:'#6ee7b7', icon:'✅', title:'Vínculo Societário Confirmado' },
+    cpf_collision: { color:'#f97316', bg:'rgba(249,115,22,0.12)',  border:'rgba(249,115,22,0.35)',  txt:'#fdba74', icon:'⚠️', title:'CPF Parcial Coincide — Nomes Divergem' },
+    nome_only:     { color:'#f59e0b', bg:'rgba(245,158,11,0.10)',  border:'rgba(245,158,11,0.3)',   txt:'#fcd34d', icon:'❓', title:'Possível Vínculo por Nome' }
+  };
+  const cfg = CFG[matchType] || CFG.nome_only;
+
+  const warningHtml = {
+    cpf_nome:      `<div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;font-size:11px;color:${cfg.txt};margin-bottom:8px">✅ CPF parcial <strong>e</strong> nome normalizado coincidem — alta confiança de que é a mesma pessoa.</div>`,
+    cpf_collision: `<div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;font-size:11px;color:${cfg.txt};margin-bottom:8px">⚠️ O fragmento de CPF coincide, mas os <strong>nomes são diferentes</strong>. Pode ser uma colisão de CPF parcial (pessoas distintas com mesmos dígitos centrais) ou erro de cadastro.</div>`,
+    nome_only:     `<div class="wbox">❓ Match apenas por nome normalizado — sem CPF não é confirmação definitiva. Homônimos podem gerar falso vínculo.</div>`
+  }[matchType];
+
+  const socioItems = (entries||[]).map(e => {
+    let extra = '';
+    if (e.matchType==='cpf_nome')      extra = `<div style="font-size:10px;color:#6ee7b7;margin-top:2px">✅ CPF: ${e.cpf} · Nome idêntico</div>`;
+    if (e.matchType==='cpf_collision') extra = `<div style="font-size:10px;color:#fca5a5;margin-top:2px">⚠️ CPF: ${e.cpf}<br>Empresa A: "${e.nomeA}" ↔ Empresa B: "${e.nomeB}"</div>`;
+    if (e.matchType==='nome_only')     extra = `<div style="font-size:10px;color:#fcd34d;margin-top:2px">❓ Sem CPF disponível</div>`;
+    const rowCfg = CFG[e.matchType] || cfg;
+    return `<div style="background:var(--bg3);border:1px solid ${rowCfg.border};border-radius:var(--rs);padding:6px 10px;margin-bottom:5px;font-size:12px">
+      <div style="font-weight:600;color:${rowCfg.txt}">${rowCfg.icon} ${e.nomeA}</div>
+      ${extra}
+    </div>`;
+  }).join('');
+
+  const h = `<div class="dh"><div><div class="dname" style="color:${cfg.color}">${cfg.icon} ${cfg.title}</div></div><button class="dcls" onclick="closeDet()">✕</button></div>
+    ${warningHtml}
+    <div class="ds" style="margin-top:10px"><div class="dst">Sócio(s) em comum</div>${socioItems}</div>
     <div class="ds"><div class="dst">Empresas conectadas</div>
     ${[la,lb].map(l=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:8px;margin-bottom:5px;cursor:pointer" onclick="openDetailPanel('${l['CNPJ']}')">
       <div style="font-size:12px;font-weight:600">${l['Nome Fantasia']||l['Razão Social']||'—'}</div>
