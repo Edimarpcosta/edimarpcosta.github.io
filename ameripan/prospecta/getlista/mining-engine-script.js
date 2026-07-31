@@ -875,11 +875,11 @@ const MiningEngine = {
             // Salvar referência do refresh para syncEditorToFilters
             self._chipRefreshers[key] = refresh;
 
-            // Função para processar os valores digitados
+            // Função para processar os valores digitados (suporta vírgula, linebreak \n, ;, |, \t)
             const processValues = (rawText) => {
                 if (!rawText) return 0;
                 const currentUf = (self.els.ufInput?.value || 'SP').toUpperCase().trim();
-                const parts = rawText.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0);
+                const parts = rawText.split(/[,;|\r\n\t]+/).map(p => p.trim()).filter(p => p.length > 0);
                 let added = 0;
                 const unmatchedCities = [];
                 const unmatchedCnaes = [];
@@ -959,17 +959,15 @@ const MiningEngine = {
                 if (added > 0) refresh();
             });
 
-            // Suporte a colar (Ctrl+V) com split automático
+            // Suporte a colar (Ctrl+V) com split automático capturando texto multilinha do clipboard
             input.addEventListener('paste', e => {
-                // Delay para o conteúdo colado estar no input
-                setTimeout(() => {
-                    const raw = input.value.trim();
-                    if (!raw) return;
-
-                    const added = processValues(raw);
+                const pasteText = (e.clipboardData || window.clipboardData)?.getData('text');
+                if (pasteText) {
+                    e.preventDefault();
+                    const added = processValues(pasteText);
                     input.value = '';
                     if (added > 0) refresh();
-                }, 50);
+                }
             });
 
             // Delegação de evento para remover chips
@@ -1013,10 +1011,12 @@ const MiningEngine = {
 
     // Verifica se um CNPJ (14 dígitos) está na blocklist (exato ou por raiz)
     isInBlocklist(cnpj14) {
+        const active = document.getElementById('blocklistActiveCheck')?.checked ?? true;
+        if (!active) return false;
         if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) return false;
         const clean = this.normalizeCnpjForBlocklist(cnpj14);
         if (state.cnpjsJaAtendidos.has(clean)) return true;
-        const matchByRoot = document.getElementById('blocklistMatchByRoot')?.checked ?? false;
+        const matchByRoot = document.getElementById('blocklistMatchByRoot')?.checked ?? true;
         if (matchByRoot && clean.length >= 8) {
             const root = clean.substring(0, 8);
             if (state.cnpjsJaAtendidos.has(root)) return true;
@@ -2454,9 +2454,9 @@ const MiningEngine = {
             const val = input.value;
             const currentUf = (self.els.ufInput?.value || 'SP').toUpperCase().trim();
 
-            // Ao digitar vírgula, converte e corrige automaticamente os termos anteriores
-            if (val.includes(',')) {
-                const parts = val.split(',');
+            // Ao digitar vírgula ou colar com quebra de linha, converte os termos anteriores
+            if (val.includes(',') || val.includes('\n') || val.includes('\r') || val.includes(';')) {
+                const parts = val.split(/[,;\r\n]+/);
                 const completed = parts.slice(0, -1).join(',');
                 const remaining = parts[parts.length - 1];
 
@@ -2579,9 +2579,9 @@ const MiningEngine = {
         input.addEventListener('input', () => {
             const val = input.value;
 
-            // Ao digitar vírgula, processa CNAEs inseridos
-            if (val.includes(',')) {
-                const parts = val.split(',');
+            // Ao digitar vírgula ou colar com quebra de linha, processa CNAEs inseridos
+            if (val.includes(',') || val.includes('\n') || val.includes('\r') || val.includes(';')) {
+                const parts = val.split(/[,;\r\n]+/);
                 const completed = parts.slice(0, -1).join(',');
                 const remaining = parts[parts.length - 1];
 
@@ -2695,8 +2695,8 @@ const MiningEngine = {
         input.addEventListener('input', () => {
             const val = input.value;
 
-            if (val.includes(',')) {
-                const parts = val.split(',');
+            if (val.includes(',') || val.includes('\n') || val.includes('\r') || val.includes(';')) {
+                const parts = val.split(/[,;\r\n]+/);
                 const completed = parts.slice(0, -1).join(',');
                 const remaining = parts[parts.length - 1];
 

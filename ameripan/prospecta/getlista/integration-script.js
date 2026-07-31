@@ -4,6 +4,72 @@
 
 Object.assign(dataHandlers, {
 
+    // Transferência direta para o LeadView (Mapa & JSON) sem precisar baixar arquivo
+    sendToLeadView() {
+        const filtered = typeof uiControllers !== 'undefined' ? uiControllers.getFilteredResults() : state.results;
+        const validList = (filtered && filtered.length > 0 ? filtered : state.results || []).filter(r => r && !r.error);
+
+        if (validList.length === 0) {
+            alert('Nenhum lead disponível para enviar ao LeadView.');
+            return;
+        }
+
+        const payload = {
+            metadata: {
+                total_registros: validList.length,
+                data_exportacao: new Date().toISOString(),
+                origem: 'GetLista Prospecta'
+            },
+            cnpjs_enriquecidos: validList
+        };
+
+        try {
+            localStorage.setItem('leadview_auto_transfer', JSON.stringify(payload));
+            const leadviewUrl = 'https://edimarpcosta.github.io/ameripan/prospecta/getlista/leadview/';
+            window.open(leadviewUrl, '_blank');
+
+            if (typeof utils !== 'undefined') {
+                utils.updateStatus(`🚀 ${validList.length} leads enviados para o LeadView! Abrindo em nova aba...`);
+            }
+        } catch(e) {
+            console.error('[LeadView Transfer] Erro ao salvar dados:', e);
+            alert('Não foi possível transferir os dados automaticamente. Tente a opção "Copiar JSON".');
+        }
+    },
+
+    // Copia o JSON estruturado dos leads filtrados para a área de transferência
+    async copyFilteredJson() {
+        const filtered = typeof uiControllers !== 'undefined' ? uiControllers.getFilteredResults() : state.results;
+        const validList = (filtered && filtered.length > 0 ? filtered : state.results || []).filter(r => r && !r.error);
+
+        if (validList.length === 0) {
+            alert('Nenhum lead disponível para copiar em JSON.');
+            return;
+        }
+
+        const payload = {
+            metadata: {
+                total_registros: validList.length,
+                data_exportacao: new Date().toISOString(),
+                origem: 'GetLista Prospecta'
+            },
+            cnpjs_enriquecidos: validList
+        };
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+
+        try {
+            await navigator.clipboard.writeText(jsonStr);
+            alert(`✅ JSON de ${validList.length} leads filtrados copiado para a área de transferência!`);
+            if (typeof utils !== 'undefined') {
+                utils.updateStatus(`📋 JSON de ${validList.length} leads copiado para a área de transferência.`);
+            }
+        } catch(e) {
+            console.error('[Copy JSON] Erro ao copiar:', e);
+            alert('Erro ao copiar para a área de transferência.');
+        }
+    },
+
     // §3 — Leitura Direta de .xlsx e .csv via SheetJS
     async loadSpreadsheet(file) {
         return new Promise((resolve, reject) => {
@@ -52,10 +118,10 @@ Object.assign(dataHandlers, {
         });
     },
 
-    // Processa texto colado (um CNPJ por linha)
+    // Processa texto colado (um por linha ou separado por vírgula)
     processListText(text) {
         return text
-            .split(/[\n\r,;]+/)
+            .split(/[\n\r,;|\t]+/)
             .map(l => l.replace(/\D/g, ''))
             .filter(l => l.length >= 11)
             .map(l => l.padStart(14, '0'))
@@ -270,6 +336,7 @@ Object.assign(dataHandlers, {
                 if (result.qsa && result.qsa.length > 0) {
                     result.qsa.forEach((s, i) => {
                         row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                        row['Sócio ' + (i + 1) + ' - CPF/CNPJ'] = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cnpj_cpf_socio || s.cpf_mascarado || '';
                         row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
                         row['Sócio ' + (i + 1) + ' - Faixa Etária'] = s.faixa_etaria || '';
                         row['Sócio ' + (i + 1) + ' - Entrada'] = s.data_entrada_sociedade || s.data_entrada || '';
@@ -916,6 +983,7 @@ Object.assign(dataHandlers, {
         if (result.qsa && result.qsa.length > 0) {
             result.qsa.forEach((s, i) => {
                 row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                row['Sócio ' + (i + 1) + ' - CPF/CNPJ'] = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cnpj_cpf_socio || s.cpf_mascarado || '';
                 row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
             });
         }

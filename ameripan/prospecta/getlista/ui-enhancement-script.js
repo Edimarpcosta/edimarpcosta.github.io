@@ -372,6 +372,120 @@ const uiControllers = {
     },
 
 
+    // ===== HELPER: CÁLCULO DE TIMESTAMP DA DATA DE ABERTURA =====
+    getOpeningTimestamp(r) {
+        if (!r) return 0;
+        const d = r.data_inicio_atividade || r.data_abertura || r.abertura || r.data_situacao_cadastral || '';
+        if (d) {
+            const dStr = String(d).trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+                const t = new Date(dStr).getTime();
+                if (!isNaN(t) && t > 0) return t;
+            }
+            const pts = dStr.split('/');
+            if (pts.length === 3) {
+                const iso = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
+                const t = new Date(iso).getTime();
+                if (!isNaN(t) && t > 0) return t;
+            }
+            const num = dStr.replace(/\D/g, '');
+            if (num.length === 8) {
+                const iso = `${num.substring(0,4)}-${num.substring(4,6)}-${num.substring(6,8)}`;
+                const t = new Date(iso).getTime();
+                if (!isNaN(t) && t > 0) return t;
+            }
+        }
+        return 0;
+    },
+
+    // ===== HELPER: AGRUPAMENTO DE PONTO COMERCIAL (UNION-FIND / DISJOINT SET) =====
+    computeAddressGroups(resultsList) {
+        if (!Array.isArray(resultsList) || resultsList.length === 0) return;
+
+        const parent = {};
+        const find = (i) => {
+            if (parent[i] === undefined) parent[i] = i;
+            if (parent[i] === i) return i;
+            return (parent[i] = find(parent[i]));
+        };
+        const union = (i, j) => {
+            const rootI = find(i);
+            const rootJ = find(j);
+            if (rootI !== rootJ) parent[rootI] = rootJ;
+        };
+
+        const cepMap = {};
+        const ruaMap = {};
+
+        resultsList.forEach((r, idx) => {
+            if (!r || r.error) return;
+            const cep = (r.cep || '').replace(/\D/g, '');
+            const num = (r.numero || '').trim();
+            const rua = (r.logradouro || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const mun = (r.municipio || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+            if (cep.length === 8 && num) {
+                const kA = `${cep}|${num}`;
+                if (!cepMap[kA]) cepMap[kA] = [];
+                cepMap[kA].push(idx);
+            }
+
+            if (rua && num && mun) {
+                const kB = `${rua}|${num}|${mun}`;
+                if (!ruaMap[kB]) ruaMap[kB] = [];
+                ruaMap[kB].push(idx);
+            }
+        });
+
+        [cepMap, ruaMap].forEach(map => {
+            Object.values(map).forEach(group => {
+                if (group.length > 1) {
+                    for (let i = 1; i < group.length; i++) {
+                        union(group[0], group[i]);
+                    }
+                }
+            });
+        });
+
+        const components = {};
+        resultsList.forEach((r, idx) => {
+            if (!r || r.error) return;
+            const root = find(idx);
+            if (!components[root]) components[root] = [];
+            components[root].push(r);
+        });
+
+        Object.values(components).forEach(groupLeads => {
+            if (groupLeads.length < 2) {
+                if (groupLeads.length === 1) {
+                    groupLeads[0]._leadAddrMeta = {
+                        isSameAddr: false,
+                        isNewest: true,
+                        totalAtAddr: 1,
+                        youngestLead: groupLeads[0],
+                        peers: []
+                    };
+                }
+                return;
+            }
+
+            groupLeads.sort((a, b) => this.getOpeningTimestamp(b) - this.getOpeningTimestamp(a));
+
+            const newestLead = groupLeads[0];
+
+            groupLeads.forEach(r => {
+                const isNewest = (r === newestLead);
+                r._leadAddrMeta = {
+                    isSameAddr: true,
+                    isNewest: isNewest,
+                    totalAtAddr: groupLeads.length,
+                    youngestLead: newestLead,
+                    peers: groupLeads.filter(x => x !== r)
+                };
+            });
+        });
+    },
+
     // ===== §4.3 — TABELA COM VIRTUALIZAÇÃO LEVE =====
     addResultToTable(result, index) {
         // Limita renderização DOM a MAX_VISIBLE_ROWS linhas
@@ -419,10 +533,29 @@ const uiControllers = {
             if (scoreInfo.score >= 70) badgeClass = 'badge-status-ativa';
             else if (scoreInfo.score >= 35) badgeClass = 'badge-origin';
 
+            const pontoFilter = document.getElementById('filterPontoComercial')?.value || 'todos';
+            let addrBadge = '';
+            let peersCitation = '';
+
+            if (result._leadAddrMeta && result._leadAddrMeta.isSameAddr) {
+                if (result._leadAddrMeta.isNewest) {
+                    addrBadge = `<span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold ml-1.5" style="background:rgba(34,197,94,0.2); border:1px solid rgba(34,197,94,0.4); color:#4ade80" title="PJ mais recente cadastrado neste endereço (provável novo dono)">⭐ NOVO DONO</span>`;
+                } else {
+                    addrBadge = `<span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold ml-1.5" style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#f87171" title="PJ antigo cadastrado neste endereço (ponto vendido/passado)">🏚️ PJ ANTERIOR</span>`;
+                }
+
+                if (pontoFilter === 'novo_dono_citar_antigos' && result._leadAddrMeta.isNewest && result._leadAddrMeta.peers.length > 0) {
+                    peersCitation = `<div class="mt-1 p-1.5 rounded text-[11px] font-medium" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); color:#fbbf24">
+                        <b>🏚️ PJs Antigos neste Ponto (${result._leadAddrMeta.peers.length}):</b><br>
+                        ${result._leadAddrMeta.peers.map(p => `• <b>${p.razao_social || p.nome_fantasia || p.cnpj}</b> (${utils.formatCnpjForDisplay(p.cnpj)} · Abertura: ${p.data_inicio_atividade || 'Antigo'})`).join('<br>')}
+                    </div>`;
+                }
+            }
+
             row.innerHTML = `
                 <td><span class="badge ${badgeClass}" title="${(scoreInfo.reasons || []).join(' | ')}">${scoreInfo.score || 0} ${scoreInfo.temp || ''}</span></td>
                 <td>${utils.formatCnpjForDisplay(result.cnpj)}</td>
-                <td>${result.razao_social || '-'}</td>
+                <td><div><span class="font-semibold">${result.razao_social || '-'}</span>${addrBadge}${peersCitation}</div></td>
                 <td>${result.nome_fantasia || '-'}</td>
                 <td>${result.descricao_situacao_cadastral || '-'}</td>
                 <td>${result.municipio || '-'}/${result.uf || '-'}</td>
@@ -441,6 +574,9 @@ const uiControllers = {
     // ===== FILTRAGEM DINÂMICA EM TEMPO REAL =====
     getFilteredResults() {
         if (!state.results || state.results.length === 0) return [];
+
+        // Atualiza agrupamento de ponto comercial / mesmo endereço (Union-Find)
+        this.computeAddressGroups(state.results);
 
         // 1. Filtros de Situação Cadastral (topo)
         const exportAll = document.getElementById('exportAll')?.checked ?? true;
@@ -466,6 +602,7 @@ const uiControllers = {
         const capMax = capMaxInput !== undefined && capMaxInput !== '' ? parseFloat(capMaxInput) : NaN;
         const obrasFilter = document.getElementById('filterObras')?.value || 'todos';
         const ieFilter = document.getElementById('filterIe')?.value || 'todos';
+        const pontoFilter = document.getElementById('filterPontoComercial')?.value || 'todos';
 
         // Suporte a CNO Obras Ativas
         const cnoEnabled = document.getElementById('cnoEnabled')?.checked;
@@ -473,6 +610,13 @@ const uiControllers = {
 
         return state.results.filter(r => {
             if (!r || r.error) return false;
+
+            // Filtro de Ponto Comercial / Mesmo Endereço (Novo Dono vs PJs Antigos)
+            if (pontoFilter === 'novo_dono_apenas' || pontoFilter === 'novo_dono_citar_antigos') {
+                if (r._leadAddrMeta && r._leadAddrMeta.isSameAddr && !r._leadAddrMeta.isNewest) {
+                    return false;
+                }
+            }
 
             // CNO Obras Ativas (configuração global)
             if (cnoEnabled && cnoOnlyActive) {
@@ -618,6 +762,7 @@ const uiControllers = {
         setVal('filterCapitalMax', '');
         setVal('filterObras', 'todos');
         setVal('filterIe', 'todos');
+        setVal('filterPontoComercial', 'todos');
         
         this.applyFilters();
     },
@@ -630,10 +775,11 @@ const uiControllers = {
     renderGroupedResults(filteredList = null) {
         const groupRoot = document.getElementById('groupRoot')?.checked;
         const groupCity = document.getElementById('groupCity')?.checked;
+        const groupAddress = document.getElementById('groupAddress')?.checked;
         const container = document.getElementById('groupedResultsContainer');
         const tableWrap = document.querySelector('.overflow-x-auto');
 
-        if (!groupRoot && !groupCity) {
+        if (!groupRoot && !groupCity && !groupAddress) {
             if (container) container.classList.add('hidden');
             if (tableWrap) tableWrap.classList.remove('hidden');
             return;
@@ -644,8 +790,13 @@ const uiControllers = {
 
         const highContrastColors = ['#FF4136', '#0074D9', '#2ECC40', '#FF851B', '#B10DC9', '#3D9970', '#FFDC00', '#F012BE', '#7FDBFF', '#39CCCC', '#FF6347', '#4682B4'];
         
-        const groups = new Map();
         const listToGroup = filteredList || this.getFilteredResults();
+
+        if (groupAddress) {
+            this.computeAddressGroups(listToGroup);
+        }
+
+        const groups = new Map();
 
         listToGroup.forEach((r) => {
             if (!r || r.error) return;
@@ -653,8 +804,20 @@ const uiControllers = {
             
             let root = groupRoot ? String(r.cnpj).replace(/\D/g, '').substring(0, 8) : '';
             let city = groupCity ? (r.municipio || 'SEM CIDADE').toUpperCase() : '';
+            let addr = '';
+            if (groupAddress) {
+                if (r._leadAddrMeta && r._leadAddrMeta.isSameAddr) {
+                    const logr = (r.logradouro || 'ENDEREÇO').toUpperCase();
+                    const num = (r.numero || 'S/N').toUpperCase();
+                    const mun = (r.municipio || '').toUpperCase();
+                    addr = `📍 ${logr}, ${num} (${mun})`;
+                } else {
+                    addr = `📍 ENDEREÇOS ÚNICOS (SEM DUPLICIDADE)`;
+                }
+            }
             
             let keyParts = [];
+            if (groupAddress) keyParts.push(addr);
             if (groupRoot) keyParts.push(`Raiz: ${root}`);
             if (groupCity) keyParts.push(`Cidade: ${city}`);
             let key = keyParts.join(' | ');
@@ -681,12 +844,15 @@ const uiControllers = {
             const color = highContrastColors[colorIndex % highContrastColors.length];
             colorIndex++;
             
-            // Pega a razão social da primeira empresa do grupo
+            if (groupAddress && key.startsWith('📍') && !key.includes('ENDEREÇOS ÚNICOS')) {
+                groupData.members.sort((a, b) => (b.result._leadAddrMeta?.isNewest ? 1 : 0) - (a.result._leadAddrMeta?.isNewest ? 1 : 0));
+            }
+
             const firstCompany = groupData.members[0]?.result;
             const companyName = firstCompany?.razao_social || firstCompany?.nome_fantasia || '';
             
             let headerText = key;
-            if (groupRoot && companyName) {
+            if (groupRoot && companyName && !groupAddress) {
                 headerText = `${key} — ${companyName}`;
             }
 
@@ -707,11 +873,22 @@ const uiControllers = {
                     cnpjDisplay = `<mark style="background-color: ${color};">${cnpjFormatted.substring(0, 10)}</mark>${cnpjFormatted.substring(10)}`;
                 }
                 
-                html += `<li onclick="uiControllers.showDetails(state.results[${member.index}])" class="cursor-pointer">
+                let addrBadge = '';
+                if (r._leadAddrMeta && r._leadAddrMeta.isSameAddr) {
+                    if (r._leadAddrMeta.isNewest) {
+                        addrBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:rgba(34,197,94,0.2); border:1px solid rgba(34,197,94,0.4); color:#4ade80">⭐ NOVO DONO</span>`;
+                    } else {
+                        addrBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#f87171">🏚️ PJ ANTERIOR</span>`;
+                    }
+                }
+
+                html += `<li onclick="uiControllers.showDetails(state.results[${member.index}])" class="cursor-pointer flex items-center justify-between">
                     <div>
                         ${cnpjDisplay} - <span style="color:var(--color-text); font-weight:600">${r.razao_social || 'Sem Nome'}</span>
+                        <span class="text-xs text-gray-400 ml-2">(Abertura: ${r.data_inicio_atividade || r.abertura || 'N/I'})</span>
                     </div>
                     <div class="flex items-center gap-2">
+                        ${addrBadge}
                         <span class="text-xs font-medium" style="color:var(--color-text-muted)">${r.municipio || ''}/${r.uf || ''}</span>
                         <button class="details-btn px-2 py-1 text-xs rounded font-bold" style="background:var(--bg-details-btn); border:1px solid var(--border-details-btn); color:var(--color-details-btn); cursor:pointer;" data-index="${member.index}" onclick="event.stopPropagation(); uiControllers.showDetails(state.results[${member.index}])">Ver</button>
                     </div>
@@ -776,8 +953,42 @@ const uiControllers = {
                     ${scoreInfo.reasons.map(r => `<li>${r}</li>`).join('')}
                 </ul>
             </div>` : ''}
-        </div>
+        </div>`;
 
+        if (result._leadAddrMeta && result._leadAddrMeta.isSameAddr) {
+            html += `
+            <!-- CARD DE PONTO COMERCIAL (MESMO ENDEREÇO / NOVO DONO) -->
+            <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:0.75rem; padding:1.25rem;" class="mb-5">
+                <div class="flex items-center justify-between gap-2 mb-2 flex-wrap font-bold" style="color:#fbbf24; font-size:0.95rem">
+                    <span>🏢 Ponto Comercial Compartilhado (${result._leadAddrMeta.totalAtAddr} PJs neste endereço)</span>
+                    ${result._leadAddrMeta.isNewest 
+                        ? '<span class="px-2.5 py-0.5 rounded text-xs" style="background:#16a34a; color:#fff; font-weight:700">⭐ NOVO DONO</span>' 
+                        : '<span class="px-2.5 py-0.5 rounded text-xs" style="background:#ef4444; color:#fff; font-weight:700">🏚️ PJ ANTERIOR NO PONTO</span>'}
+                </div>
+                <p class="text-xs text-gray-300 mb-2">${result._leadAddrMeta.isNewest 
+                    ? 'Este lead é o CNPJ mais recente cadastrado neste endereço (provável operador atual do ponto comercial).' 
+                    : 'Este lead é um CNPJ mais antigo neste endereço (já existe um registro comercial mais recente no local).'}</p>
+                ${result._leadAddrMeta.peers.length > 0 ? `
+                <div class="text-xs space-y-1.5 mt-3 pt-2 border-t border-amber-500/20">
+                    <span class="font-bold text-amber-200">Outras empresas registradas neste mesmo ponto comercial:</span>
+                    <div class="grid grid-cols-1 gap-2 mt-1">
+                        ${result._leadAddrMeta.peers.map(p => {
+                            const pIdx = state.results.indexOf(p);
+                            return `
+                            <div class="p-2.5 rounded flex items-center justify-between gap-2" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08)">
+                                <div>
+                                    <span class="font-bold text-white block">${p.razao_social || p.nome_fantasia || 'Empresa'}</span>
+                                    <span class="text-[11px] text-gray-400 block">${utils.formatCnpjForDisplay(p.cnpj)} · Abertura: ${p.data_inicio_atividade || 'Não informada'}</span>
+                                </div>
+                                ${pIdx !== -1 ? `<button class="details-btn px-2.5 py-1 text-xs rounded font-bold" onclick="uiControllers.showDetails(state.results[${pIdx}])">Ver Lead →</button>` : ''}
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>` : ''}
+            </div>`;
+        }
+
+        html += `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Informações Básicas -->
             <div style="background:var(--bg-badge); border:1px solid var(--border-card); border-radius:0.5rem; padding:1rem;">
@@ -850,10 +1061,14 @@ const uiControllers = {
             result.qsa.forEach(s => {
                 const nomeBusca = encodeURIComponent((s.nome_socio || '').trim().replace(/\s+/g, '+'));
                 const socUrl = `https://casadosdados.com.br/solucao/cnpj?q=${nomeBusca}`;
+                const cpfPart = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cnpj_cpf_socio || s.cpf_mascarado || '';
 
                 html += `<div style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.75rem;" class="text-sm">
-                     <p style="color:var(--color-text); font-weight:700">${s.nome_socio || '-'}</p>
-                     <p style="color:var(--color-text-muted); font-weight:500">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
+                     <div class="flex items-center justify-between flex-wrap gap-1">
+                         <p style="color:var(--color-text); font-weight:700">${s.nome_socio || '-'}</p>
+                         ${cpfPart ? `<span class="text-xs px-2 py-0.5 rounded font-mono font-bold" style="background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3)">CPF: ${cpfPart}</span>` : ''}
+                     </div>
+                     <p style="color:var(--color-text-muted); font-weight:500" class="mt-1">${s.qualificacao_socio || ''} ${s.data_entrada_sociedade ? '• Entrada: ' + s.data_entrada_sociedade : ''}</p>
                      <div style="margin-top:0.4rem;">
                          <a href="${socUrl}" target="_blank" title="Buscar outras empresas de ${s.nome_socio} na Casa dos Dados" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.75rem;font-weight:700;text-decoration:none;color:#6366f1;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);padding:0.2rem 0.5rem;border-radius:0.25rem;cursor:pointer;">
                              🏢 Ver Sociedades na Casa dos Dados
@@ -1386,11 +1601,25 @@ const blocklistController = {
         return { type: 'invalid', value: clean };
     },
 
+    onActiveToggle() {
+        const isChecked = document.getElementById('blocklistActiveCheck')?.checked ?? true;
+        const totalPj = state.cnpjsJaAtendidos ? state.cnpjsJaAtendidos.size : 0;
+        const totalCpf = state.cpfsJaAtendidos ? state.cpfsJaAtendidos.length : 0;
+
+        if (!isChecked) {
+            this._showStatus(`⏸️ Exclusão por Blocklist desativada (os ${totalPj} PJs e ${totalCpf} CPFs continuam salvos na memória, mas não serão ignorados durante a prospecção).`);
+            if (typeof utils !== 'undefined') utils.updateStatus(`⏸️ Blocklist desativada temporariamente.`);
+        } else {
+            this._showStatus(`✅ Exclusão por Blocklist ativada (${totalPj} PJs e ${totalCpf} CPFs serão ignorados da prospecção).`);
+            if (typeof utils !== 'undefined') utils.updateStatus(`🚫 Blocklist ativada: ${totalPj} PJs salvos.`);
+        }
+    },
+
     // Carrega a blocklist a partir da textarea, salva no state e no localStorage
     load() {
         const textarea = document.getElementById('blocklistTextarea');
         const raw = textarea?.value?.trim() || '';
-        const lines = raw.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
+        const lines = raw.split(/[\n\r,;|\t]+/).map(l => l.trim()).filter(l => l.length > 0);
 
         state.cnpjsJaAtendidos = new Set();
         state.cpfsJaAtendidos = [];

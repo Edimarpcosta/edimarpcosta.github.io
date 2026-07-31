@@ -519,7 +519,7 @@ const apiAdapters = {
             email: est.email || '',
             capital_social: parseFloat(data.capital_social) || 0,
             porte: data.porte?.descricao || '',
-            qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao_socio?.descricao || s.qualificacao || '' })) || [],
+            qsa: data.socios?.map(s => ({ nome_socio: s.nome_socio || s.nome || '', cpf_cnpj_socio: s.cpf_cnpj_socio || s.cpf_cnpj_do_socio || s.cpf_mascarado || s.cpf || '', qualificacao_socio: s.qualificacao_socio?.descricao || s.qualificacao_socio || s.qualificacao || '', faixa_etaria: s.faixa_etaria?.descricao || s.faixa_etaria || '', data_entrada_sociedade: s.data_entrada_sociedade || s.data_entrada || '' })) || [],
             cnaes_secundarios: est.atividades_secundarias?.map(a => ({ codigo: a.id, descricao: a.descricao })) || [],
             api_origem: 'Publica CNPJ WS'
         };
@@ -550,7 +550,7 @@ const apiAdapters = {
         email: data.email,
         capital_social: parseFloat(String(data.capital_social || '0').replace(/\./g, '').replace(',', '.')) || 0,
         porte: data.porte,
-        qsa: data.qsa?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qual })) || [],
+        qsa: data.qsa?.map(s => ({ nome_socio: s.nome || s.nome_socio || '', cpf_cnpj_socio: s.cnpj_cpf_do_socio || s.cpf_cnpj_socio || s.cpf_mascarado || s.cpf || '', qualificacao_socio: s.qual || s.qualificacao_socio || '' })) || [],
         cnaes_secundarios: data.atividades_secundarias?.map(a => ({ codigo: a.code?.replace(/\D/g, ''), descricao: a.text })) || [],
         api_origem: 'ReceitaWS'
     }),
@@ -575,7 +575,7 @@ const apiAdapters = {
         email: data.email || '',
         capital_social: parseFloat(data.capital_social) || 0,
         porte: data.porte?.nome || data.porte,
-        qsa: data.socios?.map(s => ({ nome_socio: s.nome, qualificacao_socio: s.qualificacao, data_entrada_sociedade: s.data_entrada })) || [],
+        qsa: data.socios?.map(s => ({ nome_socio: s.nome || s.nome_socio || '', cpf_cnpj_socio: s.cpf_cnpj_socio || s.cpf || s.cnpj_cpf_do_socio || s.cpf_mascarado || '', qualificacao_socio: s.qualificacao || s.qualificacao_socio || '', data_entrada_sociedade: s.data_entrada || s.data_entrada_sociedade || '' })) || [],
         cnaes_secundarios: data.atividades_secundarias?.map(a => ({ codigo: a.codigo, descricao: a.nome || a.descricao })) || [],
         api_origem: 'Invertexto'
     }),
@@ -586,8 +586,9 @@ const apiAdapters = {
             descricao: c.descricao
         })) || [];
         const formattedQsa = data.QSA?.map(s => ({
-            nome_socio: s.nome_socio,
-            qualificacao_socio: s.qualificacao_socio || ''
+            nome_socio: s.nome_socio || s.nome || '',
+            cpf_cnpj_socio: s.cnpj_cpf_socio || s.cpf_cnpj_socio || s.cpf_mascarado || s.cpf || '',
+            qualificacao_socio: s.qualificacao_socio || s.qualificacao || ''
         })) || [];
         const ddd_tel1 = data.telefones?.[0] ? `${data.telefones[0].ddd || ''}${data.telefones[0].numero || ''}` : '';
         const ddd_tel2 = data.telefones?.[1] ? `${data.telefones[1].ddd || ''}${data.telefones[1].numero || ''}` : '';
