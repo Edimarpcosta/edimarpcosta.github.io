@@ -2543,6 +2543,25 @@ async function initApp(data) {
 window.addEventListener('DOMContentLoaded', async () => {
   await loadGeoCacheDB();
   renderFileHistoryUI();
+
+  // Verificação de transferência automática enviada do GetLista Prospecta
+  const transferred = localStorage.getItem('leadview_auto_transfer');
+  if (transferred) {
+    try {
+      const data = JSON.parse(transferred);
+      localStorage.removeItem('leadview_auto_transfer');
+      if (data && (data.cnpjs_enriquecidos || Array.isArray(data))) {
+        const payload = data.cnpjs_enriquecidos ? data : { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString() }, cnpjs_enriquecidos: data };
+        const fileName = `Transf_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+        await saveFileHistory(fileName, payload);
+        initApp(payload, fileName);
+        toast(`🚀 ${payload.cnpjs_enriquecidos.length} leads recebidos automaticamente do Prospecta!`, 5000);
+        return;
+      }
+    } catch(e) {
+      console.warn('[LeadView] Erro ao importar dados transferidos:', e);
+    }
+  }
 });
 </script>
 </body>
