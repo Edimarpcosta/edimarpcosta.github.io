@@ -320,9 +320,13 @@ input#fileIn{display:none}
       📂 Selecionar JSON do GetLista
     </label>
     <input type="file" id="fileIn" accept=".json" onchange="onFileSelected(event)" />
+    <button class="ul-btn" id="pasteJsonBtn" onclick="pasteJsonFromClipboard()" style="background:linear-gradient(135deg,#10b981,#059669);margin-top:8px;cursor:pointer;border:none">
+      📋 Colar JSON (do Prospecta)
+    </button>
     <div class="ul-info">
       ✅ Arquivo lido localmente — nenhum dado sai do seu computador<br>
-      📦 Compatível com o formato <code>getlista_completo_*.json</code>
+      📦 Compatível com o formato <code>getlista_completo_*.json</code><br>
+      <span style="color:var(--warm);font-size:10px">📋 Use "Copiar JSON" no Prospecta e depois "Colar JSON" aqui</span>
     </div>
   </div>
 
@@ -2731,7 +2735,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadGeoCacheDB();
   renderFileHistoryUI();
 
-  // Verificação de transferência automática enviada do GetLista Prospecta
+  // Verificação de transferência automática enviada do GetLista Prospecta via localStorage
   const transferred = localStorage.getItem('leadview_auto_transfer');
   if (transferred) {
     try {
@@ -2749,7 +2753,58 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.warn('[LeadView] Erro ao importar dados transferidos:', e);
     }
   }
+
+  // Se a página foi aberta via window.open() do Prospecta, tenta receber dados por postMessage
+  window.addEventListener('message', async (evt) => {
+    if (!evt.data || evt.data.type !== 'leadview_transfer') return;
+    try {
+      const payload = evt.data.payload;
+      if (!payload || !payload.cnpjs_enriquecidos) return;
+      const fileName = `Transf_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+      await saveFileHistory(fileName, payload);
+      initApp(payload, fileName);
+      toast(`🚀 ${payload.cnpjs_enriquecidos.length} leads recebidos automaticamente do Prospecta!`, 5000);
+    } catch(e) {
+      console.warn('[LeadView] Erro ao importar dados via postMessage:', e);
+    }
+  }, { once: true });
 });
+
+// Colar JSON da área de transferência (botão na tela de upload)
+async function pasteJsonFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || text.trim() === '') {
+      alert('Área de transferência vazia. Use "Copiar JSON (Filtrados)" no Prospecta primeiro.');
+      return;
+    }
+    let data;
+    try { data = JSON.parse(text); } catch(e) {
+      alert('❌ O conteúdo colado não é um JSON válido. Certifique-se de copiar com o botão "Copiar JSON" do Prospecta.');
+      return;
+    }
+    if (!data) { alert('JSON inválido ou vazio.'); return; }
+    // Normaliza formato
+    const payload = data.cnpjs_enriquecidos ? data
+      : Array.isArray(data) ? { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString(), origem: 'Colado' }, cnpjs_enriquecidos: data }
+      : null;
+    if (!payload || !payload.cnpjs_enriquecidos || payload.cnpjs_enriquecidos.length === 0) {
+      alert('❌ JSON não contém leads válidos. Verifique se copiou corretamente do Prospecta.');
+      return;
+    }
+    const fileName = `ColJSON_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+    await saveFileHistory(fileName, payload);
+    initApp(payload, fileName);
+    toast(`📋 ${payload.cnpjs_enriquecidos.length} leads carregados via Colar JSON!`, 4000);
+  } catch(e) {
+    console.error('[pasteJson] Erro:', e);
+    if (e.name === 'NotAllowedError') {
+      alert('❌ Permissão de leitura da área de transferência negada pelo navegador.\n\nSolução: Clique em "Permitir" quando o navegador perguntar, ou use a opção de selecionar arquivo.');
+    } else {
+      alert('Erro ao colar JSON: ' + e.message);
+    }
+  }
+}
 </script>
 </body>
 </html>
