@@ -304,6 +304,139 @@ Object.assign(dataHandlers, {
         }
     },
 
+    exportCompletoJson() {
+        try {
+            if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
+
+            utils.updateStatus('Preparando exportação JSON completa...');
+            const { successRows, errorRows, apiStats } = this._getFilteredResults();
+
+            const groupRoot = document.getElementById('groupRoot')?.checked;
+            const groupCity = document.getElementById('groupCity')?.checked;
+
+            if (groupRoot || groupCity) {
+                successRows.sort((a, b) => {
+                    let cmp = 0;
+                    if (groupCity) {
+                        const cityA = (a.result.municipio || '').toLowerCase();
+                        const cityB = (b.result.municipio || '').toLowerCase();
+                        if (cityA < cityB) cmp = -1;
+                        if (cityA > cityB) cmp = 1;
+                    }
+                    if (cmp === 0 && groupRoot) {
+                        const rootA = String(a.result.cnpj).replace(/\D/g, '').substring(0, 8);
+                        const rootB = String(b.result.cnpj).replace(/\D/g, '').substring(0, 8);
+                        if (rootA < rootB) cmp = -1;
+                        if (rootA > rootB) cmp = 1;
+                    }
+                    return cmp;
+                });
+            }
+
+            const rows = successRows.map(({ result, apiUsed }) => {
+                const tel1 = utils.cleanPhone(result.ddd_telefone_1);
+                const tel2 = utils.cleanPhone(result.ddd_telefone_2);
+                const scoreInfo = result.scoreInfo || {};
+                const age = utils.calculateAge(result.data_inicio_atividade || result.abertura);
+                const ageDesc = utils.getAgeDescription(age);
+                const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
+
+                const row = {};
+                if (groupRoot) {
+                    row['Raiz CNPJ'] = String(result.cnpj).replace(/\D/g, '').substring(0, 8);
+                }
+                
+                Object.assign(row, {
+                    'CNPJ': result.cnpj,
+                    'CNPJ Formatado': utils.formatCnpjForDisplay(result.cnpj),
+                    'Inscrição Estadual (IE)': result.inscricao_estadual || '',
+                    'Score B2B': scoreInfo.score || 0,
+                    'Temperatura Lead': scoreInfo.temp || 'Frio ❄️',
+                    'Score Motivos': (scoreInfo.reasons || []).join(' | '),
+                    'Estágio Comercial': ageDesc.text,
+                    'Idade (Anos)': age !== null ? age : '',
+                    'Contato Contábil?': isAccounting ? 'SIM' : 'NÃO',
+                    'Razão Social': result.razao_social || '',
+                    'Nome Fantasia': result.nome_fantasia || '',
+                    'Situação Cadastral': result.descricao_situacao_cadastral || '',
+                    'Data de Abertura': result.data_inicio_atividade || '',
+                    'CNAE Principal': result.cnae_fiscal || '',
+                    'Descrição CNAE': result.cnae_fiscal_descricao || '',
+                    'Natureza Jurídica': result.natureza_juridica || '',
+                    'Logradouro': result.logradouro || '',
+                    'Número': result.numero || '',
+                    'Complemento': result.complemento || '',
+                    'Bairro': result.bairro || '',
+                    'Município': result.municipio || '',
+                    'UF': result.uf || '',
+                    'CEP': result.cep || '',
+                    'Telefone': result.ddd_telefone_1 || '',
+                    'Telefone 2': result.ddd_telefone_2 || '',
+                    'Email': result.email || '',
+                    'WhatsApp 1': tel1.length >= 10 ? 'https://wa.me/55' + tel1 : '',
+                    'WhatsApp 2': tel2.length >= 10 ? 'https://wa.me/55' + tel2 : '',
+                    'Capital Social': result.capital_social || '',
+                    'Porte': result.porte || '',
+                    'API Origem': apiUsed,
+                    'Tem Obras': result.cno && result.cno.obras && result.cno.obras.length > 0 ? 'SIM' : 'NÃO',
+                    'Qtde Obras': result.cno && result.cno.obras ? result.cno.obras.length : 0,
+                    'Lista CNOs': result.cno && result.cno.obras ? result.cno.obras.map(o => `${o.cno} (${o.situacao?.descricao || ''})`).join(', ') : '',
+                    'Área Total Obras (m²)': result.cno && result.cno.obras ? result.cno.obras.reduce((acc, o) => acc + (parseFloat(o.area_total) || 0), 0) : 0
+                });
+
+                // Sócios como colunas extras
+                if (result.qsa && result.qsa.length > 0) {
+                    result.qsa.forEach((s, i) => {
+                        row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                        row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
+                        row['Sócio ' + (i + 1) + ' - Faixa Etária'] = s.faixa_etaria || '';
+                        row['Sócio ' + (i + 1) + ' - Entrada'] = s.data_entrada_sociedade || s.data_entrada || '';
+                    });
+                }
+
+                // CNAEs Secundários
+                if (result.cnaes_secundarios && result.cnaes_secundarios.length > 0) {
+                    result.cnaes_secundarios.forEach((c, i) => {
+                        row['CNAE Secundário ' + (i + 1)] = c.codigo || '';
+                        row['Descrição CNAE Secundário ' + (i + 1)] = c.descricao || '';
+                    });
+                }
+
+                return row;
+            });
+
+            const exportPayload = {
+                metadata: {
+                    data_exportacao: new Date().toISOString(),
+                    total_sucesso: rows.length,
+                    total_erros: errorRows.length,
+                    estatisticas_api: apiStats
+                },
+                cnpjs_enriquecidos: rows,
+                erros: errorRows
+            };
+
+            const jsonStr = JSON.stringify(exportPayload, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const filename = `getlista_completo_${dateStr}.json`;
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            utils.updateStatus('✅ Exportação JSON completa! ' + rows.length + ' CNPJs salvos em ' + filename);
+        } catch (err) {
+            console.error('Erro na exportação JSON completa:', err);
+            alert('Erro ao exportar JSON: ' + err.message);
+        }
+    },
+
     // ====== 📄 EXPORTAR PDF DOSSIÊ CORPORATIVO ======
     exportPdfProfissional(d) {
         return this.exportLeadPdf(d);

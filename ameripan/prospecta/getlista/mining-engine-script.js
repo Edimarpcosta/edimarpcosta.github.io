@@ -582,7 +582,7 @@ const MiningEngine = {
             "codigo_atividade_principal": this.filters.cnaes,
             "codigo_natureza_juridica": this.filters.naturezaJuridica,
             "incluir_atividade_secundaria": document.getElementById('mineCnaeSecundariaCheck')?.checked || false,
-            "uf": uf ? [uf] : [],
+            "uf": (uf && uf !== '_TODOS' && uf !== 'TODOS') ? [uf] : [],
             "municipio": unaccentedCities,
             "bairro": this.filters.bairros,
             "cep": this.filters.ceps,
@@ -683,11 +683,15 @@ const MiningEngine = {
         const currentUf = (this.els.ufInput?.value || 'SP').toUpperCase().trim();
 
         // UF
-        if (this.els.ufInput && payload.uf && payload.uf.length > 0) {
-            const newUf = payload.uf[0].toUpperCase().trim();
-            if (newUf !== currentUf) {
-                this.els.ufInput.value = newUf;
-                this.loadCitiesList(newUf);
+        if (this.els.ufInput) {
+            if (!payload.uf || payload.uf.length === 0) {
+                this.els.ufInput.value = '_todos';
+            } else {
+                const newUf = payload.uf[0].toUpperCase().trim();
+                if (newUf !== currentUf) {
+                    this.els.ufInput.value = newUf;
+                    this.loadCitiesList(newUf);
+                }
             }
         }
 
@@ -1012,7 +1016,7 @@ const MiningEngine = {
         if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) return false;
         const clean = this.normalizeCnpjForBlocklist(cnpj14);
         if (state.cnpjsJaAtendidos.has(clean)) return true;
-        const matchByRoot = document.getElementById('blocklistMatchByRoot')?.checked ?? true;
+        const matchByRoot = document.getElementById('blocklistMatchByRoot')?.checked ?? false;
         if (matchByRoot && clean.length >= 8) {
             const root = clean.substring(0, 8);
             if (state.cnpjsJaAtendidos.has(root)) return true;
@@ -1063,6 +1067,7 @@ const MiningEngine = {
         this.els.stopMineBtn?.classList.remove('hidden');
         this.els.transferBtn?.classList.add('hidden');
         this.els.exportMineBtn?.classList.add('hidden');
+        this.els.exportMineJsonBtn?.classList.add('hidden');
         if (this.els.mineSpinner) this.els.mineSpinner.classList.remove('hidden');
 
         const headers = {
@@ -1083,10 +1088,13 @@ const MiningEngine = {
         const smartDouble = document.getElementById('smartDoubleMiningCheck')?.checked ?? true;
         const hasCnaes = this.filters.cnaes && this.filters.cnaes.length > 0;
         const hasTermos = this.filters.termos && this.filters.termos.length > 0;
-        const isUserJson = this.els.jsonEditor && this.els.jsonEditor._userEditing;
+        const customPayload = (this._userHasCustomJson || this.els.jsonEditor?._userEditing) ? this.getPayloadFromEditor() : null;
 
         try {
-            if (smartDouble && hasCnaes && hasTermos && !isUserJson) {
+            if (customPayload) {
+                this.log('📝 [Payload Personalizado] Executando mineração utilizando o JSON exato do editor (preservando campos customizados/novos)...', 'succ');
+                await this._executeMiningPass(customPayload);
+            } else if (smartDouble && hasCnaes && hasTermos) {
                 this.log('🔍 [Busca Dupla Inteligente] Ativada! Executando mineração em 2 etapas para extração completa...', 'succ');
                 
                 // Etapa 1: Mineração por CNAE
@@ -1103,12 +1111,7 @@ const MiningEngine = {
                 }
             } else {
                 // Mineração padrão em payload único
-                let payload;
-                if (isUserJson) {
-                    payload = this.getPayloadFromEditor() || this.buildPayload();
-                } else {
-                    payload = this.buildPayload();
-                }
+                const payload = this.buildPayload();
                 await this._executeMiningPass(payload);
             }
 
@@ -1129,6 +1132,7 @@ const MiningEngine = {
                 this.els.transferBtnFase2?.classList.remove('hidden');
                 this.els.clearResultsBtn?.classList.remove('hidden');
                 this.els.exportMineBtn?.classList.remove('hidden');
+                this.els.exportMineJsonBtn?.classList.remove('hidden');
                 const duration = ((Date.now() - this.state.miningStartTime) / 1000).toFixed(0);
                 this.log(`\n=== MINERAÇÃO CONCLUÍDA: ${this.state.leads.length} CNPJs únicos na memória (${duration}s) ===`, 'succ');
                 if (this.state.duplicatesSkipped > 0) {
@@ -1411,7 +1415,66 @@ const MiningEngine = {
         }
     },
 
-    // ========================= EXPORTAÇÃO DIRETA DA MINERAÇÃO =========================
+    // ========================= GERADOR DE NOMES INTELIGENTES DE ARQUIVOS =========================
+    _generateSmartFilename(ext = 'xlsx') {
+        const d = new Date();
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        const dateSuffix = `${day}_${month}_${year}`;
+
+        // Função para sanitizar strings para nome de arquivo do SO
+        const sanitize = (str) => {
+            if (!str) return '';
+            return this._normalizeString(String(str))
+                .replace(/[^A-Z0-9]/gi, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '');
+        };
+
+        // Regra 1: Busca por CNPJ Raiz (ex: 53153938 - COBASI)
+        if (this.filters.cnpjRaiz && this.filters.cnpjRaiz.length > 0) {
+            const rootStr = this.filters.cnpjRaiz.join('_');
+            let companyName = '';
+            
+            if (this.state.leads && this.state.leads.length > 0) {
+                const first = this.state.leads[0];
+                const rawName = first.nome_fantasia || first.razao_social || '';
+                companyName = sanitize(rawName).slice(0, 35);
+            }
+
+            if (companyName) {
+                return `Filiais_raiz_${rootStr}_${companyName}_${dateSuffix}.${ext}`;
+            }
+            return `Filiais_raiz_${rootStr}_${dateSuffix}.${ext}`;
+        }
+
+        // Regra 2: Busca por Cidades (até 7 cidades)
+        if (this.filters.cidades && this.filters.cidades.length > 0) {
+            const cityList = this.filters.cidades.slice(0, 7).map(c => sanitize(c));
+            const citiesStr = cityList.join('_');
+            return `Mineracao_${citiesStr}_${dateSuffix}.${ext}`;
+        }
+
+        // Regra 3: Busca por Termos Textuais
+        if (this.filters.termos && this.filters.termos.length > 0) {
+            const termList = this.filters.termos.slice(0, 3).map(t => sanitize(t));
+            const termsStr = termList.join('_');
+            return `Mineracao_${termsStr}_${dateSuffix}.${ext}`;
+        }
+
+        // Regra 4: Busca por CNAEs
+        if (this.filters.cnaes && this.filters.cnaes.length > 0) {
+            const cnaeList = this.filters.cnaes.slice(0, 3).map(c => sanitize(c));
+            const cnaesStr = cnaeList.join('_');
+            return `Mineracao_CNAE_${cnaesStr}_${dateSuffix}.${ext}`;
+        }
+
+        // Regra 5: Fallback padrão
+        return `Mineracao_CasaDosDados_${dateSuffix}.${ext}`;
+    },
+
+    // ========================= EXPORTAÇÃO DIRETA DA MINERAÇÃO (EXCEL / JSON) =========================
     exportMined() {
         if (this.state.leads.length === 0) {
             alert('Nenhum dado minerado para exportar.');
@@ -1424,6 +1487,7 @@ const MiningEngine = {
 
         const workbook = XLSX.utils.book_new();
 
+        // 1. Aba de Dados Minerados
         const rows = this.state.leads.map(lead => ({
             'CNPJ': lead.cnpj,
             'Razão Social': lead.razao_social,
@@ -1450,29 +1514,96 @@ const MiningEngine = {
 
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Minerados');
 
-        // Aba de resumo
-        const summary = [
-            ['RESUMO DA MINERAÇÃO'],
-            [''],
-            ['Data', new Date().toLocaleString('pt-BR')],
-            ['Total Encontrados', this.state.totalRecords],
-            ['Total Extraídos', this.state.leads.length],
-            ['Duplicados Ignorados', this.state.duplicatesSkipped],
-            ['Páginas Processadas', `${this.state.currentPage}/${this.state.totalPages}`],
-            [''],
-            ['FILTROS UTILIZADOS'],
-            ['UF', this.els.ufInput?.value || ''],
-            ['Situação', this.els.situacaoSelect?.value || ''],
-            ['Municípios', this.filters.cidades.join(', ')],
-            ['Termos', this.filters.termos.join(', ')],
-            ['CNAEs', this.filters.cnaes.join(', ')],
-        ];
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Resumo');
+        // 2. Aba de Resumo com Metadados, Todos os Termos de Busca e Payload JSON para Repetir
+        const currentPayload = (this._userHasCustomJson || this.els.jsonEditor?._userEditing) 
+            ? (this.getPayloadFromEditor() || this.buildPayload()) 
+            : this.buildPayload();
 
-        const now = new Date();
-        const dateStr = now.toISOString().slice(0, 16).replace(/[-:T]/g, '').slice(0, 12);
-        XLSX.writeFile(workbook, `mineracao_${dateStr}.xlsx`);
-        this.log(`✅ Exportação direta: ${rows.length} CNPJs salvos em mineracao_${dateStr}.xlsx`, 'succ');
+        const rawJsonString = JSON.stringify(currentPayload, null, 2);
+        const getCheckText = (id) => document.getElementById(id)?.checked ? 'Sim' : 'Não';
+        const meiVal = document.getElementById('mineMeiSelect')?.value || 'todos';
+        const simplesVal = document.getElementById('mineSimplesSelect')?.value || 'todos';
+        const ufVal = this.els.ufInput?.value === '_todos' ? 'Todos os Estados (Brasil Inteiro)' : (this.els.ufInput?.value || '—');
+
+        const summaryRows = [
+            ['📋 RESUMO DA MINERAÇÃO E TERMOS DE BUSCA'],
+            [''],
+            ['--- METADADOS DA EXECUÇÃO ---', ''],
+            ['Data e Hora da Extração', new Date().toLocaleString('pt-BR')],
+            ['Total Registros Encontrados na API', this.state.totalRecords || this.state.leads.length],
+            ['Total CNPJs Únicos Extraídos', this.state.leads.length],
+            ['Duplicados Ignorados', this.state.duplicatesSkipped || 0],
+            ['Páginas Processadas', `${this.state.currentPage}/${this.state.totalPages}`],
+            ['Endpoint de Pesquisa', this.state.endpoint],
+            [''],
+            ['--- FILTROS E TERMOS UTILIZADOS ---', ''],
+            ['UF (Estado)', ufVal],
+            ['Situação Cadastral', this.els.situacaoSelect?.value || '—'],
+            ['Municípios', this.filters.cidades.length > 0 ? this.filters.cidades.join(', ') : '— (Nenhum)'],
+            ['CNPJ Raiz', this.filters.cnpjRaiz.length > 0 ? this.filters.cnpjRaiz.join(', ') : '— (Nenhum)'],
+            ['CNAEs', this.filters.cnaes.length > 0 ? this.filters.cnaes.join(', ') : '— (Nenhum)'],
+            ['Naturezas Jurídicas', this.filters.naturezaJuridica.length > 0 ? this.filters.naturezaJuridica.join(', ') : '— (Nenhum)'],
+            ['Termos de Busca (Palavras-Chave)', this.filters.termos.length > 0 ? this.filters.termos.join(', ') : '— (Nenhum)'],
+            ['Tipo de Busca Textual', document.getElementById('searchTermTipoBusca')?.value || 'radical'],
+            ['Campos de Busca Textual', `Razão Social: ${getCheckText('searchTermRazaoSocial')} | Nome Fantasia: ${getCheckText('searchTermNomeFantasia')} | Sócio: ${getCheckText('searchTermNomeSocio')}`],
+            ['Filtro MEI', meiVal === 'apenas_mei' ? 'Apenas MEI' : (meiVal === 'excluir_mei' ? 'Excluir MEI' : 'Todos')],
+            ['Filtro Simples Nacional', simplesVal === 'apenas_simples' ? 'Apenas Simples' : (simplesVal === 'excluir_simples' ? 'Excluir Simples' : 'Todos')],
+            ['Filtros Avançados', `Somente Matriz: ${getCheckText('mf_somente_matriz')} | Somente Filial: ${getCheckText('mf_somente_filial')} | Com E-mail: ${getCheckText('mf_com_email')} | Com Telefone: ${getCheckText('mf_com_telefone')} | Excluir E-mail Contábil: ${getCheckText('mf_excluir_email_contab')} | Excluir Visualizadas: ${getCheckText('mf_excluir_empresas_visualizadas')}`],
+            ['Bairros', this.filters.bairros.length > 0 ? this.filters.bairros.join(', ') : '—'],
+            ['CEPs', this.filters.ceps.length > 0 ? this.filters.ceps.join(', ') : '—'],
+            ['DDDs', this.filters.ddds.length > 0 ? this.filters.ddds.join(', ') : '—'],
+            ['Telefones', this.filters.telefone.length > 0 ? this.filters.telefone.join(', ') : '—'],
+            [''],
+            ['--- PAYLOAD JSON COMPLETO DA PESQUISA (Para Copiar/Repetir) ---', ''],
+            [rawJsonString]
+        ];
+
+        const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+        summarySheet['!cols'] = [{ wch: 35 }, { wch: 85 }];
+        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumo');
+
+        const filename = this._generateSmartFilename('xlsx');
+        XLSX.writeFile(workbook, filename);
+        this.log(`✅ Exportação Excel concluída: ${rows.length} CNPJs salvos em "${filename}" com aba Resumo e Payload!`, 'succ');
+    },
+
+    exportMinedJson() {
+        if (this.state.leads.length === 0) {
+            alert('Nenhum dado minerado para exportar.');
+            return;
+        }
+
+        const currentPayload = (this._userHasCustomJson || this.els.jsonEditor?._userEditing) 
+            ? (this.getPayloadFromEditor() || this.buildPayload()) 
+            : this.buildPayload();
+
+        const exportData = {
+            metadata: {
+                data_exportacao: new Date().toISOString(),
+                total_encontrados_api: this.state.totalRecords || this.state.leads.length,
+                total_extraidos: this.state.leads.length,
+                duplicados_ignorados: this.state.duplicatesSkipped || 0,
+                paginas_processadas: `${this.state.currentPage}/${this.state.totalPages}`,
+                endpoint: this.state.endpoint
+            },
+            payload_pesquisa: currentPayload,
+            leads: this.state.leads
+        };
+
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const filename = this._generateSmartFilename('json');
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        this.log(`✅ Exportação JSON concluída: ${this.state.leads.length} CNPJs salvos em "${filename}"!`, 'succ');
     },
 
     // ========================= PRESETS DE FILTROS =========================
@@ -1807,6 +1938,7 @@ const MiningEngine = {
         this.els.transferBtnFase2?.classList.add('hidden');
         this.els.clearResultsBtn?.classList.add('hidden');
         this.els.exportMineBtn?.classList.add('hidden');
+        this.els.exportMineJsonBtn?.classList.add('hidden');
         if (this.els.mineTableInfo) this.els.mineTableInfo.classList.add('hidden');
     },
 
@@ -1846,6 +1978,7 @@ const MiningEngine = {
             transferBtnFase2: document.getElementById('transferMineBtnFase2'),
             clearResultsBtn: document.getElementById('clearMineResultsBtn'),
             exportMineBtn: document.getElementById('exportMineBtn'),
+            exportMineJsonBtn: document.getElementById('exportMineJsonBtn'),
             mineTableBody: document.getElementById('mineTableBody'),
             mineTableInfo: document.getElementById('mineTableInfo'),
             ramosSelect: document.getElementById('mineRamosSelect'),
@@ -1892,6 +2025,7 @@ const MiningEngine = {
         this.els.transferBtnFase2?.addEventListener('click', () => this.transferToEnrichment());
         this.els.clearResultsBtn?.addEventListener('click', () => this.clearMinedResults());
         this.els.exportMineBtn?.addEventListener('click', () => this.exportMined());
+        this.els.exportMineJsonBtn?.addEventListener('click', () => this.exportMinedJson());
 
         // Botão Testar API Key
         document.getElementById('testApiKeyBtn')?.addEventListener('click', () => this.testApiKey());
@@ -1926,6 +2060,7 @@ const MiningEngine = {
 
             // Validação e auto-sincronização bidirecional do Editor JSON -> Filtros Visuais em tempo real
             this.els.jsonEditor.addEventListener('input', () => {
+                this._userHasCustomJson = true;
                 const isValid = this.validateEditor();
                 if (isValid) {
                     this.syncEditorToFilters({ silent: true });
@@ -1941,10 +2076,14 @@ const MiningEngine = {
         }
 
         // Botão "Sincronizar do Editor"
-        document.getElementById('syncFromEditorBtn')?.addEventListener('click', () => this.syncEditorToFilters());
+        document.getElementById('syncFromEditorBtn')?.addEventListener('click', () => {
+            this._userHasCustomJson = true;
+            this.syncEditorToFilters();
+        });
 
         // Botão "Resetar Editor" — volta o editor para refletir os filtros visuais
         document.getElementById('resetEditorBtn')?.addEventListener('click', () => {
+            this._userHasCustomJson = false;
             if (this.els.jsonEditor) this.els.jsonEditor._userEditing = false;
             this.buildPayload();
             this.log('Editor resetado para os filtros visuais.', 'info');
@@ -2217,7 +2356,15 @@ const MiningEngine = {
         const uf = (ufParam || this.els.ufInput?.value || 'SP').toUpperCase().trim();
         const listContainer = this.els.citiesList;
         const ufLabel = document.getElementById('mineCitiesUfLabel');
-        if (ufLabel) ufLabel.textContent = uf;
+        if (ufLabel) ufLabel.textContent = uf === '_TODOS' ? 'Brasil Inteiro' : uf;
+
+        if (uf === '_TODOS' || !uf) {
+            if (listContainer) {
+                listContainer.innerHTML = '<span class="text-xs text-gray-400 p-1">🌐 Todos os Estados selecionados (sem filtro por UF).</span>';
+            }
+            this._allUfCities = [];
+            return [];
+        }
 
         // Retorna do cache de UF se já estiver carregado
         if (this._ufCitiesCache[uf] && this._ufCitiesCache[uf].length > 0) {
