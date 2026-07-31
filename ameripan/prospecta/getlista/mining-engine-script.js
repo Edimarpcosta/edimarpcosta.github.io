@@ -30,11 +30,516 @@ const MiningEngine = {
         naturezaJuridica: [],
         bairros: [],
         ceps: [],
-        ddds: []
+        ddds: [],
+        cnpjRaiz: [],
+        telefone: []
     },
 
     // Mapa de refresh callbacks por key (preenchido no initChips)
     _chipRefreshers: {},
+
+    // Cache de cidades por UF e lista completa
+    _ufCitiesCache: {},
+    _allUfCities: [],
+
+    // Helper para normalização de texto (remove acentos, espaços duplos e símbolos)
+    _normalizeString(str) {
+        if (!str) return '';
+        return str
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Z0-9]/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .toUpperCase()
+            .trim();
+    },
+
+    // Retorna o nome oficial do município corrigido de acordo com a UF informada
+    getOfficialCityName(typedCity, uf) {
+        if (!typedCity) return '';
+        const cleanTyped = typedCity.trim();
+        if (!cleanTyped) return '';
+
+        const targetUf = (uf || this.els.ufInput?.value || 'SP').toUpperCase().trim();
+        const cities = this._ufCitiesCache[targetUf] || this._allUfCities || [];
+
+        if (!cities || cities.length === 0) {
+            return cleanTyped.toUpperCase();
+        }
+
+        const upperTyped = cleanTyped.toUpperCase();
+        // 1. Exato (case-insensitive)
+        const exactMatch = cities.find(c => c.toUpperCase() === upperTyped);
+        if (exactMatch) return exactMatch;
+
+        // 2. Normalizado (sem acentos, sem apóstrofos/hífens)
+        const normTyped = this._normalizeString(cleanTyped);
+        const normMatch = cities.find(c => this._normalizeString(c) === normTyped);
+        if (normMatch) return normMatch;
+
+        // Fallback mantém maiúsculas
+        return upperTyped;
+    },
+
+    // Helper para cálculo da distância de Levenshtein entre duas strings
+    _levenshteinDistance(a, b) {
+        if (!a || !b) return (a || b).length;
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+        return matrix[b.length][a.length];
+    },
+
+    // Encontra todos os municípios correspondentes por radical/prefixo de 3/4 letras ou similaridade
+    _findCitySuggestions(unmatchedCity, citiesList) {
+        if (!citiesList || citiesList.length === 0) return [];
+        const normInput = this._normalizeString(unmatchedCity);
+        if (!normInput) return [];
+
+        const radical4 = normInput.length >= 4 ? normInput.slice(0, 4) : normInput;
+        const radical3 = normInput.length >= 3 ? normInput.slice(0, 3) : normInput;
+
+        // 1. Busca por prefixo/radical de 4 letras ou 3 letras
+        let matches = citiesList.filter(c => {
+            const normC = this._normalizeString(c);
+            return normC.startsWith(radical4) || normC.includes(radical4) || normC.startsWith(radical3);
+        });
+
+        // 2. Se o radical não trouxe correspondências, busca por Levenshtein
+        if (matches.length === 0) {
+            matches = citiesList.filter(c => {
+                const normC = this._normalizeString(c);
+                const dist = this._levenshteinDistance(normInput, normC);
+                return dist <= Math.max(3, Math.floor(normInput.length * 0.45));
+            });
+        }
+
+        // Ordena por relevância: quem começa com o radical fica no topo, depois por menor distância
+        matches.sort((a, b) => {
+            const normA = this._normalizeString(a);
+            const normB = this._normalizeString(b);
+            const aStart = normA.startsWith(radical4) ? 0 : 1;
+            const bStart = normB.startsWith(radical4) ? 0 : 1;
+            if (aStart !== bStart) return aStart - bStart;
+            return this._levenshteinDistance(normInput, normA) - this._levenshteinDistance(normInput, normB);
+        });
+
+        return matches;
+    },
+
+    // Exibe o painel de alerta "Cidades não encontradas... Você quis dizer...?" agrupado por radical
+    showCitiesValidationNotice(unmatchedItems) {
+        const noticeEl = document.getElementById('mineCitiesValidationNotice');
+        const unmatchedTextEl = document.getElementById('mineUnmatchedCitiesText');
+        const suggestionsContainer = document.getElementById('mineCitySuggestionsContainer');
+        if (!noticeEl || !unmatchedTextEl || !suggestionsContainer) return;
+
+        if (!unmatchedItems || unmatchedItems.length === 0) {
+            noticeEl.classList.add('hidden');
+            return;
+        }
+
+        const unmatchedNames = unmatchedItems.map(item => item.original).join(', ');
+        unmatchedTextEl.textContent = unmatchedNames;
+
+        let html = '';
+        unmatchedItems.forEach(item => {
+            const suggestions = item.suggestions || [];
+            if (suggestions.length > 0) {
+                html += `
+                    <div class="w-full mt-1.5 mb-2">
+                        <span class="text-[11px] font-semibold block mb-1" style="color:#c7d2fe;">
+                            🔍 Possíveis correspondências para "<strong style="color:#ffffff;">${item.original}</strong>" (${suggestions.length} cidades encontradas):
+                        </span>
+                        <div class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 rounded" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08);">
+                            ${suggestions.map(city => `
+                                <button type="button" class="mine-suggested-city-btn" data-city="${city}" style="background:rgba(99,102,241,0.25); border:1px solid rgba(99,102,241,0.5); color:#a5b4fc; padding:3px 9px; border-radius:4px; font-weight:600; cursor:pointer; font-size:0.75rem; transition:all 0.15s;">
+                                    + ${city}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="w-full mt-1 text-xs text-gray-400">
+                        Nenhuma cidade correspondente a "${item.original}" encontrada na UF. Verifique a grafia.
+                    </div>
+                `;
+            }
+        });
+
+        suggestionsContainer.innerHTML = html;
+
+        suggestionsContainer.querySelectorAll('.mine-suggested-city-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const cityToAdd = btn.dataset.city;
+                const normCity = this._normalizeString(cityToAdd);
+                if (normCity && !this.filters.cidades.includes(normCity)) {
+                    this.filters.cidades.push(normCity);
+                    if (this._chipRefreshers.cidades) this._chipRefreshers.cidades();
+                    this.buildPayload();
+                }
+                btn.style.opacity = '0.4';
+                btn.style.pointerEvents = 'none';
+                btn.textContent = '✓ ' + cityToAdd;
+            });
+        });
+
+        noticeEl.classList.remove('hidden');
+
+        const closeBtn = document.getElementById('mineCloseCitiesNoticeBtn');
+        if (closeBtn) {
+            closeBtn.onclick = () => noticeEl.classList.add('hidden');
+        }
+    },
+
+    // Cache de CNAEs pesquisados e mapa de validação
+    _cnaeCache: {},
+    _cnaeKnownMap: {},
+
+    // Filtra e classifica uma lista de CNAEs por código ou descrição (com suporte a radicais/plural)
+    _filterCnaeList(list, query) {
+        if (!list || !Array.isArray(list) || list.length === 0) return [];
+        const rawQ = String(query || '').trim();
+        if (!rawQ) return [];
+
+        const normQ = this._normalizeString(rawQ);
+        const cleanNumeric = rawQ.replace(/\D/g, '');
+
+        // Stems/Radicais dos termos (ex: SORVETES -> SORVET, PADARIAS -> PADARI)
+        const tokens = normQ.split(/\s+/).filter(t => t.length >= 2);
+        const stems = tokens.map(t => {
+            if (t.length > 4 && t.endsWith('ES')) return t.slice(0, -2);
+            if (t.length > 3 && t.endsWith('S')) return t.slice(0, -1);
+            return t;
+        });
+
+        const matches = list.map(item => {
+            const code = String(item.code || item.codigo || '').replace(/\D/g, '');
+            const name = item.name || item.descricao || item.text || '';
+            const normName = this._normalizeString(name);
+            if (!code && !normName) return null;
+
+            let score = 0;
+
+            // 1. Busca Numérica no Código CNAE
+            if (cleanNumeric.length > 0) {
+                if (code === cleanNumeric) score += 100;
+                else if (code.startsWith(cleanNumeric)) score += 80;
+                else if (code.includes(cleanNumeric)) score += 50;
+            }
+
+            // 2. Busca Textual na Descrição
+            if (normQ.length > 0) {
+                if (normName === normQ) score += 90;
+                else if (normName.startsWith(normQ)) score += 70;
+                else if (normName.includes(normQ)) score += 60;
+                else {
+                    // Match por radicais/tokens (ex: SORVETES encontra SORVETES / SORVETE)
+                    let tokenMatches = 0;
+                    tokens.forEach((tok, idx) => {
+                        const stem = stems[idx] || tok;
+                        if (normName.includes(tok) || normName.includes(stem)) {
+                            tokenMatches++;
+                        }
+                    });
+                    if (tokenMatches > 0) {
+                        score += (tokenMatches / tokens.length) * 40;
+                    }
+                }
+            }
+
+            if (score > 0) {
+                return { code, name, score };
+            }
+            return null;
+        }).filter(Boolean);
+
+        matches.sort((a, b) => b.score - a.score);
+
+        return matches.map(m => ({ code: m.code, name: m.name }));
+    },
+
+    // Lista estática da API da Casa dos Dados para Natureza Jurídica (fallback offline & instantâneo)
+    _allNatjurList: [
+        { "name": "ÓRGÃO PÚBLICO DO PODER EXECUTIVO FEDERAL", "code": "1015" },
+        { "name": "ORGAO PUBLICO DO PODER EXECUTIVO ESTADUAL OU DO DISTRITO FEDERAL", "code": "1023" },
+        { "name": "ORGAO PUBLICO DO PODER EXECUTIVO MUNICIPAL", "code": "1031" },
+        { "name": "ÓRGÃO PÚBLICO DO PODER LEGISLATIVO FEDERAL", "code": "1040" },
+        { "name": "ÓRGÃO PÚBLICO DO PODER LEGISLATIVO ESTADUAL OU DO DISTRITO FEDERAL", "code": "1058" },
+        { "name": "ORGAO PUBLICO DO PODER LEGISLATIVO MUNICIPAL", "code": "1066" },
+        { "name": "ÓRGÃO PÚBLICO DO PODER JUDICIÁRIO FEDERAL", "code": "1074" },
+        { "name": "ÓRGÃO PÚBLICO DO PODER JUDICIÁRIO ESTADUAL", "code": "1082" },
+        { "name": "AUTARQUIA FEDERAL", "code": "1104" },
+        { "name": "AUTARQUIA ESTADUAL OU DO DISTRITO FEDERAL", "code": "1112" },
+        { "name": "AUTARQUIA MUNICIPAL", "code": "1120" },
+        { "name": "FUNDAÇÃO PÚBLICA DE DIREITO PÚBLICO FEDERAL", "code": "1139" },
+        { "name": "FUNDACAO PUB. DE DIREITO PUB. EST. OU DO DF", "code": "1147" },
+        { "name": "FUNDAÇÃO PÚBLICA DE DIREITO PÚBLICO MUNICIPAL", "code": "1155" },
+        { "name": "ÓRGÃO PÚBLICO AUTÔNOMO FEDERAL", "code": "1163" },
+        { "name": "ÓRGÃO PÚBLICO AUTÔNOMO ESTADUAL OU DO DISTRITO FEDERAL", "code": "1171" },
+        { "name": "ÓRGÃO PÚBLICO AUTÔNOMO MUNICIPAL", "code": "1180" },
+        { "name": "COMISSÃO POLINACIONAL", "code": "1198" },
+        { "name": "CONSORCIO PUB.DE DIREITO PUB. (ASS. PUB.)", "code": "1210" },
+        { "name": "CONSÓRCIO PÚBLICO DE DIREITO PRIVADO", "code": "1228" },
+        { "name": "ESTADO OU DISTRITO FEDERAL", "code": "1236" },
+        { "name": "MUNICÍPIO", "code": "1244" },
+        { "name": "FUNDAÇÃO PÚBLICA DE DIREITO PRIVADO FEDERAL", "code": "1252" },
+        { "name": "FUNDAÇÃO PÚBLICA DE DIREITO PRIVADO ESTADUAL OU DO DISTRITO FEDERAL", "code": "1260" },
+        { "name": "FUNDAÇÃO PÚBLICA DE DIREITO PRIVADO MUNICIPAL", "code": "1279" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO INDIRETA FEDERAL", "code": "1287" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO INDIRETA ESTADUAL OU DO DISTRITO FEDERAL", "code": "1295" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO INDIRETA MUNICIPAL", "code": "1309" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO DIRETA FEDERAL", "code": "1317" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO DIRETA ESTADUAL OU DO DISTRITO FEDERAL", "code": "1325" },
+        { "name": "FUNDO PÚBLICO DA ADMINISTRAÇÃO DIRETA MUNICIPAL", "code": "1333" },
+        { "name": "UNIÃO", "code": "1341" },
+        { "name": "ENTIDADE PÚBLICA SOB REGIME ESPECIAL", "code": "1350" },
+        { "name": "EMPRESA PUBLICA", "code": "2011" },
+        { "name": "SOCIEDADE DE ECONOMIA MISTA", "code": "2038" },
+        { "name": "SOCIEDADE ANÔNIMA ABERTA", "code": "2046" },
+        { "name": "SOCIEDADE ANONIMA FECHADA", "code": "2054" },
+        { "name": "SOCIEDADE EMPRESARIA LIMITADA", "code": "2062" },
+        { "name": "SOCIEDADE EMPRESARIA EM NOME COLETIVO", "code": "2070" },
+        { "name": "SOCIEDADE EMPRESÁRIA EM COMANDITA SIMPLES", "code": "2089" },
+        { "name": "SOCIEDADE EMPRESÁRIA EM COMANDITA POR AÇÕES", "code": "2097" },
+        { "name": "SOCIEDADE MERCANTIL DE CAPITAL E INDÚSTRIA", "code": "2100" },
+        { "name": "SOCIEDADE EM CONTA DE PARTICIPACAO", "code": "2127" },
+        { "name": "EMPRESARIO (INDIVIDUAL)", "code": "2135" },
+        { "name": "COOPERATIVA", "code": "2143" },
+        { "name": "CONSORCIO DE SOCIEDADES", "code": "2151" },
+        { "name": "GRUPO DE SOCIEDADES", "code": "2160" },
+        { "name": "ESTABELECIMENTO, NO BRASIL, DE SOCIEDADE ESTRANGEIRA", "code": "2178" },
+        { "name": "EMPRESA DOMICILIADA NO EXTERIOR", "code": "2216" },
+        { "name": "CLUBE/FUNDO DE INVESTIMENTO", "code": "2224" },
+        { "name": "SOCIEDADE SIMPLES PURA", "code": "2232" },
+        { "name": "SOCIEDADE SIMPLES LIMITADA", "code": "2240" },
+        { "name": "SOCIEDADE SIMPLES EM NOME COLETIVO", "code": "2259" },
+        { "name": "SOCIEDADE SIMPLES EM COMANDITA SIMPLES", "code": "2267" },
+        { "name": "EMPRESA BINACIONAL", "code": "2275" },
+        { "name": "CONSÓRCIO DE EMPREGADORES", "code": "2283" },
+        { "name": "CONSÓRCIO SIMPLES", "code": "2291" },
+        { "name": "EMPRESA INDIVIDUAL DE RESP.LIMITADA (DE NATUREZA EMPRESARIA)", "code": "2305" },
+        { "name": "EMPRESA INDIVIDUAL DE RESPONSABILIDADE LIMITADA (DE NATUREZA SIMPLES)", "code": "2313" },
+        { "name": "NATUREZA JURIDICA INVALIDA", "code": "2321" },
+        { "name": "COOPERATIVAS DE CONSUMO", "code": "2330" },
+        { "name": "EMPRESA SIMPLES DE INOVAÇÃO", "code": "2348" },
+        { "name": "SERVICO NOTARIAL E REGISTRAL (CARTORIO)", "code": "3034" },
+        { "name": "FUNDACAO PRIVADA", "code": "3069" },
+        { "name": "SERVIÇO SOCIAL AUTÔNOMO", "code": "3077" },
+        { "name": "CONDOMINIO EDILICIO", "code": "3085" },
+        { "name": "COMISSÃO DE CONCILIAÇÃO PRÉVIA", "code": "3107" },
+        { "name": "ENTIDADE DE MEDIACAO E ARBITRAGEM", "code": "3115" },
+        { "name": "ENTIDADE SINDICAL", "code": "3131" },
+        { "name": "ESTABELECIMENTO, NO BRASIL, DE FUNDAÇÃO OU ASSOCIAÇÃO ESTRANGEIRAS", "code": "3204" },
+        { "name": "FUNDAÇÃO OU ASSOCIAÇÃO DOMICILIADA NO EXTERIOR", "code": "3212" },
+        { "name": "ORGANIZACAO RELIGIOSA", "code": "3220" },
+        { "name": "COMUNIDADE INDÍGENA", "code": "3239" },
+        { "name": "FUNDO PRIVADO", "code": "3247" },
+        { "name": "ORGAO DE DIRECAO NACIONAL DE PARTIDO POLITICO", "code": "3255" },
+        { "name": "ORGAO DE DIRECAO REGIONAL DE PARTIDO POLITICO", "code": "3263" },
+        { "name": "ORGAO DE DIRECAO LOCAL DE PARTIDO POLITICO", "code": "3271" },
+        { "name": "COMITÊ FINANCEIRO DE PARTIDO POLÍTICO", "code": "3280" },
+        { "name": "FRENTE PLEBISCITÁRIA OU REFERENDÁRIA", "code": "3298" },
+        { "name": "ORGANIZACAO SOCIAL (OS)", "code": "3301" },
+        { "name": "PLANO DE BENEFÍCIOS DE PREVIDÊNCIA COMPLEMENTAR FECHADA", "code": "3328" },
+        { "name": "ASSOCIACAO PRIVADA", "code": "3999" },
+        { "name": "EMPRESA INDIVIDUAL IMOBILIARIA", "code": "4014" },
+        { "name": "CANDIDATO A CARGO POLITICO ELETIVO", "code": "4090" },
+        { "name": "PRODUTOR RURAL (PESSOA FISICA)", "code": "4120" },
+        { "name": "ORGANIZAÇÃO INTERNACIONAL", "code": "5010" },
+        { "name": "REPRESENTAÇÃO DIPLOMÁTICA ESTRANGEIRA", "code": "5029" },
+        { "name": "OUTRAS INSTITUIÇÕES EXTRATERRITORIAIS", "code": "5037" },
+        { "name": "NATUREZA JURÍDICA NÃO INFORMADA", "code": "8885" }
+    ],
+
+    // Busca sugestões de Natureza Jurídica por descrição ou código
+    async _findNatjurSuggestions(query) {
+        const rawQ = String(query || '').trim();
+        if (!rawQ) return [];
+
+        const normQ = this._normalizeString(rawQ);
+        const cleanNumeric = rawQ.replace(/\D/g, '');
+
+        let list = this._allNatjurList || [];
+
+        try {
+            if (!this._natjurApiLoaded) {
+                const res = await fetch('https://api.casadosdados.com.br/v4/public/cnpj/busca/natureza-juridica');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        list = data;
+                        this._allNatjurList = data;
+                        this._natjurApiLoaded = true;
+                    }
+                }
+            }
+        } catch (e) {
+            // Silencioso
+        }
+
+        const matches = list.map(item => {
+            const code = String(item.code || '').trim();
+            const name = item.name || '';
+            const normName = this._normalizeString(name);
+
+            let score = 0;
+            if (cleanNumeric.length > 0) {
+                if (code === cleanNumeric) score += 100;
+                else if (code.startsWith(cleanNumeric)) score += 80;
+                else if (code.includes(cleanNumeric)) score += 50;
+            }
+
+            if (normQ.length > 0) {
+                if (normName === normQ) score += 90;
+                else if (normName.startsWith(normQ)) score += 70;
+                else if (normName.includes(normQ)) score += 60;
+                else {
+                    const tokens = normQ.split(/\s+/).filter(t => t.length >= 2);
+                    let tokenMatches = 0;
+                    tokens.forEach(t => {
+                        if (normName.includes(t)) tokenMatches++;
+                    });
+                    if (tokenMatches > 0) {
+                        score += (tokenMatches / tokens.length) * 40;
+                    }
+                }
+            }
+
+            if (score > 0) return { code, name, score };
+            return null;
+        }).filter(Boolean);
+
+        matches.sort((a, b) => b.score - a.score);
+        return matches.map(m => ({ code: m.code, name: m.name }));
+    },
+
+    // Busca sugestões de CNAE por termo ou código via API/Cache
+    async _findCnaeSuggestions(unmatchedItem) {
+        const q = String(unmatchedItem || '').trim().toUpperCase();
+        if (!q) return [];
+
+        if (this._cnaeCache[q]) return this._cnaeCache[q];
+
+        let rawList = [];
+        try {
+            const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/cnae?q=${encodeURIComponent(q)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    rawList = data;
+                } else if (data && typeof data === 'object') {
+                    rawList = data.data || data.results || data.cnaes || [];
+                }
+            }
+        } catch (e) {
+            console.warn('Erro ao buscar sugestões de CNAE:', e);
+        }
+
+        // Fallback para cnae.json se a API falhar ou não retornar dados
+        if (rawList.length === 0 && this._localCnaeDb) {
+            rawList = this._localCnaeDb;
+        }
+
+        // Aplica o filtro inteligente client-side (com radicais e relevância)
+        let results = this._filterCnaeList(rawList, q);
+
+        // Se ainda não achou e temos cnae.json local, tenta filtrar no banco local
+        if (results.length === 0 && this._localCnaeDb && rawList !== this._localCnaeDb) {
+            results = this._filterCnaeList(this._localCnaeDb, q);
+        }
+
+        results.forEach(c => {
+            if (c.code) this._cnaeKnownMap[c.code] = c.name;
+        });
+
+        this._cnaeCache[q] = results;
+        return results;
+    },
+
+    // Exibe o painel de alerta "CNAEs não encontrados... Você quis dizer...?"
+    async showCnaeValidationNotice(unmatchedItems) {
+        const noticeEl = document.getElementById('mineCnaeValidationNotice');
+        const unmatchedTextEl = document.getElementById('mineUnmatchedCnaesText');
+        const suggestionsContainer = document.getElementById('mineCnaeSuggestionsContainer');
+        if (!noticeEl || !unmatchedTextEl || !suggestionsContainer) return;
+
+        if (!unmatchedItems || unmatchedItems.length === 0) {
+            noticeEl.classList.add('hidden');
+            return;
+        }
+
+        const unmatchedNames = unmatchedItems.map(item => item.original).join(', ');
+        unmatchedTextEl.textContent = unmatchedNames;
+
+        let html = '';
+        for (const item of unmatchedItems) {
+            const suggestions = await this._findCnaeSuggestions(item.original);
+            if (suggestions.length > 0) {
+                html += `
+                    <div class="w-full mt-1.5 mb-2">
+                        <span class="text-[11px] font-semibold block mb-1" style="color:#c7d2fe;">
+                            🔍 CNAEs correspondentes para "<strong style="color:#ffffff;">${item.original}</strong>" (${suggestions.length} encontrados):
+                        </span>
+                        <div class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 rounded" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08);">
+                            ${suggestions.map(c => `
+                                <button type="button" class="mine-suggested-cnae-btn" data-code="${c.code}" style="background:rgba(99,102,241,0.25); border:1px solid rgba(99,102,241,0.5); color:#a5b4fc; padding:3px 9px; border-radius:4px; font-weight:600; cursor:pointer; font-size:0.75rem; transition:all 0.15s;" title="${c.name}">
+                                    + ${c.code} (${c.name})
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="w-full mt-1 text-xs text-gray-400">
+                        Nenhum CNAE correspondente a "${item.original}" encontrado. Verifique o código ou nome.
+                    </div>
+                `;
+            }
+        }
+
+        suggestionsContainer.innerHTML = html;
+
+        suggestionsContainer.querySelectorAll('.mine-suggested-cnae-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeToAdd = btn.dataset.code;
+                if (codeToAdd && !this.filters.cnaes.includes(codeToAdd)) {
+                    this.filters.cnaes.push(codeToAdd);
+                    if (this._chipRefreshers.cnaes) this._chipRefreshers.cnaes();
+                    this.buildPayload();
+                }
+                btn.style.opacity = '0.4';
+                btn.style.pointerEvents = 'none';
+                btn.textContent = '✓ ' + codeToAdd;
+            });
+        });
+
+        noticeEl.classList.remove('hidden');
+
+        const closeBtn = document.getElementById('mineCloseCnaeNoticeBtn');
+        if (closeBtn) {
+            closeBtn.onclick = () => noticeEl.classList.add('hidden');
+        }
+    },
 
     // ===== REFERÊNCIAS DOM (preenchido no init) =====
     els: {},
@@ -53,23 +558,40 @@ const MiningEngine = {
         const nomeFantasia = document.getElementById('searchTermNomeFantasia')?.checked ?? true;
         const nomeSocio = document.getElementById('searchTermNomeSocio')?.checked ?? false;
 
+        // Cidades garantidamente sem acento no payload (padrão Casa dos Dados)
+        const unaccentedCities = this.filters.cidades.map(c => this._normalizeString(c));
+
+        // MEI
+        const meiVal = document.getElementById('mineMeiSelect')?.value || 'todos';
+        const meiObj = {
+            "optante": meiVal === 'apenas_mei',
+            "excluir_optante": meiVal === 'excluir_mei'
+        };
+
+        // Simples Nacional
+        const simplesVal = document.getElementById('mineSimplesSelect')?.value || 'todos';
+        const simplesObj = {
+            "optante": simplesVal === 'apenas_simples',
+            "excluir_optante": simplesVal === 'excluir_simples'
+        };
+
         const payload = {
             "cnpj": [],
-            "cnpj_raiz": [],
+            "cnpj_raiz": this.filters.cnpjRaiz || [],
             "situacao_cadastral": situacao === '_todas' ? [] : [situacao],
             "codigo_atividade_principal": this.filters.cnaes,
             "codigo_natureza_juridica": this.filters.naturezaJuridica,
             "incluir_atividade_secundaria": document.getElementById('mineCnaeSecundariaCheck')?.checked || false,
             "uf": uf ? [uf] : [],
-            "municipio": this.filters.cidades,
+            "municipio": unaccentedCities,
             "bairro": this.filters.bairros,
             "cep": this.filters.ceps,
             "ddd": this.filters.ddds,
-            "telefone": [],
+            "telefone": this.filters.telefone || [],
             "data_abertura": this._getDataAberturaFilter(),
             "capital_social": this._getCapitalSocialFilter(),
-            "mei": { "optante": false, "excluir_optante": false },
-            "simples": { "optante": false, "excluir_optante": false },
+            "mei": meiObj,
+            "simples": simplesObj,
             "mais_filtros": {
                 "somente_matriz": getCheck('mf_somente_matriz'),
                 "somente_filial": getCheck('mf_somente_filial'),
@@ -77,8 +599,8 @@ const MiningEngine = {
                 "com_telefone": getCheck('mf_com_telefone'),
                 "somente_fixo": getCheck('mf_somente_fixo'),
                 "somente_celular": getCheck('mf_somente_celular'),
-                "excluir_empresas_visualizadas": false,
-                "excluir_email_contab": false
+                "excluir_empresas_visualizadas": getCheck('mf_excluir_empresas_visualizadas'),
+                "excluir_email_contab": getCheck('mf_excluir_email_contab')
             },
             "limite": 100,
             "pagina": 1,
@@ -149,16 +671,24 @@ const MiningEngine = {
     },
 
     // Sincroniza do editor para os filtros visuais
-    syncEditorToFilters() {
+    syncEditorToFilters(options = {}) {
         const payload = this.getPayloadFromEditor();
         if (!payload) {
-            alert('JSON inválido! Corrija a sintaxe antes de sincronizar.');
+            if (!options.silent) {
+                alert('JSON inválido! Corrija a sintaxe antes de sincronizar.');
+            }
             return;
         }
 
+        const currentUf = (this.els.ufInput?.value || 'SP').toUpperCase().trim();
+
         // UF
         if (this.els.ufInput && payload.uf && payload.uf.length > 0) {
-            this.els.ufInput.value = payload.uf[0];
+            const newUf = payload.uf[0].toUpperCase().trim();
+            if (newUf !== currentUf) {
+                this.els.ufInput.value = newUf;
+                this.loadCitiesList(newUf);
+            }
         }
 
         // Situação
@@ -170,17 +700,44 @@ const MiningEngine = {
             }
         }
 
-        // Chips
-        this.filters.cidades = payload.municipio || [];
+        // Chips - garante que cidades fiquem sem acento e em maiúsculas (padrão Casa dos Dados)
+        this.filters.cidades = (payload.municipio || []).map(c => this._normalizeString(c));
         this.filters.cnaes = payload.codigo_atividade_principal || [];
         this.filters.naturezaJuridica = payload.codigo_natureza_juridica || [];
         this.filters.bairros = payload.bairro || [];
         this.filters.ceps = payload.cep || [];
         this.filters.ddds = payload.ddd || [];
+        this.filters.cnpjRaiz = payload.cnpj_raiz || [];
+        this.filters.telefone = payload.telefone || [];
 
-        // Termos de busca
+        // MEI
+        const meiSel = document.getElementById('mineMeiSelect');
+        if (meiSel) {
+            const mei = payload.mei || {};
+            if (mei.optante) meiSel.value = 'apenas_mei';
+            else if (mei.excluir_optante) meiSel.value = 'excluir_mei';
+            else meiSel.value = 'todos';
+        }
+
+        // Simples Nacional
+        const simplesSel = document.getElementById('mineSimplesSelect');
+        if (simplesSel) {
+            const simples = payload.simples || {};
+            if (simples.optante) simplesSel.value = 'apenas_simples';
+            else if (simples.excluir_optante) simplesSel.value = 'excluir_simples';
+            else simplesSel.value = 'todos';
+        }
+
+        // Termos de busca e controles de busca
         if (payload.busca_textual && payload.busca_textual.length > 0 && payload.busca_textual[0].texto) {
-            this.filters.termos = payload.busca_textual[0].texto.map(t => t.toUpperCase());
+            const bt = payload.busca_textual[0];
+            this.filters.termos = (bt.texto || []).map(t => t.toUpperCase());
+            const setCheck = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+            setCheck('searchTermRazaoSocial', bt.razao_social);
+            setCheck('searchTermNomeFantasia', bt.nome_fantasia);
+            setCheck('searchTermNomeSocio', bt.nome_socio);
+            const tipoSel = document.getElementById('searchTermTipoBusca');
+            if (tipoSel && bt.tipo_busca) tipoSel.value = bt.tipo_busca;
         } else {
             this.filters.termos = [];
         }
@@ -194,6 +751,8 @@ const MiningEngine = {
         setCheck('mf_com_telefone', mf.com_telefone);
         setCheck('mf_somente_fixo', mf.somente_fixo);
         setCheck('mf_somente_celular', mf.somente_celular);
+        setCheck('mf_excluir_empresas_visualizadas', mf.excluir_empresas_visualizadas);
+        setCheck('mf_excluir_email_contab', mf.excluir_email_contab);
 
         // Capital Social
         const cs = payload.capital_social || {};
@@ -212,7 +771,9 @@ const MiningEngine = {
         // Refresh todos os chips
         Object.keys(this._chipRefreshers).forEach(k => this._chipRefreshers[k]());
 
-        this.log('✓ Filtros visuais sincronizados do JSON editado.', 'succ');
+        if (!options.silent) {
+            this.log('✓ Filtros visuais sincronizados do JSON editado.', 'succ');
+        }
     },
 
     // ========================= TERMINAL LOG =========================
@@ -313,16 +874,61 @@ const MiningEngine = {
             // Função para processar os valores digitados
             const processValues = (rawText) => {
                 if (!rawText) return 0;
-                const parts = rawText.split(/[,;|]+/).map(p => p.trim().toUpperCase()).filter(p => p.length > 0);
+                const currentUf = (self.els.ufInput?.value || 'SP').toUpperCase().trim();
+                const parts = rawText.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0);
                 let added = 0;
+                const unmatchedCities = [];
+                const unmatchedCnaes = [];
+
                 parts.forEach(v => {
-                    // Se for CNAE, higieniza mantendo apenas números (ex: 10.53-8/00 vira 1053800)
-                    const finalVal = (key === 'cnaes') ? v.replace(/\D/g, '') : v;
-                    if (finalVal && !self.filters[key].includes(finalVal)) {
-                        self.filters[key].push(finalVal);
-                        added++;
+                    if (key === 'cnpjRaiz') {
+                        const cleanDigits = v.replace(/\D/g, '').slice(0, 8);
+                        if (cleanDigits && !self.filters.cnpjRaiz.includes(cleanDigits)) {
+                            self.filters.cnpjRaiz.push(cleanDigits);
+                            added++;
+                        }
+                    } else if (key === 'cnaes') {
+                        const cleanDigits = v.replace(/\D/g, '');
+                        // Valida se é um código numérico de 7 dígitos (ou 5/7 dígitos conhecido)
+                        if (cleanDigits.length === 7 || (cleanDigits.length >= 5 && self._cnaeKnownMap[cleanDigits])) {
+                            if (!self.filters.cnaes.includes(cleanDigits)) {
+                                self.filters.cnaes.push(cleanDigits);
+                                added++;
+                            }
+                        } else {
+                            unmatchedCnaes.push({ original: v });
+                        }
+                    } else if (key === 'cidades') {
+                        const normV = self._normalizeString(v);
+                        const ufCities = self._ufCitiesCache[currentUf] || self._allUfCities || [];
+                        const matchedCity = ufCities.find(c => self._normalizeString(c) === normV);
+
+                        if (matchedCity) {
+                            const finalCity = self._normalizeString(matchedCity);
+                            if (!self.filters.cidades.includes(finalCity)) {
+                                self.filters.cidades.push(finalCity);
+                                added++;
+                            }
+                        } else {
+                            // Não encontrada na lista oficial da UF — busca correspondências por radical (ex: 4 letras)
+                            const suggestions = self._findCitySuggestions(v, ufCities);
+                            unmatchedCities.push({ original: v, suggestions });
+                        }
+                    } else {
+                        const finalVal = v.toUpperCase();
+                        if (finalVal && !self.filters[key].includes(finalVal)) {
+                            self.filters[key].push(finalVal);
+                            added++;
+                        }
                     }
                 });
+
+                if (key === 'cidades') {
+                    self.showCitiesValidationNotice(unmatchedCities);
+                } else if (key === 'cnaes' && unmatchedCnaes.length > 0) {
+                    self.showCnaeValidationNotice(unmatchedCnaes);
+                }
+
                 return added;
             };
 
@@ -1290,15 +1896,17 @@ const MiningEngine = {
         // Botão Testar API Key
         document.getElementById('testApiKeyBtn')?.addEventListener('click', () => this.testApiKey());
 
-        // Atualizar payload ao mudar UF ou Situação
-        this.els.ufInput?.addEventListener('input', () => {
+        // Atualizar payload e carregar cidades ao mudar UF ou Situação
+        const handleUfChange = () => {
+            const uf = (this.els.ufInput?.value || 'SP').toUpperCase().trim();
             this.buildPayload();
-            // Se o painel de cidades estiver aberto, atualizar a lista para a nova UF
-            if (this.els.citiesPanel && !this.els.citiesPanel.classList.contains('hidden')) {
-                this.loadCitiesList();
-            }
-        });
+            this.loadCitiesList(uf);
+        };
+        this.els.ufInput?.addEventListener('change', handleUfChange);
+        this.els.ufInput?.addEventListener('input', handleUfChange);
         this.els.situacaoSelect?.addEventListener('change', () => this.buildPayload());
+        document.getElementById('mineMeiSelect')?.addEventListener('change', () => this.buildPayload());
+        document.getElementById('mineSimplesSelect')?.addEventListener('change', () => this.buildPayload());
 
         // Filtros avançados — qualquer checkbox mine-filter
         document.querySelectorAll('.mine-filter-check').forEach(cb => {
@@ -1308,7 +1916,7 @@ const MiningEngine = {
         // Toggle da seção
         document.getElementById('miningToggleBtn')?.addEventListener('click', () => this.toggleSection());
 
-        // Editor JSON — tracking de foco para não sobrescrever enquanto user edita
+        // Editor JSON — tracking de foco e sincronização automática bidirecional em tempo real
         if (this.els.jsonEditor) {
             this.els.jsonEditor._userEditing = false;
 
@@ -1316,9 +1924,19 @@ const MiningEngine = {
                 this.els.jsonEditor._userEditing = true;
             });
 
-            // Validação em tempo real enquanto digita
+            // Validação e auto-sincronização bidirecional do Editor JSON -> Filtros Visuais em tempo real
             this.els.jsonEditor.addEventListener('input', () => {
-                this.validateEditor();
+                const isValid = this.validateEditor();
+                if (isValid) {
+                    this.syncEditorToFilters({ silent: true });
+                }
+            });
+
+            this.els.jsonEditor.addEventListener('blur', () => {
+                this.els.jsonEditor._userEditing = false;
+                if (this.validateEditor()) {
+                    this.syncEditorToFilters({ silent: true });
+                }
             });
         }
 
@@ -1579,6 +2197,12 @@ const MiningEngine = {
             }, 300);
         });
 
+        // Inicializar autocomplete de municípios, CNAEs e Natureza Jurídica e pré-carregar cidades da UF padrão
+        this.initCitiesAutocomplete();
+        this.initCnaesAutocomplete();
+        this.initNatjurAutocomplete();
+        this.loadCitiesList(this.els.ufInput?.value || 'SP');
+
         // Build inicial do payload
         this.buildPayload();
 
@@ -1589,33 +2213,424 @@ const MiningEngine = {
     },
 
     // ========================= MÉTODOS AUXILIARES NOVOS (CIDADES E CNAES) =========================
-    async loadCitiesList() {
-        const uf = (this.els.ufInput?.value || 'SP').toUpperCase().trim();
+    async loadCitiesList(ufParam) {
+        const uf = (ufParam || this.els.ufInput?.value || 'SP').toUpperCase().trim();
         const listContainer = this.els.citiesList;
         const ufLabel = document.getElementById('mineCitiesUfLabel');
         if (ufLabel) ufLabel.textContent = uf;
-        if (!listContainer) return;
 
-        listContainer.innerHTML = '<span class="text-xs text-blue-500 p-1">⏳ Carregando municípios...</span>';
-        try {
-            const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/municipio/${uf}`);
-            if (!res.ok) throw new Error(`Status ${res.status}`);
-            const data = await res.json();
-            
-            let cities = [];
-            if (Array.isArray(data)) {
-                cities = data.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
-            } else if (data && typeof data === 'object') {
-                const list = data.data || data.municipios || data.results || [];
-                cities = list.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
-            }
-            cities = cities.filter(Boolean).map(c => c.toUpperCase()).sort();
-            this._allUfCities = cities; // Cache local
-            this.renderCitiesChecklist(cities);
-        } catch (e) {
-            listContainer.innerHTML = `<span class="text-xs text-red-500 p-1">❌ Erro: ${e.message}</span>`;
-            console.error(e);
+        // Retorna do cache de UF se já estiver carregado
+        if (this._ufCitiesCache[uf] && this._ufCitiesCache[uf].length > 0) {
+            this._allUfCities = this._ufCitiesCache[uf];
+            if (listContainer) this.renderCitiesChecklist(this._allUfCities);
+            return this._allUfCities;
         }
+
+        if (listContainer) {
+            listContainer.innerHTML = '<span class="text-xs text-blue-500 p-1">⏳ Carregando municípios...</span>';
+        }
+
+        try {
+            let cities = [];
+            // 1. Tenta a API oficial da Casa dos Dados primeiro (retorna cidades exatamente como no backend, sem acentos)
+            try {
+                const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/municipio/${uf}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        cities = data.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
+                    } else if (data && typeof data === 'object') {
+                        const list = data.data || data.municipios || data.results || [];
+                        cities = list.map(c => typeof c === 'object' ? (c.municipio || c.nome || c.name || '') : String(c));
+                    }
+                }
+            } catch (errCsa) {
+                console.warn('Erro ao carregar via Casa dos Dados, tentando IBGE:', errCsa);
+            }
+
+            // 2. Fallback para IBGE API caso Casa dos Dados falhe
+            if (cities.length === 0) {
+                const ibgeRes = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+                if (ibgeRes.ok) {
+                    const ibgeData = await ibgeRes.json();
+                    if (Array.isArray(ibgeData) && ibgeData.length > 0) {
+                        cities = ibgeData.map(item => item.nome || '');
+                    }
+                }
+            }
+
+            // Garante normalização (maiúsculas e sem acento no formato Casa dos Dados)
+            cities = Array.from(new Set(cities.filter(Boolean).map(c => this._normalizeString(c)))).sort();
+            this._ufCitiesCache[uf] = cities;
+            this._allUfCities = cities;
+
+            if (listContainer) this.renderCitiesChecklist(cities);
+            return cities;
+        } catch (e) {
+            if (listContainer) {
+                listContainer.innerHTML = `<span class="text-xs text-red-500 p-1">❌ Erro: ${e.message}</span>`;
+            }
+            console.error('Erro ao carregar cidades:', e);
+            return [];
+        }
+    },
+
+    // Sistema de sugestão/autocomplete direto no campo de Municípios
+    initCitiesAutocomplete() {
+        const self = this;
+        const input = document.querySelector('.mine-chip-input[data-key="cidades"]');
+        const dropdown = document.getElementById('mineCitiesAutocompleteList');
+        if (!input || !dropdown) return;
+
+        let activeIndex = -1;
+
+        const hideDropdown = () => {
+            dropdown.classList.add('hidden');
+            dropdown.innerHTML = '';
+            activeIndex = -1;
+        };
+
+        const addCityChip = (cityName) => {
+            const currentUf = (self.els.ufInput?.value || 'SP').toUpperCase().trim();
+            const officialName = self.getOfficialCityName(cityName, currentUf);
+            if (officialName && !self.filters.cidades.includes(officialName)) {
+                self.filters.cidades.push(officialName);
+                if (self._chipRefreshers.cidades) self._chipRefreshers.cidades();
+                self.buildPayload();
+            }
+            input.value = '';
+            hideDropdown();
+            input.focus();
+        };
+
+        input.addEventListener('input', async () => {
+            const val = input.value;
+            const currentUf = (self.els.ufInput?.value || 'SP').toUpperCase().trim();
+
+            // Ao digitar vírgula, converte e corrige automaticamente os termos anteriores
+            if (val.includes(',')) {
+                const parts = val.split(',');
+                const completed = parts.slice(0, -1).join(',');
+                const remaining = parts[parts.length - 1];
+
+                if (completed.trim()) {
+                    const added = processValues(completed);
+                    if (added > 0 && self._chipRefreshers.cidades) self._chipRefreshers.cidades();
+                    self.buildPayload();
+                }
+                input.value = remaining.trimStart();
+                if (!input.value.trim()) {
+                    hideDropdown();
+                    return;
+                }
+            }
+
+            const query = input.value.trim();
+            if (query.length < 1) {
+                hideDropdown();
+                return;
+            }
+
+            let cities = self._ufCitiesCache[currentUf];
+            if (!cities || cities.length === 0) {
+                cities = await self.loadCitiesList(currentUf);
+            }
+
+            if (!cities || cities.length === 0) {
+                hideDropdown();
+                return;
+            }
+
+            const normQuery = self._normalizeString(query);
+            const matches = cities.filter(c => {
+                if (self.filters.cidades.includes(c)) return false;
+                return self._normalizeString(c).includes(normQuery);
+            }).slice(0, 12);
+
+            if (matches.length === 0) {
+                hideDropdown();
+                return;
+            }
+
+            dropdown.innerHTML = matches.map((city, idx) => `
+                <div class="mine-autocomplete-item ${idx === activeIndex ? 'active' : ''}" data-city="${city}">
+                    <span>${city}</span>
+                    <span class="uf-tag">${currentUf}</span>
+                </div>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+
+            dropdown.querySelectorAll('.mine-autocomplete-item').forEach(item => {
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    addCityChip(item.dataset.city);
+                });
+            });
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (dropdown.classList.contains('hidden')) return;
+            const items = dropdown.querySelectorAll('.mine-autocomplete-item');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && items[activeIndex]) {
+                    e.preventDefault();
+                    addCityChip(items[activeIndex].dataset.city);
+                } else if (items.length === 1) {
+                    e.preventDefault();
+                    addCityChip(items[0].dataset.city);
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(hideDropdown, 200);
+        });
+    },
+
+    initCnaesAutocomplete() {
+        const self = this;
+        const input = document.querySelector('.mine-chip-input[data-key="cnaes"]');
+        const dropdown = document.getElementById('mineCnaeAutocompleteList');
+        if (!input || !dropdown) return;
+
+        let activeIndex = -1;
+        let searchDebounce = null;
+
+        const hideDropdown = () => {
+            dropdown.classList.add('hidden');
+            dropdown.innerHTML = '';
+            activeIndex = -1;
+        };
+
+        const addCnaeChip = (cnaeCode) => {
+            const cleanCode = String(cnaeCode).replace(/\D/g, '');
+            if (cleanCode && !self.filters.cnaes.includes(cleanCode)) {
+                self.filters.cnaes.push(cleanCode);
+                if (self._chipRefreshers.cnaes) self._chipRefreshers.cnaes();
+                self.buildPayload();
+            }
+            input.value = '';
+            hideDropdown();
+            input.focus();
+        };
+
+        input.addEventListener('input', () => {
+            const val = input.value;
+
+            // Ao digitar vírgula, processa CNAEs inseridos
+            if (val.includes(',')) {
+                const parts = val.split(',');
+                const completed = parts.slice(0, -1).join(',');
+                const remaining = parts[parts.length - 1];
+
+                if (completed.trim()) {
+                    if (self._chipProcessors && self._chipProcessors.cnaes) {
+                        self._chipProcessors.cnaes(completed);
+                    }
+                    if (self._chipRefreshers.cnaes) self._chipRefreshers.cnaes();
+                    self.buildPayload();
+                }
+                input.value = remaining.trimStart();
+                if (!input.value.trim()) {
+                    hideDropdown();
+                    return;
+                }
+            }
+
+            const query = input.value.trim();
+            if (query.length < 1) {
+                hideDropdown();
+                return;
+            }
+
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(async () => {
+                const suggestions = await self._findCnaeSuggestions(query);
+                const filtered = suggestions.filter(c => !self.filters.cnaes.includes(c.code)).slice(0, 12);
+
+                if (filtered.length === 0) {
+                    hideDropdown();
+                    return;
+                }
+
+                dropdown.innerHTML = filtered.map((c, idx) => `
+                    <div class="mine-autocomplete-item ${idx === activeIndex ? 'active' : ''}" data-code="${c.code}">
+                        <span><strong>${c.code}</strong> - ${c.name}</span>
+                    </div>
+                `).join('');
+
+                dropdown.classList.remove('hidden');
+
+                dropdown.querySelectorAll('.mine-autocomplete-item').forEach(item => {
+                    item.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        addCnaeChip(item.dataset.code);
+                    });
+                });
+            }, 250);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (dropdown.classList.contains('hidden')) return;
+            const items = dropdown.querySelectorAll('.mine-autocomplete-item');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && items[activeIndex]) {
+                    e.preventDefault();
+                    addCnaeChip(items[activeIndex].dataset.code);
+                } else if (items.length === 1) {
+                    e.preventDefault();
+                    addCnaeChip(items[0].dataset.code);
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(hideDropdown, 200);
+        });
+    },
+
+    initNatjurAutocomplete() {
+        const self = this;
+        const input = document.querySelector('.mine-chip-input[data-key="naturezaJuridica"]');
+        const dropdown = document.getElementById('mineNatjurAutocompleteList');
+        if (!input || !dropdown) return;
+
+        let activeIndex = -1;
+        let searchDebounce = null;
+
+        const hideDropdown = () => {
+            dropdown.classList.add('hidden');
+            dropdown.innerHTML = '';
+            activeIndex = -1;
+        };
+
+        const addNatjurChip = (code) => {
+            const cleanCode = String(code).replace(/\D/g, '');
+            if (cleanCode && !self.filters.naturezaJuridica.includes(cleanCode)) {
+                self.filters.naturezaJuridica.push(cleanCode);
+                if (self._chipRefreshers.naturezaJuridica) self._chipRefreshers.naturezaJuridica();
+                self.buildPayload();
+            }
+            input.value = '';
+            hideDropdown();
+            input.focus();
+        };
+
+        input.addEventListener('input', () => {
+            const val = input.value;
+
+            if (val.includes(',')) {
+                const parts = val.split(',');
+                const completed = parts.slice(0, -1).join(',');
+                const remaining = parts[parts.length - 1];
+
+                if (completed.trim()) {
+                    if (self._chipProcessors && self._chipProcessors.naturezaJuridica) {
+                        self._chipProcessors.naturezaJuridica(completed);
+                    }
+                    if (self._chipRefreshers.naturezaJuridica) self._chipRefreshers.naturezaJuridica();
+                    self.buildPayload();
+                }
+                input.value = remaining.trimStart();
+                if (!input.value.trim()) {
+                    hideDropdown();
+                    return;
+                }
+            }
+
+            const query = input.value.trim();
+            if (query.length < 1) {
+                hideDropdown();
+                return;
+            }
+
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(async () => {
+                const suggestions = await self._findNatjurSuggestions(query);
+                const filtered = suggestions.filter(n => !self.filters.naturezaJuridica.includes(n.code)).slice(0, 12);
+
+                if (filtered.length === 0) {
+                    hideDropdown();
+                    return;
+                }
+
+                dropdown.innerHTML = filtered.map((n, idx) => `
+                    <div class="mine-autocomplete-item ${idx === activeIndex ? 'active' : ''}" data-code="${n.code}">
+                        <span><strong>${n.code}</strong> - ${n.name}</span>
+                    </div>
+                `).join('');
+
+                dropdown.classList.remove('hidden');
+
+                dropdown.querySelectorAll('.mine-autocomplete-item').forEach(item => {
+                    item.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        addNatjurChip(item.dataset.code);
+                    });
+                });
+            }, 120);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (dropdown.classList.contains('hidden')) return;
+            const items = dropdown.querySelectorAll('.mine-autocomplete-item');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                items.forEach((it, idx) => it.classList.toggle('active', idx === activeIndex));
+                items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && items[activeIndex]) {
+                    e.preventDefault();
+                    addNatjurChip(items[activeIndex].dataset.code);
+                } else if (items.length === 1) {
+                    e.preventDefault();
+                    addNatjurChip(items[0].dataset.code);
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(hideDropdown, 200);
+        });
     },
 
     renderCitiesChecklist(cities) {
@@ -1688,45 +2703,28 @@ const MiningEngine = {
             return;
         }
 
-        let results = [];
-        // 1. Tentar API da Casa dos Dados
+        let rawList = [];
         try {
             const res = await fetch(`https://api.casadosdados.com.br/v4/public/cnpj/busca/cnae?q=${encodeURIComponent(q)}`);
             if (res.ok) {
                 const data = await res.json();
-                let apiList = [];
                 if (Array.isArray(data)) {
-                    apiList = data;
+                    rawList = data;
                 } else if (data && typeof data === 'object') {
-                    apiList = data.data || data.results || data.cnaes || [];
+                    rawList = data.data || data.results || data.cnaes || [];
                 }
-                
-                results = apiList.map(item => ({
-                    code: String(item.code || item.codigo || '').replace(/\D/g, ''),
-                    name: item.name || item.descricao || item.text || ''
-                })).filter(item => 
-                    String(item.code).includes(q) || 
-                    String(item.name).toUpperCase().includes(q)
-                );
             }
         } catch (e) {
             console.warn('API de busca de CNAE offline. Usando fallback local:', e);
         }
 
-        // 2. Fallback para banco local cnae.json (se API falhar ou retornar 0 resultados filtrados)
+        let results = this._filterCnaeList(rawList, q);
+
         if (results.length === 0 && this._localCnaeDb) {
-            results = this._localCnaeDb.filter(c => 
-                String(c.code).includes(q) || 
-                String(c.name).toUpperCase().includes(q)
-            ).map(c => ({
-                code: String(c.code).replace(/\D/g, ''),
-                name: c.name
-            }));
+            results = this._filterCnaeList(this._localCnaeDb, q);
         }
 
-        // Limita a 50 resultados para manter a UI responsiva
         results = results.slice(0, 50);
-
         this.renderCnaeChecklist(results);
     },
 
