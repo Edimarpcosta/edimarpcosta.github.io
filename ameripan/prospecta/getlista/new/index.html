@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GetLista — Prospecta CNPJ</title>
+    <meta name="description" content="Ferramenta de prospecção de CNPJs com Multi-API, fallback inteligente e exportação enriquecida.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔍</text></svg>">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* ===== SYSTEM THEME VARIABLES ===== */
+        /* Default: Light Mode (WCAG compliant) */
+        :root {
+            --bg-body: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            --bg-card: rgba(255, 255, 255, 0.85);
+            --border-card: rgba(15, 23, 42, 0.12);
+            --color-text: #0f172a;
+            --color-text-muted: #475569;
+            --color-accent: #0284c7;
+            --bg-badge: rgba(15, 23, 42, 0.06);
+            --bg-input: #ffffff;
+            --border-input: rgba(15, 23, 42, 0.18);
+            --color-input: #0f172a;
+            --bg-terminal: #0f172a;
+            --color-terminal: #cbd5e1;
+            --bg-header: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.08));
+            --border-header: rgba(15, 23, 42, 0.08);
+            --bg-table-header: rgba(99, 102, 241, 0.1);
+            --color-table-header: #4f46e5;
+            --color-table-cell: #1e293b;
+            --border-table-row: rgba(15, 23, 42, 0.06);
+            --bg-table-row-hover: rgba(15, 23, 42, 0.03);
+            --color-chip: #b45309;
+            --bg-chip: rgba(245, 158, 11, 0.1);
+            --border-chip: rgba(245, 158, 11, 0.3);
+            --bg-select-option: #ffffff;
+            --color-select-option: #0f172a;
+            --bg-details-btn: rgba(99, 102, 241, 0.1);
+            --color-details-btn: #4f46e5;
+            --border-details-btn: rgba(99, 102, 241, 0.2);
+            --bg-progress-track: #cbd5e1;
+            --bg-modal: #ffffff;
+            --border-modal: rgba(15, 23, 42, 0.12);
+            --shadow-color: rgba(15, 23, 42, 0.08);
+            --btn-sec-bg: rgba(15, 23, 42, 0.06);
+            --btn-sec-border: rgba(15, 23, 42, 0.15);
+            --btn-sec-color: #0f172a;
+            --btn-sec-hover-bg: rgba(15, 23, 42, 0.12);
+            --hover-row-bg: rgba(15, 23, 42, 0.08);
+        }
+
+        /* Dark Mode Override */
+        .theme-dark {
+            --bg-body: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --border-card: rgba(255, 255, 255, 0.1);
+            --color-text: #e2e8f0;
+            --color-text-muted: #94a3b8;
+            --color-accent: #818cf8;
+            --bg-badge: rgba(0, 0, 0, 0.45);
+            --bg-input: rgba(255, 255, 255, 0.05);
+            --border-input: rgba(255, 255, 255, 0.15);
+            --color-input: #e2e8f0;
+            --bg-terminal: #010409;
+            --color-terminal: #8b949e;
+            --bg-header: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
+            --border-header: rgba(255, 255, 255, 0.08);
+            --bg-table-header: rgba(99, 102, 241, 0.15);
+            --color-table-header: #a5b4fc;
+            --color-table-cell: #cbd5e1;
+            --border-table-row: rgba(255, 255, 255, 0.05);
+            --bg-table-row-hover: rgba(255, 255, 255, 0.03);
+            --color-chip: #fbbf24;
+            --bg-chip: rgba(245, 158, 11, 0.15);
+            --border-chip: rgba(245, 158, 11, 0.35);
+            --bg-select-option: #1e293b;
+            --color-select-option: #e2e8f0;
+            --bg-details-btn: rgba(99, 102, 241, 0.2);
+            --color-details-btn: #a5b4fc;
+            --border-details-btn: rgba(99, 102, 241, 0.3);
+            --bg-progress-track: #1e293b;
+            --bg-modal: #1e293b;
+            --border-modal: rgba(255, 255, 255, 0.1);
+            --shadow-color: rgba(0, 0, 0, 0.4);
+            --btn-sec-bg: rgba(255, 255, 255, 0.08);
+            --btn-sec-border: rgba(255, 255, 255, 0.15);
+            --btn-sec-color: #e2e8f0;
+            --btn-sec-hover-bg: rgba(255, 255, 255, 0.15);
+            --hover-row-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===== BASE STYLES ===== */
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        body { background: var(--bg-body); color: var(--color-text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+        
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 1rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 var(--shadow-color);
+            transition: background 0.3s, border 0.3s, box-shadow 0.3s;
+        }
+
+        /* Force adaptation of text/headers when utility classes compete */
+        h1, h2, h3, h4, h5, h6 { color: var(--color-text); transition: color 0.3s; }
+        .theme-light .text-white, .theme-light h2.text-white, .theme-light h1.text-white { color: var(--color-text) !important; }
+        .theme-light .text-gray-300, .theme-light .text-gray-400 { color: var(--color-text-muted) !important; }
+        .theme-light .text-indigo-300, .theme-light .text-indigo-400 { color: var(--color-accent) !important; }
+
+        .hover-row {
+            transition: background 0.15s, color 0.15s;
+        }
+        .hover-row:hover {
+            background-color: var(--hover-row-bg) !important;
+        }
+
+        .progress-container { width:100%; background:var(--bg-progress-track); border-radius:0.5rem; margin:0.75rem 0; overflow:hidden; }
+        .progress-bar {
+            height:24px; background:linear-gradient(90deg,#6366f1,#8b5cf6);
+            border-radius:0.5rem; transition:width 0.3s ease; color:#fff;
+            text-align:center; line-height:24px; font-size:0.8rem; font-weight:600;
+        }
+        .loading-spinner {
+            display:inline-block; width:18px; height:18px;
+            border:3px solid rgba(255,255,255,.2); border-radius:50%;
+            border-top-color:#818cf8; animation:spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        
+        .auto-pause-alert {
+            background:rgba(251,146,60,0.15); border:1px solid #f97316;
+            border-radius:0.75rem; padding:1rem; margin:0.75rem 0; display:none;
+        }
+        .pulse { animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        
+        .timer-display {
+            background:var(--bg-progress-track); color:var(--color-text); border-radius:0.25rem;
+            padding:0.25rem 0.5rem; font-family:monospace; font-size:1.1em; margin:0 0.5rem;
+        }
+        .api-badge {
+            display:inline-flex; align-items:center; gap:4px;
+            padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:600;
+            transition: all 0.2s;
+        }
+        .api-active { background:rgba(74,222,128,0.15); color:#22c55e; border:1px solid rgba(74,222,128,0.3); }
+        .theme-dark .api-active { color:#4ade80; }
+        .api-inactive { background:rgba(248,113,113,0.15); color:#ef4444; border:1px solid rgba(248,113,113,0.3); }
+        .theme-dark .api-inactive { color:#f87171; }
+        .api-badge.api-fallback { background:rgba(245,158,11,0.15); color:#d97706; border:1px solid rgba(245,158,11,0.3); }
+        .theme-dark .api-badge.api-fallback { color:#fbbf24; }
+
+        .btn-primary {
+            background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff;
+            padding:0.6rem 1.5rem; border-radius:0.5rem; font-weight:600; font-size:0.9rem;
+            border:none; cursor:pointer; transition:all 0.2s;
+        }
+        .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(99,102,241,0.4); }
+        .btn-success { background:linear-gradient(135deg,#22c55e,#16a34a); }
+        .btn-success:hover { box-shadow:0 4px 12px rgba(34,197,94,0.4); }
+        .btn-warning { background:linear-gradient(135deg,#f59e0b,#d97706); }
+        .btn-warning:hover { box-shadow:0 4px 12px rgba(245,158,11,0.4); }
+        .btn-danger { background:linear-gradient(135deg,#ef4444,#dc2626); }
+        .btn-export { background:linear-gradient(135deg,#a855f7,#7c3aed); }
+        .btn-export:hover { box-shadow:0 4px 12px rgba(168,85,247,0.4); }
+        
+        .btn-secondary {
+            background:var(--btn-sec-bg); color:var(--btn-sec-color);
+            padding:0.5rem 1rem; border-radius:0.5rem; font-weight:500; font-size:0.85rem;
+            border:1px solid var(--btn-sec-border); cursor:pointer; transition:all 0.2s;
+        }
+        .btn-secondary:hover { background:var(--btn-sec-hover-bg); }
+        
+        input[type="file"] { color:var(--color-text-muted); }
+        input[type="file"]::file-selector-button {
+            background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff;
+            padding:0.5rem 1rem; border:none; border-radius:0.5rem; font-weight:600;
+            cursor:pointer; margin-right:0.75rem;
+        }
+        textarea, input[type="number"], input[type="text"], input[type="password"], input[type="date"], select {
+            background:var(--bg-input) !important; border:1px solid var(--border-input) !important;
+            color:var(--color-text) !important; border-radius:0.5rem; transition: background 0.3s, border 0.3s;
+        }
+        textarea:focus, input[type="number"]:focus, input[type="text"]:focus, input[type="password"]:focus, input[type="date"]:focus, select:focus {
+            border-color:var(--color-accent) !important; outline:none; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        
+        select option {
+            background-color: var(--bg-select-option) !important;
+            color: var(--color-select-option) !important;
+        }
+        
+        table { border-collapse:collapse; width:100%; }
+        thead { background:var(--bg-table-header); }
+        th { color:var(--color-table-header); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; padding:0.75rem 1rem; text-align:left; transition: color 0.3s; }
+        td { color:var(--color-table-cell); font-size:0.85rem; padding:0.6rem 1rem; border-bottom:1px solid var(--border-table-row); transition: color 0.3s, border 0.3s; }
+        tr:hover td { background:var(--bg-table-row-hover); }
+        
+        .details-btn {
+            background:var(--bg-details-btn); color:var(--color-details-btn); border:1px solid var(--border-details-btn);
+            padding:3px 10px; border-radius:0.375rem; font-size:0.75rem; cursor:pointer; transition:all 0.2s;
+        }
+        .details-btn:hover { background:var(--color-accent); color:#fff; }
+        
+        .modal-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
+            display:flex; align-items:center; justify-content:center; z-index:50;
+        }
+        .modal-content {
+            background:var(--bg-modal); border:1px solid var(--border-modal);
+            border-radius:1rem; max-width:56rem; width:95%; max-height:90vh; overflow-y:auto; padding:2rem;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            transition: background 0.3s, border 0.3s;
+        }
+        .stat-card {
+            background:var(--bg-card); border:1px solid var(--border-card);
+            border-radius:0.75rem; padding:1rem; text-align:center;
+            transition: background 0.3s, border 0.3s;
+        }
+        .stat-card .stat-value { font-size:1.5rem; font-weight:700; color:var(--color-text); }
+        .stat-card .stat-label { font-size:0.75rem; color:var(--color-text-muted); margin-top:0.25rem; }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:3px; }
+
+        /* ===== MINING SECTION STYLES ===== */
+        .mine-chip-container {
+            display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+            background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12);
+            padding:8px 10px; border-radius:0.5rem; min-height:42px;
+        }
+        .mine-chip {
+            background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35);
+            color:#fbbf24; padding:3px 8px; border-radius:4px;
+            font-size:0.75rem; font-weight:600; display:flex; align-items:center; gap:5px;
+            animation: chipIn 0.2s ease;
+        }
+        .mine-chip span { cursor:pointer; color:#94a3b8; transition:color 0.15s; }
+        .mine-chip span:hover { color:#f87171; }
+        @keyframes chipIn { from { transform:scale(0.8); opacity:0; } to { transform:scale(1); opacity:1; } }
+        .mine-chip-input {
+            background:transparent; border:none; padding:0; flex:1; min-width:100px;
+            color:#e2e8f0; outline:none; font-size:0.85rem;
+        }
+        .mine-chip-input::placeholder { color:#64748b; }
+        #mineTerminal {
+            background:#010409; color:#8b949e; padding:12px; font-family:'Courier New', monospace;
+            font-size:0.75rem; height:140px; overflow-y:auto; border-radius:0.5rem;
+            border:1px solid rgba(255,255,255,0.08);
+        }
+        .mine-autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            max-height: 180px;
+            overflow-y: auto;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            margin-top: 4px;
+        }
+        .mine-autocomplete-item {
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            color: #e2e8f0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.15s;
+        }
+        .mine-autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        .mine-autocomplete-item:hover, .mine-autocomplete-item.active {
+            background: #334155;
+            color: #818cf8;
+            font-weight: 600;
+        }
+        .mine-autocomplete-item .uf-tag {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+        .mine-log-info { color:#60a5fa; }
+        .mine-log-warn { color:#fbbf24; }
+        .mine-log-err { color:#f87171; }
+        .mine-log-succ { color:#4ade80; }
+        #mineJsonEditor {
+            background:#010409 !important; color:#86efac !important; padding:12px;
+            font-family:'Courier New', monospace !important; font-size:0.72rem;
+            border-radius:0.5rem; border:1px solid rgba(74,222,128,0.2) !important;
+            resize:vertical; line-height:1.5; tab-size:2; transition: border-color 0.2s;
+        }
+        #mineJsonEditor:focus { border-color:rgba(74,222,128,0.5) !important; outline:none; }
+        .mine-clear-chips-btn:hover { opacity:1 !important; color:#ef4444 !important; }
+        .mine-progress-container { width:100%; background:#1e293b; border-radius:0.5rem; overflow:hidden; }
+        .mine-progress-bar {
+            height:22px; background:linear-gradient(90deg,#f59e0b,#d97706);
+            border-radius:0.5rem; transition:width 0.4s ease; color:#000;
+            text-align:center; line-height:22px; font-size:0.75rem; font-weight:700;
+        }
+        .btn-mine {
+            background:linear-gradient(135deg,#f59e0b,#d97706); color:#000;
+            padding:0.6rem 1.5rem; border-radius:0.5rem; font-weight:700; font-size:0.9rem;
+            border:none; cursor:pointer; transition:all 0.2s;
+        }
+        .btn-mine:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(245,158,11,0.4); }
+        .btn-mine-stop {
+            background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff;
+            padding:0.6rem 1.5rem; border-radius:0.5rem; font-weight:700; font-size:0.9rem;
+            border:none; cursor:pointer; transition:all 0.2s;
+        }
+        .btn-mine-transfer {
+            background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff;
+            padding:0.6rem 1.5rem; border-radius:0.5rem; font-weight:700; font-size:0.9rem;
+            border:none; cursor:pointer; transition:all 0.2s;
+        }
+        .btn-mine-transfer:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(34,197,94,0.4); }
+        .section-toggle {
+            cursor:pointer; display:flex; align-items:center; gap:8px;
+            user-select:none; transition:opacity 0.2s;
+        }
+        .section-toggle:hover { opacity:0.8; }
+        .mine-filter-grid label {
+            display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#94a3b8;
+            cursor:pointer; padding:2px 0;
+        }
+        .mine-filter-grid label:hover { color: var(--color-text); }
+        .mine-filter-grid input[type="checkbox"] { accent-color:#f59e0b; width:14px; height:14px; }
+
+        /* Agrupamento Fase 2 */
+        .cnpj-group { border: 1px solid var(--border-card); border-radius: 0.5rem; padding: 12px; margin-bottom: 15px; background: var(--bg-card); }
+        .cnpj-group-header { font-weight: 600; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: var(--color-text); }
+        .cnpj-group-header .count { font-weight: bold; padding: 2px 8px; border-radius: 4px; color: #ffffff; font-size: 0.8rem; }
+        .cnpj-members-list { list-style: none; padding-left: 0; margin: 0; font-size: 0.85rem; color: var(--color-text-muted); }
+        .cnpj-members-list li { margin-bottom: 6px; padding: 8px 12px; border-radius: 6px; background: var(--bg-badge); border: 1px solid var(--border-card); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.15s; }
+        .cnpj-members-list li:hover { background: var(--hover-row-bg); }
+        .cnpj-members-list li mark { color: #ffffff; font-weight: bold; padding: 1px 4px; border-radius: 3px; }
+
+        /* ===== BLOCKLIST (JÁ ATENDIDOS) ===== */
+        #blocklistSection { border-color: rgba(239, 68, 68, 0.25) !important; }
+        .blocklist-badge {
+            background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171; border-radius: 4px; padding: 2px 10px;
+            font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;
+        }
+        #blocklistSection textarea {
+            background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--color-text); border-radius: 0.5rem; width: 100%; padding: 10px;
+            font-size: 0.82rem; font-family: 'Courier New', monospace; resize: vertical;
+            min-height: 90px; outline: none; transition: border-color 0.2s;
+        }
+        #blocklistSection textarea:focus { border-color: rgba(239, 68, 68, 0.5); }
+        .btn-blocklist {
+            background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff;
+            padding: 0.45rem 1.2rem; border-radius: 0.5rem; font-weight: 700;
+            font-size: 0.82rem; border: none; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-blocklist:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.4); }
+        .btn-blocklist-sec {
+            background: rgba(239,68,68,0.08); color: #f87171;
+            border: 1px solid rgba(239,68,68,0.3); padding: 0.45rem 1rem;
+            border-radius: 0.5rem; font-weight: 600; font-size: 0.8rem;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-blocklist-sec:hover { background: rgba(239,68,68,0.18); }
+        .blocklist-toggle { cursor: pointer; user-select: none; }
+        .blocklist-toggle:hover { opacity: 0.85; }
+        .stat-excluded { border-color: rgba(148,163,184,0.2) !important; }
+        .stat-excluded .stat-value { color: #94a3b8 !important; }
+        /* Botão exportação atendidos enriquecidos */
+        .btn-atendidos-export {
+            background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
+            padding: 0.5rem 1.2rem; border-radius: 0.5rem; font-weight: 700;
+            font-size: 0.85rem; border: none; cursor: pointer; transition: all 0.2s; opacity: 0.5;
+        }
+        .btn-atendidos-export:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.4); opacity: 1; }
+        .btn-atendidos-export:disabled { cursor: not-allowed; }
+    
+        /* ===== STEPPER / FLUXO GUIADO (adicionado) ===== */
+        .step-nav {
+            position: sticky; top: 0; z-index: 40;
+            display: flex; gap: 0; margin: -6px -6px 18px -6px; padding: 10px 6px;
+            background: var(--bg-header); backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-header);
+            border-radius: 0.75rem; overflow-x: auto;
+        }
+        .step-nav a {
+            display: flex; align-items: center; gap: 8px; flex: 1 1 0;
+            padding: 8px 12px; border-radius: 0.6rem; text-decoration: none;
+            white-space: nowrap; font-size: 0.78rem; font-weight: 700;
+            color: var(--color-text-muted); transition: all .15s;
+        }
+        .step-nav a:hover { background: var(--bg-badge); color: var(--color-text); }
+        .step-nav .num {
+            width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem; background: var(--bg-badge); border: 1px solid var(--border-card);
+        }
+        .step-nav a[data-active="true"] { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; }
+        .step-nav a[data-active="true"] .num { background: rgba(255,255,255,0.25); border-color: transparent; color:#fff; }
+        .step-nav .sep { align-self: center; color: var(--color-text-muted); opacity: .4; font-size: .8rem; }
+
+        .step-badge {
+            display: inline-flex; align-items: center; gap: 10px; margin: 4px 0 16px 0;
+        }
+        .step-badge .circle {
+            width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.85rem; color: #fff;
+        }
+        .step-badge h3 { font-size: 0.95rem; font-weight: 800; letter-spacing: .02em; }
+        .step-badge p { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 1px; }
+
+        /* ===== STEP CONNECTOR (curved SVG arrow) ===== */
+        .step-connector-wrap {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            margin: 10px 0 6px 0;
+            min-height: 90px;
+        }
+        .step-connector-wrap .connector-label {
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            opacity: .7;
+            white-space: nowrap;
+        }
+        .step-connector-wrap svg.curved-arrow {
+            width: 140px;
+            height: 88px;
+            overflow: visible;
+        }
+        /* Fallback mobile: seta reta simples ancorada abaixo do botão */
+        @media (max-width: 639px) {
+            .step-connector-wrap {
+                min-height: 52px;
+            }
+            .step-connector-wrap svg.curved-arrow {
+                display: none;
+            }
+            .step-connector-wrap .mobile-arrow-fallback {
+                display: flex !important;
+            }
+        }
+        .mobile-arrow-fallback {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            opacity: .75;
+        }
+        .mobile-arrow-fallback span.line {
+            width: 2px; height: 22px;
+            background: linear-gradient(180deg, currentColor, transparent);
+        }
+        .mobile-arrow-fallback svg { width: 20px; height: 20px; }
+
+        /* ===== PULSE RING on CTA buttons ===== */
+        .btn-pulse-ring {
+            position: relative;
+            z-index: 0;
+        }
+        .btn-pulse-ring::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: inherit;
+            border: 2px solid currentColor;
+            opacity: 0;
+            animation: pulse-ring 2.2s ease-out infinite;
+            pointer-events: none;
+            z-index: -1;
+        }
+        @keyframes pulse-ring {
+            0%   { transform: scale(.95); opacity: .6; }
+            70%  { transform: scale(1.12); opacity: 0; }
+            100% { opacity: 0; }
+        }
+
+        /* ===== DATA SOURCE CARD (Etapa 3) ===== */
+        .datasource-card {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.35);
+            border-radius: 0.75rem;
+            padding: 0.85rem 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .datasource-card.visible { display: flex; }
+        .datasource-card .ds-icon {
+            font-size: 1.5rem; flex-shrink: 0;
+        }
+        .datasource-card .ds-text { flex: 1; }
+        .datasource-card .ds-title {
+            font-size: 0.9rem; font-weight: 700; color: #4ade80;
+        }
+        .datasource-card .ds-sub {
+            font-size: 0.75rem; color: #86efac; margin-top: 2px;
+        }
+        .datasource-card .ds-change-btn {
+            background: rgba(34,197,94,0.12); color: #4ade80;
+            border: 1px solid rgba(34,197,94,0.35);
+            padding: 4px 12px; border-radius: 0.4rem;
+            font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; white-space: nowrap;
+            transition: background .15s;
+            flex-shrink: 0;
+        }
+        .datasource-card .ds-change-btn:hover { background: rgba(34,197,94,0.25); }
+
+        /* ===== UPLOAD BLOCK collapse ===== */
+        #enrichUploadBlock {
+            transition: opacity .25s, max-height .3s;
+        }
+        #enrichUploadBlock.collapsed {
+            display: none;
+        }
+
+        details.adv-details { background:rgba(255,255,255,0.02); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.6rem 0.85rem; margin-bottom: 0.9rem; }
+        details.adv-details > summary {
+            cursor: pointer; list-style: none; font-size: 0.72rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted);
+            display: flex; align-items: center; gap: 6px; user-select: none;
+        }
+        details.adv-details > summary::-webkit-details-marker { display: none; }
+        details.adv-details > summary::before { content: '▶'; font-size: 0.6rem; transition: transform .15s; }
+        details.adv-details[open] > summary::before { transform: rotate(90deg); }
+        details.adv-details > summary .adv-tag {
+            margin-left: auto; font-size: 0.62rem; font-weight: 600; color: var(--color-text-muted);
+            background: var(--bg-badge); padding: 2px 8px; border-radius: 999px; text-transform: none;
+        }
+        details.adv-details > .adv-body { margin-top: 0.85rem; }
+
+        .export-bar {
+            background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(99,102,241,0.06));
+            border: 1px solid rgba(16,185,129,0.25); border-radius: 0.75rem;
+            padding: 1rem; margin-bottom: 1.25rem;
+        }
+        .export-bar h3 { font-size: 0.85rem; font-weight: 800; color: #10b981; margin-bottom: 0.6rem; }
+
+        @media (max-width: 640px) {
+            .step-nav { position: static; }
+            .step-nav a span.label { display: none; }
+            .step-nav a { flex: 0 0 auto; padding: 8px 10px; }
+        }
+        @media (max-width: 639px) {
+            .step-connector-wrap { min-height: 52px; }
+            .step-connector-wrap svg.curved-arrow { display: none; }
+            .step-connector-wrap .mobile-arrow-fallback { display: flex !important; }
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header style="background:var(--bg-header); border-bottom:1px solid var(--border-header);" class="p-6 transition-all duration-300">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6); width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                    <svg width="20" height="20" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white" style="color:var(--color-text)">GetLista <span style="color:#6366f1">Prospecta</span></h1>
+                    <p class="text-sm text-gray-400" style="color:var(--color-text-muted)">Multi-API · Fallback Inteligente · Exportação Enriquecida</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <a href="https://edimarpcosta.github.io/ameripan/prospecta/cnpdata/" target="_blank" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(99,102,241,0.4); color:#818cf8; font-weight:600;" title="Busca profunda de um CNPJ na Receita Federal">
+                    <span>🔍 CNPData</span>
+                </a>
+                <a href="https://edimarpcosta.github.io/ameripan/prospecta/getlista/leadview/" target="_blank" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(245,158,11,0.4); color:#fbbf24; font-weight:600;" title="Visualizador de Mapa e JSON (LeadView)">
+                    <span>🗺️ LeadView</span>
+                </a>
+                <button id="topProxySettingsBtn" type="button" onclick="if(typeof proxyController !== 'undefined') proxyController.openModal();" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(16,185,129,0.4); color:#10b981; font-weight:600;">
+                    <span>🌐 Proxy Settings</span>
+                </button>
+                <button id="themeToggleBtn" class="btn-secondary flex items-center gap-2" style="border-radius:9999px; font-weight:600;">
+                    <span id="themeToggleIcon">☀️</span>
+                    <span id="themeToggleText">Modo Claro</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-6 space-y-6">
+        <nav class="step-nav" id="flowStepperNav" aria-label="Etapas do fluxo">
+            <a href="#step1Filtrar" data-step="1"><span class="num">1</span><span class="label">Filtrar</span></a>
+            <span class="sep">›</span>
+            <a href="#step2Minerar" data-step="2"><span class="num">2</span><span class="label">Minerar</span></a>
+            <span class="sep">›</span>
+            <a href="#step3Enriquecer" data-step="3"><span class="num">3</span><span class="label">Enriquecer</span></a>
+            <span class="sep">›</span>
+            <a href="#step4Exportar" data-step="4"><span class="num">4</span><span class="label">Analisar &amp; Exportar</span></a>
+        </nav>
+
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- BLOCKLIST — CNPJs JÁ ATENDIDOS                        -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="step-badge" style="opacity:.85">
+            <div class="circle" style="background:linear-gradient(135deg,#64748b,#475569)">0</div>
+            <div><h3 style="color:#94a3b8">ETAPA 0 · BLOCKLIST (opcional)</h3><p>Configure antes de minerar, se já tiver CNPJs atendidos a excluir</p></div>
+        </div>
+        <div id="blocklistSection" class="glass-card p-5" style="border:1px solid rgba(239,68,68,0.25);">
+            <!-- Header colapsável -->
+            <div class="blocklist-toggle flex items-center justify-between" id="blocklistToggleBtn">
+                <div class="flex items-center gap-3">
+                    <div style="background:linear-gradient(135deg,#ef4444,#b91c1c); width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <span style="font-size:1rem;">🚫</span>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-semibold" style="color:#f87171;">CNPJs Já Atendidos <span style="color:#64748b; font-weight:400; font-size:0.78rem;">(Blocklist)</span></h2>
+                        <p class="text-xs" style="color:#94a3b8;">CNPJs desta lista serão excluídos automaticamente da prospecção</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="blocklistCounterBadge" class="blocklist-badge hidden">0 CNPJs</span>
+                    <span id="blocklistCpfBadge" class="blocklist-badge hidden" style="background:rgba(99,102,241,0.1); border-color:rgba(99,102,241,0.3); color:#818cf8;">0 CPFs</span>
+                    <span id="blocklistInvalidBadge" class="blocklist-badge hidden" style="background:rgba(234,179,8,0.1); border-color:rgba(234,179,8,0.3); color:#facc15;">0 inválidos</span>
+                    <span id="blocklistToggleIcon" style="color:#f87171; font-size:1.1rem;">▼</span>
+                </div>
+            </div>
+
+            <!-- Conteúdo colapsável -->
+            <div id="blocklistContent" class="mt-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    <!-- Textarea de entrada -->
+                    <div>
+                        <label class="block text-xs font-semibold mb-1" style="color:#f87171; text-transform:uppercase; letter-spacing:0.04em;">Cole os CNPJs que já atende (um por linha)</label>
+                        <textarea id="blocklistTextarea" placeholder="97.049.677/0001-56&#10;97049677000156&#10;12345678 (raiz — exclui todas as filiais)"></textarea>
+                        <p class="text-[10px] mt-1" style="color:#64748b;">Aceita qualquer formato: com pontuação, só dígitos ou raiz com 8 dígitos (exclui todas as filiais).</p>
+                    </div>
+                    <!-- Controles e status -->
+                    <div class="flex flex-col justify-between">
+                        <div>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <button id="loadBlocklistBtn" class="btn-blocklist">✅ Carregar Blocklist</button>
+                                <button id="clearBlocklistBtn" class="btn-blocklist-sec">🗑 Limpar</button>
+                                <button id="downloadBlocklistRawBtn" class="btn-blocklist-sec" disabled title="Carregue a blocklist primeiro">📥 Baixar Lista (.xlsx)</button>
+                            </div>
+                            <!-- Status/Contador -->
+                            <div id="blocklistStatusMsg" class="text-xs hidden" style="color:#94a3b8; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.15); border-radius:0.375rem; padding:6px 10px;"></div>
+                        </div>
+                        <!-- Opções avançadas -->
+                        <div class="mt-3 pt-3 border-t space-y-2" style="border-color:rgba(239,68,68,0.15);">
+                            <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer" style="color:#f87171;">
+                                <input type="checkbox" id="blocklistActiveCheck" class="h-3.5 w-3.5" style="accent-color:#ef4444;" checked onchange="if (typeof blocklistController !== 'undefined' && blocklistController.onActiveToggle) blocklistController.onActiveToggle()">
+                                <span>🚫 Ativar exclusão por Blocklist <span style="color:#64748b; font-weight:400;">(desmarcar para manter CNPJs salvos sem excluir da prospecção)</span></span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs cursor-pointer" style="color:#94a3b8;">
+                                <input type="checkbox" id="enrichAtendidosCheck" class="h-3.5 w-3.5" style="accent-color:#6366f1;">
+                                <span>🔄 Enriquecer também os já atendidos <span style="color:#64748b;">(após enriquecer os não-atendidos)</span></span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs cursor-pointer" style="color:#94a3b8;">
+                                <input type="checkbox" id="includeAtendidosExportCheck" class="h-3.5 w-3.5" style="accent-color:#6366f1;">
+                                <span>📊 Incluir já-atendidos na exportação final <span style="color:#64748b;">(coluna "Atende" = Sim/Não)</span></span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs cursor-pointer" style="color:#94a3b8;">
+                                <input type="checkbox" id="blocklistMatchByRoot" class="h-3.5 w-3.5" style="accent-color:#ef4444;">
+                                <span>🌳 Match por raiz CNPJ <span style="color:#64748b;">(exclui todas as filiais; desmarcado = exato)</span></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- SEÇÃO FASE 1: MINERAÇÃO CASA DOS DADOS                -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="glass-card p-6" style="border:1px solid rgba(245,158,11,0.2);">
+            <div class="flex items-center justify-between mb-4">
+                <div id="miningToggleBtn" class="section-toggle">
+                    <div style="background:linear-gradient(135deg,#f59e0b,#d97706); width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size:1.1rem">⛏️</span>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">Fase 1 — Mineração <span style="color:#fbbf24">Casa dos Dados</span></h2>
+                        <p class="text-xs" style="color:#94a3b8">Busca em lote por filtros via API paga — gera a lista de CNPJs para enriquecer</p>
+                    </div>
+                    <span id="miningToggleIcon" style="color:#fbbf24; font-size:1.2rem; margin-left:auto;">▼</span>
+                </div>
+            </div>
+
+            <div id="miningContent">
+                <div class="step-badge" id="step1Filtrar">
+                    <div class="circle" style="background:linear-gradient(135deg,#f59e0b,#d97706)">1</div>
+                    <div><h3 style="color:#fbbf24">ETAPA 1 · FILTRAR</h3><p>Defina UF, municípios e ramo de atuação para gerar a lista de CNPJs</p></div>
+                </div>
+                <!-- API Key e Endpoint -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1" style="color:#fbbf24; text-transform:uppercase; letter-spacing:0.05em;">🔑 API Key Casa dos Dados</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="mineApiKey" placeholder="Insira sua chave da API..." class="flex-1 p-3 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(245,158,11,0.25); color:var(--color-text); border-radius:0.5rem;">
+                            <button id="testApiKeyBtn" class="btn-secondary" style="padding:0.5rem 0.75rem; font-size:0.75rem; white-space:nowrap; border-color:rgba(245,158,11,0.3); color:#fbbf24;">🔑 Testar</button>
+                        </div>
+                        <span id="mineKeyTestResult" class="text-xs mt-1 block" style="color:#64748b; min-height:1.2em;"></span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1" style="color:var(--color-text-muted); text-transform:uppercase; letter-spacing:0.05em;">🌐 Endpoint</label>
+                        <input type="text" id="mineEndpoint" value="https://api.casadosdados.com.br/v5/cnpj/pesquisa" class="w-full p-3 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text-muted); border-radius:0.5rem; font-size:0.8rem;">
+                    </div>
+                </div>
+
+                <!-- Presets e Ramos de Filtros -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                    <!-- Presets Customizados -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:0.75rem; padding:0.75rem 1rem;">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-medium text-xs" style="color:#a855f7; text-transform:uppercase; letter-spacing:0.05em;">💾 Presets de Filtros</h3>
+                            <div class="flex gap-2">
+                                <button id="importPresetBtn" class="btn-secondary" style="padding:3px 8px; font-size:0.7rem;" title="Importar Presets (JSON)">📥</button>
+                                <button id="exportPresetBtn" class="btn-secondary" style="padding:3px 8px; font-size:0.7rem;" title="Exportar Presets (JSON)">📤</button>
+                                <button id="savePresetBtn" class="btn-secondary" style="padding:3px 10px; font-size:0.7rem; border-color:rgba(168,85,247,0.3); color:#a855f7;">💾 Salvar Atual</button>
+                            </div>
+                        </div>
+                        <div id="minePresetsContainer">
+                            <span class="text-xs" style="color:#64748b">Nenhum preset salvo</span>
+                        </div>
+                    </div>
+                    <!-- Ramos de Atuação -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:0.75rem; padding:0.75rem 1rem;">
+                        <label class="block text-xs font-semibold mb-1" style="color:#fbbf24; text-transform:uppercase; letter-spacing:0.05em;">🏭 Ramos de Atuação</label>
+                        <select id="mineRamosSelect" class="w-full p-2 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text); border-radius:0.5rem; margin-top:0.25rem;">
+                            <option value="">-- Selecione um Ramo para Carregar --</option>
+                            <option value="socio_busca_exata">👨‍💼 Buscar Empresas pelo Nome do Sócio (Busca Exata em Sócios)</option>
+                            <option value="gelados_atacado">🍦 Gelados - Sniper (Indústria/Atacado)</option>
+                            <option value="gelados_varejo">🍧 Gelados - Arrastão (Varejo/Gelaterias)</option>
+                            <option value="gelados_total">🍨 Gelados - Total (Indústria/Atacado/Varejo/Gelaterias/Paleterias)</option>
+                            <option value="panificacao_atacado">🍞 Panificação - Sniper (Industrial/Atacado)</option>
+                            <option value="panificacao_varejo">🧁 Panificação - Arrastão (Padarias de Bairro)</option>
+                            <option value="panificacao_total">🎂 Panificação - Total (Industrial/Atacado/Varejo/Padarias/Fábricas)</option>
+                            <option value="revenda_supermercados">🛒 Revenda - Master (Supermercados/Mercados)</option>
+                            <option value="revenda_conveniencia">🎳 Lazer/Conveniência - Sniper (Postos/Buffets)</option>
+                            <option value="maquina_total">🚀 A Máquina Total (Dominação)</option>
+                        </select>
+                        <span class="text-[10px]" style="color:var(--color-text-muted); display:block; margin-top:4px;">* Preenche radicais de termos. Deixa CNAEs opcionais.</span>
+                    </div>
+                </div>
+
+                <!-- Grid Principal de Filtros -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                    <!-- Coluna Esquerda -->
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--color-text-muted); text-transform:uppercase;">UF (Estado)</label>
+                                <select id="mineUf" class="w-full p-2 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text); border-radius:0.5rem;">
+                                    <option value="_todos" style="background:#1e293b; color:#e2e8f0;">🌐 Todos os Estados (Brasil Inteiro)</option>
+                                    <option value="AC" style="background:#1e293b; color:#e2e8f0;">AC - Acre</option>
+                                    <option value="AL" style="background:#1e293b; color:#e2e8f0;">AL - Alagoas</option>
+                                    <option value="AP" style="background:#1e293b; color:#e2e8f0;">AP - Amapá</option>
+                                    <option value="AM" style="background:#1e293b; color:#e2e8f0;">AM - Amazonas</option>
+                                    <option value="BA" style="background:#1e293b; color:#e2e8f0;">BA - Bahia</option>
+                                    <option value="CE" style="background:#1e293b; color:#e2e8f0;">CE - Ceará</option>
+                                    <option value="DF" style="background:#1e293b; color:#e2e8f0;">DF - Distrito Federal</option>
+                                    <option value="ES" style="background:#1e293b; color:#e2e8f0;">ES - Espírito Santo</option>
+                                    <option value="GO" style="background:#1e293b; color:#e2e8f0;">GO - Goiás</option>
+                                    <option value="MA" style="background:#1e293b; color:#e2e8f0;">MA - Maranhão</option>
+                                    <option value="MT" style="background:#1e293b; color:#e2e8f0;">MT - Mato Grosso</option>
+                                    <option value="MS" style="background:#1e293b; color:#e2e8f0;">MS - Mato Grosso do Sul</option>
+                                    <option value="MG" style="background:#1e293b; color:#e2e8f0;">MG - Minas Gerais</option>
+                                    <option value="PA" style="background:#1e293b; color:#e2e8f0;">PA - Pará</option>
+                                    <option value="PB" style="background:#1e293b; color:#e2e8f0;">PB - Paraíba</option>
+                                    <option value="PR" style="background:#1e293b; color:#e2e8f0;">PR - Paraná</option>
+                                    <option value="PE" style="background:#1e293b; color:#e2e8f0;">PE - Pernambuco</option>
+                                    <option value="PI" style="background:#1e293b; color:#e2e8f0;">PI - Piauí</option>
+                                    <option value="RJ" style="background:#1e293b; color:#e2e8f0;">RJ - Rio de Janeiro</option>
+                                    <option value="RN" style="background:#1e293b; color:#e2e8f0;">RN - Rio Grande do Norte</option>
+                                    <option value="RS" style="background:#1e293b; color:#e2e8f0;">RS - Rio Grande do Sul</option>
+                                    <option value="RO" style="background:#1e293b; color:#e2e8f0;">RO - Rondônia</option>
+                                    <option value="RR" style="background:#1e293b; color:#e2e8f0;">RR - Roraima</option>
+                                    <option value="SC" style="background:#1e293b; color:#e2e8f0;">SC - Santa Catarina</option>
+                                    <option value="SP" selected style="background:#1e293b; color:#e2e8f0;">SP - São Paulo</option>
+                                    <option value="SE" style="background:#1e293b; color:#e2e8f0;">SE - Sergipe</option>
+                                    <option value="TO" style="background:#1e293b; color:#e2e8f0;">TO - Tocantins</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--color-text-muted); text-transform:uppercase;">Situação</label>
+                                <select id="mineSituacao" class="w-full p-2 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text); border-radius:0.5rem;">
+                                    <option value="_todas">📋 Todas</option>
+                                    <option value="ativa" selected>Ativa</option>
+                                    <option value="baixada">Baixada</option>
+                                    <option value="inapta">Inapta</option>
+                                    <option value="suspensa">Suspensa</option>
+                                    <option value="nula">Nula</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold" style="color:var(--color-text-muted); text-transform:uppercase;">Municípios <span style="color:#64748b; font-weight:400">(Enter · vírgula ou linha)</span></label>
+                                <div class="flex gap-2">
+                                    <button id="mineSearchCitiesBtn" style="background:none; border:none; color:#6366f1; font-size:0.65rem; cursor:pointer; padding:2px 6px; font-weight: 600;" title="Buscar lista de municípios">🔍 Buscar Lista</button>
+                                    <button class="mine-clear-chips-btn" data-clear-key="cidades" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar todos">Limpar</button>
+                                </div>
+                            </div>
+                            <div style="position: relative;">
+                                <div class="mine-chip-container" id="box-mine-cidades"><input type="text" class="mine-chip-input" data-key="cidades" placeholder="Digite ou cole: CIDADE1, CIDADE2..." autocomplete="off"></div>
+                                <div id="mineCitiesAutocompleteList" class="mine-autocomplete-dropdown hidden"></div>
+                            </div>
+                            
+                            <!-- Caixas de Alerta & Sugestões para Cidades Não Encontradas -->
+                            <div id="mineCitiesValidationNotice" class="hidden mt-2 p-2.5 rounded-lg border text-xs" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#fca5a5;">
+                                <div class="flex items-center justify-between font-bold mb-1">
+                                    <span>⚠️ Cidades não encontradas: <span id="mineUnmatchedCitiesText" style="color:#f87171; font-weight:700;"></span></span>
+                                    <button id="mineCloseCitiesNoticeBtn" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem;" title="Fechar aviso">✕</button>
+                                </div>
+                                <div class="mt-1">
+                                    <span>👉 <strong>Você quis dizer:</strong></span>
+                                    <div id="mineCitySuggestionsContainer" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                                    <span class="block text-[10px] text-gray-400 mt-1">(Clique nas cidades sugeridas para adicionar, ou digite corretamente)</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Container de seleção de municípios por checkboxes (oculto por padrão) -->
+                            <div id="mineCitiesPanel" class="hidden" style="background:rgba(0,0,0,0.08); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.75rem; margin-top:0.5rem;">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs font-bold" style="color:var(--color-text)">Listagem de Municípios (<span id="mineCitiesUfLabel">SP</span>)</span>
+                                    <button id="mineCloseCitiesPanelBtn" style="background:none; border:none; color:var(--color-text-muted); font-size:0.75rem; cursor:pointer;">✕</button>
+                                </div>
+                                <input type="text" id="mineCitiesFilterInput" placeholder="Filtrar municípios..." class="w-full p-2 text-xs mb-2" style="border-radius:0.375rem;">
+                                <div id="mineCitiesList" style="max-height:120px; overflow-y:auto; font-size:0.75rem; display:flex; flex-direction:column; gap:4px; border:1px solid var(--border-input); padding:4px; border-radius:4px; background:var(--bg-input);">
+                                    <span class="text-xs text-gray-500 p-1">Clique em "Buscar Lista" para carregar municípios da UF</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold" style="color:var(--color-text-muted); text-transform:uppercase;">CNPJ Raiz <span style="color:#64748b; font-weight:400">(8 dígitos · vírgula ou quebra de linha)</span></label>
+                                <button class="mine-clear-chips-btn" data-clear-key="cnpjRaiz" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar todos">Limpar</button>
+                            </div>
+                            <div class="mine-chip-container" id="box-mine-cnpj-raiz">
+                                <input type="text" class="mine-chip-input" data-key="cnpjRaiz" placeholder="🏢 Somente os 8 dígitos (ex: 53153938, 65029035...)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold" style="color:var(--color-text-muted); text-transform:uppercase;">Termos de Busca <span style="color:#64748b; font-weight:400">(Radical · vírgula ou linha)</span></label>
+                                <button class="mine-clear-chips-btn" data-clear-key="termos" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar todos">Limpar</button>
+                            </div>
+
+                            <!-- Checkbox Busca Dupla Inteligente (CNAE + Termos em Etapas) -->
+                            <label class="flex items-center text-xs font-semibold mb-2 cursor-pointer" style="color:#10b981" title="Executa a mineração em 2 etapas separadas (primeiro por CNAEs, depois por Termos de Busca) e unifica a lista sem duplicatas para trazer o maior volume de leads possível">
+                                <input type="checkbox" id="smartDoubleMiningCheck" checked class="mr-2 h-4 w-4 rounded" style="accent-color:#10b981">
+                                🔍 Busca Dupla Inteligente (CNAE + Termos em Etapas - Pega Tudo)
+                            </label>
+
+                            <div class="mine-chip-container" id="box-mine-termos"><input type="text" class="mine-chip-input" data-key="termos" placeholder="Ex: sorvete, açaí, gelato ou nome do sócio..."></div>
+                            
+                            <!-- Controles de Configuração de Busca Textual (Tipo & Alvos) -->
+                            <div class="mt-2 p-2 rounded flex flex-wrap items-center justify-between gap-2 text-xs" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">
+                                <div class="flex items-center gap-1.5">
+                                    <span style="color:var(--color-text-muted); font-weight:600">Tipo de Busca:</span>
+                                    <select id="searchTermTipoBusca" class="p-1 rounded text-xs" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
+                                        <option value="radical" selected>radical (Padrão Empresas)</option>
+                                        <option value="exata">exata (Padrão Sócios)</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <span style="color:var(--color-text-muted); font-weight:600">Alvos:</span>
+                                    <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                        <input type="checkbox" id="searchTermRazaoSocial" checked class="rounded" style="accent-color:#6366f1"> Razão Social
+                                    </label>
+                                    <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                        <input type="checkbox" id="searchTermNomeFantasia" checked class="rounded" style="accent-color:#6366f1"> Nome Fantasia
+                                    </label>
+                                    <label class="flex items-center gap-1 cursor-pointer" style="color:#f59e0b; font-weight:600" title="Marque para buscar pelo Nome do Sócio (Recomendado Tipo: exata)">
+                                        <input type="checkbox" id="searchTermNomeSocio" class="rounded" style="accent-color:#f59e0b"> Nome do Sócio
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Direita -->
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold" style="color:var(--color-text-muted); text-transform:uppercase;">CNAEs <span style="color:#64748b; font-weight:400">(Opcional · vírgula ou linha)</span></label>
+                                <div class="flex gap-3 items-center">
+                                    <label class="flex items-center text-[10px]" style="color:#6366f1; cursor:pointer; font-weight:600; user-select:none;">
+                                        <input type="checkbox" id="mineCnaeApiCheck" class="mr-1 h-3 w-3" style="accent-color:#6366f1"> Pesquisar na API
+                                    </label>
+                                    <label class="flex items-center text-[10px]" style="color:#6366f1; cursor:pointer; font-weight:600; user-select:none;" title="Incluir busca em Atividades Secundárias">
+                                        <input type="checkbox" id="mineCnaeSecundariaCheck" class="mr-1 h-3 w-3" style="accent-color:#6366f1"> Incluir Secundárias
+                                    </label>
+                                    <button class="mine-clear-chips-btn" data-clear-key="cnaes" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar todos">Limpar</button>
+                                </div>
+                            </div>
+                            <div style="position: relative;">
+                                <div class="mine-chip-container" id="box-mine-cnaes"><input type="text" class="mine-chip-input" data-key="cnaes" placeholder="Ex: 1053800, 5611203..." autocomplete="off"></div>
+                                <div id="mineCnaeAutocompleteList" class="mine-autocomplete-dropdown hidden"></div>
+                            </div>
+                            
+                            <!-- Caixas de Alerta & Sugestões para CNAEs Não Encontrados -->
+                            <div id="mineCnaeValidationNotice" class="hidden mt-2 p-2.5 rounded-lg border text-xs" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#fca5a5;">
+                                <div class="flex items-center justify-between font-bold mb-1">
+                                    <span>⚠️ CNAEs / Termos não encontrados: <span id="mineUnmatchedCnaesText" style="color:#f87171; font-weight:700;"></span></span>
+                                    <button id="mineCloseCnaeNoticeBtn" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem;" title="Fechar aviso">✕</button>
+                                </div>
+                                <div class="mt-1">
+                                    <div id="mineCnaeSuggestionsContainer" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                                    <span class="block text-[10px] text-gray-400 mt-1">(Clique nos CNAEs sugeridos para adicionar, ou digite corretamente)</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Panel de busca de CNAEs na API (oculto por padrão) -->
+                            <div id="mineCnaePanel" class="hidden" style="background:rgba(0,0,0,0.08); border:1px solid var(--border-card); border-radius:0.5rem; padding:0.75rem; margin-top:0.5rem;">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs font-bold" style="color:var(--color-text)">Pesquisa de CNAEs</span>
+                                    <button id="mineCloseCnaePanelBtn" style="background:none; border:none; color:var(--color-text-muted); font-size:0.75rem; cursor:pointer;">✕</button>
+                                </div>
+                                <input type="text" id="mineCnaeFilterInput" placeholder="Digite nome ou código CNAE..." class="w-full p-2 text-xs mb-2" style="border-radius:0.375rem;">
+                                <div id="mineCnaeList" style="max-height:120px; overflow-y:auto; font-size:0.75rem; display:flex; flex-direction:column; gap:4px; border:1px solid var(--border-input); padding:4px; border-radius:4px; background:var(--bg-input);">
+                                    <span class="text-xs text-gray-500 p-1">Comece a digitar para pesquisar...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold" style="color:var(--color-text-muted); text-transform:uppercase;">Natureza Jurídica <span style="color:#64748b; font-weight:400">(Opcional · vírgula ou linha)</span></label>
+                                <button class="mine-clear-chips-btn" data-clear-key="naturezaJuridica" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar todos">Limpar</button>
+                            </div>
+                            <div style="position: relative;">
+                                <div class="mine-chip-container" id="box-mine-natjur"><input type="text" class="mine-chip-input" data-key="naturezaJuridica" placeholder="Ex: 2062, 2135, limitada..." autocomplete="off"></div>
+                                <div id="mineNatjurAutocompleteList" class="mine-autocomplete-dropdown hidden"></div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros Avançados -->
+                        <details class="adv-details">
+                            <summary>Filtros Avançados <span class="adv-tag">opcional</span></summary>
+                            <div class="adv-body">
+                            <div class="mine-filter-grid grid grid-cols-2 gap-x-4 gap-y-1">
+                                <label><input type="checkbox" id="mf_somente_matriz" class="mine-filter-check"> Somente Matriz</label>
+                                <label><input type="checkbox" id="mf_somente_filial" class="mine-filter-check"> Somente Filial</label>
+                                <label><input type="checkbox" id="mf_com_email" class="mine-filter-check"> Com E-mail</label>
+                                <label><input type="checkbox" id="mf_com_telefone" class="mine-filter-check"> Com Telefone</label>
+                                <label><input type="checkbox" id="mf_somente_fixo" class="mine-filter-check"> Somente Fixo</label>
+                                <label><input type="checkbox" id="mf_somente_celular" class="mine-filter-check"> Somente Celular</label>
+                                <label><input type="checkbox" id="mf_excluir_email_contab" class="mine-filter-check"> 🚫 Excluir E-mail Contábil</label>
+                                <label><input type="checkbox" id="mf_excluir_empresas_visualizadas" class="mine-filter-check"> 👁️ Excluir Já Visualizadas</label>
+                            </div>
+
+                            <!-- Filtros Tributários (MEI e Simples Nacional) -->
+                            <div class="mt-3 border-t border-gray-700 pt-2.5 grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1 font-semibold">Filtro MEI</label>
+                                    <select id="mineMeiSelect" class="w-full p-1.5 text-xs rounded" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0;">
+                                        <option value="todos" selected>MEI: Todos</option>
+                                        <option value="apenas_mei">Apenas MEI</option>
+                                        <option value="excluir_mei">Excluir MEI</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1 font-semibold">Simples Nacional</label>
+                                    <select id="mineSimplesSelect" class="w-full p-1.5 text-xs rounded" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0;">
+                                        <option value="todos" selected>Simples: Todos</option>
+                                        <option value="apenas_simples">Apenas Simples</option>
+                                        <option value="excluir_simples">Excluir Simples</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Capital Social & Data Abertura -->
+                            <div class="mt-4 border-t border-gray-700 pt-3">
+                                <label class="block text-xs font-semibold mb-2" style="color:#94a3b8; text-transform:uppercase;">Valores e Datas <span style="color:#64748b; font-weight:400">(Opcional)</span></label>
+                                <div class="grid grid-cols-2 gap-3 mb-2">
+                                    <div>
+                                        <label class="block text-[10px] uppercase text-gray-500 mb-1">Capital Social Mín. (R$)</label>
+                                        <input type="number" id="mineCapitalMin" placeholder="Ex: 10000" class="w-full p-2 text-xs" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; border-radius:0.375rem;">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase text-gray-500 mb-1">Capital Social Máx. (R$)</label>
+                                        <input type="number" id="mineCapitalMax" placeholder="Ex: 500000" class="w-full p-2 text-xs" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; border-radius:0.375rem;">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[10px] uppercase text-gray-500 mb-1">Abertura De (AAAA-MM-DD)</label>
+                                        <input type="date" id="mineDataDe" class="w-full p-2 text-xs" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; border-radius:0.375rem; color-scheme: dark;">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase text-gray-500 mb-1">Abertura Até (AAAA-MM-DD)</label>
+                                        <input type="date" id="mineDataAte" class="w-full p-2 text-xs" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; border-radius:0.375rem; color-scheme: dark;">
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                        </details>
+
+                        <!-- Delay e Max Pages -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:#94a3b8; text-transform:uppercase;">Delay (ms)</label>
+                                <input type="number" id="minePageDelay" value="3000" min="1000" max="15000" step="500" class="w-full p-2 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#e2e8f0; border-radius:0.5rem;">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:#94a3b8; text-transform:uppercase;">Máx. Páginas <span style="color:#64748b; font-weight:400">(0=ilimitado)</span></label>
+                                <input type="number" id="mineMaxPages" value="0" min="0" max="9999" class="w-full p-2 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#e2e8f0; border-radius:0.5rem;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros Extras: Bairro, CEP, DDD, Telefone -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold" style="color:#94a3b8; text-transform:uppercase;">Bairro <span style="color:#64748b; font-weight:400">(Opcional)</span></label>
+                            <button class="mine-clear-chips-btn" data-clear-key="bairros" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar">🗑</button>
+                        </div>
+                        <div class="mine-chip-container" id="box-mine-bairros"><input type="text" class="mine-chip-input" data-key="bairros" placeholder="Ex: CENTRO, VILA..."></div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold" style="color:#94a3b8; text-transform:uppercase;">CEP <span style="color:#64748b; font-weight:400">(Opcional)</span></label>
+                            <button class="mine-clear-chips-btn" data-clear-key="ceps" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar">🗑</button>
+                        </div>
+                        <div class="mine-chip-container" id="box-mine-ceps"><input type="text" class="mine-chip-input" data-key="ceps" placeholder="Ex: 13400000, 13416..."></div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold" style="color:#94a3b8; text-transform:uppercase;">DDD <span style="color:#64748b; font-weight:400">(Opcional)</span></label>
+                            <button class="mine-clear-chips-btn" data-clear-key="ddds" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar">🗑</button>
+                        </div>
+                        <div class="mine-chip-container" id="box-mine-ddds"><input type="text" class="mine-chip-input" data-key="ddds" placeholder="Ex: 19, 11, 21..."></div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold" style="color:#94a3b8; text-transform:uppercase;">Telefone <span style="color:#64748b; font-weight:400">(Opcional)</span></label>
+                            <button class="mine-clear-chips-btn" data-clear-key="telefone" style="background:none; border:none; color:#f87171; font-size:0.65rem; cursor:pointer; padding:2px 6px; opacity:0.7;" title="Limpar">🗑</button>
+                        </div>
+                        <div class="mine-chip-container" id="box-mine-telefone"><input type="text" class="mine-chip-input" data-key="telefone" placeholder="Ex: 34340000..."></div>
+                    </div>
+                </div>
+
+                <!-- Payload JSON Editor -->
+                <details class="adv-details mb-4">
+                    <summary>📄 Payload Editor (JSON Editável) <span class="adv-tag">avançado / dev</span></summary>
+                    <div class="adv-body">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-medium text-sm" style="color:#86efac;">📄 Payload Editor (JSON Editável)</h3>
+                        <div class="flex items-center gap-2">
+                            <span id="mineJsonEditorStatus" class="text-xs" style="color:#4ade80;"></span>
+                            <button id="syncFromEditorBtn" class="btn-secondary text-xs" style="padding:3px 10px; font-size:0.7rem;">🔄 Sincronizar → Filtros</button>
+                            <button id="resetEditorBtn" class="btn-secondary text-xs" style="padding:3px 10px; font-size:0.7rem;">↩ Resetar</button>
+                            <button id="clearAllChipsBtn" class="btn-secondary text-xs" style="padding:3px 10px; font-size:0.7rem; border-color:rgba(248,113,113,0.3); color:#f87171;">🗑 Limpar Filtros</button>
+                        </div>
+                    </div>
+                    <textarea id="mineJsonEditor" rows="14" spellcheck="false" style="width:100%; background:#010409; color:#86efac; padding:12px; font-family:'Courier New', monospace; font-size:0.72rem; border-radius:0.5rem; border:1px solid rgba(74,222,128,0.2); resize:vertical; line-height:1.5; tab-size:2;"></textarea>
+                    <p class="text-xs mt-1" style="color:#64748b;">💡 Edite livremente e clique <strong>Sincronizar → Filtros</strong> para aplicar. Ao alterar os filtros visuais acima, o editor atualiza automaticamente.</p>
+                    </div>
+                </details>
+
+                <!-- Progresso e Estatísticas -->
+                <div class="mb-4">
+                    <div class="mine-progress-container mb-3">
+                        <div id="mineProgressBar" class="mine-progress-bar" style="width:0%">0%</div>
+                    </div>
+                    <div class="grid grid-cols-3 md:grid-cols-6 gap-3 mb-3">
+                        <div class="stat-card" style="border-color:rgba(245,158,11,0.2);">
+                            <div class="stat-value" id="mineStatTotal" style="color:#fbbf24;">0</div>
+                            <div class="stat-label">Encontrados</div>
+                        </div>
+                        <div class="stat-card" style="border-color:rgba(74,222,128,0.2);">
+                            <div class="stat-value" id="mineStatExtracts" style="color:#4ade80;">0</div>
+                            <div class="stat-label">Extraídos</div>
+                        </div>
+                        <div class="stat-card" style="border-color:rgba(96,165,250,0.2);">
+                            <div class="stat-value" id="mineStatPage" style="color:#60a5fa;">0/0</div>
+                            <div class="stat-label">Página</div>
+                        </div>
+                        <div class="stat-card" style="border-color:rgba(168,85,247,0.2);">
+                            <div class="stat-value" id="mineStatEta" style="color:#a855f7;">—</div>
+                            <div class="stat-label">⏱ ETA</div>
+                        </div>
+                        <div class="stat-card" style="border-color:rgba(248,113,113,0.2);">
+                            <div class="stat-value" id="mineStatDupes" style="color:#f87171;">0</div>
+                            <div class="stat-label">Duplicados</div>
+                        </div>
+                        <div class="stat-card" style="border-color:rgba(56,189,248,0.2);">
+                            <div class="stat-value" id="mineStatSpeed" style="color:#38bdf8;">0</div>
+                            <div class="stat-label">CNPJs/s</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terminal -->
+                <div id="mineTerminal" class="mb-4">
+                    <div class="mine-log-info">--- Console Standby ---</div>
+                </div>
+
+                <!-- Transição Etapa 1→2: seta SVG curva ancorada no botão startMineBtn -->
+                <!-- step2Minerar badge mantido como âncora de navegação -->
+                <div id="step2Minerar" class="step-badge">
+                    <div class="circle" style="background:linear-gradient(135deg,#f59e0b,#d97706)">2</div>
+                    <div><h3 style="color:#fbbf24">ETAPA 2 · MINERAR</h3><p>Execute a busca com os filtros definidos e confira a prévia dos resultados</p></div>
+                </div>
+                <!-- Botões de Ação -->
+                <div class="flex flex-wrap gap-3 mb-4 items-center">
+                <button id="startMineBtn" class="btn-mine btn-pulse-ring" style="color:#f59e0b">🚀 Minerar Base</button>
+                    <button id="stopMineBtn" class="btn-mine-stop hidden">🛑 Parar</button>
+                    <span id="mineSpinner" class="loading-spinner hidden" style="margin-top:6px;"></span>
+                    <button id="exportMineBtn" class="btn-primary btn-export hidden" style="font-size:0.85rem; padding:0.5rem 1.2rem;">📊 Exportar Excel (.xlsx)</button>
+                    <button id="exportMineJsonBtn" class="btn-secondary hidden" style="font-size:0.85rem; padding:0.5rem 1.2rem; border-color:#38bdf8; color:#38bdf8;" title="Exportar dados minerados em formato JSON estruturado para IA / Scripts">📋 Exportar JSON (.json)</button>
+                    <button id="transferMineBtn" class="btn-mine-transfer hidden">📥 Usar CNPJs na Fase 2 (Enriquecer)</button>
+                    <button id="clearMineResultsBtn" class="btn-secondary hidden" style="border-color:#ef4444; color:#f87171; padding:0.4rem 0.8rem; font-size:0.78rem;">🗑 Limpar Resultados</button>
+                    <span style="border-left:1px solid rgba(255,255,255,0.1); height:24px; margin:0 4px;"></span>
+                    <button id="showHistoryBtn" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.78rem;">📜 Histórico</button>
+                    <label class="flex items-center text-xs" style="color:#94a3b8; cursor:pointer;">
+                        <input type="checkbox" id="mineNotifyCheck" checked class="mr-1 h-3 w-3" style="accent-color:#f59e0b">
+                        🔔 Notificar
+                    </label>
+                </div>
+
+                <!-- Tabela Prévia de Resultados da Mineração -->
+                <div class="flex justify-between items-end mb-2">
+                    <h3 class="font-medium text-sm" style="color:#fbbf24;">📄 Prévia dos Resultados</h3>
+                    <button id="toggleTableModeBtn" class="btn-secondary text-xs" style="padding:3px 8px; font-size:0.7rem;">Modo Expandido</button>
+                </div>
+                <div id="mineResultsWrap" style="border-radius:0.75rem; border:1px solid rgba(245,158,11,0.15); overflow-x:auto;">
+                    <table id="mineTable">
+                        <thead style="background:rgba(245,158,11,0.1);">
+                            <tr>
+                                <th style="color:#fbbf24;">CNPJ</th>
+                                <th style="color:#fbbf24;">Razão Social</th>
+                                <th style="color:#fbbf24;">Nome Fantasia</th>
+                                <th style="color:#fbbf24;">Cidade/UF</th>
+                                <th style="color:#fbbf24;">Situação</th>
+                                <th style="color:#fbbf24;">CNAE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mineTableBody"></tbody>
+                    </table>
+                    <div id="mineTableInfo" class="text-center text-xs mt-2 mb-2 hidden" style="color:#64748b"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- SEÇÃO FASE 2: CARREGAR / ENRIQUECER CNPJs             -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+
+        <!-- Conector SVG curvo: Etapa 2 (startMineBtn) → Etapa 3 -->
+        <div class="step-connector-wrap" style="color:#6366f1" aria-hidden="true">
+            <svg class="curved-arrow" viewBox="0 0 140 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="arrowhead-indigo" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" opacity="0.85"/>
+                    </marker>
+                </defs>
+                <!-- Curva que contorna o botão: parte da direita do CTA, sobe, contorna e desce -->
+                <path d="M 70 4 C 115 4, 130 30, 120 52 C 110 74, 82 76, 70 84"
+                      stroke="#6366f1" stroke-width="2.5" stroke-opacity="0.8"
+                      stroke-dasharray="5 3"
+                      fill="none"
+                      marker-end="url(#arrowhead-indigo)"/>
+                <!-- Anel decorativo no ponto de origem (junto ao botão) -->
+                <circle cx="70" cy="4" r="4" fill="#6366f1" opacity="0.5"/>
+            </svg>
+            <!-- Fallback mobile -->
+            <div class="mobile-arrow-fallback" style="color:#6366f1">
+                <span class="line"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            </div>
+            <span class="connector-label" style="color:#6366f1">Etapa 3 · Enriquecer</span>
+        </div>
+
+        <div class="step-badge" id="step3Enriquecer">
+            <div class="circle" style="background:linear-gradient(135deg,#6366f1,#4f46e5)">3</div>
+            <div><h3 style="color:#818cf8">ETAPA 3 · ENRIQUECER</h3><p>Carregue os CNPJs minerados (ou uma planilha própria) e rode o enriquecimento multi-API</p></div>
+        </div>
+        <div id="enrichmentSection" class="glass-card p-6">
+
+            <!-- Card de status da fonte de dados (Estado A: CNPJs recebidos da mineração) -->
+            <div id="datasourceStatusCard" class="datasource-card">
+                <span class="ds-icon">✅</span>
+                <div class="ds-text">
+                    <div class="ds-title"><span id="datasourceCount">0</span> CNPJs recebidos da mineração (Etapa 2)</div>
+                    <div class="ds-sub">Pronto para enriquecer — use os botões abaixo para iniciar.</div>
+                </div>
+                <button class="ds-change-btn" id="datasourceChangeBtn" title="Carregar outra fonte de dados">🔄 Carregar outra fonte</button>
+            </div>
+
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <h2 class="text-lg font-semibold text-white">📂 Fase 2 — Carregar / Enriquecer CNPJs</h2>
+                <button id="transferMineBtnFase2" class="btn-mine-transfer hidden">📥 Puxar CNPJs da Mineração (Fase 1)</button>
+            </div>
+
+            <!-- Bloco de upload/paste (Estado B: expandido por padrão, recolhe quando dados chegam) -->
+            <div id="enrichUploadBlock">
+                <p class="text-xs mb-4" style="color:#94a3b8; background:rgba(99,102,241,0.07); border:1px solid rgba(99,102,241,0.18); border-radius:0.5rem; padding:8px 12px;">
+                    📂 <strong>Comece por aqui:</strong> carregue uma lista de CNPJs pronta — ou volte à Etapa 1 para minerar uma nova.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Upload de Arquivo -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.75rem; padding:1.25rem;">
+                        <h3 class="font-medium text-gray-300 mb-3">Carregar Planilha (CSV / XLSX)</h3>
+                        <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" class="block w-full mb-3 text-sm">
+                        <button id="loadCsvBtn" class="btn-primary w-full">Carregar Arquivo</button>
+                        <p class="text-xs mt-2" style="color:#64748b">Aceita .csv e .xlsx (Casa dos Dados, etc.)</p>
+                    </div>
+                    <!-- Cola de Lista -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.75rem; padding:1.25rem;">
+                        <h3 class="font-medium text-gray-300 mb-3">Colar lista de CNPJs</h3>
+                        <textarea id="cnpjList" rows="4" class="w-full p-3 text-sm mb-3" placeholder="Cole seus CNPJs aqui (um por linha)&#10;97.049.677/0001-56&#10;97049677000156"></textarea>
+                        <button id="loadListBtn" class="btn-primary w-full btn-pulse-ring" style="color:#fff">Carregar Lista</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 2: Painel Multi-API -->
+        <div id="controlsSection" class="glass-card p-6 hidden">
+
+            <!-- ── 1. BOTÕES DE AÇÃO PRINCIPAL (sempre visíveis) ── -->
+            <div class="flex flex-wrap gap-3 mb-4">
+                <button id="startBtn" class="btn-primary btn-success btn-pulse-ring" style="color:#fff">▶ Iniciar Consulta Padrão</button>
+                <button id="startDeepBtn" class="btn-primary btn-pulse-ring" style="background:linear-gradient(135deg,#0284c7,#0369a1); font-weight:700; color:#fff" onclick="uiControllers.startProcessing(true)">🚀 Iniciar (Modo Profundo)</button>
+                <button id="pauseBtn" class="btn-primary btn-warning hidden">⏸ Pausar</button>
+                <button id="resumeBtn" class="btn-primary hidden">▶ Continuar</button>
+                <button id="stopBtn" class="btn-primary btn-danger hidden">🛑 Parar</button>
+                <button id="reenrichBtn" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="dataHandlers.reenrichWithDeepMerge()">🔍 Reenriquecer Lista (Modo Profundo)</button>
+                <button id="retryFailedBtn" class="btn-primary" style="background:linear-gradient(135deg,#dc2626,#b91c1c);" onclick="uiControllers.showFailedCnpjsModal()">⚠️ Re-tentar Falhas</button>
+            </div>
+
+            <!-- ── 2. STATUS / PROGRESSO (visível durante execução) ── -->
+            <!-- Estatísticas Rápidas -->
+            <div id="statsPanel" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 hidden">
+                <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+                <div class="stat-card"><div class="stat-value" id="statSuccess" style="color:#4ade80">0</div><div class="stat-label">Sucesso</div></div>
+                <div class="stat-card cursor-pointer hover:border-red-500 transition-colors" onclick="uiControllers.showFailedCnpjsModal()" title="Clique para ver os CNPJs com falha e opções de re-tentativa"><div class="stat-value" id="statError" style="color:#f87171">0</div><div class="stat-label">Erros (Re-tentar)</div></div>
+                <div class="stat-card"><div class="stat-value" id="statPending" style="color:#facc15">0</div><div class="stat-label">Pendentes</div></div>
+            </div>
+
+            <!-- Barra de Progresso -->
+            <div class="progress-container">
+                <div id="progressBar" class="progress-bar" style="width:0%">0%</div>
+            </div>
+            <div class="flex items-center mb-4">
+                <span id="statusText" class="mr-2 text-sm" style="color:#94a3b8">Pronto para processar</span>
+                <span id="loadingSpinner" class="loading-spinner hidden"></span>
+            </div>
+
+            <!-- Alerta de Pausa Automática (aparece apenas quando ocorre erro 429) -->
+            <div id="autoPauseAlert" class="auto-pause-alert">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p class="font-medium" style="color:#fb923c">⚠ Processamento pausado automaticamente</p>
+                        <p id="autoPauseReason" class="text-sm" style="color:#fdba74">Erro: Too Many Requests (429)</p>
+                        <p class="text-sm mt-2 flex items-center" style="color:#fed7aa">
+                            <span>Retomando em</span>
+                            <span id="autoPauseCountdown" class="timer-display">30</span>
+                            <span>segundos</span>
+                            <span class="ml-4 flex items-center">
+                                <button type="button" class="px-2 py-1 rounded-l text-xs" style="background:rgba(251,146,60,0.2); color:#fb923c; border:1px solid rgba(251,146,60,0.3);" onclick="adjustPauseDelay(-5)">-5s</button>
+                                <input type="number" id="currentPauseDelay" min="5" max="300" class="w-14 py-1 text-xs text-center" style="border-radius:0" onchange="updateCurrentPauseDelay(this.value)">
+                                <button type="button" class="px-2 py-1 rounded-r text-xs" style="background:rgba(251,146,60,0.2); color:#fb923c; border:1px solid rgba(251,146,60,0.3);" onclick="adjustPauseDelay(5)">+5s</button>
+                            </span>
+                        </p>
+                        <p class="text-xs mt-1" style="color:#fdba74" id="connectionTestStatus"></p>
+                    </div>
+                    <div class="mt-3 md:mt-0 flex flex-col md:flex-row gap-2">
+                        <button id="testConnectionBtn" class="btn-secondary text-xs">🔌 Testar Conexão</button>
+                        <button id="cancelAutoPauseBtn" class="btn-secondary text-xs" style="border-color:rgba(251,146,60,0.4); color:#fb923c">▶ Cancelar e Continuar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── 3. CONFIGURAÇÕES AVANÇADAS (accordion fechado por padrão) ── -->
+            <details class="adv-details" id="advEnrichSettings">
+                <summary>⚙️ Configurações Avançadas
+                    <span class="adv-tag">delay · paralelismo · APIs · prioridade</span>
+                </summary>
+                <div class="adv-body">
+
+                    <!-- Status e Ordenação das APIs -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-base font-semibold" style="color:var(--color-text)">📡 Fila de APIs</h2>
+                            <div class="flex gap-2">
+                                <button id="toggleApiManagerBtn" type="button" class="btn-secondary text-xs" onclick="const p = document.getElementById('apiManagerPanel'); p.classList.toggle('hidden');">⚙️ API Settings</button>
+                                <button id="openProxySettingsBtn" type="button" class="btn-secondary text-xs" onclick="if(typeof proxyController !== 'undefined') proxyController.openModal();" style="border-color:rgba(16,185,129,0.4); color:#10b981;">🌐 Proxy Settings</button>
+                                <button id="testAllApisBtn" type="button" class="btn-secondary text-xs">🔄 Testar Pings</button>
+                            </div>
+                        </div>
+                        <div id="apiQueueStatus" class="flex flex-wrap gap-2 mb-3"></div>
+
+                        <!-- Painel Expansível de API Settings (Prioridades & Rate Limits) -->
+                        <div id="apiManagerPanel" class="hidden p-4 rounded-lg mb-3" style="background:var(--bg-card); border:1px solid var(--border-card);">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-xs font-semibold" style="color:var(--color-accent)">⚙️ API Settings & Prioridades (Configure Req/min, Timeout e Ordem):</span>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="utils.loadApiOrder(); uiControllers.renderApiQueueStatus();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">🔄 Restaurar Salvo</button>
+                                    <button type="button" onclick="localStorage.removeItem('cnpj_apis_order'); location.reload();" class="text-xs px-2 py-1 rounded" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">⚡ Restaurar Padrão</button>
+                                </div>
+                            </div>
+                            <div id="apiOrderingList" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+                        </div>
+                    </div>
+
+                    <!-- Campos de configuração numérica -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:0.75rem; padding:1rem;" class="mb-3">
+                        <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <div>
+                                <label class="block text-xs mb-1" style="color:#64748b">Delay (ms)</label>
+                                <input type="number" id="apiDelay" value="300" min="100" max="5000" step="100" class="w-full p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs mb-1" style="color:#64748b">Paralelas</label>
+                                <input type="number" id="maxParallelRequests" value="3" min="1" max="10" class="w-full p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs mb-1" style="color:#64748b">Pausa auto (s)</label>
+                                <input type="number" id="autoPauseDelay" value="30" min="5" max="300" class="w-full p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs mb-1" style="color:#64748b">Rodízio APIs (Lote)</label>
+                                <input type="number" id="batchRotationSize" value="30" min="5" max="100" class="w-full p-2 text-sm" title="Alterna a API principal a cada N requisições para evitar limites de taxa (Rate Limit)">
+                            </div>
+                            <div>
+                                <label class="block text-xs mb-1" style="color:#64748b">CEP Origem (Haversine)</label>
+                                <input type="text" id="scoreCepOrigem" placeholder="Ex: 13400000" class="w-full p-2 text-sm" onchange="state.scoreConfig.cepOrigem = this.value.replace(/\D/g, '')">
+                            </div>
+                            <div class="flex flex-col justify-end">
+                                <label class="flex items-center text-xs" style="color:#94a3b8">
+                                    <input type="checkbox" id="autoPauseEnabled" checked class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1">
+                                    Auto-pause ativo
+                                </label>
+                                <label class="flex items-center text-xs mt-1" style="color:#94a3b8">
+                                    <input type="checkbox" id="testConnectionBeforeResume" checked class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1">
+                                    Testar antes de retomar
+                                </label>
+                            </div>
+                            <div class="flex flex-col justify-end border-l border-gray-700 pl-3">
+                                <label class="flex items-center text-xs" style="color:#94a3b8; cursor:pointer; user-select:none;">
+                                    <input type="checkbox" id="cnoEnabled" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1">
+                                    Consultar Obras CNO
+                                </label>
+                                <label id="cnoOnlyActiveWrapper" class="flex items-center text-xs mt-1 hidden" style="color:#94a3b8; cursor:pointer; user-select:none;">
+                                    <input type="checkbox" id="cnoOnlyActive" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1">
+                                    Apenas Obras Ativas
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Modo Enriquecimento Profundo Opção & IE -->
+                        <div class="mt-3 pt-3 border-t border-gray-700/30 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
+                            <div class="flex flex-wrap items-center gap-4">
+                                <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;">
+                                    <input type="checkbox" id="deepMergeEnabledCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.deepMergeEnabled = this.checked">
+                                    🔍 Modo Enriquecimento Profundo (Multi-API)
+                                </label>
+                                <label class="flex items-center text-xs font-semibold" style="color:var(--color-accent); cursor:pointer;" title="Consulta Inscrição Estadual e sócios via APIs CNPJ Fácil e CNPJa durante a busca">
+                                    <input type="checkbox" id="ieEnabledCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#6366f1" onchange="state.ieEnabled = this.checked">
+                                    🏢 Consultar IE Durante a Busca (CNPJ Fácil / CNPJa)
+                                </label>
+                                <label class="flex items-center text-xs font-semibold" style="color:#a855f7; cursor:pointer;" title="Pula a consulta de IE na busca principal para torná-la rápida. Ao terminar, realiza uma tarefa separada apenas para preencher IEs faltantes com intervalos/timers inteligentes.">
+                                    <input type="checkbox" id="ieFetchAtEndCheck" class="mr-2 h-4 w-4 rounded" style="accent-color:#a855f7">
+                                    ⏳ Buscar IE Apenas ao Final (Fase 3 Separada com Timer)
+                                </label>
+                            </div>
+                            <span class="text-xs" style="color:var(--color-text-muted)">⚠️ Consulta múltiplas APIs ativas por CNPJ para enriquecer Inscrição Estadual, sócios e contatos.</span>
+                        </div>
+                    </div>
+
+                </div><!-- /.adv-body -->
+            </details><!-- /#advEnrichSettings -->
+
+        </div>
+
+        <!-- Seção 3: Resultados -->
+        <!-- Conector SVG curvo: Etapa 3 (startBtn/startDeepBtn) → Etapa 4 -->
+        <div class="step-connector-wrap" style="color:#10b981" aria-hidden="true">
+            <svg class="curved-arrow" viewBox="0 0 140 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" opacity="0.85"/>
+                    </marker>
+                </defs>
+                <path d="M 70 4 C 20 4, 8 30, 18 52 C 28 74, 56 76, 70 84"
+                      stroke="#10b981" stroke-width="2.5" stroke-opacity="0.8"
+                      stroke-dasharray="5 3"
+                      fill="none"
+                      marker-end="url(#arrowhead-green)"/>
+                <circle cx="70" cy="4" r="4" fill="#10b981" opacity="0.5"/>
+            </svg>
+            <!-- Fallback mobile -->
+            <div class="mobile-arrow-fallback" style="color:#10b981">
+                <span class="line"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            </div>
+            <span class="connector-label" style="color:#10b981">Etapa 4 · Analisar &amp; Exportar</span>
+        </div>
+        <div class="step-badge" id="step4Exportar">
+            <div class="circle" style="background:linear-gradient(135deg,#10b981,#059669)">4</div>
+            <div><h3 style="color:#34d399">ETAPA 4 · ANALISAR &amp; EXPORTAR</h3><p>Filtre, agrupe e exporte os leads enriquecidos</p></div>
+        </div>
+        <div id="resultsSection" class="glass-card p-6 hidden">
+            <div class="export-bar">
+                <h3>📤 Exportar Resultados</h3>
+                <div class="flex flex-wrap gap-2">
+                <button id="exportMaposcopeBtn" class="btn-primary btn-export opacity-50" disabled>🗺️ Exportar Maposcope</button>
+                <button id="exportCompletoBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#6366f1,#4f46e5)">📊 Exportar Planilha Completo (PT-BR)</button>
+                <button id="exportCompletoJsonBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#0284c7,#0369a1)" title="Exportar todos os campos enriquecidos em formato JSON estruturado">📋 Exportar JSON Completo (PT-BR)</button>
+                <button id="sendToLeadViewBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#f59e0b,#d97706); font-weight:700" title="Enviar os leads do filtro diretamente para o LeadView sem precisar baixar arquivo">🗺️ Enviar p/ LeadView (Mapa)</button>
+                <button id="copyFilteredJsonBtn" class="btn-primary btn-export opacity-50" disabled style="background:linear-gradient(135deg,#10b981,#059669); font-weight:700" title="Copiar texto JSON dos leads do filtro para a área de transferência">📋 Copiar JSON (Filtrados)</button>
+                <button id="exportCompletoComAtendeBtn" class="btn-atendidos-export hidden" disabled title="Disponível após enriquecer os já-atendidos">📊 Exportar Todos + Atende (Sim/Não)</button>
+                <button id="downloadAtendidosEnriquecidosBtn" class="btn-atendidos-export hidden" disabled title="Disponível após enriquecer os já-atendidos">📥 Baixar Já-Atendidos Enriquecidos</button>
+                <button id="exportCpfSocioBtn" class="btn-atendidos-export hidden" disabled title="Disponível após enriquecimento quando há CPFs na blocklist">🔍 Relatório Possíveis Sócios (QSA)</button>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <h2 class="text-lg font-semibold text-white">📋 Resultados</h2>
+                
+                <!-- Filtros de Exportação -->
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Exportar Filtros:</span>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="exportAll" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="document.querySelectorAll('.export-status').forEach(cb => cb.disabled = this.checked)"> Todos</label>
+                    <span class="opacity-50">|</span>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="ativa" disabled style="accent-color:#6366f1"> Ativa</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="baixada" disabled style="accent-color:#6366f1"> Baixada</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="inapta" disabled style="accent-color:#6366f1"> Inapta</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="nula" disabled style="accent-color:#6366f1"> Nula</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" class="export-status mr-1 h-3 w-3" value="suspensa" disabled style="accent-color:#6366f1"> Suspensa</label>
+                </div>
+                
+                <!-- Filtros de Agrupamento -->
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Agrupar por:</span>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="groupRoot" checked class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> Raiz CNPJ</label>
+                    <label class="flex items-center cursor-pointer"><input type="checkbox" id="groupCity" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> Cidade</label>
+                    <label class="flex items-center cursor-pointer" title="Agrupa CNPJs no mesmo endereço e destaca o Novo Dono"><input type="checkbox" id="groupAddress" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> Ver CNPJs com o mesmo endereço</label>
+                </div>
+
+                <!-- Configurações de Exibição -->
+                <div class="flex flex-wrap items-center gap-3 text-xs" style="color:var(--color-text); background:var(--bg-badge); padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid var(--border-card);">
+                    <span class="font-bold" style="color:var(--color-accent)">Exibição:</span>
+                    <label class="flex items-center cursor-pointer" style="user-select:none;">
+                        <input type="checkbox" id="expandResultsDefault" class="mr-1 h-3 w-3" style="accent-color:#6366f1" onchange="uiControllers.renderGroupedResults()"> 
+                        Manter expandidos (padrão colapsado)
+                    </label>
+                </div>
+            </div>
+
+            <!-- Painel de Filtros Avançados dos Resultados (Tempo Real) -->
+            <div id="advancedFiltersPanel" class="mb-4 p-4 rounded-lg" style="background:var(--bg-badge); border:1px solid var(--border-card);">
+                <div class="flex items-center justify-between cursor-pointer select-none mb-3" onclick="const p = document.getElementById('filterFieldsContainer'); const icon = this.querySelector('.filter-toggle-icon'); if (p.classList.contains('hidden')) { p.classList.remove('hidden'); icon.textContent = '▲'; } else { p.classList.add('hidden'); icon.textContent = '▼'; }">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-bold" style="color:var(--color-accent)">🔍 Filtros em Tempo Real</span>
+                        <span id="filteredResultsCounter" class="text-xs px-2 py-0.5 rounded font-bold" style="background:rgba(99,102,241,0.15); color:#6366f1">Exibindo todos os resultados</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="text-xs px-2.5 py-1 rounded font-semibold" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text); cursor:pointer;" onclick="event.stopPropagation(); uiControllers.resetFilters()">🧹 Limpar Filtros</button>
+                        <span class="filter-toggle-icon text-xs font-bold" style="color:var(--color-text-muted)">▲</span>
+                    </div>
+                </div>
+
+                <!-- Grid de Inputs de Filtro -->
+                <div id="filterFieldsContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <!-- Temperatura Lead -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Temperatura Lead</label>
+                        <div class="flex items-center gap-2 flex-wrap pt-1">
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempQuente" class="filter-input" style="accent-color:#16a34a" onchange="uiControllers.applyFilters()"> 🔥 Quente
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempMorno" class="filter-input" style="accent-color:#eab308" onchange="uiControllers.applyFilters()"> ⚡ Morno
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer" style="color:var(--color-text)">
+                                <input type="checkbox" id="filterTempFrio" class="filter-input" style="accent-color:#3b82f6" onchange="uiControllers.applyFilters()"> ❄️ Frio
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Nome / Fantasia / Razão Social -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Razão Social / Fantasia</label>
+                        <input type="text" id="filterEmpresa" placeholder="Ex: Sorvetes, Borelli..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Nome do Sócio (QSA) -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Nome do Sócio (QSA)</label>
+                        <input type="text" id="filterSocio" placeholder="Ex: Fabio, Silva..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Raiz CNPJ / CNPJ -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">CNPJ ou Raiz (8 dígitos)</label>
+                        <input type="text" id="filterCnpj" placeholder="Ex: 97554300..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Cidade / Bairro -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Cidade / Bairro / UF</label>
+                        <input type="text" id="filterLocal" placeholder="Ex: Ribeirão Preto, SP..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- CNAE Principal / Secundário -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">CNAE (Código/Texto)</label>
+                        <input type="text" id="filterCnae" placeholder="Ex: 5611, Lanchonetes..." class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                    </div>
+
+                    <!-- Capital Social Mínimo / Máximo -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Capital Social (R$ Min - Max)</label>
+                        <div class="flex gap-1">
+                            <input type="number" id="filterCapitalMin" placeholder="Mín R$" class="w-1/2 px-2 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                            <input type="number" id="filterCapitalMax" placeholder="Máx R$" class="w-1/2 px-2 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" oninput="uiControllers.applyFilters()">
+                        </div>
+                    </div>
+
+                    <!-- Obras CNO -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Obras CNO</label>
+                        <select id="filterObras" class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" onchange="uiControllers.applyFilters()">
+                            <option value="todos">Todos os leads</option>
+                            <option value="com_obras">Apenas com Obras CNO</option>
+                            <option value="obras_ativas">Apenas com Obras Ativas</option>
+                            <option value="sem_obras">Apenas sem Obras CNO</option>
+                        </select>
+                    </div>
+
+                    <!-- Inscrição Estadual -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">Inscrição Estadual (IE)</label>
+                        <select id="filterIe" class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" onchange="uiControllers.applyFilters()">
+                            <option value="todos">Todas as IEs</option>
+                            <option value="com_ie">Apenas com IE Cadastrada</option>
+                            <option value="sem_ie">Sem IE / Não informada</option>
+                        </select>
+                    </div>
+
+                    <!-- Ponto Comercial / Mesmo Endereço -->
+                    <div>
+                        <label class="block font-bold mb-1" style="color:var(--color-text-muted)">🏢 Ponto Comercial / Mesmo Endereço</label>
+                        <select id="filterPontoComercial" class="w-full px-2.5 py-1.5 rounded text-xs filter-input" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--color-text)" onchange="uiControllers.applyFilters()">
+                            <option value="todos">Todos os leads</option>
+                            <option value="novo_dono_apenas">Apenas o cnpj mais novo do endereço</option>
+                            <option value="novo_dono_citar_antigos">Apenas o cnpj mais novo do endereço e citar "antigos"</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto" style="border-radius:0.75rem; border:1px solid rgba(255,255,255,0.08);">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Score B2B</th>
+                            <th>CNPJ</th>
+                            <th>Razão Social</th>
+                            <th>Nome Fantasia</th>
+                            <th>Situação</th>
+                            <th>Cidade/UF</th>
+                            <th>CNAE Principal</th>
+                            <th>API</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            
+            <!-- Container de Grupos (oculto por padrão) -->
+            <div id="groupedResultsContainer" class="hidden space-y-4"></div>
+            
+            <div id="tableInfoRow" class="text-center text-xs mt-3 hidden" style="color:#64748b"></div>
+        </div>
+    </main>
+
+    <!-- Modal de Detalhes -->
+    <div id="detailsModal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-semibold text-white" id="modalTitle">Detalhes</h2>
+                <button id="closeModalBtn" onclick="uiControllers.closeDetails()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="modalContent" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Modal de Configurações de CORS Proxies -->
+    <div id="proxySettingsModal" class="modal-overlay" style="display:none">
+        <div class="modal-content max-w-2xl">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-700/50">
+                <div>
+                    <h2 class="text-xl font-bold text-emerald-400">🌐 Gerenciador de CORS Proxies</h2>
+                    <p class="text-xs text-gray-400">Configure os servidores proxy para contornar restrições de CORS e limites de taxa</p>
+                </div>
+                <button onclick="document.getElementById('proxySettingsModal').style.display='none'" class="text-gray-400 hover:text-white transition-colors font-bold text-xl">✕</button>
+            </div>
+
+            <!-- Formulário Adicionar Proxy -->
+            <div class="p-3 rounded-lg mb-4 space-y-3" style="background:var(--bg-card); border:1px solid var(--border-card);">
+                <span class="text-xs font-bold text-white block uppercase">➕ Adicionar Novo Proxy</span>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] uppercase text-gray-400 mb-1">Nome do Proxy</label>
+                        <input type="text" id="newProxyName" placeholder="Ex: Meu Proxy Local" class="w-full p-2 text-xs rounded bg-slate-900 border border-slate-700 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase text-gray-400 mb-1">Template da URL (use {url} ou {encoded_url})</label>
+                        <input type="text" id="newProxyUrl" placeholder="https://127.0.0.1/proxy/raw?url={url}" class="w-full p-2 text-xs rounded bg-slate-900 border border-slate-700 text-white font-mono">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] uppercase text-gray-400 mb-1">Chave de API / Token (opcional)</label>
+                        <input type="text" id="newProxyApiKey" placeholder="Ex: secret_token_123" class="w-full p-2 text-xs rounded bg-slate-900 border border-slate-700 text-white font-mono">
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button type="button" onclick="proxyController.addProxyFromInput()" class="w-full p-2 text-xs font-bold rounded text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
+                            ✨ Adicionar à Lista
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Proxies -->
+            <div class="space-y-2 mb-4">
+                <span class="text-xs font-bold text-gray-300 block uppercase">📋 Pool de Proxies Ativos (Ordem de Tentativa):</span>
+                <div id="proxyListContainer" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+            </div>
+
+            <!-- Botões de Ação do Modal -->
+            <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-gray-700/50">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="proxyController.restoreDefaults()" class="px-3 py-1.5 rounded text-xs text-gray-400 border border-gray-700 hover:text-white">
+                        ⚡ Restaurar Padrão
+                    </button>
+                    <a href="https://github.com/Edimarpcosta/edimarpcosta.github.io/blob/main/ameripan/prospecta/getlista/proxy.exe" target="_blank" rel="noopener" class="px-3 py-1.5 rounded text-xs font-bold text-emerald-300 border border-emerald-700/60 bg-emerald-950/60 hover:bg-emerald-900 transition-colors flex items-center gap-1" title="Baixar executável standalone do Servidor Proxy Python">
+                        📥 Baixar Proxy Python (.exe)
+                    </a>
+                </div>
+                <button type="button" onclick="document.getElementById('proxySettingsModal').style.display='none'" class="px-4 py-1.5 rounded text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500">
+                    ✅ Concluído
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <div style="position:fixed; right:20px; bottom:30px; display:flex; flex-direction:column; gap:12px; z-index:9999;">
+        <!-- Topo -->
+        <button onclick="window.scrollTo({top:0, behavior:'smooth'})" class="btn-primary" style="width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding:0; background:#1e293b; border:1px solid rgba(255,255,255,0.2); box-shadow:0 4px 6px rgba(0,0,0,0.3);" title="Ir para o Topo">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7"/></svg>
+        </button>
+        <!-- Collapse Mineração -->
+        <button onclick="if(typeof MiningEngine !== 'undefined') MiningEngine.toggleSection()" style="width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding:0; background:linear-gradient(135deg,#f59e0b,#d97706); border:none; box-shadow:0 4px 12px rgba(245,158,11,0.4); color:#000; cursor:pointer;" title="Encolher/Expandir Mineração">
+            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <!-- Fim -->
+        <button onclick="window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'})" class="btn-primary" style="width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding:0; background:#1e293b; border:1px solid rgba(255,255,255,0.2); box-shadow:0 4px 6px rgba(0,0,0,0.3);" title="Ir para o Fim">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </button>
+    </div>
+
+    <!-- Scripts Modulares -->
+    <script src="api-connectivity-script.js?v=4.0"></script>
+    <script src="error-handler-script.js?v=4.0"></script>
+    <script src="mining-engine-script.js?v=4.0"></script>
+    <script src="integration-script.js?v=4.0"></script>
+    <script src="ui-enhancement-script.js?v=4.0"></script>
+
+    <!-- Script adicional: navegação do stepper (não interfere na lógica existente) -->
+    <script>
+    (function () {
+        var nav = document.getElementById('flowStepperNav');
+        if (!nav) return;
+        var links = Array.prototype.slice.call(nav.querySelectorAll('a[data-step]'));
+        var targets = links.map(function (a) {
+            return document.getElementById(a.getAttribute('href').slice(1));
+        });
+
+        function setActive(step) {
+            links.forEach(function (a) {
+                a.setAttribute('data-active', a.dataset.step === String(step) ? 'true' : 'false');
+            });
+        }
+
+        links.forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                var el = document.getElementById(a.getAttribute('href').slice(1));
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        if ('IntersectionObserver' in window) {
+            var io = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        var idx = targets.indexOf(entry.target);
+                        if (idx !== -1) setActive(links[idx].dataset.step);
+                    }
+                });
+            }, { rootMargin: '-15% 0px -70% 0px' });
+            targets.forEach(function (t) { if (t) io.observe(t); });
+        }
+
+        setActive(1);
+    })();
+    </script>
+
+    <!-- Script aditivo: estado dinâmico da fonte de dados (Etapa 3) + pulse ring management -->
+    <!-- NÃO altera nenhum id nem nenhum dos 5 arquivos .js -->
+    <script>
+    (function () {
+        // ── Datasource State Card ──
+        var statusCard    = document.getElementById('datasourceStatusCard');
+        var countEl       = document.getElementById('datasourceCount');
+        var uploadBlock   = document.getElementById('enrichUploadBlock');
+        var changeBtn     = document.getElementById('datasourceChangeBtn');
+        var transferBtn2  = document.getElementById('transferMineBtnFase2');
+
+        // Recolhe o bloco de upload e mostra o card de status com N CNPJs
+        function showDatasourceCard(count, label) {
+            if (!statusCard || !uploadBlock) return;
+            if (countEl) countEl.textContent = count;
+            if (label) {
+                var subEl = statusCard.querySelector('.ds-sub');
+                if (subEl) subEl.textContent = label;
+            }
+            statusCard.classList.add('visible');
+            uploadBlock.classList.add('collapsed');
+            // Remover pulse dos botões de carga pois já há dados
+            removePulseFromLoadButtons();
+        }
+
+        // Expande de volta o bloco de upload
+        function hideDatasourceCard() {
+            if (!statusCard || !uploadBlock) return;
+            statusCard.classList.remove('visible');
+            uploadBlock.classList.remove('collapsed');
+        }
+
+        // Botão "🔄 Carregar outra fonte"
+        if (changeBtn) {
+            changeBtn.addEventListener('click', function () {
+                hideDatasourceCard();
+            });
+        }
+
+        // Interceptar o botão transferMineBtnFase2 (Puxar CNPJs da Mineração)
+        // A lógica JS principal ainda executa; apenas reagimos DEPOIS ao DOM
+        if (transferBtn2) {
+            transferBtn2.addEventListener('click', function () {
+                // Aguarda um tick para o JS principal popular os dados
+                setTimeout(function () {
+                    // Tentar ler o counter do estado existente
+                    var total = 0;
+                    // ui-enhancement-script expõe state.cnpjs ou similar;
+                    // como não podemos modificar os .js, lemos o DOM
+                    var statTotalEl = document.getElementById('statTotal');
+                    if (statTotalEl) total = parseInt(statTotalEl.textContent, 10) || 0;
+                    // Alternativa: contar linhas no textarea cnpjList
+                    var ta = document.getElementById('cnpjList');
+                    if (ta && ta.value.trim()) {
+                        var lines = ta.value.trim().split('\n').filter(function(l){ return l.trim().length > 0; });
+                        total = lines.length;
+                    }
+                    if (total > 0) {
+                        showDatasourceCard(total, 'Pronto para enriquecer — use os botões abaixo para iniciar.');
+                    }
+                }, 400);
+            });
+        }
+
+        // Interceptar loadCsvBtn e loadListBtn para mostrar o card quando carregados
+        ['loadCsvBtn', 'loadListBtn'].forEach(function (id) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                setTimeout(function () {
+                    var ta = document.getElementById('cnpjList');
+                    var total = 0;
+                    if (ta && ta.value.trim()) {
+                        total = ta.value.trim().split('\n').filter(function(l){ return l.trim().length > 0; }).length;
+                    }
+                    // Ler statsPanel se populado
+                    var statEl = document.getElementById('statTotal');
+                    if (statEl && parseInt(statEl.textContent, 10) > 0) {
+                        total = parseInt(statEl.textContent, 10);
+                    }
+                    if (total > 0) {
+                        showDatasourceCard(total, 'Lista carregada — use os botões acima para iniciar o enriquecimento.');
+                    }
+                }, 600);
+            });
+        });
+
+        // ── Pulse ring: remover animação dos botões de carga quando dados já chegaram ──
+        function removePulseFromLoadButtons() {
+            ['loadCsvBtn', 'loadListBtn'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.classList.remove('btn-pulse-ring');
+            });
+        }
+
+        // Remover pulse dos botões de iniciar quando o processamento começar
+        // (os botões ficam sem o ring enquanto estão processando)
+        ['startBtn', 'startDeepBtn'].forEach(function(id) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                btn.classList.remove('btn-pulse-ring');
+            });
+        });
+
+    })();
+    </script>
+</body>
+</html>
