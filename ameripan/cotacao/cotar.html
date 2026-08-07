@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link
     href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Barlow+Condensed:wght@600;700;800&display=swap"
@@ -1035,6 +1036,46 @@
       border-radius: 6px;
     }
 
+    /* Container da imagem no card mobile — relativo para posicionar o botão */
+    .mc-img-wrap {
+      position: relative;
+      width: 54px;
+      height: 54px;
+      flex-shrink: 0;
+    }
+
+    .mc-img-wrap .iph {
+      width: 54px;
+      height: 54px;
+      border-radius: 6px;
+    }
+
+    /* Botão de câmera/lápis sobre a imagem no card mobile */
+    .mc-img-edit-btn {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: rgba(0, 72, 144, 0.75);
+      color: #fff;
+      border: none;
+      border-radius: 0 0 6px 0;
+      padding: 3px 5px;
+      font-size: 0.65rem;
+      cursor: pointer;
+      line-height: 1;
+      min-width: 0;
+      z-index: 2;
+      transition: background 0.2s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mc-img-edit-btn:hover,
+    .mc-img-edit-btn:active {
+      background: var(--bl);
+      transform: scale(1.12);
+    }
+
+
     .mc-body {
       flex: 1;
     }
@@ -1699,7 +1740,7 @@
         <button class="btn da" id="clearAll">
           <i class="fa fa-trash"></i> Limpar todos
         </button>
-        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap">
+        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center">
           <button class="btn se" id="cpyBtn">
             <i class="fa fa-copy"></i> Copiar
           </button>
@@ -1709,12 +1750,48 @@
           <button class="btn se" id="xlsBtn">
             <i class="fa fa-file-excel"></i> Excel
           </button>
-          <button class="btn wa" id="sharePdfBtn" title="Compartilhar PDF diretamente (WhatsApp/Outros)">
-            <i class="fa fa-share-nodes"></i> Compartilhar PDF
-          </button>
-          <button class="btn bl" id="pdfBtn" title="Baixar arquivo PDF">
-            <i class="fa fa-file-pdf"></i> Baixar PDF
-          </button>
+          <!-- Orientação PDF -->
+          <span style="display:inline-flex;border:1.5px solid var(--bo);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+            <button class="btn se sm" id="btnOrientP" title="Modo Retrato" style="border-radius:0;border:none;gap:4px">
+              <i class="fa fa-file" style="font-size:0.8rem"></i> Retrato
+            </button>
+            <button class="btn se sm" id="btnOrientL" title="Modo Paisagem" style="border-radius:0;border:none;border-left:1px solid var(--bo);gap:4px">
+              <i class="fa fa-file" style="font-size:0.8rem;transform:rotate(90deg);display:inline-block"></i> Paisagem
+            </button>
+          </span>
+
+          <!-- PAINEL DE SELEÇÃO POR RADIOBUTTON (Formato & Ação) -->
+          <div class="export-box" style="display:inline-flex;align-items:center;gap:0.6rem;background:#f8fafe;border:1.5px solid var(--bo);border-radius:10px;padding:0.3rem 0.65rem;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+            <!-- Tipo de Arquivo -->
+            <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;color:var(--bl)">
+              <span style="font-size:0.7rem;color:var(--mu);text-transform:uppercase;letter-spacing:0.04em">Arquivo:</span>
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="Gerar em PDF (Várias Páginas)">
+                <input type="radio" name="optFormat" value="pdf" checked style="accent-color:var(--bl);cursor:pointer"> PDF
+              </label>
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="Gerar Imagem PNG (Página Única / WhatsApp)">
+                <input type="radio" name="optFormat" value="png" style="accent-color:var(--bl);cursor:pointer"> PNG
+              </label>
+            </div>
+
+            <div style="width:1px;height:18px;background:var(--bo)"></div>
+
+            <!-- Modo de Envio / Ação -->
+            <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;color:var(--bl)">
+              <span style="font-size:0.7rem;color:var(--mu);text-transform:uppercase;letter-spacing:0.04em">Modo:</span>
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="Compartilhar diretamente (WhatsApp / Outros)">
+                <input type="radio" name="optAction" value="share" checked style="accent-color:var(--bl);cursor:pointer"> Compartilhar
+              </label>
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="Baixar arquivo direto no dispositivo">
+                <input type="radio" name="optAction" value="download" style="accent-color:var(--bl);cursor:pointer"> Baixar
+              </label>
+            </div>
+
+            <!-- Botão Principal Destaque Executar -->
+            <button class="btn wa" id="btnExport" style="font-weight:800;padding:0.45rem 0.9rem;gap:6px">
+              <i class="fa fa-share-nodes" id="btnExportIcon"></i>
+              <span id="btnExportText">Compartilhar PDF</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1732,11 +1809,8 @@
         <button class="btn wa sm" id="mWa">
           <i class="fa-brands fa-whatsapp"></i>
         </button>
-        <button class="btn wa sm" id="mSharePdf" title="Compartilhar PDF">
-          <i class="fa fa-share-nodes"></i>
-        </button>
-        <button class="btn bl sm" id="mPdf" title="Baixar PDF">
-          <i class="fa fa-file-pdf"></i>
+        <button class="btn wa sm" id="mExport" title="Exportar Cotação (Segue opções selecionadas)">
+          <i class="fa fa-share-nodes" id="mExportIcon"></i>
         </button>
       </div>
     </div>
@@ -1823,6 +1897,7 @@
       imgSrc: "sheet",
       maxSug: 100,
       gasUrl: "https://script.google.com/macros/s/AKfycbwYlSQpYiD4-VJpHKI_IiTBXvtWyx9indGwluDfWYJLJrzipnBCmznoSjtwuxkL1zGM/exec",
+      pdfOrient: "p", // "p" = retrato (padrão), "l" = paisagem
     };
 
     // Cache do logo para não re-baixar a cada PDF
@@ -2235,7 +2310,8 @@
         CFG.rowH = c.rowH || 14;
         CFG.imgSrc = c.imgSrc || "sheet";
         CFG.maxSug = c.maxSug || 100;
-        CFG.gasUrl = c.gasUrl || CFG.gasUrl; // mantém default se não havia no localStorage
+        CFG.gasUrl = c.gasUrl || CFG.gasUrl;
+        CFG.pdfOrient = c.pdfOrient || "p";
       }
       $("cfg_base").value = CFG.imgBase;
       $("cfg_gkey").value = CFG.gKey;
@@ -2245,6 +2321,30 @@
       $("cfg_gasurl").value = CFG.gasUrl;
       $("cfg_rowh").value = CFG.rowH;
       $("cfg_rowh_v").textContent = CFG.rowH + "mm";
+      _applyOrientUI();
+    }
+
+    /* Atualiza visual dos botões de orientação */
+    function _applyOrientUI() {
+      const isP = CFG.pdfOrient === "p";
+      const btnP = $("btnOrientP"), btnL = $("btnOrientL");
+      if (!btnP || !btnL) return;
+      btnP.style.background = isP ? "var(--bl)" : "";
+      btnP.style.color = isP ? "#fff" : "";
+      btnP.style.fontWeight = isP ? "800" : "";
+      btnL.style.background = !isP ? "var(--bl)" : "";
+      btnL.style.color = !isP ? "#fff" : "";
+      btnL.style.fontWeight = !isP ? "800" : "";
+    }
+
+    function setOrient(o) {
+      CFG.pdfOrient = o;
+      const sv = localStorage.getItem("a_cfg");
+      const c = sv ? JSON.parse(sv) : {};
+      c.pdfOrient = o;
+      localStorage.setItem("a_cfg", JSON.stringify(c));
+      _applyOrientUI();
+      toast(o === "p" ? "📄 Modo Retrato ativado" : "📐 Modo Paisagem ativado");
     }
     function saveCfg() {
       CFG.imgBase = $("cfg_base").value || CFG.imgBase;
@@ -2264,6 +2364,7 @@
           imgSrc: CFG.imgSrc,
           maxSug: CFG.maxSug,
           gasUrl: CFG.gasUrl,
+          pdfOrient: CFG.pdfOrient,
         }),
       );
       imgCache.clear();
@@ -2722,6 +2823,7 @@
       syncToForm();
       render();
       renderHist();
+      if (typeof updateExportBtnUI === "function") updateExportBtnUI();
     }
 
     function syncToForm() {
@@ -2858,12 +2960,57 @@
 ══════════════════════════════════════════ */
     function updateFeedback() {
       const nc = E.cod.value.trim();
+      // Limpa qualquer botão de imagem anterior
+      const oldImgBtn = $("ef_img_btn");
+      if (oldImgBtn) oldImgBtn.remove();
+
+      function _checkAndShowImgBtn(code, desc) {
+        // Verifica se o produto tem imagem; se não tiver, exibe botão para atribuir
+        resolveImg(code).then((r) => {
+          const oldB = $("ef_img_btn");
+          if (oldB) oldB.remove();
+          // Só mostra o botão se o código ainda for o mesmo digitado
+          if (E.cod.value.trim() !== code) return;
+          const hasImg = !!(r?.url);
+          const feed = $("ef_feed");
+          if (!feed) return;
+          const btn = document.createElement("button");
+          btn.id = "ef_img_btn";
+          btn.type = "button";
+          btn.className = "btn sm " + (hasImg ? "se" : "pr");
+          btn.title = hasImg ? "Editar imagem do produto" : "Produto sem imagem — clique para definir";
+          btn.style.cssText = "margin-left:8px;font-size:0.78rem;padding:3px 10px;vertical-align:middle;animation:pulseOnce 0.8s ease";
+          btn.innerHTML = hasImg
+            ? `<i class="fa fa-image"></i> <span style="display:none">Editar</span>`
+            : `<i class="fa fa-camera"></i> Definir imagem`;
+          btn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
+          btn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+          btn.onclick = (e) => {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            openImgEdit(code, r?.url || null);
+          };
+          // Insere após o feed_txt, dentro do ef_feed
+          feed.appendChild(btn);
+          if (!hasImg) {
+            // Destaca a faixa de feedback para chamar atenção
+            feed.style.background = "#fff8f0";
+            feed.style.borderColor = "var(--or)";
+            feed.style.color = "var(--or)";
+          } else {
+            feed.style.background = "";
+            feed.style.borderColor = "";
+            feed.style.color = "";
+          }
+        });
+      }
+
       if (S.cmap.has(nc)) {
         const _it = S.cmap.get(nc);
         const desc = _it?.desc ?? _it;
         E.desc.value = desc;
         E.feedTxt.innerHTML = `Produto: <strong>${desc}</strong>`;
         E.feed.classList.add("on");
+        _checkAndShowImgBtn(nc, desc);
       } else {
         // Tenta resolver na web
         resolveImg(nc).then((r) => {
@@ -2871,6 +3018,7 @@
             E.desc.value = r.name;
             E.feedTxt.innerHTML = `Produto (Web): <strong>${r.name}</strong>`;
             E.feed.classList.add("on");
+            _checkAndShowImgBtn(nc, r.name);
           } else {
             E.feed.classList.remove("on");
           }
@@ -2919,14 +3067,24 @@
     });
 
     let _isCommittingOnExit = false;
-    function commitItemOnExit() {
+    function commitItemOnExit(e) {
       if (_isCommittingOnExit) return;
-      const code = E.cod.value.trim();
-      const desc = E.desc.value.trim();
-      if (!code && !desc) return;
-      _isCommittingOnExit = true;
-      commitItem();
-      setTimeout(() => { _isCommittingOnExit = false; }, 200);
+      // Previne gravação se o modal de imagem está aberto ou o foco foi para o botão de imagem
+      if ($("imgEditM")?.classList.contains("on")) return;
+      if (e && e.relatedTarget && (e.relatedTarget.id === "ef_img_btn" || e.relatedTarget.closest("#imgEditM"))) return;
+      if (document.activeElement && (document.activeElement.id === "ef_img_btn" || document.activeElement.closest("#imgEditM"))) return;
+
+      setTimeout(() => {
+        if ($("imgEditM")?.classList.contains("on")) return;
+        if (document.activeElement && (document.activeElement.id === "ef_img_btn" || document.activeElement.closest("#imgEditM"))) return;
+
+        const code = E.cod.value.trim();
+        const desc = E.desc.value.trim();
+        if (!code && !desc) return;
+        _isCommittingOnExit = true;
+        commitItem();
+        setTimeout(() => { _isCommittingOnExit = false; }, 200);
+      }, 80);
     }
 
     E.price.addEventListener("blur", commitItemOnExit);
@@ -3051,18 +3209,44 @@
 
       const iTd = document.createElement("td");
       iTd.className = "td-img";
+      iTd.style.position = "relative";
       const ph = document.createElement("div");
       ph.className = "iph";
       ph.innerHTML = '<i class="fa fa-image"></i>';
       iTd.appendChild(ph);
+
+      // Botão de editar imagem — sempre visível na célula (desktop + mobile via toque)
+      function _makeImgEditBtn(code, currentUrl) {
+        const old = iTd.querySelector(".img-edit-btn");
+        if (old) old.remove();
+        const btn = document.createElement("button");
+        btn.className = "btn sm img-edit-btn";
+        btn.title = currentUrl ? "Editar imagem" : "Definir imagem";
+        btn.innerHTML = currentUrl
+          ? '<i class="fa fa-pencil"></i>'
+          : '<i class="fa fa-camera"></i>';
+        btn.style.cssText = [
+          "position:absolute", "bottom:2px", "right:2px",
+          "padding:2px 5px", "font-size:0.65rem", "border-radius:5px",
+          "background:rgba(0,72,144,0.82)", "color:#fff",
+          "opacity:0.85", "line-height:1", "border:none", "cursor:pointer",
+          "z-index:2", "min-width:0"
+        ].join(";");
+        btn.onmouseenter = () => { btn.style.opacity = "1"; btn.style.transform = "scale(1.08)"; };
+        btn.onmouseleave = () => { btn.style.opacity = "0.85"; btn.style.transform = ""; };
+        btn.onclick = (e) => { e.stopPropagation(); openImgEdit(code, currentUrl); };
+        iTd.appendChild(btn);
+      }
+
       resolveImg(item.code).then((r) => {
         if (!r?.url) {
-          ph.innerHTML = '<i class="fa fa-image" style="color:#ccc;cursor:pointer" title="Clique direito para definir imagem"></i>';
+          ph.innerHTML = '<i class="fa fa-image" style="color:#ccc" title="Sem imagem — use o botão para definir"></i>';
           ph.oncontextmenu = (e) => showImgCtx(e, item.code, null);
           let _lp2;
           ph.addEventListener("touchstart", (e) => { _lp2 = setTimeout(() => showImgCtx(e, item.code, null), 600); }, { passive: true });
           ph.addEventListener("touchend", () => clearTimeout(_lp2));
           ph.addEventListener("touchmove", () => clearTimeout(_lp2));
+          _makeImgEditBtn(item.code, null);
           return;
         }
         const img = document.createElement("img");
@@ -3081,6 +3265,7 @@
         img.addEventListener("touchend", () => clearTimeout(_lp));
         img.addEventListener("touchmove", () => clearTimeout(_lp));
         iTd.replaceChild(img, ph);
+        _makeImgEditBtn(item.code, r.url);
       });
 
       const dTd = tdPen(item.desc);
@@ -3304,7 +3489,12 @@
       card.className = "mcard";
       card.innerHTML = `
     <div class="mc-top">
-      <div id="mc_img_${idx}"><div class="iph"><i class="fa fa-image"></i></div></div>
+      <div id="mc_img_${idx}" class="mc-img-wrap">
+        <div class="iph"><i class="fa fa-image"></i></div>
+        <button class="mc-img-edit-btn" title="Definir imagem" onclick="openImgEdit('${item.code}', null)">
+          <i class="fa fa-camera"></i>
+        </button>
+      </div>
       <div class="mc-body" style="flex:1">
         <div style="font-size:.72rem;color:var(--mu)">Cód: <strong>${item.code}</strong></div>
         <div style="font-weight:700;font-size:.92rem;margin-top:2px">${item.desc}</div>
@@ -3323,12 +3513,29 @@
       resolveImg(item.code).then((r) => {
         const wrap = $(`mc_img_${idx}`);
         if (!wrap) return;
-        if (!r?.url) return;
+        const editBtn = wrap.querySelector(".mc-img-edit-btn");
+        if (!r?.url) {
+          // Sem imagem: botão câmera laranja bem visível
+          if (editBtn) {
+            editBtn.style.background = "var(--or)";
+            editBtn.title = "Produto sem imagem — toque para definir";
+          }
+          return;
+        }
         const img = document.createElement("img");
         img.className = "mc-img";
         img.src = r.url;
-        img.onerror = () => { };
-        wrap.replaceWith(img);
+        img.onerror = () => {};
+        // Mantém o botão de editar por cima da imagem
+        const ph = wrap.querySelector(".iph");
+        if (ph) ph.replaceWith(img);
+        // Atualiza botão para editar (já tem imagem)
+        if (editBtn) {
+          editBtn.innerHTML = '<i class="fa fa-pencil"></i>';
+          editBtn.title = "Editar imagem";
+          editBtn.style.background = "rgba(0,72,144,0.75)";
+          editBtn.onclick = () => openImgEdit(item.code, r.url);
+        }
       });
       E.mc.appendChild(card);
     }
@@ -3448,8 +3655,13 @@
 
     async function genPDF(mode = "download") {
       const { jsPDF } = window.jspdf;
-      const doc = new jsPDF("l", "mm", "a4");
-      const q = S.q, W = 297, H = 210;
+      // ─── Orientação: retrato (padrão) ou paisagem ───
+      const orient = CFG.pdfOrient || "p";
+      const isPortrait = orient === "p";
+      const W = isPortrait ? 210 : 297;
+      const H = isPortrait ? 297 : 210;
+      const doc = new jsPDF(orient, "mm", "a4");
+      const q = S.q;
       const RH = CFG.rowH;
       const IMG_W = RH - 2;
       const M = 8; // margem lateral
@@ -3461,11 +3673,8 @@
       const imgUrl = {};
       function _detectFmt(b64) {
         if (!b64) return "JPEG";
-        // Detecta pelo prefixo do data URI
         if (b64.startsWith("data:image/png")) return "PNG";
         if (b64.startsWith("data:image/webp")) return "WEBP";
-        // Detecta pela assinatura binária (magic bytes em base64)
-        // PNG magic: \x89PNG = iVBOR em base64
         const b64Data = b64.split(",")[1] || "";
         if (b64Data.startsWith("iVBOR")) return "PNG";
         return "JPEG";
@@ -3482,7 +3691,7 @@
               imgB64[item.code] = { data: b64, fmt };
               console.log(`[PDF] ✅ ${item.code}: formato=${fmt}, url=${r.url.slice(-50)}`);
             } else {
-              console.warn(`[PDF] ❌ ${item.code}: url2b64 retornou NULL — imagem NÃO vai para o PDF. URL: ${r.url}`);
+              console.warn(`[PDF] ❌ ${item.code}: url2b64 retornou NULL. URL: ${r.url}`);
             }
           } else {
             console.warn(`[PDF] ⚠️ ${item.code}: resolveImg não encontrou URL`);
@@ -3530,17 +3739,21 @@
         const lb = await loadLogo();
         if (lb) {
           const imgFmt = lb.includes("data:image/png") ? "PNG" : "JPEG";
-          doc.addImage(lb, imgFmt, M + 1, 13.5, 55, 27);
+          // Em retrato, logo um pouco menor
+          const logoW = isPortrait ? 48 : 55;
+          const logoH = isPortrait ? 23 : 27;
+          doc.addImage(lb, imgFmt, M + 1, 13.5, logoW, logoH);
         }
       } catch { }
 
-      doc.setFontSize(22); doc.setTextColor(...P.bld); doc.setFont("helvetica", "bold");
+      const titleFontSize = isPortrait ? 18 : 22;
+      doc.setFontSize(titleFontSize); doc.setTextColor(...P.bld); doc.setFont("helvetica", "bold");
       doc.text("COTAÇÃO DE PRODUTOS", W / 2, 28, { align: "center" });
       doc.setFontSize(7.5); doc.setTextColor(...P.gy); doc.setFont("helvetica", "normal");
       doc.text("Proposta Comercial — Ameripan Distribuidora", W / 2, 34.5, { align: "center" });
 
       // ── Box Nº / Data ──
-      const boxW = 72, boxH = 28, boxX = W - M - boxW, boxY = 13;
+      const boxW = isPortrait ? 55 : 72, boxH = 28, boxX = W - M - boxW, boxY = 13;
       doc.setFillColor(...P.wh); doc.roundedRect(boxX, boxY, boxW, boxH, 2.5, 2.5, "F");
       doc.setDrawColor(...P.bo); doc.setLineWidth(0.3); doc.roundedRect(boxX, boxY, boxW, boxH, 2.5, 2.5, "S");
       doc.setFillColor(...P.or); doc.roundedRect(boxX, boxY, boxW, 4, 2.5, 2.5, "F");
@@ -3618,27 +3831,47 @@
 
       // ═══════════════════════════════════════════
       //  TABELA DE ITENS
+      //  Nova ordem: # | CÓD | PREÇO UN | IMG | DESCRIÇÃO | UN | [BARRAS] | QTDE | TOTAL
+      //  Preço unitário fica logo antes da imagem — mais visível para o cliente!
       // ═══════════════════════════════════════════
+
+      // Larguras adaptadas para retrato (210mm) vs paisagem (297mm)
+      // Em retrato, temos menos espaço horizontal → colunas mais compactas
+      const colN     = isPortrait ?  8 : 9;
+      const colCod   = isPortrait ? 15 : 18;
+      const colPrice = isPortrait ? 20 : 24;
+      const colImg   = IMG_W + 3;              // sempre proporcional ao rowH
+      const colUn    = isPortrait ? 10 : 11;
+      const colBar   = isPortrait ? 22 : 26;  // só aparece quando showBar=true
+      const colQty   = isPortrait ? 12 : 14;
+      const colTotal = isPortrait ? 22 : 27;
+      // desc: "auto" — absorve o restante da largura útil
+
       const cols = [
-        { header: "#", dataKey: "n" },
-        { header: "CÓD.", dataKey: "cod" },
-        { header: "IMG", dataKey: "img" },
-        { header: "DESCRIÇÃO", dataKey: "desc" },
-        { header: "UN", dataKey: "un" },
+        { header: "#",        dataKey: "n" },
+        { header: "CÓD.",     dataKey: "cod" },
+        { header: "PREÇO UN", dataKey: "price" },   // ← movido para cá!
+        { header: "IMG",      dataKey: "img" },
+        { header: "DESCRIÇÃO",dataKey: "desc" },
+        { header: "UN",       dataKey: "un" },
       ];
       if (q.showBar) cols.push({ header: "BARRAS", dataKey: "bar" });
       cols.push(
-        { header: "QTDE", dataKey: "qty" },
-        { header: "PREÇO UN", dataKey: "price" },
+        { header: "QTDE",  dataKey: "qty" },
         { header: "TOTAL", dataKey: "total" },
       );
 
       const rows = q.items.map((item, i) => ({
-        n: (i + 1).toString(), cod: item.code, img: "",
-        desc: item.desc, un: item.un || "UN",
-        bar: item.bar || "", qty: item.qty.toString(),
-        price: fmt(item.price), total: fmt(item.qty * item.price),
-        _sku: item.code,
+        n:     (i + 1).toString(),
+        cod:   item.code,
+        img:   "",
+        desc:  item.desc,
+        un:    item.un || "UN",
+        bar:   item.bar || "",
+        qty:   item.qty.toString(),
+        price: fmt(item.price),
+        total: fmt(item.qty * item.price),
+        _sku:  item.code,
       }));
 
       let pageCount = 1;
@@ -3650,26 +3883,27 @@
         margin: { left: M, right: M, bottom: 20 },
         headStyles: {
           fillColor: P.bl, textColor: 255, fontStyle: "bold", halign: "center",
-          fontSize: 7, cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
+          fontSize: isPortrait ? 6.5 : 7,
+          cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
           lineWidth: 0.1, lineColor: P.bld,
         },
         bodyStyles: {
-          textColor: P.tx, fontSize: 7.5,
+          textColor: P.tx, fontSize: isPortrait ? 7 : 7.5,
           cellPadding: { top: 1.2, bottom: 1.2, left: 2, right: 2 },
           minCellHeight: RH, valign: "middle",
           lineWidth: 0.1, lineColor: [220, 228, 239],
         },
         alternateRowStyles: { fillColor: P.ra },
         columnStyles: {
-          n: { halign: "center", cellWidth: 9, textColor: P.gy, fontSize: 7 },
-          cod: { halign: "center", cellWidth: 18, fontStyle: "bold", textColor: P.bl },
-          img: { halign: "center", cellWidth: IMG_W + 3 },
-          desc: { cellWidth: "auto", fontSize: 7.5 },
-          un: { halign: "center", cellWidth: 11, textColor: P.gy, fontSize: 7 },
-          bar: { halign: "center", cellWidth: 26, fontSize: 6.5, textColor: P.gy },
-          qty: { halign: "center", cellWidth: 14, fontStyle: "bold" },
-          price: { halign: "right", cellWidth: 24 },
-          total: { halign: "right", cellWidth: 27, fontStyle: "bold", textColor: P.or },
+          n:     { halign: "center", cellWidth: colN,     textColor: P.gy, fontSize: isPortrait ? 6.5 : 7 },
+          cod:   { halign: "center", cellWidth: colCod,   fontStyle: "bold", textColor: P.bl },
+          price: { halign: "right",  cellWidth: colPrice, fontStyle: "bold", textColor: P.tx },
+          img:   { halign: "center", cellWidth: colImg },
+          desc:  { cellWidth: "auto", fontSize: isPortrait ? 7 : 7.5 },
+          un:    { halign: "center", cellWidth: colUn,    textColor: P.gy, fontSize: isPortrait ? 6.5 : 7 },
+          bar:   { halign: "center", cellWidth: colBar,   fontSize: 6.5, textColor: P.gy },
+          qty:   { halign: "center", cellWidth: colQty,   fontStyle: "bold" },
+          total: { halign: "right",  cellWidth: colTotal, fontStyle: "bold", textColor: P.or },
         },
         didDrawPage(data) {
           if (data.pageNumber > 1) drawMiniHeader();
@@ -3727,7 +3961,7 @@
       }
 
       /* ── BOX TOTAL ── */
-      const totW = 80, totH = 16, totX = W - M - totW, totY = baseY;
+      const totW = isPortrait ? 70 : 80, totH = 16, totX = W - M - totW, totY = baseY;
       doc.setFillColor(230, 235, 245); doc.roundedRect(totX + 0.5, totY + 0.5, totW, totH, 3, 3, "F");
       doc.setFillColor(...P.or); doc.roundedRect(totX, totY, totW, totH, 3, 3, "F");
       doc.setFontSize(6.5); doc.setTextColor(...P.wh); doc.setFont("helvetica", "bold");
@@ -3751,11 +3985,11 @@
 
       /* ── BOTÃO WHATSAPP CTA ── */
       const waLnk = waUrl();
-      const waBtnW = 175, waBtnH = 11, waBtnX = (W - waBtnW) / 2, waBtnY = baseY + 22;
+      const waBtnW = isPortrait ? 150 : 175, waBtnH = 11, waBtnX = (W - waBtnW) / 2, waBtnY = baseY + 22;
       doc.setFillColor(20, 160, 70); doc.roundedRect(waBtnX + 0.4, waBtnY + 0.4, waBtnW, waBtnH, 3, 3, "F");
       doc.setFillColor(...P.gn); doc.roundedRect(waBtnX, waBtnY, waBtnW, waBtnH, 3, 3, "F");
       doc.setDrawColor(20, 180, 75); doc.setLineWidth(0.25); doc.roundedRect(waBtnX, waBtnY, waBtnW, waBtnH, 3, 3, "S");
-      doc.setFontSize(9); doc.setTextColor(...P.wh); doc.setFont("helvetica", "bold");
+      doc.setFontSize(isPortrait ? 7.5 : 9); doc.setTextColor(...P.wh); doc.setFont("helvetica", "bold");
       doc.textWithLink("CLIQUE AQUI PARA FALAR SOBRE ESTA COTAÇÃO NO WHATSAPP", waBtnX + waBtnW / 2, waBtnY + 7.2, { align: "center", url: waLnk });
 
       // ── Rodapé em todas as páginas ──
@@ -3795,6 +4029,230 @@
 
       doc.save(fileName);
       toast("PDF baixado com sucesso! ✓");
+    }
+
+    /* ══════════════════════════════════════════
+       EXPORTAR PNG DE ALTA QUALIDADE
+       Gera um PNG longo (todas as páginas em sequência)
+       ideal para compartilhar no WhatsApp sem leitor PDF
+    ══════════════════════════════════════════ */
+    async function genPNG(mode = "download") {
+      if (!window.html2canvas) {
+        toast("⏳ Aguardando html2canvas carregar…");
+        return;
+      }
+      const q = S.q;
+      if (!q.items.length) return toast("Adicione itens antes de exportar!");
+
+      toast(mode === "share" ? "Aguarde… preparando PNG para compartilhar…" : "Aguarde… gerando imagem PNG…", 20000);
+
+      // ── Pré-carrega imagens ──
+      const imgUrls = {};
+      await Promise.allSettled(
+        q.items.map(async (item) => {
+          const r = await resolveImg(item.code);
+          if (r?.url) imgUrls[item.code] = r.url;
+        })
+      );
+
+      // ── Carrega logo ──
+      let logoDataUrl = null;
+      try { logoDataUrl = await loadLogo(); } catch { }
+
+      // ── Helpers de formatação ──
+      const fmtR = fmt;
+      const tv = q.items.reduce((a, i) => a + i.qty * i.price, 0);
+      const waLnk = waUrl();
+
+      // ── Cria container oculto ──
+      const wrap = document.createElement("div");
+      wrap.id = "_png_export_wrap";
+      wrap.style.cssText = [
+        "position:fixed","left:-9999px","top:0","width:900px",
+        "background:#fff","font-family:Helvetica,Arial,sans-serif",
+        "color:#1a2540","z-index:-1","font-size:13px"
+      ].join(";");
+
+      // ── Gera linhas da tabela ──
+      const rowsHTML = await Promise.all(q.items.map(async (item, i) => {
+        const sub = item.qty * item.price;
+        const imgUrl2 = imgUrls[item.code];
+        let imgHtml = `<div style="width:52px;height:52px;background:#f0f4f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:18px">📷</div>`;
+        if (imgUrl2) {
+          const b64 = await url2b64(imgUrl2);
+          if (b64) {
+            imgHtml = `<img src="${b64}" style="width:52px;height:52px;object-fit:contain;border-radius:6px;border:1px solid #edf1f7;background:#fff" />`;
+          } else {
+            imgHtml = `<img src="${imgUrl2}" crossorigin="anonymous" style="width:52px;height:52px;object-fit:contain;border-radius:6px;border:1px solid #edf1f7;background:#fff" />`;
+          }
+        }
+        const rowBg = i % 2 === 0 ? "#fff" : "#f8fafe";
+        return `
+          <tr style="background:${rowBg}">
+            <td style="padding:8px 6px;text-align:center;color:#aab;font-size:11px;font-weight:800;border-bottom:1px solid #edf1f7;width:28px">${i + 1}</td>
+            <td style="padding:8px 6px;text-align:center;border-bottom:1px solid #edf1f7;width:60px"><strong style="color:#004890">${item.code}</strong></td>
+            <td style="padding:8px 4px;text-align:right;border-bottom:1px solid #edf1f7;width:80px;font-weight:700;color:#1a2540">${fmtR(item.price)}</td>
+            <td style="padding:4px;text-align:center;border-bottom:1px solid #edf1f7;width:60px">${imgHtml}</td>
+            <td style="padding:8px 6px;border-bottom:1px solid #edf1f7">${item.desc}</td>
+            <td style="padding:8px 4px;text-align:center;border-bottom:1px solid #edf1f7;width:36px;color:#5a6378;font-size:12px">${item.un || "UN"}</td>
+            ${q.showBar ? `<td style="padding:8px 4px;text-align:center;border-bottom:1px solid #edf1f7;width:90px;font-size:11px;color:#5a6378">${item.bar || "—"}</td>` : ""}
+            <td style="padding:8px 6px;text-align:center;border-bottom:1px solid #edf1f7;width:48px;font-weight:800">${item.qty}</td>
+            <td style="padding:8px 6px;text-align:right;border-bottom:1px solid #edf1f7;width:88px;font-weight:800;color:#f47920">${fmtR(sub)}</td>
+          </tr>`;
+      }));
+
+      const logoHtml = logoDataUrl
+        ? `<img src="${logoDataUrl}" style="height:48px;object-fit:contain" />`
+        : `<div style="font-size:22px;font-weight:900;color:#004890">AMERIPAN</div>`;
+
+      const notesHtml = q.notes ? `
+        <div style="background:#fffaf5;border:1.5px solid #fcd9b8;border-radius:10px;padding:10px 14px;margin:12px 0;font-size:12px">
+          <strong style="color:#f47920">OBS:</strong> <span style="color:#1a2540">${q.notes}</span>
+        </div>` : "";
+
+      const thStyle = "padding:9px 6px;background:linear-gradient(180deg,#004890,#003168);color:#fff;font-size:12px;font-weight:800;text-transform:uppercase;border-bottom:2.5px solid #f47920";
+
+      wrap.innerHTML = `
+        <div style="background:#003168;color:rgba(200,215,240,0.85);font-size:10px;text-align:center;padding:7px;letter-spacing:.1em;font-weight:600">
+          AMERIPAN DISTRIBUIDORA — DESDE 1990
+        </div>
+        <div style="background:#e8f0fa;padding:18px 20px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            ${logoHtml}
+            <div>
+              <div style="font-size:22px;font-weight:900;color:#003168;letter-spacing:-.5px">COTAÇÃO DE PRODUTOS</div>
+              <div style="font-size:12px;color:#5a6378;margin-top:2px">Proposta Comercial — Ameripan Distribuidora</div>
+            </div>
+          </div>
+          <div style="background:#fff;border-radius:10px;border:1px solid #dde4ef;min-width:110px;overflow:hidden;box-shadow:0 2px 8px rgba(0,72,144,.1);text-align:center">
+            <div style="background:#f47920;color:#fff;font-size:10px;font-weight:800;padding:5px;letter-spacing:.1em">COTAÇÃO</div>
+            <div style="font-size:28px;font-weight:900;color:#f47920;padding:4px 0 2px">#${q.id}</div>
+            <div style="border-top:1px solid #eee;padding:4px 6px">
+              <div style="font-size:10px;color:#5a6378">DATA DE EMISSÃO</div>
+              <div style="font-size:13px;font-weight:800;color:#1a2540">${fmtDt(q.dt)}</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:#f47920;height:4px;margin-bottom:0"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 20px">
+          <div style="background:#fff;border-radius:8px;border:1px solid #dde4ef;overflow:hidden">
+            <div style="background:#004890;color:#fff;font-size:11px;font-weight:800;padding:6px 10px;letter-spacing:.08em">CLIENTE / ENTREGA</div>
+            <div style="padding:10px 12px">
+              <div style="font-size:10px;color:#5a6378">Razão Social / Nome:</div>
+              <div style="font-size:14px;font-weight:800;color:#1a2540;margin:2px 0 6px">${(q.buyer || "—").toUpperCase()}${q.ccod ? ` <span style="font-size:11px;font-weight:600;color:#5a6378">(Cód: ${q.ccod})</span>` : ""}</div>
+              <div style="font-size:10px;color:#5a6378">Endereço / Detalhes:</div>
+              <div style="font-size:12px;color:#1a2540;margin-top:2px">${q.cdet || "—"}</div>
+            </div>
+          </div>
+          <div style="background:#fff;border-radius:8px;border:1px solid #dde4ef;overflow:hidden">
+            <div style="background:#004890;color:#fff;font-size:11px;font-weight:800;padding:6px 10px;letter-spacing:.08em">DADOS COMERCIAIS</div>
+            <div style="padding:10px 12px">
+              <div style="font-size:10px;color:#5a6378">Vendedor:</div>
+              <div style="font-size:14px;font-weight:800;color:#1a2540;margin:2px 0 6px">${(q.seller || "—").toUpperCase()}</div>
+              ${q.swa ? `<div style="font-size:12px;font-weight:700;color:#25d366">WhatsApp: ${q.swa}</div>` : ""}
+              ${q.cpay ? `<div style="font-size:11px;color:#5a6378;margin-top:4px">Pagamento: <strong style="color:#1a2540">${q.cpay}</strong></div>` : ""}
+            </div>
+          </div>
+        </div>
+        <div style="margin:0 20px 12px;border-radius:10px;overflow:hidden;border:1px solid #dde4ef">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr>
+                <th style="${thStyle};width:28px;text-align:center">#</th>
+                <th style="${thStyle};width:60px;text-align:center">CÓD.</th>
+                <th style="${thStyle};width:80px;text-align:right">PREÇO UN</th>
+                <th style="${thStyle};width:60px;text-align:center">IMG</th>
+                <th style="${thStyle};text-align:left">DESCRIÇÃO</th>
+                <th style="${thStyle};width:36px;text-align:center">UN</th>
+                ${q.showBar ? `<th style="${thStyle};width:90px;text-align:center">BARRAS</th>` : ""}
+                <th style="${thStyle};width:48px;text-align:center">QTDE</th>
+                <th style="${thStyle};width:88px;text-align:right">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML.join("")}
+            </tbody>
+          </table>
+        </div>
+        ${notesHtml}
+        <div style="display:flex;justify-content:flex-end;padding:4px 20px 12px">
+          <div style="background:#f47920;border-radius:10px;padding:10px 24px;text-align:center;min-width:180px">
+            <div style="font-size:11px;font-weight:800;color:#fff;letter-spacing:.1em">TOTAL DA COTAÇÃO</div>
+            <div style="font-size:26px;font-weight:900;color:#fff;margin-top:2px">${fmtR(tv)}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px">${q.items.length} ${q.items.length === 1 ? "item" : "itens"}</div>
+          </div>
+        </div>
+        <div style="margin:0 20px 14px;border-top:1px dashed #dde4ef;padding-top:12px">
+          <div style="display:inline-block;border-bottom:1.5px dashed #aab;width:220px;padding-bottom:4px"></div>
+          <div style="font-size:10px;color:#5a6378;margin-top:4px">Assinatura / Carimbo do Cliente</div>
+          <div style="font-size:9px;color:#aab">De acordo com os termos desta cotação</div>
+        </div>
+        ${q.swa ? `
+        <div style="margin:0 20px 20px;background:linear-gradient(135deg,#25d366,#20bd5a);border-radius:10px;padding:12px;text-align:center">
+          <a href="${waLnk}" style="color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.05em">
+            📲 CLIQUE AQUI PARA FALAR SOBRE ESTA COTAÇÃO NO WHATSAPP
+          </a>
+        </div>` : ""}
+        <div style="background:#003168;color:rgba(200,215,240,0.75);font-size:10px;text-align:center;padding:8px;margin-top:4px">
+          Ameripan Distribuidora — Desde 1990 &nbsp;|&nbsp; Cotação #${q.id} &nbsp;|&nbsp; ${fmtDt(q.dt)}
+        </div>
+      `;
+
+      document.body.appendChild(wrap);
+      await new Promise(r => setTimeout(r, 600));
+
+      try {
+        const canvas = await html2canvas(wrap, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: 900,
+          windowWidth: 900,
+        });
+
+        const fileName = `Cotacao_${q.id}_${(q.buyer || "cotacao").replace(/[^a-z0-9]/gi, "_")}.png`;
+        addToHist();
+
+        if (mode === "share") {
+          try {
+            const blob = await new Promise(r => canvas.toBlob(r, "image/png"));
+            const file = new File([blob], fileName, { type: "image/png" });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: `Cotação #${q.id}`,
+                text: `Cotação #${q.id} - ${q.buyer || "Ameripan"}`
+              });
+              toast("PNG compartilhado com sucesso! ✓");
+              return;
+            } else {
+              toast("Compartilhamento nativo não suportado. Baixando PNG...");
+            }
+          } catch (err) {
+            if (err.name !== "AbortError") {
+              toast("Erro ao compartilhar. Baixando PNG...");
+            } else {
+              return;
+            }
+          }
+        }
+
+        const pngDataUrl = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.download = fileName;
+        a.href = pngDataUrl;
+        a.click();
+
+        toast("✅ PNG baixado com sucesso! Envie pelo WhatsApp.");
+      } catch (err) {
+        console.error('[PNG] Erro:', err);
+        toast("Erro ao gerar PNG: " + err.message);
+      } finally {
+        if (wrap.parentNode) document.body.removeChild(wrap);
+      }
     }
 
     /* ══════════════════════════════════════════
@@ -4108,10 +4566,86 @@
       }
     };
     $("btnNew").onclick = newOrder;
-    $("pdfBtn").onclick = () => genPDF("download");
-    $("mPdf").onclick = () => genPDF("download");
-    $("sharePdfBtn").onclick = () => genPDF("share");
-    $("mSharePdf").onclick = () => genPDF("share");
+    /* Atualização da UI do Botão de Exportação dinâmico conforme os RadioButtons */
+    function updateExportBtnUI() {
+      const formatRadios = document.getElementsByName("optFormat");
+      const actionRadios = document.getElementsByName("optAction");
+      let fmt = "pdf";
+      let act = "share";
+
+      for (const r of formatRadios) { if (r.checked) fmt = r.value; }
+      for (const r of actionRadios) { if (r.checked) act = r.value; }
+
+      const btn = $("btnExport");
+      const icon = $("btnExportIcon");
+      const txt = $("btnExportText");
+      const mBtn = $("mExport");
+      const mIcon = $("mExportIcon");
+
+      if (!btn || !txt || !icon) return;
+
+      const isShare = act === "share";
+      const isPdf = fmt === "pdf";
+
+      let iconClass = "";
+      let labelText = "";
+      let btnBgClass = "";
+
+      if (isPdf && isShare) {
+        iconClass = "fa fa-share-nodes";
+        labelText = "Compartilhar PDF";
+        btnBgClass = "btn wa";
+      } else if (isPdf && !isShare) {
+        iconClass = "fa fa-file-pdf";
+        labelText = "Baixar PDF";
+        btnBgClass = "btn bl";
+      } else if (!isPdf && isShare) {
+        iconClass = "fa fa-share-nodes";
+        labelText = "Compartilhar PNG";
+        btnBgClass = "btn wa";
+      } else {
+        iconClass = "fa fa-image";
+        labelText = "Baixar PNG";
+        btnBgClass = "btn se";
+      }
+
+      btn.className = btnBgClass;
+      icon.className = iconClass;
+      txt.textContent = labelText;
+
+      if (mBtn && mIcon) {
+        mBtn.className = btnBgClass + " sm";
+        mIcon.className = iconClass;
+        mBtn.title = labelText;
+      }
+    }
+
+    function doExport() {
+      const formatRadios = document.getElementsByName("optFormat");
+      const actionRadios = document.getElementsByName("optAction");
+      let fmt = "pdf";
+      let act = "share";
+
+      for (const r of formatRadios) { if (r.checked) fmt = r.value; }
+      for (const r of actionRadios) { if (r.checked) act = r.value; }
+
+      if (fmt === "pdf") {
+        genPDF(act);
+      } else {
+        genPNG(act);
+      }
+    }
+
+    // Event listeners para os radio buttons
+    document.getElementsByName("optFormat").forEach(r => r.addEventListener("change", updateExportBtnUI));
+    document.getElementsByName("optAction").forEach(r => r.addEventListener("change", updateExportBtnUI));
+
+    $("btnExport").onclick = doExport;
+    const mExp = $("mExport");
+    if (mExp) mExp.onclick = doExport;
+
+    $("btnOrientP").onclick = () => setOrient("p");
+    $("btnOrientL").onclick = () => setOrient("l");
     $("btnBatchProcess").onclick = processBatchInput;
 
     const exportXls = () => {
@@ -4167,6 +4701,7 @@
     window.activateER = activateER;
     window.removeItem = removeItem;
     window.setFormMode = setFormMode;
+    window.openImgEdit = openImgEdit; // necessário para onclick inline nos cards mobile
 
     init();
   </script>
