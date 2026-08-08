@@ -35,13 +35,19 @@ Object.assign(dataHandlers, {
             return;
         }
 
+        const formattedLeads = validList.map(r => {
+            const row = this._buildResultRow ? this._buildResultRow(r, r.api_origem || '') : r;
+            Object.assign(row, r);
+            return this._sanitizeLead(row);
+        });
+
         const payload = {
             metadata: {
                 total_registros: validList.length,
                 data_exportacao: new Date().toISOString(),
                 origem: 'GetLista Prospecta'
             },
-            cnpjs_enriquecidos: validList.map(r => this._sanitizeLead(r))
+            cnpjs_enriquecidos: formattedLeads
         };
 
         try {
@@ -68,13 +74,19 @@ Object.assign(dataHandlers, {
             return;
         }
 
+        const formattedLeads = validList.map(r => {
+            const row = this._buildResultRow ? this._buildResultRow(r, r.api_origem || '') : r;
+            Object.assign(row, r);
+            return this._sanitizeLead(row);
+        });
+
         const payload = {
             metadata: {
                 total_registros: validList.length,
                 data_exportacao: new Date().toISOString(),
                 origem: 'GetLista Prospecta'
             },
-            cnpjs_enriquecidos: validList.map(r => this._sanitizeLead(r))
+            cnpjs_enriquecidos: formattedLeads
         };
 
         try {
@@ -148,6 +160,63 @@ Object.assign(dataHandlers, {
             .filter(l => l.length === 14);
     },
 
+    // ====== 🏷️ GERADOR INTELIGENTE DE NOMES DE ARQUIVO (Com Cidades Procuradas) ======
+    _generateEnrichedFilename(prefix = 'GetLista', ext = 'xlsx', leads = null) {
+        const d = new Date();
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        const dateSuffix = `${day}_${month}_${year}`;
+
+        const sanitize = (str) => {
+            if (!str) return '';
+            const normalized = typeof utils !== 'undefined' && utils.removeAccents
+                ? utils.removeAccents(String(str))
+                : String(str).normalize('NFD').replace(/[̀-ͯ]/g, '');
+            return normalized
+                .replace(/[^A-Z0-9]/gi, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '');
+        };
+
+        const citiesSet = new Set();
+
+        // 1. Cidades da Mineração (MiningEngine)
+        if (typeof MiningEngine !== 'undefined' && MiningEngine.filters && MiningEngine.filters.cidades && MiningEngine.filters.cidades.length > 0) {
+            MiningEngine.filters.cidades.forEach(c => {
+                const s = sanitize(c);
+                if (s) citiesSet.add(s);
+            });
+        }
+
+        // 2. Filtro de cidade digitado na tela (#filterLocal)
+        const filterLocalVal = document.getElementById('filterLocal')?.value?.trim();
+        if (filterLocalVal) {
+            const s = sanitize(filterLocalVal);
+            if (s) citiesSet.add(s);
+        }
+
+        // 3. Extrair municípios únicos dos próprios leads sendo exportados
+        if (citiesSet.size === 0 && leads && Array.isArray(leads)) {
+            leads.forEach(item => {
+                const r = item.result || item;
+                const mun = r.municipio || r['Município'] || r.cidade;
+                if (mun) {
+                    const s = sanitize(mun);
+                    if (s) citiesSet.add(s);
+                }
+            });
+        }
+
+        const citiesList = Array.from(citiesSet).slice(0, 5);
+        if (citiesList.length > 0) {
+            const citiesStr = citiesList.join('_');
+            return `${prefix}_${citiesStr}_${dateSuffix}.${ext}`;
+        }
+
+        return `${prefix}_${dateSuffix}.${ext}`;
+    },
+
     // ====== FILTRO COMPARTILHADO (respeita todos os filtros avançados da tela) ======
     _getFilteredResults() {
         const successRows = [];
@@ -178,27 +247,104 @@ Object.assign(dataHandlers, {
         return { successRows, errorRows, apiStats };
     },
 
-    // ====== ABAS COMUNS (Erros + Resumo) ======
-    _addCommonSheets(workbook, errorRows, apiStats, successCount) {
+    // ====== ABAS COMUNS (Erros + Resumo Completo com Cidades, Termos e Filtros) ======
+    _addCommonSheets(workbook, errorRows, apiStats, successCount, leads = null) {
         if (errorRows.length > 0) {
             XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(errorRows), 'Erros');
         }
-        const totalProcessed = state.results.filter(r => r !== undefined).length;
+
+        const totalProcessed = state.results ? state.results.filter(r => r !== undefined).length : 0;
+
+        // 1. Identificar Cidades Procuradas / Presentes nos dados
+        const citiesSet = new Set();
+        if (typeof MiningEngine !== 'undefined' && MiningEngine.filters && MiningEngine.filters.cidades) {
+            MiningEngine.filters.cidades.forEach(c => citiesSet.add(c));
+        }
+        const targetLeads = leads || (state.results ? state.results.filter(r => r && !r.error) : []);
+        targetLeads.forEach(item => {
+            const r = item.result || item;
+            const mun = r.municipio || r['Município'];
+            if (mun) citiesSet.add(mun + (r.uf || r['UF'] ? `/${r.uf || r['UF']}` : ''));
+        });
+        const cidadesStr = citiesSet.size > 0 ? Array.from(citiesSet).join(', ') : 'Não informado';
+
+        // 2. Coletar Filtros de Tela (Tempo Real)
+        const getVal = (id) => document.getElementById(id)?.value || '';
+        const getCheckText = (id) => document.getElementById(id)?.checked ? 'SIM' : 'NÃO';
+
+        const uiFiltersList = [];
+        if (getCheckText('filterTempQuente') === 'SIM') uiFiltersList.push('Temp: Quente 🔥');
+        if (getCheckText('filterTempMorno') === 'SIM') uiFiltersList.push('Temp: Morno ⚡');
+        if (getCheckText('filterTempFrio') === 'SIM') uiFiltersList.push('Temp: Frio ❄️');
+        if (getVal('filterEmpresa')) uiFiltersList.push(`Razão/Fantasia: "${getVal('filterEmpresa')}"`);
+        if (getVal('filterSocio')) uiFiltersList.push(`Sócio: "${getVal('filterSocio')}"`);
+        if (getVal('filterCnpj')) uiFiltersList.push(`CNPJ/Raiz: "${getVal('filterCnpj')}"`);
+        if (getVal('filterLocal')) uiFiltersList.push(`Local: "${getVal('filterLocal')}"`);
+        if (getVal('filterCnae')) uiFiltersList.push(`CNAE: "${getVal('filterCnae')}"`);
+        if (getVal('filterCapitalMin') || getVal('filterCapitalMax')) {
+            uiFiltersList.push(`Capital Social: R$ ${getVal('filterCapitalMin') || '0'} a R$ ${getVal('filterCapitalMax') || '∞'}`);
+        }
+        if (getVal('filterObras') && getVal('filterObras') !== 'todos') uiFiltersList.push(`Obras CNO: ${getVal('filterObras')}`);
+        if (getVal('filterIe') && getVal('filterIe') !== 'todos') uiFiltersList.push(`Inscrição Estadual: ${getVal('filterIe')}`);
+        if (getVal('filterPontoComercial') && getVal('filterPontoComercial') !== 'todos') uiFiltersList.push(`Ponto Comercial: ${getVal('filterPontoComercial')}`);
+
+        const uiFiltersStr = uiFiltersList.length > 0 ? uiFiltersList.join(' | ') : 'Nenhum (Exibindo todos os resultados)';
+
+        // 3. Coletar Filtros e Termos da Mineração
+        let miningTermsStr = '— (Não utilizada)';
+        let miningPayloadStr = '';
+        if (typeof MiningEngine !== 'undefined' && MiningEngine.filters) {
+            const f = MiningEngine.filters;
+            const termsParts = [];
+            if (f.cidades && f.cidades.length > 0) termsParts.push(`Cidades: [${f.cidades.join(', ')}]`);
+            if (f.cnaes && f.cnaes.length > 0) termsParts.push(`CNAEs: [${f.cnaes.join(', ')}]`);
+            if (f.termos && f.termos.length > 0) termsParts.push(`Palavras-chave: [${f.termos.join(', ')}]`);
+            if (f.cnpjRaiz && f.cnpjRaiz.length > 0) termsParts.push(`CNPJ Raiz: [${f.cnpjRaiz.join(', ')}]`);
+            if (f.naturezaJuridica && f.naturezaJuridica.length > 0) termsParts.push(`Natureza Jurídica: [${f.naturezaJuridica.join(', ')}]`);
+            if (MiningEngine.els && MiningEngine.els.ufInput && MiningEngine.els.ufInput.value) termsParts.push(`UF: ${MiningEngine.els.ufInput.value}`);
+
+            if (termsParts.length > 0) {
+                miningTermsStr = termsParts.join(' | ');
+            }
+            try {
+                const payload = MiningEngine.buildPayload ? MiningEngine.buildPayload() : null;
+                if (payload) miningPayloadStr = JSON.stringify(payload, null, 2);
+            } catch (e) {}
+        }
+
         const summary = [
-            ['RESUMO DA PROSPECÇÃO'],
+            ['📋 RESUMO DA PROSPECÇÃO E CONFIGURAÇÃO DA PESQUISA'],
             [''],
-            ['Data da exportação', new Date().toLocaleString('pt-BR')],
-            ['Total de CNPJs carregados', state.cnpjList.length],
-            ['Total processados', totalProcessed],
-            ['Sucessos (exportados)', successCount],
-            ['Erros', errorRows.length],
+            ['--- METADADOS DA EXTRAÇÃO ---', ''],
+            ['Data e Hora da Exportação', new Date().toLocaleString('pt-BR')],
+            ['Cidades Procuradas / Atendidas', cidadesStr],
+            ['Total de CNPJs Carregados', state.cnpjList ? state.cnpjList.length : 0],
+            ['Total Processados Multi-API', totalProcessed],
+            ['Sucessos Exportados', successCount],
+            ['Erros de Consulta', errorRows.length],
             [''],
-            ['CONSUMO DE APIS'],
-            ...Object.entries(apiStats).map(([api, count]) => [api, count]),
+            ['--- PARÂMETROS E FILTROS APLICADOS PARA REPETIR A PESQUISA ---', ''],
+            ['Termos e Filtros de Mineração', miningTermsStr],
+            ['Filtros em Tempo Real da Tela', uiFiltersStr],
+            ['Modo Enriquecimento Profundo', state.deepMergeEnabled ? 'ATIVADO (Multi-API)' : 'DESATIVADO'],
+            ['Consulta Inscrição Estadual (IE)', state.ieEnabled ? 'ATIVADO' : 'DESATIVADO'],
+            ['Consulta Obras CNO', document.getElementById('cnoEnabled')?.checked ? 'ATIVADO' : 'DESATIVADO'],
             [''],
-            ['APIs configuradas', state.apis.map(a => `${a.name} (${a.active ? 'ativa' : 'inativa'})`).join(', ')]
+            ['--- CONSUMO E STATUS DAS APIS ---', ''],
+            ...Object.entries(apiStats).map(([api, count]) => [`API: ${api}`, `${count} requisições`]),
+            [''],
+            ['APIs Configuradas na Fila', state.apis ? state.apis.map(a => `${a.name} (${a.active ? 'ativa' : 'inativa'})`).join(', ') : '—']
         ];
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Resumo');
+
+        if (miningPayloadStr) {
+            summary.push(['']);
+            summary.push(['--- PAYLOAD JSON DA MINERAÇÃO (Para Copiar e Repetir) ---', '']);
+            summary.push([miningPayloadStr]);
+        }
+
+        const summarySheet = XLSX.utils.aoa_to_sheet(summary);
+        summarySheet['!cols'] = [{ wch: 35 }, { wch: 85 }];
+        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumo');
     },
 
     // ====== 🗺️ EXPORTAR MAPOSCOPE (otimizado) ======
@@ -259,8 +405,8 @@ Object.assign(dataHandlers, {
                 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado']]), 'Maposcope');
             }
 
-            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            XLSX.writeFile(workbook, 'maposcope_' + dateStr + '.xlsx');
+            const filename = this._generateEnrichedFilename('Maposcope', 'xlsx', rows);
+            XLSX.writeFile(workbook, filename);
             utils.updateStatus('✅ Maposcope exportado! ' + rows.length + ' pinos.');
         } catch (err) {
             console.error('Erro na exportação Maposcope:', err);
@@ -309,10 +455,9 @@ Object.assign(dataHandlers, {
                 const ageDesc = utils.getAgeDescription(age);
                 const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
 
-                const row = {};
-                if (groupRoot) {
-                    row['Raiz CNPJ'] = String(result.cnpj).replace(/\D/g, '').substring(0, 8);
-                }
+                const row = {
+                    'Raiz CNPJ': String(result.cnpj).replace(/\D/g, '').substring(0, 8)
+                };
                 
                 Object.assign(row, {
                     'CNPJ': result.cnpj,
@@ -380,10 +525,10 @@ Object.assign(dataHandlers, {
                 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado com sucesso']]), 'CNPJs Enriquecidos');
             }
 
-            this._addCommonSheets(workbook, errorRows, apiStats, rows.length);
+            this._addCommonSheets(workbook, errorRows, apiStats, rows.length, rows);
 
-            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            XLSX.writeFile(workbook, 'getlista_completo_' + dateStr + '.xlsx');
+            const filename = this._generateEnrichedFilename('GetLista_Completo', 'xlsx', rows);
+            XLSX.writeFile(workbook, filename);
             utils.updateStatus('✅ Exportação completa! ' + rows.length + ' CNPJs.');
         } catch (err) {
             console.error('Erro na exportação completa:', err);
@@ -428,10 +573,9 @@ Object.assign(dataHandlers, {
                 const ageDesc = utils.getAgeDescription(age);
                 const isAccounting = utils.detectAccountingContact(result.ddd_telefone_1, result.email, result.nome_fantasia, result.razao_social);
 
-                const row = {};
-                if (groupRoot) {
-                    row['Raiz CNPJ'] = String(result.cnpj).replace(/\D/g, '').substring(0, 8);
-                }
+                const row = {
+                    'Raiz CNPJ': String(result.cnpj).replace(/\D/g, '').substring(0, 8)
+                };
                 
                 Object.assign(row, {
                     'CNPJ': result.cnpj,
@@ -471,10 +615,16 @@ Object.assign(dataHandlers, {
                     'Área Total Obras (m²)': result.cno && result.cno.obras ? result.cno.obras.reduce((acc, o) => acc + (parseFloat(o.area_total) || 0), 0) : 0
                 });
 
+                // Preserva arrays e objetos originais para visualização no LeadView
+                row.qsa = result.qsa || [];
+                row.cnaes_secundarios = result.cnaes_secundarios || [];
+                if (result.cno) row.cno = result.cno;
+
                 // Sócios como colunas extras
                 if (result.qsa && result.qsa.length > 0) {
                     result.qsa.forEach((s, i) => {
                         row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
+                        row['Sócio ' + (i + 1) + ' - CPF/CNPJ'] = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cnpj_cpf_socio || s.cpf_mascarado || '';
                         row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
                         row['Sócio ' + (i + 1) + ' - Faixa Etária'] = s.faixa_etaria || '';
                         row['Sócio ' + (i + 1) + ' - Entrada'] = s.data_entrada_sociedade || s.data_entrada || '';
@@ -492,12 +642,29 @@ Object.assign(dataHandlers, {
                 return row;
             });
 
+            // Extrair cidades procuradas / encontradas para os metadados do JSON
+            const citiesSet = new Set();
+            if (typeof MiningEngine !== 'undefined' && MiningEngine.filters && MiningEngine.filters.cidades) {
+                MiningEngine.filters.cidades.forEach(c => citiesSet.add(c));
+            }
+            rows.forEach(r => { if (r['Município']) citiesSet.add(r['Município']); });
+
             const exportPayload = {
                 metadata: {
                     data_exportacao: new Date().toISOString(),
+                    cidades_procuradas: Array.from(citiesSet),
                     total_sucesso: rows.length,
                     total_erros: errorRows.length,
-                    estatisticas_api: apiStats
+                    estatisticas_api: apiStats,
+                    filtros_pesquisa: {
+                        mineração: (typeof MiningEngine !== 'undefined' && MiningEngine.filters) ? MiningEngine.filters : null,
+                        filtros_tela: {
+                            empresa: document.getElementById('filterEmpresa')?.value || '',
+                            socio: document.getElementById('filterSocio')?.value || '',
+                            local: document.getElementById('filterLocal')?.value || '',
+                            cnae: document.getElementById('filterCnae')?.value || ''
+                        }
+                    }
                 },
                 cnpjs_enriquecidos: rows,
                 erros: errorRows
@@ -507,8 +674,7 @@ Object.assign(dataHandlers, {
             const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            const filename = `getlista_completo_${dateStr}.json`;
+            const filename = this._generateEnrichedFilename('GetLista_Completo', 'json', rows);
             
             link.setAttribute('href', url);
             link.setAttribute('download', filename);
@@ -916,8 +1082,9 @@ Object.assign(dataHandlers, {
         const workbook = XLSX.utils.book_new();
         const rows = state.resultsJaAtendidos.map(result => this._buildResultRow(result, 'Sim'));
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Já Atendidos Enriquecidos');
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        XLSX.writeFile(workbook, `ja_atendidos_enriquecidos_${dateStr}.xlsx`);
+        this._addCommonSheets(workbook, [], {}, rows.length, state.resultsJaAtendidos);
+        const filename = this._generateEnrichedFilename('Ja_Atendidos_Enriquecidos', 'xlsx', state.resultsJaAtendidos);
+        XLSX.writeFile(workbook, filename);
         utils.updateStatus(`✅ Já-atendidos enriquecidos exportados! ${rows.length} CNPJs.`);
     },
 
@@ -945,8 +1112,9 @@ Object.assign(dataHandlers, {
                 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Nenhum resultado']]), 'Todos + Atende');
             }
 
-            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            XLSX.writeFile(workbook, `getlista_todos_atende_${dateStr}.xlsx`);
+            this._addCommonSheets(workbook, [], {}, allRows.length, allRows);
+            const filename = this._generateEnrichedFilename('GetLista_Todos_Atende', 'xlsx', allRows);
+            XLSX.writeFile(workbook, filename);
             utils.updateStatus(`✅ Exportação com Atende! ${allRows.length} CNPJs (${rowsNao.length} não-atendidos + ${rowsSim.length} já-atendidos).`);
         } catch (err) {
             console.error('Erro na exportação com Atende:', err);
@@ -1086,8 +1254,9 @@ Object.assign(dataHandlers, {
             'Nível de Confiança': m.confianca
         }));
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Possíveis Sócios (QSA)');
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        XLSX.writeFile(workbook, `possiveis_socios_qsa_${dateStr}.xlsx`);
+        this._addCommonSheets(workbook, [], {}, rows.length, state.cpfSocioMatches);
+        const filename = this._generateEnrichedFilename('Possiveis_Socios_QSA', 'xlsx', state.cpfSocioMatches);
+        XLSX.writeFile(workbook, filename);
         utils.updateStatus(`✅ Relatório de possíveis sócios exportado! ${rows.length} matches.`);
     }
 });
