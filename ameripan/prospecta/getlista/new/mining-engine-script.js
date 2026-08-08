@@ -1456,6 +1456,22 @@ const MiningEngine = {
             return `Mineracao_${citiesStr}_${dateSuffix}.${ext}`;
         }
 
+        // Regra 2.5: Extrair cidades únicas dos próprios leads minerados se não houver filtro explícito de cidades
+        if (this.state.leads && this.state.leads.length > 0) {
+            const leadCitiesSet = new Set();
+            this.state.leads.forEach(l => {
+                if (l.municipio) {
+                    const s = sanitize(l.municipio);
+                    if (s) leadCitiesSet.add(s);
+                }
+            });
+            const leadCitiesList = Array.from(leadCitiesSet).slice(0, 5);
+            if (leadCitiesList.length > 0) {
+                const citiesStr = leadCitiesList.join('_');
+                return `Mineracao_${citiesStr}_${dateSuffix}.${ext}`;
+            }
+        }
+
         // Regra 3: Busca por Termos Textuais
         if (this.filters.termos && this.filters.termos.length > 0) {
             const termList = this.filters.termos.slice(0, 3).map(t => sanitize(t));
@@ -1587,6 +1603,7 @@ const MiningEngine = {
                 endpoint: this.state.endpoint
             },
             payload_pesquisa: currentPayload,
+            cnpjs_enriquecidos: this.state.leads,
             leads: this.state.leads
         };
 
@@ -1912,8 +1929,12 @@ const MiningEngine = {
             document.getElementById('resultsSection')?.classList.remove('hidden');
         }
 
-        // Scroll suave até a seção de enriquecimento
-        document.getElementById('enrichmentSection')?.scrollIntoView({ behavior: 'smooth' });
+        // Scroll suave até o botão ▶ Iniciar Consulta Padrão (startBtn) na Etapa 3 (Enriquecimento)
+        const targetBtn = document.getElementById('startBtn') || document.getElementById('controlsSection');
+        if (targetBtn) {
+            targetBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            try { targetBtn.focus({ preventScroll: true }); } catch (e) {}
+        }
     },
 
     // ========================= LIMPAR RESULTADOS =========================

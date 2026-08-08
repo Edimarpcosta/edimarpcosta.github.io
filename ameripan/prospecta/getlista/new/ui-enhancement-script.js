@@ -44,6 +44,15 @@ const uiControllers = {
         utils.updateProgressBar(0, cnpjs.length);
         utils.updateStats();
         this.renderApiQueueStatus();
+
+        // Scroll suave até o botão ▶ Iniciar Consulta Padrão (startBtn) na Etapa 3
+        setTimeout(() => {
+            const startBtn = document.getElementById('startBtn') || elements.controlsSection;
+            if (startBtn) {
+                startBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                try { startBtn.focus({ preventScroll: true }); } catch (e) {}
+            }
+        }, 100);
     },
 
     // ===== PROCESSAMENTO =====
