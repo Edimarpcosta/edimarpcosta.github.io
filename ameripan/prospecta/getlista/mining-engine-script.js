@@ -1913,7 +1913,7 @@ const MiningEngine = {
         }
 
         // Scroll suave até a seção de enriquecimento
-        document.getElementById('enrichmentSection')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('cnpjInputSection')?.scrollIntoView({ behavior: 'smooth' });
     },
 
     // ========================= LIMPAR RESULTADOS =========================
