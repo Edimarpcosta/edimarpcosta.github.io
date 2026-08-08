@@ -1162,13 +1162,19 @@ function onFileSelected(e) {
 
 function readFile(file) {
   const r = new FileReader();
-  r.onload = ev => {
+  r.onload = async ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!data.cnpjs_enriquecidos) throw new Error('JSON sem campo cnpjs_enriquecidos');
+      if (!data.cnpjs_enriquecidos && !data.leads && !Array.isArray(data)) {
+        throw new Error('JSON não possui um array de leads válido (cnpjs_enriquecidos ou leads).');
+      }
+      const payload = data.cnpjs_enriquecidos ? data
+        : data.leads ? { metadata: data.metadata || {}, cnpjs_enriquecidos: data.leads }
+        : { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString() }, cnpjs_enriquecidos: data };
+
       const fileName = file.name || 'dataset.json';
-      saveFileHistory(fileName, data);
-      initApp(data, fileName);
+      await saveFileHistory(fileName, payload);
+      initApp(payload, fileName);
     } catch(err) {
       toast('❌ JSON inválido: ' + err.message, 5000);
     }
@@ -2682,21 +2688,62 @@ async function initApp(data) {
   // Carrega cache de geo via IndexedDB / LocalStorage
   await loadGeoCacheDB();
 
-  // Normaliza leads
-  S.all = data.cnpjs_enriquecidos.map(lead => {
+  // Normaliza leads com suporte duplo (chaves formatadas do Prospecta + chaves raw de APIs/Mineração)
+  const rawList = (data && data.cnpjs_enriquecidos) || (data && data.leads) || (Array.isArray(data) ? data : []);
+  S.all = rawList.map(lead => {
     const l = {...lead};
-    l._temp    = tempClass(lead['Temperatura Lead']);
-    l._porte   = normPorte(lead['Porte']);
-    l._situacao= normSit(lead['Situação Cadastral']);
-    l._socios  = extractSocios(lead);
-    l._cnaesSecundarios = extractCnaeSec(lead);
-    l._cnae    = String(lead['CNAE Principal']||'');
-    l._descCnae= lead['Descrição CNAE']||'';
-    l._scoreNum= Number(lead['Score B2B'])||0;
-    l._capitalNum = Number(lead['Capital Social'])||0;
+
+    // Mapeamento bidirecional resiliente
+    l['CNPJ'] = lead['CNPJ'] || lead.cnpj || '';
+    l['CNPJ Formatado'] = lead['CNPJ Formatado'] || (l['CNPJ'] ? String(l['CNPJ']).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : '');
+    l['Raiz CNPJ'] = lead['Raiz CNPJ'] || (l['CNPJ'] ? String(l['CNPJ']).replace(/\D/g, '').substring(0, 8) : '');
+    l['Razão Social'] = lead['Razão Social'] || lead.razao_social || lead.nome || '';
+    l['Nome Fantasia'] = lead['Nome Fantasia'] || lead.nome_fantasia || lead.fantasia || l['Razão Social'] || '';
+    l['Município'] = lead['Município'] || lead.municipio || lead.cidade || '';
+    l['UF'] = lead['UF'] || lead.uf || lead.estado || 'SP';
+    l['Bairro'] = lead['Bairro'] || lead.bairro || '';
+    l['Logradouro'] = lead['Logradouro'] || lead.logradouro || lead.endereco || '';
+    l['Número'] = lead['Número'] || lead.numero || '';
+    l['Complemento'] = lead['Complemento'] || lead.complemento || '';
+    l['CEP'] = lead['CEP'] || lead.cep || '';
+    l['CNAE Principal'] = lead['CNAE Principal'] || lead.cnae_fiscal || lead.cnae_ordem_principal || lead.cnae || '';
+    l['Descrição CNAE'] = lead['Descrição CNAE'] || lead.cnae_fiscal_descricao || lead.cnae_descricao || '';
+    l['Capital Social'] = lead['Capital Social'] !== undefined ? lead['Capital Social'] : (lead.capital_social || 0);
+    l['Porte'] = lead['Porte'] || lead.porte || '';
+    l['Situação Cadastral'] = lead['Situação Cadastral'] || lead.descricao_situacao_cadastral || lead.situacao_cadastral || 'Ativa';
+    l['Data de Abertura'] = lead['Data de Abertura'] || lead.data_inicio_atividade || lead.abertura || '';
+    l['Natureza Jurídica'] = lead['Natureza Jurídica'] || lead.natureza_juridica || '';
+    l['Inscrição Estadual (IE)'] = lead['Inscrição Estadual (IE)'] || lead.inscricao_estadual || lead.ie || '';
+
+    // Contatos
+    l['Telefone'] = lead['Telefone'] || lead.ddd_telefone_1 || lead.telefone1 || lead.telefone || '';
+    l['Telefone 2'] = lead['Telefone 2'] || lead.ddd_telefone_2 || lead.telefone2 || '';
+    l['Email'] = lead['Email'] || lead.email || '';
+    const tel1Clean = String(l['Telefone']).replace(/\D/g, '');
+    const tel2Clean = String(l['Telefone 2']).replace(/\D/g, '');
+    l['WhatsApp 1'] = lead['WhatsApp 1'] || (tel1Clean.length >= 10 ? `https://wa.me/55${tel1Clean}` : '');
+    l['WhatsApp 2'] = lead['WhatsApp 2'] || (tel2Clean.length >= 10 ? `https://wa.me/55${tel2Clean}` : '');
+
+    // Score e Temperatura
+    const scoreVal = lead['Score B2B'] !== undefined ? lead['Score B2B'] : (lead.scoreInfo?.score || lead.score || 0);
+    l['Score B2B'] = scoreVal;
+    l._scoreNum = Number(scoreVal) || 0;
+
+    const tempVal = lead['Temperatura Lead'] || lead.scoreInfo?.temp || (l._scoreNum >= 70 ? 'Quente 🔥' : l._scoreNum >= 40 ? 'Morno ⚡' : 'Frio ❄️');
+    l['Temperatura Lead'] = tempVal;
+    l._temp = tempClass(tempVal);
+
+    l._porte   = normPorte(l['Porte']);
+    l._situacao= normSit(l['Situação Cadastral']);
+    l.qsa      = lead.qsa || lead.socios || [];
+    l._socios  = extractSocios(l);
+    l._cnaesSecundarios = extractCnaeSec(l);
+    l._cnae    = String(l['CNAE Principal']);
+    l._descCnae= l['Descrição CNAE'];
+    l._capitalNum = Number(l['Capital Social']) || 0;
     l._coord   = null;
     l._prec    = 'nao_geocodificado';
-    l._searchStr = `${lead['Nome Fantasia']||''} ${lead['Razão Social']||''} ${lead['CNPJ']||''} ${lead['Logradouro']||''} ${lead['Bairro']||''} ${lead['Município']||''}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    l._searchStr = `${l['Nome Fantasia']} ${l['Razão Social']} ${l['CNPJ']} ${l['Logradouro']} ${l['Bairro']} ${l['Município']}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 
     // Aplica cache
     const k = cacheKey(l);
