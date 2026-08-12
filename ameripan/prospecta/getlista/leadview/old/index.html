@@ -1,0 +1,2857 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GetLista Maps — Ameripan</title>
+<meta name="description" content="Visualizador geoespacial de leads B2B da Ameripan. Mapa interativo, filtros, análise e vínculos societários." />
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700&display=swap" rel="stylesheet" />
+
+<style>
+:root {
+  --bg:     #0d1117; --bg2: #161b22; --bg3: #1c2230; --bg3h: #232b3b;
+  --border: #30363d; --bord2: #21262d;
+  --t1: #e6edf3; --t2: #8b949e; --t3: #58616a;
+  --blue: #3b82f6; --blueh: #60a5fa; --purple: #8b5cf6;
+  --hot: #ef4444; --hotbg: rgba(239,68,68,.12);
+  --warm: #f59e0b; --warmbg: rgba(245,158,11,.12);
+  --cold: #60a5fa; --coldbg: rgba(96,165,250,.12);
+  --green: #22c55e; --greenbg: rgba(34,197,94,.1);
+  --pw: 340px; --dw: 380px; --th: 52px;
+  --r: 8px; --rs: 4px; --sh: 0 4px 20px rgba(0,0,0,.5); --tr: .16s ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-family:'Inter',sans-serif;font-size:14px}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* SEARCH INPUT */
+.searchInp{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);padding:7px 10px;font-size:12px;transition:var(--tr);margin-bottom:12px}
+.searchInp:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px rgba(59,130,246,.2)}
+
+/* MODAL DE DETALHES DO LEAD */
+.modal-ov{position:fixed;inset:0;background:rgba(13,17,23,.82);backdrop-filter:blur(4px);z-index:6000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-ov.op{display:flex}
+.modal-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:var(--sh);position:relative;display:flex;flex-direction:column}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:var(--bg3)}
+.modal-title{font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:var(--t1);line-height:1.2}
+.modal-sub{font-size:12px;color:var(--t2);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.modal-close{background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:var(--rs);transition:var(--tr)}
+.modal-close:hover{color:var(--hot);background:rgba(239,68,68,.1)}
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.m-sec-title{font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.m-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.m-box{background:var(--bg3);border:1px solid var(--bord2);border-radius:var(--rs);padding:10px 12px}
+.m-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:2px}
+.m-val{font-size:12px;color:var(--t1);font-weight:500;word-break:break-word}
+.m-val a{color:var(--blueh);text-decoration:none}
+.m-val a:hover{text-decoration:underline}
+.m-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.m-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--rs);font-size:11px;font-weight:600;text-decoration:none;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--t1);transition:var(--tr)}
+.m-btn:hover{border-color:var(--blue);color:var(--blueh)}
+.m-btn.wsp{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80}
+.m-btn.wsp:hover{background:rgba(34,197,94,.22)}
+.m-btn.gmap{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#60a5fa}
+.m-btn.gmap:hover{background:rgba(59,130,246,.22)}
+.m-btn.waze{background:rgba(139,92,246,.12);border-color:rgba(139,92,246,.3);color:#c084fc}
+.m-btn.waze:hover{background:rgba(139,92,246,.22)}
+
+/* VIS NETWORK TOOLTIP FIX */
+.net-tooltip{padding:8px 11px;font-size:12px;line-height:1.45;color:var(--t1);background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);box-shadow:var(--sh);max-width:280px}
+.net-tooltip b{color:var(--t1)}
+.net-tooltip small{color:var(--warm);font-size:10px}
+
+/* GPS USER MARKER PULSE */
+@keyframes userPulse {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 14px rgba(59, 130, 246, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+.user-pin-marker{animation: userPulse 2s infinite;border-radius:50%}
+#topbar.hid{display:none!important}
+
+/* TOP BAR */
+#topbar{height:var(--th);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;flex-shrink:0;z-index:1000}
+.logo{font-family:'Outfit',sans-serif;font-size:17px;font-weight:700;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+.logo span{opacity:.55;font-weight:600}
+.sep{width:1px;height:22px;background:var(--border)}
+.chip{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--t2);display:flex;align-items:center;gap:5px}
+.chip b{color:var(--t1)}
+.sp{flex:1}
+.tbtn{background:none;border:1px solid var(--border);border-radius:var(--rs);color:var(--t2);cursor:pointer;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px;transition:var(--tr);white-space:nowrap}
+.tbtn:hover{border-color:var(--blue);color:var(--blueh)}
+.tbtn.act{background:rgba(59,130,246,.12);border-color:var(--blue);color:var(--blueh)}
+
+/* MAIN */
+#main{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* LEFT PANEL */
+#panL{width:var(--pw);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width var(--tr)}
+#panL.col{width:0;overflow:hidden}
+.ptabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.ptab{flex:1;padding:9px 6px;text-align:center;font-size:12px;font-weight:500;cursor:pointer;color:var(--t2);border:none;background:none;border-bottom:2px solid transparent;transition:var(--tr)}
+.ptab.on{color:var(--blue);border-bottom-color:var(--blue)}
+.ptab:hover:not(.on){color:var(--t1)}
+.pscroll{flex:1;overflow-y:auto;padding:12px}
+.pscroll::-webkit-scrollbar{width:3px}
+.pscroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* FILTERS */
+.fg{margin-bottom:14px}
+.fl{font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.bdg{background:var(--blue);color:#fff;border-radius:10px;padding:1px 5px;font-size:9px;font-weight:700}
+.ms-wrap{position:relative}
+.ms-inp{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);padding:6px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.ms-inp:hover{border-color:var(--blue)}
+.ms-dd{position:absolute;top:calc(100% + 3px);left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);z-index:600;max-height:200px;overflow-y:auto;display:none;box-shadow:var(--sh)}
+.ms-dd.op{display:block}
+.ms-search{padding:7px;border-bottom:1px solid var(--border)}
+.ms-search input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);padding:4px 8px;font-size:11px}
+.ms-opt{display:flex;align-items:center;gap:7px;padding:6px 10px;cursor:pointer;font-size:11px;transition:var(--tr)}
+.ms-opt:hover{background:var(--bg3h)}
+.ms-opt input{accent-color:var(--blue)}
+.rr{display:flex;flex-direction:column;gap:3px}
+.rrow{display:flex;align-items:center;gap:7px}
+.rrow input[type=range]{flex:1;accent-color:var(--blue)}
+.rv{font-size:11px;color:var(--t1);font-weight:600;min-width:28px;text-align:right}
+.rl{font-size:10px;color:var(--t3)}
+.tlist{display:flex;flex-direction:column;gap:5px}
+.ti{display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs)}
+.ti label{font-size:11px;color:var(--t1);display:flex;align-items:center;gap:7px;cursor:pointer}
+.tog{position:relative;display:inline-block;width:32px;height:17px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0}
+.tslider{position:absolute;inset:0;cursor:pointer;background:var(--border);border-radius:17px;transition:var(--tr)}
+.tslider::before{content:'';position:absolute;height:11px;width:11px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:var(--tr)}
+.tog input:checked+.tslider{background:var(--blue)}
+.tog input:checked+.tslider::before{transform:translateX(15px)}
+.tchips{display:flex;gap:5px;flex-wrap:wrap}
+.tc{padding:4px 9px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:2px solid transparent;transition:var(--tr);opacity:.45}
+.tc.on{opacity:1}
+.tc.hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+.tc.warm{background:var(--warmbg);color:var(--warm);border-color:var(--warm)}
+.tc.cold{background:var(--coldbg);color:var(--cold);border-color:var(--cold)}
+.wbox{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--rs);padding:8px 10px;font-size:11px;color:var(--warm);line-height:1.45;margin-top:6px}
+.ibox{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:var(--rs);padding:8px 10px;font-size:11px;color:var(--t2);line-height:1.45;margin-top:6px}
+#btnRst{width:100%;background:none;border:1px solid var(--border);border-radius:var(--rs);color:var(--t2);padding:6px;font-size:11px;cursor:pointer;transition:var(--tr);margin-top:8px}
+#btnRst:hover{border-color:var(--hot);color:var(--hot)}
+#fcount{font-size:11px;color:var(--t3);padding:3px 0 7px}
+#fcount b{color:var(--t1)}
+
+/* LEAD LIST */
+#leadList{display:flex;flex-direction:column;gap:5px}
+.lcard{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 11px;cursor:pointer;transition:var(--tr);border-left:3px solid transparent}
+.lcard:hover{background:var(--bg3h);border-color:var(--blue)}
+.lcard.hot{border-left-color:var(--hot)}
+.lcard.warm{border-left-color:var(--warm)}
+.lcard.cold{border-left-color:var(--cold)}
+.ln{font-size:12px;font-weight:600;color:var(--t1);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lm{font-size:10px;color:var(--t2);display:flex;gap:7px;flex-wrap:wrap}
+.sb{font-size:10px;font-weight:700;padding:2px 5px;border-radius:var(--rs);flex-shrink:0}
+.sb.hot{background:var(--hotbg);color:var(--hot)}
+.sb.warm{background:var(--warmbg);color:var(--warm)}
+.sb.cold{background:var(--coldbg);color:var(--cold)}
+
+/* MAP */
+#mapW{flex:1;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+#mctrl{position:absolute;top:10px;right:10px;z-index:800;display:flex;flex-direction:column;gap:7px}
+.mcbtn{background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:var(--rs);padding:7px 11px;font-size:11px;cursor:pointer;box-shadow:var(--sh);transition:var(--tr);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.mcbtn:hover{border-color:var(--blue);color:var(--blueh)}
+.mcbtn.act{background:rgba(59,130,246,.12);border-color:var(--blue);color:var(--blueh)}
+
+/* GEO QUALITY */
+#geoQ{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:6px 14px;display:none;gap:14px;font-size:11px;color:var(--t2);box-shadow:var(--sh)}
+#geoQ.sh{display:flex;align-items:center}
+.qd{width:7px;height:7px;border-radius:50%}
+.qd.cep{background:var(--green)}
+.qd.end{background:var(--warm)}
+.qd.bai{background:var(--cold)}
+.qd.no{background:var(--t3)}
+.qi{display:flex;align-items:center;gap:4px}
+
+/* GEO PROGRESS */
+#geoP{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:950;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:11px 18px;min-width:280px;box-shadow:var(--sh);display:none}
+#geoP.sh{display:block}
+#geoTitle{font-size:12px;font-weight:600;margin-bottom:7px;color:var(--t1)}
+.gbar-w{background:var(--bg);border-radius:3px;height:5px;overflow:hidden}
+#gbar{height:100%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:3px;transition:width .3s ease;width:0%}
+#gtxt{font-size:11px;color:var(--t2);margin-top:5px}
+
+/* DETAIL PANEL */
+#panD{width:0;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;transition:width var(--tr);display:flex;flex-direction:column}
+#panD.op{width:var(--dw)}
+#panDi{width:var(--dw);overflow-y:auto;flex:1;padding:14px}
+#panDi::-webkit-scrollbar{width:3px}
+#panDi::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.dh{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+.dcls{background:none;border:1px solid var(--border);color:var(--t2);border-radius:var(--rs);width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--tr)}
+.dcls:hover{border-color:var(--hot);color:var(--hot)}
+.dname{font-family:'Outfit',sans-serif;font-size:15px;font-weight:700;color:var(--t1);line-height:1.3}
+.dfant{font-size:12px;color:var(--t2);margin-top:2px}
+.dsr{display:flex;gap:7px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.sbig{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;line-height:1}
+.sbig.hot{color:var(--hot)}.sbig.warm{color:var(--warm)}.sbig.cold{color:var(--cold)}
+.slbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
+.ds{margin-bottom:12px}
+.dst{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);padding-bottom:5px;border-bottom:1px solid var(--bord2);margin-bottom:7px}
+.dr{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;gap:7px}
+.dk{color:var(--t3);flex-shrink:0}.dv{color:var(--t1);text-align:right;word-break:break-word}
+.cbtns{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.cbtn{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:4px 9px;font-size:11px;color:var(--t1);text-decoration:none;cursor:pointer;transition:var(--tr)}
+.cbtn:hover{border-color:var(--green);color:var(--green)}
+.cbtn.wa{border-color:rgba(34,197,94,.4);color:var(--green)}
+.mi{font-size:11px;color:var(--t2);padding:2px 0;display:flex;gap:5px}
+.mi::before{content:'●';color:var(--blue);font-size:7px;margin-top:3px;flex-shrink:0}
+.lchip{display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:10px;color:var(--t2);cursor:pointer;transition:var(--tr);margin:2px}
+.lchip:hover{border-color:var(--purple);color:var(--purple)}
+.lchip.mz{border-color:rgba(139,92,246,.45);color:var(--purple)}
+.lchip.sc{border-color:rgba(245,158,11,.45);color:var(--warm)}
+.pbdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.pbdg.cep{background:var(--greenbg);color:var(--green)}
+.pbdg.end{background:var(--warmbg);color:var(--warm)}
+.pbdg.bai{background:var(--coldbg);color:var(--cold)}
+.pbdg.no{background:rgba(88,97,106,.12);color:var(--t3)}
+.schdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.schdg.at{background:var(--greenbg);color:var(--green)}
+.schdg.bx{background:var(--hotbg);color:var(--hot)}
+.schdg.ot{background:rgba(88,97,106,.12);color:var(--t3)}
+
+/* CHARTS */
+#panC{position:absolute;bottom:0;left:0;right:0;height:0;background:var(--bg2);border-top:1px solid var(--border);overflow:hidden;transition:height var(--tr);z-index:700;display:flex;flex-direction:column}
+#panC.op{height:310px}
+.ch{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.ch h3{font-size:12px;font-weight:600;flex:1}
+.ccls{background:none;border:1px solid var(--border);border-radius:var(--rs);color:var(--t2);padding:3px 9px;cursor:pointer;font-size:11px;transition:var(--tr)}
+.ccls:hover{border-color:var(--hot);color:var(--hot)}
+#cscroll{display:flex;gap:14px;padding:14px;overflow-x:auto;flex:1}
+#cscroll::-webkit-scrollbar{height:3px}
+#cscroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.ccard{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:11px;flex-shrink:0;display:flex;flex-direction:column}
+.ccard h4{font-size:10px;color:var(--t2);margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+
+/* UPLOAD SCREEN */
+#upload{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+#upload.hid{display:none}
+.ul-box{background:var(--bg2);border:2px dashed var(--border);border-radius:16px;padding:48px 56px;text-align:center;max-width:520px;width:90%;transition:var(--tr)}
+.ul-box.drag{border-color:var(--blue);background:rgba(59,130,246,.06)}
+.ul-ico{font-size:48px;margin-bottom:12px}
+.ul-title{font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.ul-sub{font-size:13px;color:var(--t2);margin-bottom:24px;line-height:1.5}
+.ul-btn{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;border:none;border-radius:var(--r);padding:12px 28px;font-size:14px;font-weight:700;cursor:pointer;transition:var(--tr);display:inline-flex;align-items:center;gap:8px}
+.ul-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.3)}
+.ul-info{font-size:11px;color:var(--t3);margin-top:14px;line-height:1.5}
+input#fileIn{display:none}
+.ul-demo{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:6px 14px;font-size:11px;color:var(--t2);cursor:pointer;border:1px solid var(--border);transition:var(--tr)}
+.ul-demo:hover{border-color:var(--blue);color:var(--blueh)}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;z-index:2000;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:11px 15px;box-shadow:var(--sh);font-size:12px;transform:translateY(70px);opacity:0;transition:all .3s ease;max-width:300px}
+#toast.sh{transform:translateY(0);opacity:1}
+
+/* LEAFLET overrides */
+.leaflet-popup-content-wrapper{background:var(--bg3)!important;border:1px solid var(--border)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important;color:var(--t1)!important}
+.leaflet-popup-tip{background:var(--bg3)!important}
+.leaflet-tooltip{background:var(--bg2)!important;border:1px solid var(--border)!important;color:var(--t1)!important;font-size:11px!important;border-radius:5px!important}
+.popup-name{font-weight:700;font-size:13px;margin-bottom:3px}
+.popup-score{font-size:11px;margin-bottom:4px;color:var(--t2)}
+.popup-addr{font-size:10px;color:var(--t3);margin-bottom:8px}
+.popup-btn{background:var(--blue);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;cursor:pointer;width:100%;transition:var(--tr)}
+.popup-btn:hover{opacity:.85}
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(59,130,246,.18)!important}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(59,130,246,.5)!important;color:#fff!important;font-weight:700!important}
+
+/* HAMBURGER MENU (topbar) */
+.hbtn{background:none;border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);cursor:pointer;width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px;transition:var(--tr)}
+.hbtn:hover{border-color:var(--blue);color:var(--blueh)}
+.hbtn.act{background:rgba(59,130,246,.12);border-color:var(--blue);color:var(--blueh)}
+#topDrop{position:absolute;top:calc(var(--th) + 6px);right:14px;z-index:1100;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);padding:10px;display:none;flex-direction:column;gap:6px;min-width:230px}
+#topDrop.op{display:flex}
+#topDrop .tbtn{width:100%;justify-content:flex-start}
+#topDrop input#cepToken{width:100%!important;margin-top:2px}
+.dropSep{height:1px;background:var(--border);margin:4px 0}
+.dropLbl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:2px 2px 0}
+
+/* MAP CONTROLS — colapsáveis */
+#mctrl.col .mcbtn:not(.mchub){display:none}
+.mchub{margin-bottom:2px}
+
+/* NETWORK / REDE DE VÍNCULOS */
+#netView{position:fixed;inset:0;background:var(--bg);z-index:5000;display:none;flex-direction:column}
+#netView.op{display:flex}
+#netHead{height:var(--th);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;flex-shrink:0}
+#netHead h3{font-family:'Outfit',sans-serif;font-size:15px;font-weight:700}
+#netHead .sp{flex:1}
+#netGraphWrap{flex:1;position:relative;overflow:hidden}
+#netGraph{width:100%;height:100%;background:var(--bg)}
+#netLegend{position:absolute;bottom:14px;left:14px;z-index:20;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px;font-size:11px;color:var(--t2);box-shadow:var(--sh);display:flex;flex-direction:column;gap:5px}
+#netLegend .lgi{display:flex;align-items:center;gap:7px}
+.lgdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.lgln{width:16px;height:0;border-top:2.5px solid;flex-shrink:0}
+.lgln.dash{border-top-style:dashed}
+#netEmpty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--t3);font-size:12px;text-align:center;padding:0 30px}
+#netEmpty.sh{display:flex}
+
+/* PAINEL LATERAL DIREITO NA REDE DE VÍNCULOS */
+#netSideD{position:absolute;top:0;bottom:0;right:0;width:380px;max-width:90vw;background:var(--bg2);border-left:1px solid var(--border);z-index:200;transform:translateX(100%);transition:transform var(--tr);overflow-y:auto;box-shadow:-4px 0 24px rgba(0,0,0,.5);padding:14px}
+#netSideD.op{transform:translateX(0)}
+
+/* TAB DE RECOLHER PAINEL ESQUERDO */
+.panTab{position:absolute;top:50%;transform:translateY(-50%);left:var(--pw);z-index:850;width:16px;height:46px;background:var(--bg2);border:1px solid var(--border);border-left:none;border-radius:0 6px 6px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2);transition:left var(--tr);box-shadow:var(--sh);font-size:11px}
+.panTab:hover{color:var(--blueh);border-color:var(--blue)}
+#main.lcol .panTab{left:0}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ UPLOAD SCREEN ════ -->
+<div id="upload">
+  <div class="ul-box" id="dropZone">
+    <div class="ul-ico">🗺️</div>
+    <div class="ul-title">GetLista Maps</div>
+    <div class="ul-sub">
+      Carregue o JSON exportado pelo GetLista para visualizar seus leads no mapa interativo.<br>
+      <strong style="color:var(--t1)">Arraste o arquivo aqui</strong> ou clique no botão abaixo.
+    </div>
+    <label class="ul-btn" for="fileIn">
+      📂 Selecionar JSON do GetLista
+    </label>
+    <input type="file" id="fileIn" accept=".json" onchange="onFileSelected(event)" />
+    <button class="ul-btn" id="pasteJsonBtn" onclick="pasteJsonFromClipboard()" style="background:linear-gradient(135deg,#10b981,#059669);margin-top:8px;cursor:pointer;border:none">
+      📋 Colar JSON (do Prospecta)
+    </button>
+    <div class="ul-info">
+      ✅ Arquivo lido localmente — nenhum dado sai do seu computador<br>
+      📦 Compatível com o formato <code>getlista_completo_*.json</code><br>
+      <span style="color:var(--warm);font-size:10px">📋 Use "Copiar JSON" no Prospecta e depois "Colar JSON" aqui</span>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO DE ARQUIVOS RECENTES (MÁXIMO 2) -->
+  <div id="fileHistWrap" style="display:none;width:90%;max-width:520px;margin-top:16px">
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+      <span>📁 Arquivos Recentes no Navegador (Máx. 2)</span>
+      <button class="ccls" style="font-size:10px;padding:2px 6px" onclick="clearFileHistory()">🗑️ Limpar Arquivos</button>
+    </div>
+    <div id="fileHistList" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+
+  <!-- GERENCIAMENTO DE CACHE INDEXEDDB -->
+  <div id="cacheMgmtWrap" style="width:90%;max-width:520px;margin-top:12px;display:flex;gap:8px;justify-content:center">
+    <button class="tbtn" style="font-size:11px;padding:5px 12px;background:var(--bg2)" onclick="clearGeoCacheDB()" title="Apagar todas as coordenadas salvas de CNPJs no IndexedDB">🗑️ Limpar Cache Geográfico (<span id="cGeoCnt">0</span> PJs)</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ APP ════ -->
+<div id="app" style="display:none">
+  <header id="topbar">
+    <div class="logo">GetLista <span>Maps</span></div>
+    <div class="sep"></div>
+    <div class="chip">📍 <b id="cTotal">0</b> leads</div>
+    <div class="chip">🎯 <b id="cVis">0</b> visíveis</div>
+    <div class="chip">🌐 <b id="cGeo">0</b>% geo</div>
+    <div class="sp"></div>
+    <button class="tbtn" onclick="locateUserGPS()" title="Mostrar minha posição atual no mapa via GPS">📍 Meu GPS</button>
+    <button class="tbtn" onclick="promptCustomUserAddress()" title="Definir meu endereço personalizado">🏠 Meu Endereço</button>
+    <button class="tbtn" onclick="toggleTopbar()" title="Esconder topo para ver o mapa em tela cheia">👁️ Tela Cheia</button>
+    <button class="hbtn" id="hbMenu" onclick="toggleTopMenu()" title="Menu">☰</button>
+  </header>
+
+  <div id="topDrop">
+    <div class="dropLbl">Painéis</div>
+    <button class="tbtn" onclick="togglePanel();closeTopMenu()">◀▶ Filtros / Lista</button>
+    <button class="tbtn" onclick="toggleCharts();closeTopMenu()">📊 Painel de Análise</button>
+    <button class="tbtn" onclick="openNetwork();closeTopMenu()">🕸️ Rede de Vínculos</button>
+    <div class="dropSep"></div>
+    <div class="dropLbl">Minha Localização</div>
+    <button class="tbtn" onclick="locateUserGPS();closeTopMenu()">📍 Obter Localização GPS</button>
+    <button class="tbtn" onclick="promptCustomUserAddress();closeTopMenu()">🏠 Definir Endereço Atual</button>
+    <div class="dropSep"></div>
+    <div class="dropLbl">Exportar Filtrados</div>
+    <button class="tbtn" onclick="exportFilteredXLSX();closeTopMenu()">📊 Exportar Excel (.xlsx)</button>
+    <button class="tbtn" onclick="exportFilteredJSON();closeTopMenu()">📄 Exportar JSON (.json)</button>
+    <div class="dropSep"></div>
+    <div class="dropLbl">Exibição & Dados</div>
+    <button class="tbtn" onclick="toggleTopbar();closeTopMenu()">👁️ Ocultar Menu Superior</button>
+    <button class="tbtn" onclick="startGeo();closeTopMenu()">🌐 Geocodificar Forçado</button>
+    <button class="tbtn" onclick="novoArquivo()" title="Carregar outro JSON">📂 Novo JSON / Histórico</button>
+    <div class="dropSep"></div>
+    <div class="dropLbl">Gerenciar Armazenamento</div>
+    <button class="tbtn" onclick="clearFileHistory();closeTopMenu()">🗑️ Limpar Histórico de Arquivos</button>
+    <button class="tbtn" onclick="clearGeoCacheDB();closeTopMenu()">🗑️ Limpar Cache Geo (CNPJs)</button>
+    <input type="text" id="cepToken" placeholder="Token CEP Aberto (opcional)" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);padding:5px 9px;font-size:11px" />
+  </div>
+
+  <div id="main">
+    <aside id="panL">
+      <div class="ptabs">
+        <button class="ptab on" id="tabF" onclick="switchTab('f')">🔍 Filtros</button>
+        <button class="ptab" id="tabL" onclick="switchTab('l')">📋 Lista</button>
+      </div>
+
+      <!-- FILTROS -->
+      <div id="tcF" class="pscroll">
+        <div id="fcount">Carregando…</div>
+
+        <div class="fg">
+          <div class="fl">🔍 Buscar Cliente</div>
+          <input type="text" id="leadSearchF" class="searchInp" placeholder="Nome, Razão, CNPJ, Rua, Bairro..." oninput="onSearchInput(this.value)" />
+        </div>
+
+        <div class="fg">
+          <div class="fl">Temperatura</div>
+          <div class="tchips">
+            <div class="tc hot on" data-t="hot" onclick="toggleTemp(this)">🔥 Quente</div>
+            <div class="tc warm on" data-t="warm" onclick="toggleTemp(this)">⚡ Morno</div>
+            <div class="tc cold on" data-t="cold" onclick="toggleTemp(this)">❄️ Frio</div>
+          </div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Score B2B</div>
+          <div class="rr">
+            <div class="rrow"><span class="rl">Mín</span><input type="range" id="smin" min="0" max="100" value="0" oninput="onScore()"/><span class="rv" id="sminv">0</span></div>
+            <div class="rrow"><span class="rl">Máx</span><input type="range" id="smax" min="0" max="100" value="100" oninput="onScore()"/><span class="rv" id="smaxv">100</span></div>
+          </div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Município <span class="bdg" id="bdgM" style="display:none">0</span></div>
+          <div class="ms-wrap"><div class="ms-inp" onclick="toggleDD('mun')"><span id="lblM">Todos</span><span>▾</span></div>
+          <div class="ms-dd" id="dd-mun"><div id="opts-mun"></div></div></div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Bairro <span class="bdg" id="bdgB" style="display:none">0</span></div>
+          <div class="ms-wrap"><div class="ms-inp" onclick="toggleDD('bai')"><span id="lblB">Todos</span><span>▾</span></div>
+          <div class="ms-dd" id="dd-bai"><div class="ms-search"><input type="text" placeholder="Buscar bairro…" oninput="ddSearch(this,'bai')"/></div><div id="opts-bai"></div></div></div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">CNAE Principal <span class="bdg" id="bdgC" style="display:none">0</span></div>
+          <div class="ms-wrap"><div class="ms-inp" onclick="toggleDD('cna')"><span id="lblC">Todos</span><span>▾</span></div>
+          <div class="ms-dd" id="dd-cna"><div class="ms-search"><input type="text" placeholder="Buscar CNAE…" oninput="ddSearch(this,'cna')"/></div><div id="opts-cna"></div></div></div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Porte <span class="bdg" id="bdgP" style="display:none">0</span></div>
+          <div class="ms-wrap"><div class="ms-inp" onclick="toggleDD('por')"><span id="lblP">Todos</span><span>▾</span></div>
+          <div class="ms-dd" id="dd-por"><div id="opts-por"></div></div></div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Situação</div>
+          <div class="ms-wrap"><div class="ms-inp" onclick="toggleDD('sit')"><span id="lblS">Somente Ativas</span><span>▾</span></div>
+          <div class="ms-dd" id="dd-sit"><div id="opts-sit"></div></div></div>
+        </div>
+
+        <div class="fg">
+          <div class="fl">🏢 Ponto Comercial / Mesmo Endereço</div>
+          <select id="fAddrDup" class="searchInp" style="margin-bottom:0" onchange="onAddrFilter(this.value)">
+            <option value="all">Todos os leads (sem restrição de ponto)</option>
+            <option value="same_addr">🏢 Apenas Ponto Compartilhado (2+ empresas no endereço)</option>
+            <option value="newest_only">⭐ Apenas "Novo Dono" (PJ mais recente no ponto)</option>
+            <option value="older_only">🏚️ Apenas "PJ Anterior" (PJ mais antigo no ponto)</option>
+          </select>
+        </div>
+
+        <div class="fg">
+          <div class="fl">📍 Precisão Geográfica / Faltantes</div>
+          <select id="fGeoPrec" class="searchInp" style="margin-bottom:0" onchange="onGeoPrecFilter(this.value)">
+            <option value="all">Todas as precisões</option>
+            <option value="missing">❓ Faltantes / Pendentes (Sem Rua/CEP)</option>
+            <option value="endereco">🏠 Endereço / Rua (Confirmado)</option>
+            <option value="cep">📍 CEP</option>
+            <option value="bairro_centroide">🏘️ Aproximado (Bairro/Cidade)</option>
+          </select>
+        </div>
+
+        <div class="fg">
+          <div class="fl">Camadas do Mapa</div>
+          <div class="tlist">
+            <div class="ti"><label for="tClus">🫧 Cluster de markers</label><label class="tog"><input type="checkbox" id="tClus" onchange="toggleLayer('cluster')"><span class="tslider"></span></label></div>
+            <div class="ti"><label for="tHeat">🌡️ Mapa de calor</label><label class="tog"><input type="checkbox" id="tHeat" onchange="toggleLayer('heat')"><span class="tslider"></span></label></div>
+            <div class="ti"><label for="tMat">🔗 Vínculos Matriz-Filial</label><label class="tog"><input type="checkbox" id="tMat" onchange="toggleLayer('matriz')"><span class="tslider"></span></label></div>
+            <div class="ti"><label for="tSoc">👥 Sócio em Comum</label><label class="tog"><input type="checkbox" id="tSoc" onchange="toggleLayer('socio')"><span class="tslider"></span></label></div>
+            <div class="ti"><label for="tCap">💰 Tamanho por Capital</label><label class="tog"><input type="checkbox" id="tCap" onchange="toggleLayer('capital')"><span class="tslider"></span></label></div>
+          </div>
+          <!-- Filtros de Sócios -->
+          <div id="socioFilters" style="margin-top:10px;padding:10px;background:var(--bg3);border:1px solid var(--bord2);border-radius:6px;font-size:11px;display:none">
+            <div style="font-weight:700;color:var(--t1);margin-bottom:7px">🔍 Filtros de Vínculos Societários</div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfCpfNome" checked onchange="drawSocioLines()" style="accent-color:#10b981">
+                <span style="color:#10b981">✅ CPF + Nome confirmado</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfCpfCollision" checked onchange="drawSocioLines()" style="accent-color:#f97316">
+                <span style="color:#f97316">⚠️ CPF bate, nome diferente (possível colisão)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="sfNomeOnly" checked onchange="drawSocioLines()" style="accent-color:#f59e0b">
+                <span style="color:#f59e0b">❓ Apenas nome (sem CPF)</span>
+              </label>
+            </div>
+            <input type="text" id="sfNomeBusca" placeholder="🔎 Filtrar por nome do sócio..." oninput="drawSocioLines()" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--bord2);border-radius:4px;padding:4px 7px;font-size:11px;color:var(--t1);outline:none">
+            <div id="sfCount" style="margin-top:5px;color:var(--t3);font-size:10px"></div>
+          </div>
+        </div>
+
+        <div class="wbox">🔗 <strong>Matriz-Filial:</strong> conecta apenas CNPJs minerados neste dataset — não descobre filiais automaticamente.</div>
+        <div class="wbox" style="margin-top:6px">👥 <strong>Sócio em Comum:</strong> ✅ Verde = CPF+Nome confirmado · ⚠️ Laranja = CPF bate mas nome diverge · ❓ Âmbar = só por nome</div>
+        <button id="btnRst" onclick="resetFilters()">↺ Limpar todos os filtros</button>
+      </div>
+
+      <!-- LISTA -->
+      <div id="tcL" class="pscroll" style="display:none">
+        <input type="text" id="leadSearchL" class="searchInp" placeholder="🔍 Buscar cliente por nome, CNPJ, rua..." oninput="onSearchInput(this.value)" />
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div id="fcountL">0 leads</div>
+          <div style="display:flex;gap:4px">
+            <button class="tbtn" style="padding:3px 8px;font-size:10px" onclick="exportFilteredXLSX()" title="Exportar leads filtrados para Excel (.xlsx)">📊 Excel</button>
+            <button class="tbtn" style="padding:3px 8px;font-size:10px" onclick="exportFilteredJSON()" title="Exportar leads filtrados para JSON (.json)">📄 JSON</button>
+          </div>
+        </div>
+        <div id="leadList"></div>
+      </div>
+    </aside>
+
+    <button class="panTab" id="panLTab" onclick="togglePanel()" title="Mostrar/ocultar painel de filtros">‹</button>
+
+    <div id="mapW">
+      <div id="map"></div>
+      <div id="geoQ">
+        <div class="qi" style="cursor:pointer" onclick="onGeoPrecFilter('cep')" title="Clique para filtrar apenas leads com precisão de CEP"><div class="qd cep"></div><span id="qCep">0% CEP</span></div>
+        <div class="qi" style="cursor:pointer" onclick="onGeoPrecFilter('endereco')" title="Clique para filtrar apenas leads com precisão de Rua/Endereço"><div class="qd end"></div><span id="qEnd">0% Rua</span></div>
+        <div class="qi" style="cursor:pointer" onclick="onGeoPrecFilter('bairro_centroide')" title="Clique para filtrar apenas leads com localização aproximada no Bairro"><div class="qd bai"></div><span id="qBai">0% Bairro</span></div>
+        <div class="qi" style="cursor:pointer" onclick="onGeoPrecFilter('missing')" title="Clique para filtrar apenas leads FALTANTES (sem geo ou só bairro)"><div class="qd no"></div><span id="qNo">0% S/geo</span></div>
+        <span style="color:var(--t3);font-size:10px">— clique para filtrar</span>
+      </div>
+      <div id="mctrl">
+        <button class="mcbtn mchub" id="mcHub" onclick="toggleMapCtrl()">☰ Controles</button>
+        <button class="mcbtn" onclick="fitAll()">⊡ Enquadrar</button>
+        <button class="mcbtn" onclick="startGeoMissing()">🌐 Geocodificar Faltantes</button>
+        <button class="mcbtn" id="mcHeat" onclick="toggleLayerBtn('heat')">🌡️ Heatmap</button>
+        <button class="mcbtn" id="mcMat" onclick="toggleLayerBtn('matriz')">🔗 Matriz-Filial</button>
+        <button class="mcbtn" id="mcSoc" onclick="toggleLayerBtn('socio')">👥 Sócios</button>
+        <button class="mcbtn" onclick="openNetwork()">🕸️ Rede</button>
+      </div>
+      <div id="geoP">
+        <div id="geoTitle">🌐 Geocodificando…</div>
+        <div class="gbar-w"><div id="gbar"></div></div>
+        <div id="gtxt">Aguarde…</div>
+      </div>
+    </div>
+
+    <div id="panD"><div id="panDi"></div></div>
+
+    <div id="panC">
+      <div class="ch">
+        <h3>📊 Painel de Análise — <span id="clbl">todos os leads</span></h3>
+        <button class="ccls" onclick="toggleCharts()">✕ Fechar</button>
+      </div>
+      <div id="cscroll">
+        <div class="ccard" style="min-width:200px"><h4>Temperatura</h4><canvas id="chTemp" height="170"></canvas></div>
+        <div class="ccard" style="min-width:200px"><h4>Score B2B</h4><canvas id="chScore" height="170"></canvas></div>
+        <div class="ccard" style="min-width:260px"><h4>Top Bairros</h4><canvas id="chBai" height="170"></canvas></div>
+        <div class="ccard" style="min-width:320px"><h4>CNAE Principal</h4><canvas id="chCnae" height="170"></canvas></div>
+        <div class="ccard" style="min-width:220px"><h4>Idade da Empresa</h4><canvas id="chId" height="170"></canvas></div>
+        <div class="ccard" style="min-width:200px"><h4>Porte</h4><canvas id="chPort" height="170"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ REDE DE VÍNCULOS ════ -->
+<div id="netView">
+  <div id="netHead">
+    <div class="logo" style="font-size:15px">🕸️ Rede <span>de Vínculos</span></div>
+    <div class="sep"></div>
+    <div class="chip">🏢 <b id="netCEmp">0</b> empresas</div>
+    <div class="chip">🧑 <b id="netCSoc">0</b> sócios</div>
+    <div class="chip">🔗 <b id="netCLig">0</b> ligações</div>
+    <div class="sp"></div>
+    <button class="tbtn" id="netScopeBtn" onclick="toggleNetScope()">🎯 Só conectados</button>
+    <button class="tbtn" onclick="closeNetwork()">✕ Fechar</button>
+  </div>
+  <div id="netGraphWrap">
+    <div id="netGraph"></div>
+    <div id="netEmpty">
+      <div style="font-size:26px">🕸️</div>
+      <div>Nenhum vínculo (Matriz-Filial ou Sócio em Comum) encontrado entre os leads visíveis no momento.<br>Ajuste os filtros ou clique em "Todos os leads" para ver a base inteira.</div>
+    </div>
+    <div id="netLegend">
+      <div class="lgi"><div class="lgdot" style="background:#3b82f6"></div>Empresa (cor = temperatura do lead)</div>
+      <div class="lgi"><div class="lgdot" style="background:#8b5cf6;border-radius:3px;transform:rotate(45deg)"></div>Grupo (Raiz CNPJ)</div>
+      <div class="lgi"><div class="lgdot" style="background:#f59e0b;transform:scale(1.1)"></div>Sócio (pessoa)</div>
+      <div class="lgi"><div class="lgln" style="border-color:#8b5cf6"></div>Vínculo Matriz-Filial</div>
+      <div class="lgi"><div class="lgln dash" style="border-color:#f59e0b"></div>Vínculo societário (nome exato)</div>
+      <div class="lgi" style="color:var(--t3);max-width:220px">Duplo-clique num nó de sócio ou grupo expande/recolhe as ligações — arraste para reorganizar.</div>
+    </div>
+    <div id="netSideD"><div id="netSideDBody"></div></div>
+  </div>
+</div>
+
+<!-- MODAL DE DETALHES DO LEAD -->
+<div id="leadModal" class="modal-ov" onclick="if(event.target===this)closeLeadModal()">
+  <div class="modal-card">
+    <div id="leadModalBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- SCRIPTS CDN -->
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════════ */
+const S = {
+  all: [], vis: [], geocache: {},
+  markers: {}, markerGroup: null, heatLayer: null,
+  matrizLines: [], socioLines: [],
+  matrizMap: {}, socioMap: {}, leadAddrMeta: {}, addrGroups: {},
+  map: null, clusterGroup: null,
+  charts: {},
+  layers: { cluster:false, heat:false, matriz:false, socio:false, capital:false },
+  f: { temp:['hot','warm','cold'], smin:0, smax:100, mun:[], bai:[], cna:[], por:[], sit:['ativa'], addrFilter:'all', geoPrec:'all' },
+  sel: null,
+  net: { instance:null, scopeConnectedOnly:true },
+  searchQuery: '', userPos: null, userMarker: null, userCircle: null, topbarHidden: false
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   INDEXEDDB ENGINE & CACHE (v2 — geocache + file_history)
+══════════════════════════════════════════════════════════════════ */
+let dbPromise = null;
+function getGeoDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('gl_geocache_db', 2);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('geocache')) {
+          db.createObjectStore('geocache', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('file_history')) {
+          db.createObjectStore('file_history', { keyPath: 'fileName' });
+        }
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return dbPromise;
+}
+
+// ---------------- GEO CACHE (CNPJs UNICAMENTE GRAVADOS) ----------------
+async function saveGeoCacheItem(key, data) {
+  if (!key || !data) return;
+  S.geocache[key] = data;
+  try { localStorage.setItem('gl_geocache_v3', JSON.stringify(S.geocache)); } catch {}
+
+  const db = await getGeoDB();
+  if (!db) return;
+  try {
+    const tx = db.transaction('geocache', 'readwrite');
+    tx.objectStore('geocache').put({ key, ...data });
+  } catch {}
+  updateGeoCacheCountUI();
+}
+
+async function loadGeoCacheDB() {
+  const db = await getGeoDB();
+  if (db && db.objectStoreNames.contains('geocache')) {
+    try {
+      const tx = db.transaction('geocache', 'readonly');
+      const store = tx.objectStore('geocache');
+      const req = store.getAll();
+      const items = await new Promise(r => { req.onsuccess=()=>r(req.result); req.onerror=()=>r([]); });
+      if (items && items.length > 0) {
+        items.forEach(item => { S.geocache[item.key] = { coord: item.coord, prec: item.prec }; });
+        updateGeoCacheCountUI();
+        return;
+      }
+    } catch {}
+  }
+  try { S.geocache = JSON.parse(localStorage.getItem('gl_geocache_v3')||'{}'); } catch { S.geocache={}; }
+  updateGeoCacheCountUI();
+}
+
+async function clearGeoCacheDB() {
+  if (!confirm('Deseja realmente apagar todas as coordenadas salvas de CNPJs no IndexedDB?')) return;
+  S.geocache = {};
+  try { localStorage.removeItem('gl_geocache_v3'); } catch {}
+  const db = await getGeoDB();
+  if (db && db.objectStoreNames.contains('geocache')) {
+    try {
+      const tx = db.transaction('geocache', 'readwrite');
+      tx.objectStore('geocache').clear();
+    } catch {}
+  }
+  updateGeoCacheCountUI();
+  toast('🗑️ Cache geográfico de CNPJs foi limpo!');
+}
+
+function updateGeoCacheCountUI() {
+  const cnt = Object.keys(S.geocache||{}).length;
+  const el = document.getElementById('cGeoCnt');
+  if (el) el.textContent = cnt;
+}
+
+// ---------------- HISTÓRICO DE ARQUIVOS (MÁXIMO 2 RECENTES) ----------------
+async function saveFileHistory(fileName, jsonData) {
+  if (!fileName || !jsonData) return;
+  const db = await getGeoDB();
+  if (!db || !db.objectStoreNames.contains('file_history')) return;
+
+  try {
+    const txRead = db.transaction('file_history', 'readonly');
+    const reqAll = txRead.objectStore('file_history').getAll();
+    let history = await new Promise(r => { reqAll.onsuccess = () => r(reqAll.result || []); reqAll.onerror = () => r([]); });
+
+    // Se o arquivo com o mesmo nome já existe, substitui sem duplicar
+    history = history.filter(item => item.fileName !== fileName);
+
+    const newEntry = {
+      fileName: fileName,
+      date: new Date().toISOString(),
+      leadCount: jsonData.cnpjs_enriquecidos?.length || 0,
+      data: jsonData
+    };
+
+    history.push(newEntry);
+
+    // Mantém estritamente no máximo os 2 mais recentes
+    history.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const toKeep = history.slice(0, 2);
+
+    const txWrite = db.transaction('file_history', 'readwrite');
+    const storeWrite = txWrite.objectStore('file_history');
+    storeWrite.clear();
+    toKeep.forEach(entry => storeWrite.put(entry));
+  } catch {}
+
+  renderFileHistoryUI();
+}
+
+async function getFileHistory() {
+  const db = await getGeoDB();
+  if (!db || !db.objectStoreNames.contains('file_history')) return [];
+  try {
+    const tx = db.transaction('file_history', 'readonly');
+    const req = tx.objectStore('file_history').getAll();
+    const history = await new Promise(r => { req.onsuccess = () => r(req.result || []); req.onerror = () => r([]); });
+    return history.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 2);
+  } catch {
+    return [];
+  }
+}
+
+async function renderFileHistoryUI() {
+  const history = await getFileHistory();
+  const wrap = document.getElementById('fileHistWrap');
+  const list = document.getElementById('fileHistList');
+  if (!wrap || !list) return;
+
+  wrap.style.display = 'block';
+
+  if (!history.length) {
+    list.innerHTML = `<div style="font-size:11px;color:var(--t3);text-align:center;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs)">📁 Nenhum arquivo recente no histórico. Carregue um JSON acima!</div>`;
+    return;
+  }
+
+  list.innerHTML = history.map(item => {
+    const dFmt = new Date(item.date).toLocaleString('pt-BR');
+    return `
+      <div class="m-box" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);gap:8px">
+        <div style="overflow:hidden;text-overflow:ellipsis;flex:1">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📄 ${item.fileName}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:2px"><b>${item.leadCount}</b> leads · Salvo em: ${dFmt}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="tbtn" style="padding:4px 10px;font-size:11px;background:rgba(59,130,246,.15);border-color:var(--blue);color:var(--blueh)" onclick="loadHistoryFile('${item.fileName}')">📂 Abrir</button>
+          <button class="ccls" style="padding:3px 7px;font-size:11px" onclick="removeSingleFileHistory('${item.fileName}')" title="Apagar este arquivo do histórico">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function removeSingleFileHistory(fileName) {
+  const db = await getGeoDB();
+  if (db && db.objectStoreNames.contains('file_history')) {
+    try {
+      const tx = db.transaction('file_history', 'readwrite');
+      tx.objectStore('file_history').delete(fileName);
+    } catch {}
+  }
+  renderFileHistoryUI();
+  toast(`🗑️ Arquivo "${fileName}" removido do histórico.`);
+}
+
+async function loadHistoryFile(fileName) {
+  const history = await getFileHistory();
+  const found = history.find(item => item.fileName === fileName);
+  if (found && found.data) {
+    initApp(found.data, fileName);
+    document.getElementById('upload').classList.add('hid');
+  } else {
+    toast('❌ Arquivo não encontrado no histórico.');
+  }
+}
+
+async function clearFileHistory() {
+  if (!confirm('Deseja apagar o histórico de arquivos recentes do navegador?')) return;
+  const db = await getGeoDB();
+  if (db && db.objectStoreNames.contains('file_history')) {
+    try {
+      const tx = db.transaction('file_history', 'readwrite');
+      tx.objectStore('file_history').clear();
+    } catch {}
+  }
+  renderFileHistoryUI();
+  toast('🗑️ Histórico de arquivos apagado!');
+}
+
+let bgGeoRunning = false;
+async function startGeoBackground() {
+  if (bgGeoRunning) return;
+  bgGeoRunning = true;
+  const pending = S.all.filter(l => !l._coord || l._prec==='bairro_centroide' || l._prec==='nao_geocodificado');
+  for (let i = 0; i < pending.length; i++) {
+    const l = pending[i];
+    if (l._prec === 'cep' || l._prec === 'endereco') continue;
+    await processLead(l, true);
+    if (l._coord && S.markers[l['CNPJ']]) {
+      updateMarker(l);
+    }
+    updateGeoQ();
+  }
+  bgGeoRunning = false;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   USER GEOLOCATION ("ONDE ESTOU") & UI TOGGLES
+══════════════════════════════════════════════════════════════════ */
+function locateUserGPS() {
+  if (!navigator.geolocation) {
+    toast('⚠️ Geolocalização não suportada neste navegador.');
+    return;
+  }
+  toast('📍 Obtendo sua localização GPS…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = pos.coords.accuracy || 0;
+      setUserLocationOnMap([lat, lng], acc, 'Sua localização atual (GPS)');
+    },
+    err => {
+      toast('❌ Não foi possível obter GPS. Tente definir o endereço manualmente.');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function setUserLocationOnMap(coord, accuracy=0, titleStr='Sua localização') {
+  if (!S.map) return;
+  if (S.userMarker) S.userMarker.remove();
+  if (S.userCircle) S.userCircle.remove();
+
+  const userIcon = L.divIcon({
+    className: 'user-pin-marker',
+    html: `<div style="background:#3b82f6;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 12px rgba(59,130,246,0.8);"></div>`,
+    iconSize: [18, 18], iconAnchor: [9, 9]
+  });
+
+  S.userMarker = L.marker(coord, { icon: userIcon, zIndexOffset: 1000 })
+    .bindPopup(`<div style="font-weight:700">📍 ${titleStr}</div><div style="font-size:11px;color:var(--t2);margin-top:2px">Lat: ${coord[0].toFixed(5)}, Lng: ${coord[1].toFixed(5)}</div>`)
+    .addTo(S.map);
+
+  if (accuracy > 0) {
+    S.userCircle = L.circle(coord, { radius: accuracy, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.15, weight: 1.5 }).addTo(S.map);
+  }
+
+  S.map.setView(coord, 15, { animate: true });
+  S.userMarker.openPopup();
+  toast(`📍 Localização definida no mapa!`);
+}
+
+async function promptCustomUserAddress() {
+  const input = prompt('Digite seu endereço atual (ex: Rua XV de Novembro, Piracicaba):');
+  if (!input || !input.trim()) return;
+  toast('🌐 Buscando seu endereço…');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(input.trim())}`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      setUserLocationOnMap([lat, lon], 0, `Você está em: ${input.trim()}`);
+    } else {
+      toast('❌ Endereço não encontrado.');
+    }
+  } catch {
+    toast('❌ Erro ao buscar endereço.');
+  }
+}
+
+function toggleTopbar() {
+  const tb = document.getElementById('topbar');
+  tb.classList.toggle('hid');
+  S.topbarHidden = tb.classList.contains('hid');
+  if (S.map) setTimeout(() => S.map.invalidateSize(), 200);
+}
+
+function onSearchInput(val) {
+  S.searchQuery = val || '';
+  const fInp = document.getElementById('leadSearchF');
+  const lInp = document.getElementById('leadSearchL');
+  if (fInp && fInp.value !== val) fInp.value = val;
+  if (lInp && lInp.value !== val) lInp.value = val;
+  applyFilters();
+}
+
+function getOpeningTimestamp(l) {
+  if (!l) return 0;
+  const d = l['Data de Abertura'];
+  if (d) {
+    const dStr = String(d).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+      const t = new Date(dStr).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    const pts = dStr.split('/');
+    if (pts.length === 3) {
+      const iso = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
+      const t = new Date(iso).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    const num = dStr.replace(/\D/g, '');
+    if (num.length === 8 && (num.startsWith('19') || num.startsWith('20'))) {
+      const iso = `${num.substring(0,4)}-${num.substring(4,6)}-${num.substring(6,8)}`;
+      const t = new Date(iso).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+  }
+  const ageVal = l['Idade (Anos)'];
+  if (ageVal !== undefined && ageVal !== null && ageVal !== '') {
+    const numAge = Number(ageVal);
+    if (!isNaN(numAge)) {
+      return (2026 - numAge) * 365 * 86400 * 1000;
+    }
+  }
+  return 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DETECÇÃO DE MESMO ENDEREÇO & NOVO DONO (PONTO COMERCIAL)
+══════════════════════════════════════════════════════════════════ */
+function computeAddressGroups() {
+  S.addrGroups = {};
+  S.leadAddrMeta = {};
+
+  const parent = {};
+  const find = x => { parent[x] = parent[x] || x; return parent[x] === x ? x : (parent[x] = find(parent[x])); };
+  const union = (x, y) => { const rx = find(x), ry = find(y); if (rx !== ry) parent[rx] = ry; };
+
+  const cepMap = {};
+  const ruaMap = {};
+
+  S.all.forEach(l => {
+    const cnpj = l['CNPJ'];
+    const cep = (l['CEP'] || '').replace(/\D/g, '');
+    const num = (l['Número'] || '').trim().toUpperCase();
+    const logr = (l['Logradouro'] || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mun = (l['Município'] || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const validNum = num && num !== 'SN' && num !== 'S/N' && num !== '0';
+
+    if (cep.length === 8 && validNum) {
+      const kCep = `cep:${cep}|${num}`;
+      (cepMap[kCep] = cepMap[kCep] || []).push(l);
+    }
+
+    if (logr.length > 2 && validNum && mun) {
+      const cleanLogr = logr
+        .replace(/^(RUA|RUAS|AV|AVENIDA|ALAMEDA|AL|PRAÇA|PRACA|TRAVESSA|TV|RODOVIA|ROD)\s+/i, '')
+        .replace(/\b(PROF|PROFESSOR|PROFESSORA|DR|DOUTOR|DOUTORA|MAJ|MAJOR|CAP|CAPITAO|ENG|ENGENHEIRO|PRES|PRESIDENTE|SANT|SANTO|SANTA|STA|STO)\b/g, '')
+        .replace(/[^A-Z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (cleanLogr.length >= 2) {
+        const kRua = `rua:${cleanLogr}|${num}|${mun}`;
+        (ruaMap[kRua] = ruaMap[kRua] || []).push(l);
+      }
+    }
+  });
+
+  const processMap = (map) => {
+    Object.values(map).forEach(group => {
+      if (group.length > 1) {
+        for (let i = 1; i < group.length; i++) {
+          union(group[0]['CNPJ'], group[i]['CNPJ']);
+        }
+      }
+    });
+  };
+
+  processMap(cepMap);
+  processMap(ruaMap);
+
+  const components = {};
+  S.all.forEach(l => {
+    const c = l['CNPJ'];
+    const r = find(c);
+    if (!components[r]) components[r] = [];
+    components[r].push(l);
+  });
+
+  Object.entries(components).forEach(([root, leads]) => {
+    if (leads.length < 2) return;
+
+    // Ordena por data de abertura mais recente (maior timestamp primeiro)
+    leads.sort((a, b) => getOpeningTimestamp(b) - getOpeningTimestamp(a));
+
+    const newestCnpj = leads[0]['CNPJ'];
+
+    leads.forEach(l => {
+      const cnpj = l['CNPJ'];
+      const isNewest = (cnpj === newestCnpj);
+      const peers = leads.filter(x => x['CNPJ'] !== cnpj);
+
+      S.leadAddrMeta[cnpj] = {
+        isSameAddr: true,
+        isNewest: isNewest,
+        totalAtAddr: leads.length,
+        peers: peers,
+        youngestLead: leads[0]
+      };
+    });
+  });
+}
+
+function onAddrFilter(val) {
+  S.f.addrFilter = val || 'all';
+  applyFilters();
+}
+
+function onGeoPrecFilter(val) {
+  S.f.geoPrec = val || 'all';
+  const sel = document.getElementById('fGeoPrec');
+  if (sel && sel.value !== S.f.geoPrec) sel.value = S.f.geoPrec;
+  applyFilters();
+}
+
+function startGeoMissing() {
+  const pending = S.all.filter(l => !l._coord || l._prec === 'bairro_centroide' || l._prec === 'nao_geocodificado');
+  if (!pending.length) {
+    toast('✅ Todos os leads já possuem a melhor precisão disponível!');
+    return;
+  }
+  toast(`🌐 Geocodificando ${pending.length} leads pendentes…`);
+  startGeo(true);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EXPORT ENGINE (JSON & XLSX FILTRADOS)
+══════════════════════════════════════════════════════════════════ */
+function exportFilteredJSON() {
+  if (!S.vis.length) {
+    toast('⚠️ Nenhum lead visível para exportar.');
+    return;
+  }
+  const exportData = {
+    metadata: {
+      total_leads: S.vis.length,
+      data_exportacao: new Date().toISOString()
+    },
+    cnpjs_enriquecidos: S.vis.map(l => {
+      const copy = { ...l };
+      delete copy._searchStr;
+      return copy;
+    })
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `getlista_filtrados_${S.vis.length}_leads.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`📄 Exportados ${S.vis.length} leads em JSON com sucesso!`);
+}
+
+function exportFilteredXLSX() {
+  if (!S.vis.length) {
+    toast('⚠️ Nenhum lead visível para exportar.');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    toast('⚠️ Biblioteca SheetJS (XLSX) não carregada.');
+    return;
+  }
+  const rows = S.vis.map(l => ({
+    'CNPJ': l['CNPJ Formatado'] || l['CNPJ'] || '',
+    'Razão Social': l['Razão Social'] || '',
+    'Nome Fantasia': l['Nome Fantasia'] || '',
+    'Temperatura': l['Temperatura Lead'] || '',
+    'Score B2B': l._scoreNum || 0,
+    'Situação Cadastral': l['Situação Cadastral'] || '',
+    'Porte': l['Porte'] || '',
+    'Capital Social': l['Capital Social'] || 0,
+    'CNAE Principal': l['CNAE Principal'] || '',
+    'Descrição CNAE': l['Descrição CNAE'] || '',
+    'Município': l['Município'] || '',
+    'UF': l['UF'] || '',
+    'Bairro': l['Bairro'] || '',
+    'Logradouro': l['Logradouro'] || '',
+    'Número': l['Número'] || '',
+    'CEP': l['CEP'] || '',
+    'Telefone 1': l['Telefone'] || '',
+    'Telefone 2': l['Telefone 2'] || '',
+    'WhatsApp 1': l['WhatsApp 1'] || '',
+    'WhatsApp 2': l['WhatsApp 2'] || '',
+    'Email': l['Email'] || '',
+    'Precisão Geo': l._prec || '',
+    'Latitude': l._coord ? l._coord[0] : '',
+    'Longitude': l._coord ? l._coord[1] : ''
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Leads Filtrados');
+  XLSX.writeFile(workbook, `getlista_filtrados_${S.vis.length}_leads.xlsx`);
+  toast(`📊 Exportados ${S.vis.length} leads em Excel (.xlsx) com sucesso!`);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UPLOAD & FILE READ
+══════════════════════════════════════════════════════════════════ */
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.json')) readFile(f);
+  else toast('⚠ Selecione um arquivo .json');
+});
+
+function onFileSelected(e) {
+  const f = e.target.files[0];
+  if (f) readFile(f);
+}
+
+function readFile(file) {
+  const r = new FileReader();
+  r.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.cnpjs_enriquecidos && !data.leads && !Array.isArray(data)) {
+        throw new Error('JSON não possui um array de leads válido (cnpjs_enriquecidos ou leads).');
+      }
+      const payload = data.cnpjs_enriquecidos ? data
+        : data.leads ? { metadata: data.metadata || {}, cnpjs_enriquecidos: data.leads }
+        : { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString() }, cnpjs_enriquecidos: data };
+
+      const fileName = file.name || 'dataset.json';
+      await saveFileHistory(fileName, payload);
+      initApp(payload, fileName);
+    } catch(err) {
+      toast('❌ JSON inválido: ' + err.message, 5000);
+    }
+  };
+  r.readAsText(file, 'UTF-8');
+}
+
+function novoArquivo() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('upload').classList.remove('hid');
+  renderFileHistoryUI();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DATA NORMALIZATION
+══════════════════════════════════════════════════════════════════ */
+const tempClass = t => {
+  if (!t) return 'cold';
+  const u = t.toLowerCase();
+  return u.includes('quente') ? 'hot' : u.includes('morno') ? 'warm' : 'cold';
+};
+
+const normPorte = p => {
+  if (!p) return 'Não informado';
+  const u = p.trim().toUpperCase();
+  if (u.includes('MICRO') || u === 'ME') return 'Microempresa (ME)';
+  if (u.includes('PEQUENO') || u === 'EPP') return 'Empresa de Pequeno Porte (EPP)';
+  if (u.includes('MEDIO') || u.includes('MÉDIO')) return 'Média Empresa';
+  if (u.includes('GRANDE') || u === 'GE') return 'Grande Empresa';
+  return p.trim();
+};
+
+const normSit = s => {
+  if (!s) return 'Não informado';
+  const u = s.trim().toUpperCase();
+  if (u === 'ATIVA' || u === 'ACTIVE') return 'Ativa';
+  if (u.includes('BAIXA')) return 'Baixada';
+  if (u.includes('SUSPENS')) return 'Suspensa';
+  if (u.includes('INAPT')) return 'Inapta';
+  return s.trim();
+};
+
+const normName = n => n ? n.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim() : '';
+
+const fmtCap = v => {
+  if (!v && v!==0) return 'Não informado';
+  const n = Number(v);
+  if (isNaN(n)||n===0) return 'Não informado';
+  return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2});
+};
+
+function extractSocios(lead) {
+  const s = [];
+  if (Array.isArray(lead.qsa) && lead.qsa.length > 0) {
+    lead.qsa.forEach(item => {
+      const nome = item.nome_socio || item.nome || '';
+      if (nome.trim()) {
+        s.push({
+          nome: nome.trim(),
+          nomeN: normName(nome),
+          cpf: item.cpf_cnpj_socio || item.cnpj_cpf_do_socio || item.cpf_mascarado || item.cpf || '',
+          qual: item.qualificacao_socio || item.qualificacao || item.cargo || '',
+          entrada: item.data_entrada_sociedade || item.data_entrada || '',
+          faixa: item.faixa_etaria || ''
+        });
+      }
+    });
+  } else {
+    for (let i=1; i<=10; i++) {
+      const nome = lead[`Sócio ${i} - Nome`] || lead[`Socio ${i} - Nome`] || '';
+      const cpf = lead[`Sócio ${i} - CPF/CNPJ`] || lead[`Sócio ${i} - CPF`] || lead[`Socio ${i} - CPF`] || '';
+      if (nome.trim()) s.push({
+        nome: nome.trim(),
+        nomeN: normName(nome),
+        cpf: cpf.trim(),
+        qual: lead[`Sócio ${i} - Qualificação`]||'',
+        entrada: lead[`Sócio ${i} - Entrada`]||'',
+        faixa: lead[`Sócio ${i} - Faixa Etária`]||''
+      });
+    }
+  }
+  return s;
+}
+
+function extractCnaeSec(lead) {
+  const r = [];
+  for (let i=1; i<=10; i++) {
+    const c = lead[`CNAE Secundário ${i}`];
+    const d = lead[`Descrição CNAE Secundário ${i}`];
+    if (c && d) r.push({ cod: String(c), desc: d });
+  }
+  return r;
+}
+
+function cacheKey(lead) {
+  const cep = (lead['CEP']||'').replace(/\D/g,'');
+  if (cep.length===8) return `cep:${cep}`;
+  const l = (lead['Logradouro']||'').trim().toUpperCase();
+  const n = (lead['Número']||'').trim();
+  const b = (lead['Bairro']||'').trim().toUpperCase();
+  const m = (lead['Município']||'').trim().toUpperCase();
+  if (l&&m) return `addr:${l}|${n}|${b}|${m}`;
+  if (b&&m) return `bai:${b}|${m}`;
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GEOCODING ENGINE
+══════════════════════════════════════════════════════════════════ */
+const BAI_CENT = {
+  'CENTRO|PIRACICABA':          [-22.7254,-47.6491],
+  'PAULISTA|PIRACICABA':        [-22.7124,-47.6410],
+  'SAO DIMAS|PIRACICABA':       [-22.7021,-47.6318],
+  'CIDADE ALTA|PIRACICABA':     [-22.7390,-47.6350],
+  'NOVA PIRACICABA|PIRACICABA': [-22.7080,-47.6560],
+  'NOVA AMERICA|PIRACICABA':    [-22.7335,-47.6190],
+  'VILA REZENDE|PIRACICABA':    [-22.7200,-47.6600],
+  'SAO JUDAS|PIRACICABA':       [-22.7050,-47.6300],
+  'HIGIENOPOLIS|PIRACICABA':    [-22.7440,-47.6260],
+  'JARAGUA|PIRACICABA':         [-22.7180,-47.6480],
+  'CAMPESTRE|PIRACICABA':       [-22.7300,-47.6140],
+  'PARQUE CONCEICAO II|PIRACICABA':[-22.7490,-47.6270],
+  'JARDIM GLORIA|PIRACICABA':   [-22.7230,-47.6430],
+  'JARDIM SAO JORGE|PIRACICABA':[-22.7260,-47.6520],
+  'SANTA TEREZINHA|PIRACICABA': [-22.7320,-47.6470],
+  'PAULICEIA|PIRACICABA':       [-22.7150,-47.6380],
+  'DOIS CORREGOS|PIRACICABA':   [-22.7450,-47.6200],
+  'PIRACICAMIRIM|PIRACICABA':   [-22.7500,-47.6100],
+  'MORUMBI|PIRACICABA':         [-22.7560,-47.6180],
+  'AREAO|PIRACICABA':           [-22.7100,-47.6420],
+  'VILA INDEPENDENCIA|PIRACICABA':[-22.7380,-47.6310],
+  'JARDIM CAXAMBU|PIRACICABA':  [-22.7600,-47.6080],
+  'PARQUE ORLANDA|PIRACICABA':  [-22.7350,-47.6280],
+  'VILA SONIA|PIRACICABA':      [-22.7410,-47.6340],
+  'JARDIM PRIMAVERA|PIRACICABA':[-22.7200,-47.6500],
+  'CENTRO|SALTINHO':            [-22.8503,-47.6713],
+  'CENTRO|RIO DAS PEDRAS':      [-22.8384,-47.6087],
+  'CENTRO|CAPIVARI':            [-22.9997,-47.5099],
+  'CENTRO|SAO PEDRO':           [-22.5471,-47.9097],
+  'CENTRO|AGUAS DE SAO PAULO':  [-22.5988,-47.8785],
+  'CENTRO|AGUAS DE SAO PEDRO':  [-22.5988,-47.8785],
+};
+const CID_CENT = {
+  'PIRACICABA':        [-22.7254,-47.6491],
+  'SALTINHO':          [-22.8503,-47.6713],
+  'RIO DAS PEDRAS':    [-22.8384,-47.6087],
+  'CAPIVARI':          [-22.9997,-47.5099],
+  'SAO PEDRO':         [-22.5471,-47.9097],
+  'AGUAS DE SAO PAULO':[-22.5988,-47.8785],
+  'AGUAS DE SAO PEDRO':[-22.5988,-47.8785],
+};
+
+function geoByBairro(lead) {
+  const b = (lead['Bairro']||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const m = (lead['Município']||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const k = `${b}|${m}`;
+  if (BAI_CENT[k]) return { coord: BAI_CENT[k], prec:'bairro_centroide' };
+  const ck = Object.keys(CID_CENT).find(c => m.includes(c)||c.includes(m));
+  if (ck) return { coord: CID_CENT[ck], prec:'bairro_centroide' };
+  return null;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function geoByCep(cep, token) {
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://www.cepaberto.com/api/v3/cep?cep=${cep}`, {
+      headers: { Authorization: `Token token=${token}` }
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (d.latitude && d.longitude) return { coord:[parseFloat(d.latitude),parseFloat(d.longitude)], prec:'cep' };
+  } catch {}
+  return null;
+}
+
+async function geoByNominatim(lead) {
+  const logr = (lead['Logradouro']||'').trim();
+  const num  = (lead['Número']||'').trim();
+  const mun  = (lead['Município']||'').trim();
+  const bai  = (lead['Bairro']||'').trim();
+  if (!mun) return null;
+
+  const p = new URLSearchParams({ format:'json', limit:1, addressdetails:1, countrycodes:'br', 'accept-language':'pt-BR' });
+  if (logr) {
+    p.set('street', num ? `${logr}, ${num}` : logr); p.set('city', mun);
+    p.set('state','São Paulo'); p.set('country','Brasil');
+  } else {
+    p.set('q', `${bai ? bai+', ' : ''}${mun}, São Paulo, Brasil`);
+  }
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${p}`, {
+      headers: { 'User-Agent': 'GetLista-Maps/1.0 (Ameripan; edimarpcosta.github.io)' }
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (d && d.length > 0) {
+      const a = d[0].address || {};
+      // Só marca como precisão "endereço" (nível de rua) se o Nominatim
+      // realmente confirmou um logradouro/número na resposta — não basta
+      // ter enviado rua+número na consulta, o resultado pode ter caído
+      // num nível mais grosseiro (bairro/cidade) mesmo assim.
+      const gotStreet = !!(a.road || a.house_number);
+      const prec = (logr && gotStreet) ? 'endereco' : 'bairro_centroide';
+      return { coord:[parseFloat(d[0].lat), parseFloat(d[0].lon)], prec };
+    }
+  } catch {}
+  return null;
+}
+
+function loadGeoCache() {
+  loadGeoCacheDB();
+}
+function saveGeoCache() {
+  try { localStorage.setItem('gl_geocache_v3', JSON.stringify(S.geocache)); } catch {}
+  Object.entries(S.geocache).forEach(([k, v]) => saveGeoCacheItem(k, v));
+}
+
+async function processLead(lead, useApi) {
+  const k = cacheKey(lead);
+  // Só pula de vez leads que já têm a MELHOR precisão possível em cache
+  // (cep ou endereço). Precisão "bairro" fica sempre elegível a upgrade.
+  if (k && S.geocache[k] && (S.geocache[k].prec==='cep' || S.geocache[k].prec==='endereco')) {
+    lead._coord = S.geocache[k].coord;
+    lead._prec  = S.geocache[k].prec;
+    return;
+  }
+  if (!useApi) {
+    const fb = geoByBairro(lead);
+    if (fb) { lead._coord = fb.coord; lead._prec = fb.prec; if(k) S.geocache[k]=fb; }
+    return;
+  }
+  const cep = (lead['CEP']||'').replace(/\D/g,'');
+  const token = document.getElementById('cepToken').value.trim();
+  if (cep.length===8 && token) {
+    const r = await geoByCep(cep, token);
+    if (r) { lead._coord=r.coord; lead._prec=r.prec; if(k) S.geocache[k]=r; saveGeoCache(); return; }
+    await sleep(200);
+  }
+  const r2 = await geoByNominatim(lead);
+  await sleep(1100); // respeita 1 req/s do Nominatim mesmo quando a resposta não é a melhor precisão
+  if (r2) { lead._coord=r2.coord; lead._prec=r2.prec; if(k) S.geocache[k]=r2; saveGeoCache(); return; }
+  const fb = geoByBairro(lead);
+  if (fb) { lead._coord=fb.coord; lead._prec=fb.prec; if(k) S.geocache[k]=fb; saveGeoCache(); }
+}
+
+let geoRunning = false;
+async function startGeo(useApi=true) {
+  if (geoRunning) { toast('⏳ Geocodificação em andamento…'); return; }
+  // Pendente = nunca geocodificado OU só com aproximação de bairro/cidade
+  // (ainda pode ser promovido a precisão de rua pelo Nominatim/CEP Aberto)
+  const pending = S.all.filter(l => !l._coord || l._prec==='bairro_centroide' || l._prec==='nao_geocodificado');
+  if (!pending.length) { toast('✅ Todos os leads já estão na melhor precisão disponível!'); updateGeoQ(); return; }
+  geoRunning = true;
+  const gp = document.getElementById('geoP'); gp.classList.add('sh');
+  for (let i=0; i<pending.length; i++) {
+    const l = pending[i];
+    document.getElementById('geoTitle').textContent = `🌐 Buscando endereço exato… ${Math.round(((i+1)/pending.length)*100)}%`;
+    document.getElementById('gbar').style.width = ((i+1)/pending.length*100)+'%';
+    document.getElementById('gtxt').textContent = `${i+1}/${pending.length} — ${(l['Nome Fantasia']||l['Razão Social']||'').substring(0,30)}`;
+    await processLead(l, useApi);
+    if (l._coord && S.markers[l['CNPJ']]) updateMarker(l);
+  }
+  saveGeoCache(); geoRunning = false; gp.classList.remove('sh');
+  updateGeoQ(); applyFilters();
+  const upgraded = S.all.filter(l=>l._prec==='cep'||l._prec==='endereco').length;
+  toast(`✅ Geocodificação concluída — ${upgraded} leads com precisão de rua/CEP`);
+}
+
+function quickGeoOffline() {
+  S.all.forEach(l => {
+    if (l._coord) return;
+    const fb = geoByBairro(l);
+    if (fb) { l._coord=fb.coord; l._prec=fb.prec; const k=cacheKey(l); if(k) S.geocache[k]=fb; }
+  });
+  saveGeoCache();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LINK ENGINE
+══════════════════════════════════════════════════════════════════ */
+function _cpfPartial(cpfStr) {
+  // Extrai os dígitos numéricos do CPF mascarado (ex: ***123456** → '123456')
+  if (!cpfStr) return '';
+  return cpfStr.replace(/\D/g,'').substring(0,9); // pega até 9 dígitos numéricos disponíveis
+}
+
+function computeLinks() {
+  S.matrizMap = {}; S.socioMap = {};
+  S.all.forEach(l => {
+    const r = l['Raiz CNPJ']; if (!r) return;
+    if (!S.matrizMap[r]) S.matrizMap[r] = [];
+    S.matrizMap[r].push(l['CNPJ']);
+  });
+  Object.keys(S.matrizMap).forEach(k => { if (S.matrizMap[k].length < 2) delete S.matrizMap[k]; });
+
+  // ──────────────────────────────────────────────────────────
+  // PASSO 1: Índice por CPF parcial (grupo de candidatos)
+  // ──────────────────────────────────────────────────────────
+  const cpfIdx = {}; // cpfPartial -> [{cnpj, nome, nomeN, cpf}]
+  S.all.forEach(l => {
+    (l._socios||[]).forEach(s => {
+      if (!s.cpf || s.cpf.trim().length < 6) return;
+      const key = _cpfPartial(s.cpf);
+      if (key.length < 4) return;
+      if (!cpfIdx[key]) cpfIdx[key] = [];
+      if (!cpfIdx[key].some(e => e.cnpj === l['CNPJ'] && e.nomeN === s.nomeN))
+        cpfIdx[key].push({ cnpj: l['CNPJ'], nome: s.nome, nomeN: s.nomeN, cpf: s.cpf });
+    });
+  });
+
+  // PASSO 2: Cruzar por CPF parcial — comparar nomes para determinar tipo de match
+  const cpfCnpjsPaired = new Set(); // pares já confirmados por CPF+Nome (para não reprocessar no fallback)
+  Object.entries(cpfIdx).forEach(([cpfKey, entries]) => {
+    if (entries.length < 2) return;
+    for (let i=0; i<entries.length; i++) for (let j=i+1; j<entries.length; j++) {
+      const ea=entries[i], eb=entries[j];
+      if (ea.cnpj === eb.cnpj) continue;
+      const a=ea.cnpj, b=eb.cnpj;
+
+      // Determina tipo: CPF parcial bate. Verifica se nomes também batem.
+      const nomesBatem = ea.nomeN && eb.nomeN && ea.nomeN === eb.nomeN;
+      const matchType = nomesBatem ? 'cpf_nome' : 'cpf_collision';
+
+      const label = nomesBatem
+        ? `${ea.nome} · CPF: ${ea.cpf}` // confirmado
+        : `CPF parcial ${ea.cpf} → ${ea.nome} ≠ ${eb.nome}`; // colisão
+
+      const pairKey = [a,b].sort().join('|');
+      if (nomesBatem) cpfCnpjsPaired.add(pairKey + '|' + ea.nomeN);
+
+      [a,b].forEach((src,si) => {
+        const dst = si===0 ? b : a;
+        if (!S.socioMap[src]) S.socioMap[src] = {};
+        if (!S.socioMap[src][dst]) S.socioMap[src][dst] = { entries:[], matchType };
+        // Escalona matchType: cpf_nome > cpf_collision > nome_only
+        const rank = {cpf_nome:2, cpf_collision:1, nome_only:0};
+        if (rank[matchType] > rank[S.socioMap[src][dst].matchType]) S.socioMap[src][dst].matchType = matchType;
+        if (!S.socioMap[src][dst].entries.some(e=>e.label===label))
+          S.socioMap[src][dst].entries.push({ label, matchType, nomeA: ea.nome, nomeB: eb.nome, cpf: ea.cpf });
+      });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // PASSO 3: Fallback por nome normalizado (quando sem CPF)
+  // ──────────────────────────────────────────────────────────
+  const nomeIdx = {}; // nomeN -> [{cnpj, nome, cpf}]
+  S.all.forEach(l => {
+    (l._socios||[]).forEach(s => {
+      if (!s.nomeN || s.nomeN.length < 4) return;
+      if (!nomeIdx[s.nomeN]) nomeIdx[s.nomeN] = [];
+      if (!nomeIdx[s.nomeN].some(e => e.cnpj === l['CNPJ']))
+        nomeIdx[s.nomeN].push({ cnpj: l['CNPJ'], nome: s.nome, cpf: s.cpf||'' });
+    });
+  });
+  Object.entries(nomeIdx).forEach(([nomeN, entries]) => {
+    if (entries.length < 2) return;
+    for (let i=0; i<entries.length; i++) for (let j=i+1; j<entries.length; j++) {
+      const ea=entries[i], eb=entries[j];
+      if (ea.cnpj === eb.cnpj) continue;
+      // Pula se já confirmado por CPF+Nome
+      const pairKey = [ea.cnpj,eb.cnpj].sort().join('|') + '|' + nomeN;
+      if (cpfCnpjsPaired.has(pairKey)) return;
+      // Pula se ambos têm CPF (seria cpf_collision, já tratado acima)
+      if (ea.cpf && eb.cpf) return;
+      const a=ea.cnpj, b=eb.cnpj;
+      const label = `${ea.nome} (por nome)`;
+      [a,b].forEach((src,si) => {
+        const dst = si===0 ? b : a;
+        if (!S.socioMap[src]) S.socioMap[src] = {};
+        if (!S.socioMap[src][dst]) S.socioMap[src][dst] = { entries:[], matchType:'nome_only' };
+        const rank = {cpf_nome:2, cpf_collision:1, nome_only:0};
+        // Não sobrescreve match melhor
+        if (!S.socioMap[src][dst].entries.some(e=>e.label===label))
+          S.socioMap[src][dst].entries.push({ label, matchType:'nome_only', nomeA:ea.nome, nomeB:eb.nome, cpf:'' });
+      });
+    }
+  });
+}
+
+function drawMatrizLines() {
+  S.matrizLines.forEach(l=>l.remove()); S.matrizLines=[];
+  if (!S.layers.matriz) return;
+  Object.entries(S.matrizMap).forEach(([raiz, cnpjs]) => {
+    const leds = cnpjs.map(c=>S.all.find(l=>l['CNPJ']===c)).filter(l=>l&&l._coord&&S.vis.includes(l));
+    if (leds.length<2) return;
+    for (let i=0; i<leds.length-1; i++) for (let j=i+1; j<leds.length; j++) {
+      const a=leds[i]._coord, b=leds[j]._coord;
+      const ln = L.polyline([[a[0],a[1]],[b[0],b[1]]],{color:'#8b5cf6',weight:2.5,opacity:.75})
+        .bindTooltip(`🔗 Matriz-Filial (Raiz: ${raiz})<br>${leds.map(l=>l['Nome Fantasia']||l['Razão Social']).join('<br>')}`,{sticky:true})
+        .on('click',()=>showMatrizDetail(raiz,leds));
+      ln.addTo(S.map); S.matrizLines.push(ln);
+    }
+  });
+}
+
+function drawSocioLines() {
+  S.socioLines.forEach(l=>l.remove()); S.socioLines=[];
+  if (!S.layers.socio) return;
+
+  // Mostrar painel de filtros quando a camada está ativa
+  const sfPanel = document.getElementById('socioFilters');
+  if (sfPanel) sfPanel.style.display = 'block';
+
+  const fCpfNome      = document.getElementById('sfCpfNome')?.checked !== false;
+  const fCpfCollision = document.getElementById('sfCpfCollision')?.checked !== false;
+  const fNomeOnly     = document.getElementById('sfNomeOnly')?.checked !== false;
+  const nomeBusca     = (document.getElementById('sfNomeBusca')?.value||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  const STYLES = {
+    cpf_nome:      { color:'#10b981', weight:3,   opacity:0.85, dash:null    },
+    cpf_collision: { color:'#f97316', weight:2.5, opacity:0.8,  dash:'4,3'  },
+    nome_only:     { color:'#f59e0b', weight:2,   opacity:0.65, dash:'8,5'  }
+  };
+
+  const drawn = new Set();
+  let visible = 0;
+  Object.entries(S.socioMap).forEach(([ca, links]) => {
+    const la = S.all.find(l=>l['CNPJ']===ca);
+    if (!la||!la._coord||!S.vis.includes(la)) return;
+    Object.entries(links).forEach(([cb, entry]) => {
+      const pk = [ca,cb].sort().join('|');
+      if (drawn.has(pk)) return; drawn.add(pk);
+      const lb = S.all.find(l=>l['CNPJ']===cb);
+      if (!lb||!lb._coord||!S.vis.includes(lb)) return;
+
+      const mt = entry.matchType || 'nome_only';
+      // Filtra por tipo de match
+      if (mt==='cpf_nome'      && !fCpfNome)      return;
+      if (mt==='cpf_collision' && !fCpfCollision) return;
+      if (mt==='nome_only'     && !fNomeOnly)     return;
+
+      // Filtra por nome do sócio
+      const allEntries = entry.entries || [];
+      const matchEntries = nomeBusca
+        ? allEntries.filter(e => {
+            const n = (e.nomeA+' '+e.nomeB).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            return n.includes(nomeBusca);
+          })
+        : allEntries;
+      if (matchEntries.length === 0) return;
+
+      const st = STYLES[mt];
+      const icons = { cpf_nome:'✅', cpf_collision:'⚠️', nome_only:'❓' };
+      const tooltipEntries = matchEntries.map(e=>{
+        let line = `${icons[e.matchType]||''} ${e.label}`;
+        if (e.matchType==='cpf_collision') line += `<br><span style='color:#fca5a5;font-size:10px'>Nomes divergem: "${e.nomeA}" ↔ "${e.nomeB}"</span>`;
+        if (e.matchType==='nome_only') line += `<br><span style='color:#fcd34d;font-size:10px'>Sem CPF — match somente por nome</span>`;
+        return line;
+      }).join('<hr style="margin:4px 0;border-color:rgba(255,255,255,0.1)">');
+
+      const tooltip = tooltipEntries;
+      const ln = L.polyline([[la._coord[0],la._coord[1]],[lb._coord[0],lb._coord[1]]],
+        {color:st.color, weight:st.weight, opacity:st.opacity, ...(st.dash?{dashArray:st.dash}:{})})
+        .bindTooltip(tooltip,{sticky:true,maxWidth:300})
+        .on('click',()=>showSocioDetail(la,lb,matchEntries,mt));
+      ln.addTo(S.map); S.socioLines.push(ln);
+      visible++;
+    });
+  });
+  const countEl = document.getElementById('sfCount');
+  if (countEl) countEl.textContent = `${visible} vínculo(s) visível(is)`;
+}
+
+function hideSocioFilters() {
+  const sfPanel = document.getElementById('socioFilters');
+  if (sfPanel) sfPanel.style.display = 'none';
+}
+
+function redrawLinks() { drawMatrizLines(); drawSocioLines(); }
+
+/* ══════════════════════════════════════════════════════════════════
+   REDE DE VÍNCULOS — grafo de nós (inspirado no rede-cnpj do rictom:
+   github.com/rictom/rede-cnpj). Aqui não é um grafo com banco de dados
+   completo da Receita, é montado só com o que já está no JSON do
+   GetLista — mas resolve o mesmo problema visual: quando um sócio ou
+   uma raiz de CNPJ conecta 3+ empresas, linhas retas sobre o mapa
+   viram um emaranhado ilegível. Em nós, isso vira uma estrela clara.
+══════════════════════════════════════════════════════════════════ */
+const TEMP_COLOR = { hot:'#ef4444', warm:'#f59e0b', cold:'#60a5fa' };
+
+function openNetwork() {
+  document.getElementById('netView').classList.add('op');
+  buildNetworkGraph();
+}
+function closeNetwork() { closeNetLeadDetail(); document.getElementById('netView').classList.remove('op'); }
+
+function closeNetLeadDetail() {
+  const d = document.getElementById('netSideD');
+  if (d) d.classList.remove('op');
+}
+
+function openNetLeadDetail(cnpj) {
+  const lead = S.all.find(l => l['CNPJ'] === cnpj);
+  if (!lead) return;
+
+  const cnpjFmt = lead['CNPJ Formatado'] || cnpj;
+  const nomeFant = lead['Nome Fantasia'] || lead['Razão Social'] || 'Lead';
+  const razaoSoc = lead['Razão Social'] || '—';
+  const temp = lead['Temperatura Lead'] || 'Frio';
+  const sit = lead['Situação Cadastral'] || '—';
+  const porte = lead['Porte'] || '—';
+  const score = lead._scoreNum || 0;
+
+  const logr = lead['Logradouro'] || '';
+  const num = lead['Número'] || '';
+  const bai = lead['Bairro'] || '';
+  const mun = lead['Município'] || '';
+  const uf = lead['UF'] || 'SP';
+  const cep = lead['CEP'] || '';
+  const addrFull = [logr ? (num ? `${logr}, ${num}` : logr) : '', bai, mun ? `${mun}/${uf}` : '', cep ? `CEP: ${cep}` : ''].filter(Boolean).join(' - ');
+
+  const tel = lead['Telefone'] || '';
+  const tel2 = lead['Telefone 2'] || '';
+  const wa1 = lead['WhatsApp 1'] || '';
+  const wa2 = lead['WhatsApp 2'] || '';
+  const email = lead['Email'] || '';
+
+  const waNum1 = wa1 ? wa1.replace(/\D/g, '') : '';
+  const waNum2 = wa2 ? wa2.replace(/\D/g, '') : '';
+  const telNum = tel ? tel.replace(/\D/g, '') : '';
+
+  const qMap = encodeURIComponent(`${nomeFant}, ${addrFull}`);
+  const gmapUrl = `https://www.google.com/maps/search/?api=1&query=${qMap}`;
+  const wazeUrl = `https://waze.com/ul?q=${qMap}`;
+
+  const socios = lead._socios || [];
+  const cnaeSec = lead._cnaesSecundarios || [];
+  const meta = S.leadAddrMeta[cnpj];
+
+  const html = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">
+      <div>
+        <div style="font-weight:700;font-size:15px;color:var(--t1);line-height:1.2">${nomeFant}</div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px">
+          <span style="font-family:monospace">${cnpjFmt}</span> · <span>${razaoSoc}</span>
+        </div>
+        <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+          <span class="tc ${lead._temp} on" style="padding:2px 6px;border-radius:10px;font-size:10px;font-weight:600;opacity:1">${temp}</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:10px;font-size:10px;color:var(--t2)">${sit}</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:10px;font-size:10px;color:var(--blueh)">Score: ${score}</span>
+          ${meta ? (meta.isNewest ? '<span style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.4);color:#4ade80;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700">⭐ NOVO DONO</span>' : '<span style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:var(--warm);padding:2px 6px;border-radius:10px;font-size:10px;font-weight:600">🏢 PJ ANTERIOR</span>') : ''}
+        </div>
+      </div>
+      <button class="ccls" style="padding:2px 7px" onclick="closeNetLeadDetail()">✕</button>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="tbtn" style="flex:1;justify-content:center;font-size:11px" onclick="closeNetwork();openLeadModal('${cnpj}')">📍 Ver este lead no Mapa</button>
+    </div>
+
+    <!-- CONTATOS -->
+    <div class="m-box" style="margin-bottom:12px">
+      <div class="m-lbl">Endereço Completo</div>
+      <div class="m-val" style="margin-bottom:6px">${addrFull || 'Endereço não informado'}</div>
+      <div class="m-actions">
+        ${waNum1 ? `<a class="m-btn wsp" href="https://wa.me/55${waNum1}" target="_blank">💬 WhatsApp 1</a>` : ''}
+        ${waNum2 ? `<a class="m-btn wsp" href="https://wa.me/55${waNum2}" target="_blank">💬 WhatsApp 2</a>` : ''}
+        ${telNum ? `<a class="m-btn" href="tel:${telNum}">📞 Telefone</a>` : ''}
+        ${email ? `<a class="m-btn" href="mailto:${email}">✉ Email</a>` : ''}
+        <a class="m-btn gmap" href="${gmapUrl}" target="_blank">📍 Maps</a>
+        <a class="m-btn waze" href="${wazeUrl}" target="_blank">🚗 Waze</a>
+      </div>
+    </div>
+
+    <!-- PONTO COMERCIAL / MESMO ENDEREÇO -->
+    ${meta ? `
+    <div style="margin-bottom:12px">
+      <div class="m-sec-title">🏢 Ponto Comercial (${meta.totalAtAddr} PJs no endereço)</div>
+      <div class="wbox" style="margin-bottom:6px">
+        ${meta.isNewest ? '⭐ <strong>"Novo Dono"</strong> (PJ mais recente registrado neste local).' : '🏚️ <strong>"PJ Anterior"</strong> (Há um novo PJ registrado neste ponto).'}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${[lead, ...meta.peers].sort((a,b)=>(getOpeningTimestamp(b)-getOpeningTimestamp(a))).map(p => {
+          const isNew = p['CNPJ'] === meta.youngestLead['CNPJ'];
+          const isCurrent = p['CNPJ'] === cnpj;
+          return `
+            <div class="m-box" style="${isCurrent ? 'border-color:var(--blue);' : ''}${isNew ? 'background:rgba(34,197,94,.08);' : ''}">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="font-weight:700;font-size:11px;color:var(--t1)">${p['Nome Fantasia'] || p['Razão Social'] || '—'}</div>
+                ${isNew ? '<span style="background:rgba(34,197,94,.2);color:#4ade80;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px">⭐ NOVO DONO</span>' : '<span style="background:var(--bg2);color:var(--t3);font-size:9px;padding:1px 5px;border-radius:8px">PJ ANTERIOR</span>'}
+              </div>
+              <div style="font-size:10px;color:var(--t2);margin-top:2px">${p['CNPJ Formatado'] || p['CNPJ']} · Abertura: ${p['Data de Abertura']||'—'} (${p['Idade (Anos)']||0}a)</div>
+              ${!isCurrent ? `<button class="m-btn" style="margin-top:4px;padding:2px 6px;font-size:10px" onclick="openNetLeadDetail('${p['CNPJ']}');if(S.net.instance)S.net.instance.focus('e_${p['CNPJ']}',{scale:1.4,animation:true})">🔍 Inspecionar →</button>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- DADOS EMPRESARIAIS -->
+    <div style="margin-bottom:12px">
+      <div class="m-sec-title">🏢 Dados Empresariais</div>
+      <div class="m-box" style="margin-bottom:6px">
+        <div class="m-lbl">CNAE Principal</div>
+        <div class="m-val">${lead['CNAE Principal'] || ''} — ${lead['Descrição CNAE'] || '—'}</div>
+      </div>
+      <div class="m-grid">
+        <div class="m-box"><div class="m-lbl">Capital Social</div><div class="m-val">${fmtCap(lead['Capital Social'])}</div></div>
+        <div class="m-box"><div class="m-lbl">Abertura</div><div class="m-val">${lead['Data de Abertura'] || '—'} (${lead['Idade (Anos)'] || '0'}a)</div></div>
+        <div class="m-box"><div class="m-lbl">Porte</div><div class="m-val">${porte}</div></div>
+        <div class="m-box"><div class="m-lbl">Simples / MEI</div><div class="m-val">Simples: ${lead['Opção pelo Simples']||'N/A'}</div></div>
+      </div>
+    </div>
+
+    <!-- QUADRO SOCIETÁRIO -->
+    ${socios.length ? `
+    <div style="margin-bottom:12px">
+      <div class="m-sec-title">👥 Sócios (${socios.length})</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${socios.map(s => `
+          <div class="m-box">
+            <div style="font-weight:600;color:var(--t1);font-size:11px">👤 ${s.nome}</div>
+            <div style="font-size:10px;color:var(--t2)">${s.qual || 'Sócio'}${s.faixa ? ` · Faixa: ${s.faixa}` : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('netSideDBody').innerHTML = html;
+  document.getElementById('netSideD').classList.add('op');
+}
+
+function toggleNetScope() {
+  S.net.scopeConnectedOnly = !S.net.scopeConnectedOnly;
+  document.getElementById('netScopeBtn').textContent = S.net.scopeConnectedOnly ? '🎯 Só conectados' : '🗂️ Todos visíveis';
+  buildNetworkGraph();
+}
+
+function makeTooltipDiv(html) {
+  const el = document.createElement('div');
+  el.className = 'net-tooltip';
+  el.innerHTML = html;
+  return el;
+}
+
+function buildNetworkGraph() {
+  const pool = S.vis.length ? S.vis : S.all;
+  const poolSet = new Set(pool.map(l => l['CNPJ']));
+
+  // Grupos matriz-filial restritos ao pool atual (respeita os filtros)
+  const raizGroups = {};
+  pool.forEach(l => {
+    const r = l['Raiz CNPJ']; if (!r) return;
+    (raizGroups[r] = raizGroups[r] || []).push(l);
+  });
+  Object.keys(raizGroups).forEach(r => { if (raizGroups[r].length < 2) delete raizGroups[r]; });
+
+  // Pares de sócio em comum restritos ao pool atual
+  const nameIdx = {};
+  pool.forEach(l => (l._socios || []).forEach(s => {
+    if (!s.nomeN || s.nomeN.length < 4) return;
+    (nameIdx[s.nomeN] = nameIdx[s.nomeN] || { display: s.nome, leads: [] }).leads.push(l);
+  }));
+  Object.keys(nameIdx).forEach(k => { if (nameIdx[k].leads.length < 2) delete nameIdx[k]; });
+
+  const connectedCnpjs = new Set();
+  Object.values(raizGroups).forEach(leds => leds.forEach(l => connectedCnpjs.add(l['CNPJ'])));
+  Object.values(nameIdx).forEach(v => v.leads.forEach(l => connectedCnpjs.add(l['CNPJ'])));
+
+  const nodes = [], edges = [];
+  const addedEmp = new Set();
+  const addEmpresaNode = (l) => {
+    if (addedEmp.has(l['CNPJ'])) return;
+    addedEmp.add(l['CNPJ']);
+    const nome = (l['Nome Fantasia'] || l['Razão Social'] || l['CNPJ']).substring(0, 26);
+    nodes.push({
+      id: 'e_' + l['CNPJ'], label: nome, shape: 'dot', size: 15,
+      color: { background: TEMP_COLOR[l._temp] || '#8b949e', border: '#0d1117' },
+      font: { color: '#e6edf3', size: 11 },
+      title: makeTooltipDiv(`<b>${l['Razão Social'] || ''}</b><br>${l['Nome Fantasia'] || ''}<br>${l['Município'] || ''}/${l['UF'] || ''}<br><span style="color:var(--blueh)">Score: ${l._scoreNum}</span>`),
+      _cnpj: l['CNPJ'], _type: 'empresa'
+    });
+  };
+
+  const targetLeads = S.net.scopeConnectedOnly ? pool.filter(l => connectedCnpjs.has(l['CNPJ'])) : pool;
+  targetLeads.forEach(addEmpresaNode);
+
+  // Nós de grupo (raiz CNPJ) — topologia em estrela em vez de malha completa
+  Object.entries(raizGroups).forEach(([raiz, leds]) => {
+    const inScope = leds.filter(l => addedEmp.has(l['CNPJ']));
+    if (inScope.length < 2) return;
+    const hubId = 'r_' + raiz;
+    nodes.push({
+      id: hubId, label: 'Raiz ' + raiz, shape: 'diamond', size: 13,
+      color: { background: '#8b5cf6', border: '#0d1117' }, font: { color: '#e6edf3', size: 10 },
+      title: makeTooltipDiv(`<b>Grupo econômico</b><br>Raiz CNPJ: ${raiz}<br>${inScope.length} unidades no dataset atual`),
+      _type: 'raiz'
+    });
+    inScope.forEach(l => edges.push({ from: hubId, to: 'e_' + l['CNPJ'], color: { color: '#8b5cf6' }, width: 2.5 }));
+  });
+
+  // Nós de sócio — um nó por pessoa, todas as empresas dela apontam pra ele
+  Object.entries(nameIdx).forEach(([nomeN, v]) => {
+    const inScope = v.leads.filter(l => addedEmp.has(l['CNPJ']));
+    if (inScope.length < 2) return;
+    const socId = 's_' + nomeN;
+    nodes.push({
+      id: socId, label: v.display, shape: 'diamond', size: 11,
+      color: { background: '#f59e0b', border: '#0d1117' }, font: { color: '#e6edf3', size: 10 },
+      title: makeTooltipDiv(`<b>👤 ${v.display}</b><br>Possível sócio em comum de <b>${inScope.length}</b> empresas<br><small style="color:var(--warm)">⚠ Sem CPF — correspondência por nome exato</small>`),
+      _type: 'socio'
+    });
+    inScope.forEach(l => edges.push({ from: socId, to: 'e_' + l['CNPJ'], color: { color: '#f59e0b' }, dashes: [5, 4], width: 1.5 }));
+  });
+
+  document.getElementById('netCEmp').textContent = addedEmp.size;
+  document.getElementById('netCSoc').textContent = Object.keys(nameIdx).filter(k => nameIdx[k].leads.some(l => addedEmp.has(l['CNPJ']))).length;
+  document.getElementById('netCLig').textContent = edges.length;
+  document.getElementById('netEmpty').classList.toggle('sh', edges.length === 0);
+
+  const container = document.getElementById('netGraph');
+  if (S.net.instance) { S.net.instance.destroy(); S.net.instance = null; }
+  if (edges.length === 0 && S.net.scopeConnectedOnly) return;
+
+  S.net.instance = new vis.Network(container, { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, {
+    physics: { barnesHut: { gravitationalConstant: -6000, springLength: 110, springConstant: 0.03 }, stabilization: { iterations: 150 } },
+    interaction: { hover: true, tooltipDelay: 120 },
+    layout: { improvedLayout: true }
+  });
+
+  S.net.instance.on('doubleClick', params => {
+    if (!params.nodes.length) return;
+    S.net.instance.focus(params.nodes[0], { scale: 1.4, animation: true });
+  });
+  S.net.instance.on('click', params => {
+    if (!params.nodes.length) return;
+    const node = nodes.find(n => n.id === params.nodes[0]);
+    if (node && node._type === 'empresa') { openNetLeadDetail(node._cnpj); }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MAP CORE
+══════════════════════════════════════════════════════════════════ */
+function initMap() {
+  S.map = L.map('map', { zoomControl:true }).setView([-22.7254,-47.6491], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap contributors', maxZoom:19
+  }).addTo(S.map);
+  S.clusterGroup = L.markerClusterGroup({ chunkedLoading:true, maxClusterRadius:60, spiderfyOnMaxZoom:true });
+  S.clusterGroup.addTo(S.map);
+}
+
+function makeIcon(lead) {
+  const t = lead._temp, cap = lead._capitalNum, lowPrec = lead._prec==='bairro_centroide';
+  let size = 20;
+  if (S.layers.capital && cap > 0) {
+    const maxCap = Math.max(...S.all.map(l=>l._capitalNum).filter(v=>v>0));
+    size = 16 + Math.round((cap / maxCap) * 22);
+  }
+  const colors = { hot:'#dc2626,#f87171', warm:'#d97706,#fcd34d', cold:'#2563eb,#93c5fd' };
+  const [c1,c2] = (colors[t]||colors.cold).split(',');
+  const border = lowPrec ? 'border:2px dashed rgba(255,255,255,.7)' : 'border:2px solid rgba(255,255,255,.25)';
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:radial-gradient(circle,${c2},${c1});${border};display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer;font-size:${Math.max(9,size-8)}px;font-weight:700;color:rgba(255,255,255,.9)">${lead._scoreNum}</div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], popupAnchor:[0,-size/2]
+  });
+}
+
+function buildPopup(lead) {
+  const nome = lead['Nome Fantasia']||lead['Razão Social']||'—';
+  const addr = [lead['Logradouro'],lead['Número'],lead['Bairro'],lead['Município']].filter(Boolean).join(', ');
+  const precCls = { cep:'cep', endereco:'end', bairro_centroide:'bai', nao_geocodificado:'no' }[lead._prec] || 'no';
+  const precLbl = { cep:'📍 Precisão: CEP', endereco:'🏠 Precisão: Rua', bairro_centroide:'🏘 Aproximado: centro do bairro', nao_geocodificado:'❓ Sem geocodificação' }[lead._prec] || '—';
+  const approx = lead._prec==='bairro_centroide'||lead._prec==='nao_geocodificado';
+  return `<div class="popup-name">${nome}</div>
+    <div class="popup-score">${lead['Temperatura Lead']||''} · Score ${lead._scoreNum}</div>
+    <div class="pbdg ${precCls}" style="margin-bottom:5px">${precLbl}</div>
+    <div class="popup-addr">${addr}${approx?' <em style="color:var(--warm)">(pino é aproximado — endereço acima pode ficar em outra rua)</em>':''}</div>
+    <button class="popup-btn" onclick="openLeadModal('${lead['CNPJ']}')">Ver ficha completa →</button>`;
+}
+
+function addMarker(lead) {
+  if (!lead._coord) return;
+  const marker = L.marker([lead._coord[0],lead._coord[1]], { icon: makeIcon(lead) });
+  marker.bindPopup(buildPopup(lead), { maxWidth:240 });
+  marker.on('click', () => openLeadModal(lead['CNPJ']));
+  S.markers[lead['CNPJ']] = marker;
+  if (S.layers.cluster) S.clusterGroup.addLayer(marker);
+  else marker.addTo(S.map);
+}
+
+function updateMarker(lead) {
+  if (S.markers[lead['CNPJ']]) { S.markers[lead['CNPJ']].remove(); delete S.markers[lead['CNPJ']]; }
+  addMarker(lead);
+}
+
+function rebuildMarkers() {
+  S.clusterGroup.clearLayers();
+  Object.values(S.markers).forEach(m => { try{m.remove()}catch{} });
+  S.markers = {};
+  S.vis.forEach(l => { if (l._coord) addMarker(l); });
+  if (!S.layers.cluster) {
+    Object.values(S.markers).forEach(m => m.addTo(S.map));
+  }
+}
+
+function toggleHeatLayer() {
+  if (S.heatLayer) { S.heatLayer.remove(); S.heatLayer = null; }
+  if (!S.layers.heat) return;
+  const pts = S.vis.filter(l=>l._coord).map(l=>[l._coord[0],l._coord[1],0.5]);
+  if (pts.length) { S.heatLayer = L.heatLayer(pts,{radius:35,blur:20,maxZoom:16}).addTo(S.map); }
+}
+
+function fitAll() {
+  const pts = S.vis.filter(l=>l._coord).map(l=>l._coord);
+  if (pts.length) S.map.fitBounds(L.latLngBounds(pts), { padding:[40,40] });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FILTERS
+══════════════════════════════════════════════════════════════════ */
+function uniqueVals(field) {
+  return [...new Set(S.all.map(l=>l[field]||'').filter(Boolean))].sort();
+}
+function uniqueBairros() {
+  return [...new Set(S.all.map(l=>(l['Bairro']||'').trim().toUpperCase()).filter(Boolean))].sort();
+}
+function uniqueCnaes() {
+  const m={};
+  S.all.forEach(l=>{ const c=String(l['CNAE Principal']||l._cnae||'').trim(), d=(l['Descrição CNAE']||l._descCnae||'').trim(); if(c&&d) m[c]=d; });
+  return Object.entries(m).sort((a,b)=>a[1].localeCompare(b[1])).map(([k,v])=>({v:k,l:`${k} — ${v.substring(0,50)}`}));
+}
+
+function fillMS(key, vals, isObj) {
+  const c = document.getElementById(`opts-${key}`); if(!c) return;
+  c.innerHTML = '';
+  vals.forEach(val => {
+    const v = isObj?val.v:val, lbl = isObj?val.l:val;
+    const d = document.createElement('div'); d.className='ms-opt'; d.dataset.val=v;
+    d.innerHTML=`<input type="checkbox" value="${v}" onchange="onMS('${key}')"/><span>${lbl}</span>`;
+    c.appendChild(d);
+  });
+}
+
+function initFilters() {
+  fillMS('mun', uniqueVals('Município'));
+  fillMS('bai', uniqueBairros());
+  fillMS('cna', uniqueCnaes(), true);
+  fillMS('por', uniqueVals('_porte'));
+  fillMS('sit', uniqueVals('_situacao'));
+  document.addEventListener('click', e => { if (!e.target.closest('.ms-wrap')) closeDD(); });
+  applyFilters();
+}
+
+function toggleDD(k) {
+  const dd = document.getElementById(`dd-${k}`); if(!dd) return;
+  const was = dd.classList.contains('op');
+  closeDD();
+  if (!was) dd.classList.add('op');
+}
+function closeDD() { document.querySelectorAll('.ms-dd.op').forEach(d=>d.classList.remove('op')); }
+
+function ddSearch(inp, key) {
+  const q = inp.value.trim().toLowerCase();
+  document.querySelectorAll(`#opts-${key} .ms-opt`).forEach(o=>{ o.style.display=o.textContent.toLowerCase().includes(q)?'':'none'; });
+}
+
+function onMS(key) {
+  const c = document.getElementById(`opts-${key}`);
+  const sel = [...c.querySelectorAll('input:checked')].map(i=>i.value);
+  S.f[key] = sel;
+  const lblMap = {mun:'lblM',bai:'lblB',cna:'lblC',por:'lblP',sit:'lblS'};
+  const bdgMap = {mun:'bdgM',bai:'bdgB',cna:'bdgC',por:'bdgP',sit:null};
+  const lbl = document.getElementById(lblMap[key]);
+  if (lbl) lbl.textContent = sel.length ? `${sel.length} selecionado(s)` : 'Todos';
+  const bdg = bdgMap[key] && document.getElementById(bdgMap[key]);
+  if (bdg) { bdg.textContent=sel.length; bdg.style.display=sel.length?'':'none'; }
+  applyFilters();
+}
+
+function toggleTemp(el) {
+  el.classList.toggle('on');
+  S.f.temp = [...document.querySelectorAll('.tc.on')].map(c=>c.dataset.t);
+  applyFilters();
+}
+
+function onScore() {
+  let mn=+document.getElementById('smin').value, mx=+document.getElementById('smax').value;
+  if(mn>mx){document.getElementById('smin').value=mx;document.getElementById('smax').value=mn;[mn,mx]=[mx,mn];}
+  S.f.smin=mn; S.f.smax=mx;
+  document.getElementById('sminv').textContent=mn; document.getElementById('smaxv').textContent=mx;
+  applyFilters();
+}
+
+function applyFilters() {
+  const f = S.f;
+  const sq = S.searchQuery ? S.searchQuery.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') : '';
+  S.vis = S.all.filter(l => {
+    if (sq && !(l._searchStr||'').includes(sq)) return false;
+    if (f.temp.length && !f.temp.includes(l._temp)) return false;
+    if (l._scoreNum < f.smin || l._scoreNum > f.smax) return false;
+    if (f.mun.length && !f.mun.includes(l['Município'])) return false;
+    if (f.bai.length && !f.bai.includes((l['Bairro']||'').trim().toUpperCase())) return false;
+    if (f.cna.length && !f.cna.includes(String(l['CNAE Principal']||l._cnae||'').trim())) return false;
+    if (f.por.length && !f.por.includes(l._porte)) return false;
+    if (f.sit.length) {
+      if (!f.sit.some(s=>l._situacao.toLowerCase().includes(s.toLowerCase()))) return false;
+    } else if (l._situacao.toLowerCase() !== 'ativa') return false;
+
+    if (f.addrFilter === 'same_addr') {
+      const meta = S.leadAddrMeta[l['CNPJ']];
+      if (!meta || !meta.isSameAddr) return false;
+    } else if (f.addrFilter === 'newest_only') {
+      const meta = S.leadAddrMeta[l['CNPJ']];
+      if (!meta || !meta.isSameAddr || !meta.isNewest) return false;
+    } else if (f.addrFilter === 'older_only') {
+      const meta = S.leadAddrMeta[l['CNPJ']];
+      if (!meta || !meta.isSameAddr || meta.isNewest) return false;
+    }
+
+    if (f.geoPrec && f.geoPrec !== 'all') {
+      if (f.geoPrec === 'missing') {
+        if (l._coord && l._prec !== 'bairro_centroide' && l._prec !== 'nao_geocodificado') return false;
+      } else if (l._prec !== f.geoPrec) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  document.getElementById('cVis').textContent = S.vis.length;
+  document.getElementById('fcount').innerHTML = `Mostrando <b>${S.vis.length}</b> leads`;
+  document.getElementById('fcountL').textContent = `${S.vis.length} leads`;
+
+  rebuildMarkers();
+  redrawLinks();
+  if (S.layers.heat) toggleHeatLayer();
+  renderLeadList();
+  if (document.getElementById('panC').classList.contains('op')) renderCharts();
+}
+
+function resetFilters() {
+  S.f = { temp:['hot','warm','cold'], smin:0, smax:100, mun:[], bai:[], cna:[], por:[], sit:['ativa'], addrFilter:'all', geoPrec:'all' };
+  document.querySelectorAll('.tc').forEach(c=>c.classList.add('on'));
+  document.getElementById('smin').value=0; document.getElementById('smax').value=100;
+  document.getElementById('sminv').textContent=0; document.getElementById('smaxv').textContent=100;
+  const fAddr = document.getElementById('fAddrDup'); if(fAddr) fAddr.value = 'all';
+  const fGeo = document.getElementById('fGeoPrec'); if(fGeo) fGeo.value = 'all';
+  ['mun','bai','cna','por','sit'].forEach(k=>{
+    const c=document.getElementById(`opts-${k}`); if(c) c.querySelectorAll('input').forEach(i=>i.checked=false);
+    const l=document.getElementById({mun:'lblM',bai:'lblB',cna:'lblC',por:'lblP',sit:'lblS'}[k]);
+    if(l) l.textContent = k==='sit' ? 'Somente Ativas' : 'Todos';
+    const b=document.getElementById({mun:'bdgM',bai:'bdgB',cna:'bdgC',por:'bdgP',sit:null}[k]);
+    if(b) b.style.display='none';
+  });
+  applyFilters();
+}
+
+function toggleLayer(key) {
+  S.layers[key] = document.getElementById({cluster:'tClus',heat:'tHeat',matriz:'tMat',socio:'tSoc',capital:'tCap'}[key])?.checked ?? false;
+  if (key==='cluster'||key==='capital') rebuildMarkers();
+  if (key==='heat') toggleHeatLayer();
+  if (key==='matriz') drawMatrizLines();
+  if (key==='socio') {
+    if (!S.layers.socio) hideSocioFilters();
+    drawSocioLines();
+  }
+}
+
+function toggleLayerBtn(key) {
+  const chk = {heat:'tHeat',matriz:'tMat',socio:'tSoc'}[key];
+  const el = document.getElementById(chk); if(!el) return;
+  el.checked = !el.checked; toggleLayer(key);
+  const btn = {heat:'mcHeat',matriz:'mcMat',socio:'mcSoc'}[key];
+  const bel = document.getElementById(btn); if(bel) bel.classList.toggle('act', S.layers[key]);
+}
+
+function toggleTopMenu() {
+  const d = document.getElementById('topDrop'), b = document.getElementById('hbMenu');
+  d.classList.toggle('op'); b.classList.toggle('act', d.classList.contains('op'));
+}
+function closeTopMenu() {
+  document.getElementById('topDrop').classList.remove('op');
+  document.getElementById('hbMenu').classList.remove('act');
+}
+document.addEventListener('click', e => {
+  const d = document.getElementById('topDrop'), b = document.getElementById('hbMenu');
+  if (d && d.classList.contains('op') && !d.contains(e.target) && e.target!==b) closeTopMenu();
+});
+
+function toggleMapCtrl() { document.getElementById('mctrl').classList.toggle('col'); }
+
+function togglePanel() {
+  const collapsed = document.getElementById('panL').classList.toggle('col');
+  document.getElementById('main').classList.toggle('lcol', collapsed);
+  document.getElementById('panLTab').textContent = collapsed ? '›' : '‹';
+}
+function toggleCharts() {
+  const p=document.getElementById('panC'); p.classList.toggle('op');
+  if (p.classList.contains('op')) renderCharts();
+}
+function switchTab(t) {
+  document.getElementById('tcF').style.display=t==='f'?'':'none';
+  document.getElementById('tcL').style.display=t==='l'?'':'none';
+  document.getElementById('tabF').classList.toggle('on',t==='f');
+  document.getElementById('tabL').classList.toggle('on',t==='l');
+  if (t==='l') renderLeadList();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LEAD LIST
+══════════════════════════════════════════════════════════════════ */
+function renderLeadList() {
+  const c=document.getElementById('leadList'); if(!c) return;
+  const sorted=[...S.vis].sort((a,b)=>b._scoreNum-a._scoreNum);
+  if (!sorted.length) { c.innerHTML='<div style="color:var(--t3);font-size:11px;text-align:center;padding:20px 0">Nenhum lead encontrado</div>'; return; }
+  c.innerHTML = sorted.map(l => {
+    const nome = l['Nome Fantasia']||l['Razão Social']||'—';
+    const loc  = [l['Bairro'],l['Município']].filter(Boolean).join(', ');
+    const cnae = (l['Descrição CNAE']||l._descCnae||'').substring(0,38);
+    const meta = S.leadAddrMeta[l['CNPJ']];
+    const addrTag = meta ? (meta.isNewest ? `<span style="color:#4ade80;font-weight:600">⭐ Novo Dono (${meta.totalAtAddr} PJs no ponto)</span>` : `<span style="color:var(--warm)">🏢 PJ Anterior (${meta.totalAtAddr} PJs no ponto)</span>`) : '';
+    return `<div class="lcard ${l._temp}" onclick="openLeadModal('${l['CNPJ']}')">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+        <div class="ln">${nome}</div><span class="sb ${l._temp}">${l._scoreNum}</span>
+      </div>
+      <div class="lm">
+        <span>${l['Temperatura Lead']||''}</span>
+        ${loc?`<span>📍 ${loc}</span>`:''}
+        ${addrTag?`<span>${addrTag}</span>`:''}
+        ${cnae?`<span>${cnae}${(l['Descrição CNAE']||'').length>38?'…':''}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DETAIL PANEL
+══════════════════════════════════════════════════════════════════ */
+function openDetailPanel(cnpj) {
+  const lead = S.all.find(l=>l['CNPJ']===cnpj); if(!lead) return;
+  S.sel = cnpj;
+
+  const t = lead._temp;
+  const nome  = lead['Razão Social']||'—';
+  const fant  = lead['Nome Fantasia']||'';
+  const addr  = [lead['Logradouro'], lead['Número'], lead['Complemento'], lead['Bairro'], lead['Município']+'/'+lead['UF'], lead['CEP']].filter(Boolean).join(', ');
+  const score = lead._scoreNum;
+  const sitCls = lead._situacao.toLowerCase()==='ativa' ? 'at' : lead._situacao.toLowerCase().includes('baixa') ? 'bx' : 'ot';
+  const precCls = { cep:'cep', endereco:'end', bairro_centroide:'bai', nao_geocodificado:'no' }[lead._prec] || 'no';
+  const precLbl = { cep:'📍 Nível: CEP', endereco:'🏠 Nível: Rua', bairro_centroide:'🏘 Nível: Bairro', nao_geocodificado:'❓ Não geocodificado' }[lead._prec] || '—';
+  const socios = lead._socios||[];
+  const motivos = (lead['Score Motivos']||'').split('|').map(m=>m.trim()).filter(Boolean);
+  const cnaeSec = lead._cnaesSecundarios||[];
+  const mzLinks = (S.matrizMap[lead['Raiz CNPJ']]||[]).filter(c=>c!==cnpj);
+  const scLinks = S.socioMap[cnpj] ? Object.keys(S.socioMap[cnpj]) : [];
+
+  let html = `
+    <div class="dh">
+      <div>
+        <div class="dname">${nome}</div>
+        ${fant?`<div class="dfant">🏷 ${fant}</div>`:''}
+      </div>
+      <button class="dcls" onclick="closeDet()">✕</button>
+    </div>
+
+    <div class="dsr">
+      <div>
+        <div class="sbig ${t}">${score}</div>
+        <div class="slbl">Score B2B</div>
+      </div>
+      <span class="schdg ${sitCls}">${lead._situacao}</span>
+      <span class="pbdg ${precCls}">${precLbl}</span>
+      <span style="font-size:13px">${lead['Temperatura Lead']||''}</span>
+    </div>
+
+    <div class="ds">
+      <div class="dst">Identificação</div>
+      <div class="dr"><span class="dk">CNPJ</span><span class="dv" style="font-family:monospace">${lead['CNPJ Formatado']||cnpj}</span></div>
+      <div class="dr"><span class="dk">Raiz CNPJ</span><span class="dv" style="font-family:monospace">${lead['Raiz CNPJ']||'—'}</span></div>
+      <div class="dr"><span class="dk">Nat. Jurídica</span><span class="dv">${lead['Natureza Jurídica']||'—'}</span></div>
+      <div class="dr"><span class="dk">Porte</span><span class="dv">${lead._porte}</span></div>
+      <div class="dr"><span class="dk">IE</span><span class="dv">${lead['Inscrição Estadual (IE)']||'Não informado'}</span></div>
+    </div>
+
+    <div class="ds">
+      <div class="dst">Atividade</div>
+      <div class="dr"><span class="dk">Abertura</span><span class="dv">${lead['Data de Abertura']||'—'} (${lead['Idade (Anos)']||0} anos)</span></div>
+      <div class="dr"><span class="dk">Estágio</span><span class="dv">${lead['Estágio Comercial']||'—'}</span></div>
+      <div class="dr"><span class="dk">CNAE Principal</span><span class="dv">${lead['CNAE Principal']||'—'}</span></div>
+      <div style="font-size:11px;color:var(--t2);padding:3px 0 5px">${lead['Descrição CNAE']||''}</div>
+      ${cnaeSec.length ? `<div style="font-size:10px;color:var(--t3);margin-top:4px"><strong>Secundários:</strong> ${cnaeSec.slice(0,3).map(c=>c.cod).join(', ')}${cnaeSec.length>3?'…':''}</div>`:''}
+    </div>
+
+    <div class="ds">
+      <div class="dst">Endereço</div>
+      <div style="font-size:11px;color:var(--t2);line-height:1.5">${addr||'Não informado'}</div>
+      ${(lead._prec==='bairro_centroide'||lead._prec==='nao_geocodificado') ? `
+      <div class="wbox" style="margin-top:6px">📌 O pino no mapa está no <strong>${lead._prec==='bairro_centroide'?'centro do bairro':'centro da cidade'}</strong>, não no endereço exato acima — a rua não foi encontrada nas bases gratuitas de geocodificação. É normal o mapa parecer não bater com o endereço listado aqui.</div>` : ''}
+    </div>
+
+    <div class="ds">
+      <div class="dst">Contato</div>
+      <div class="cbtns">
+        ${lead['Telefone'] ? `<a class="cbtn" href="tel:${lead['Telefone']}">📞 ${lead['Telefone']}</a>` : ''}
+        ${lead['Telefone 2'] ? `<a class="cbtn" href="tel:${lead['Telefone 2']}">📞 ${lead['Telefone 2']}</a>` : ''}
+        ${lead['WhatsApp 1'] ? `<a class="cbtn wa" href="${lead['WhatsApp 1']}" target="_blank">💬 WhatsApp 1</a>` : ''}
+        ${lead['WhatsApp 2'] ? `<a class="cbtn wa" href="${lead['WhatsApp 2']}" target="_blank">💬 WhatsApp 2</a>` : ''}
+        ${lead['Email'] ? `<a class="cbtn" href="mailto:${lead['Email']}"  title="${lead['Email']}">✉ E-mail</a>` : ''}
+        ${!lead['Telefone']&&!lead['WhatsApp 1']&&!lead['Email'] ? '<span style="font-size:11px;color:var(--t3)">Sem contato cadastrado</span>' : ''}
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dst">Financeiro</div>
+      <div class="dr"><span class="dk">Capital Social</span><span class="dv">${fmtCap(lead['Capital Social'])}</span></div>
+      <div class="dr"><span class="dk">Tem Obras</span><span class="dv">${lead['Tem Obras']||'NÃO'}</span></div>
+      ${lead['Qtde Obras'] > 0 ? `<div class="dr"><span class="dk">Qtde Obras</span><span class="dv">${lead['Qtde Obras']}</span></div>` : ''}
+    </div>
+
+    ${socios.length ? `
+    <div class="ds">
+      <div class="dst">Quadro Societário</div>
+      ${socios.map(s=>`
+        <div style="background:var(--bg3);border:1px solid var(--bord2);border-radius:var(--rs);padding:7px 10px;margin-bottom:5px;font-size:11px">
+          <div style="font-weight:600;color:var(--t1)">👤 ${s.nome} ${s.cpf ? `<span style="font-size:10px;font-family:monospace;color:#818cf8;background:rgba(99,102,241,0.15);padding:1px 5px;border-radius:3px;margin-left:4px;border:1px solid rgba(99,102,241,0.3)">CPF: ${s.cpf}</span>` : ''}</div>
+          <div style="color:var(--t2)">${s.qual}${s.faixa?` · ${s.faixa}`:''}${s.entrada?` · Entrada: ${s.entrada}`:''}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${motivos.length ? `
+    <div class="ds">
+      <div class="dst">Score — Motivos</div>
+      ${motivos.map(m=>`<div class="mi">${m}</div>`).join('')}
+    </div>` : ''}
+
+    ${(mzLinks.length || scLinks.length) ? `
+    <div class="ds">
+      <button class="cbtn" style="width:100%;justify-content:center" onclick="closeDet();openNetwork();setTimeout(()=>{if(S.net.instance)S.net.instance.focus('e_${cnpj}',{scale:1.4,animation:true})},250)">🕸️ Ver este lead na Rede de Vínculos</button>
+    </div>` : ''}
+
+    ${mzLinks.length ? `
+    <div class="ds">
+      <div class="dst">🔗 Vínculos Matriz-Filial (Raiz: ${lead['Raiz CNPJ']})</div>
+      <div style="font-size:11px;color:var(--warm);margin-bottom:6px">⚠ Conecta apenas CNPJs minerados neste dataset</div>
+      ${mzLinks.map(c => {
+        const l2 = S.all.find(x=>x['CNPJ']===c);
+        return `<span class="lchip mz" onclick="openDetailPanel('${c}')">🔗 ${l2 ? (l2['Nome Fantasia']||l2['Razão Social']||c) : c}</span>`;
+      }).join('')}
+    </div>` : ''}
+
+    ${scLinks.length ? `
+    <div class="ds">
+      <div class="dst">👥 Possível Vínculo Societário</div>
+      <div style="font-size:11px;color:var(--warm);margin-bottom:6px">⚠ Match por nome — sem CPF não é confirmação definitiva</div>
+      ${scLinks.map(c => {
+        const l2 = S.all.find(x=>x['CNPJ']===c);
+        const socsN = (S.socioMap[cnpj][c]||[]).join(', ');
+        return `<span class="lchip sc" onclick="openDetailPanel('${c}')" title="Sócio: ${socsN}">👥 ${l2 ? (l2['Nome Fantasia']||l2['Razão Social']||c) : c}</span>`;
+      }).join('')}
+    </div>` : ''}
+
+    <div class="ds">
+      <div class="dst">Origem</div>
+      <div class="dr"><span class="dk">API</span><span class="dv">${lead['API Origem']||'—'}</span></div>
+      <div class="dr"><span class="dk">Contato Contábil</span><span class="dv">${lead['Contato Contábil?']||'—'}</span></div>
+    </div>
+  `;
+
+  document.getElementById('panDi').innerHTML = html;
+  document.getElementById('panD').classList.add('op');
+
+  // Zoom no marcador
+  if (lead._coord && S.map) {
+    S.map.setView([lead._coord[0],lead._coord[1]], Math.max(S.map.getZoom(), 15), { animate:true });
+    if (S.markers[cnpj]) S.markers[cnpj].openPopup();
+  }
+}
+
+function closeDet() {
+  document.getElementById('panD').classList.remove('op');
+  S.sel = null;
+}
+
+function openLeadModal(cnpj) {
+  const lead = S.all.find(l => l['CNPJ'] === cnpj);
+  if (!lead) return;
+
+  const cnpjFmt = lead['CNPJ Formatado'] || cnpj;
+  const nomeFant = lead['Nome Fantasia'] || lead['Razão Social'] || 'Lead';
+  const razaoSoc = lead['Razão Social'] || '—';
+  const temp = lead['Temperatura Lead'] || 'Frio';
+  const sit = lead['Situação Cadastral'] || '—';
+  const porte = lead['Porte'] || '—';
+  const score = lead._scoreNum || 0;
+
+  // Address
+  const logr = lead['Logradouro'] || '';
+  const num = lead['Número'] || '';
+  const bai = lead['Bairro'] || '';
+  const mun = lead['Município'] || '';
+  const uf = lead['UF'] || 'SP';
+  const cep = lead['CEP'] || '';
+  const addrFull = [logr ? (num ? `${logr}, ${num}` : logr) : '', bai, mun ? `${mun}/${uf}` : '', cep ? `CEP: ${cep}` : ''].filter(Boolean).join(' - ');
+
+  // Contacts
+  const tel = lead['Telefone'] || '';
+  const tel2 = lead['Telefone 2'] || '';
+  const wa1 = lead['WhatsApp 1'] || '';
+  const wa2 = lead['WhatsApp 2'] || '';
+  const email = lead['Email'] || '';
+
+  const waNum1 = wa1 ? wa1.replace(/\D/g, '') : '';
+  const waNum2 = wa2 ? wa2.replace(/\D/g, '') : '';
+  const telNum = tel ? tel.replace(/\D/g, '') : '';
+
+  // Maps links
+  const qMap = encodeURIComponent(`${nomeFant}, ${addrFull}`);
+  const gmapUrl = `https://www.google.com/maps/search/?api=1&query=${qMap}`;
+  const wazeUrl = `https://waze.com/ul?q=${qMap}`;
+
+  // QSA
+  const socios = lead._socios || [];
+  // CNAEs
+  const cnaeSec = lead._cnaesSecundarios || [];
+  // Ponto Comercial / Mesmo Endereço
+  const meta = S.leadAddrMeta[cnpj];
+
+  const html = `
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">${nomeFant}</div>
+        <div class="modal-sub">
+          <span style="font-family:monospace">${cnpjFmt}</span> · 
+          <span style="color:var(--t1);font-weight:600">${razaoSoc}</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <span class="tc ${lead._temp} on" style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;opacity:1">${temp}</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:11px;color:var(--t2)">Status: ${sit}</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:11px;color:var(--t2)">Porte: ${porte}</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:11px;color:var(--blueh)">Score B2B: ${score}</span>
+          ${meta ? (meta.isNewest ? '<span style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.4);color:#4ade80;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">⭐ NOVO DONO NO PONTO</span>' : '<span style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:var(--warm);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">🏢 PJ ANTERIOR NO PONTO</span>') : ''}
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeLeadModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- CONTATOS & NAVEGAÇÃO -->
+      <div>
+        <div class="m-sec-title">📞 Contatos & Localização</div>
+        <div class="m-box">
+          <div class="m-lbl">Endereço Completo</div>
+          <div class="m-val" style="margin-bottom:6px">${addrFull || 'Endereço não informado'}</div>
+          <div class="m-actions">
+            ${waNum1 ? `<a class="m-btn wsp" href="https://wa.me/55${waNum1}" target="_blank">💬 WhatsApp 1</a>` : ''}
+            ${waNum2 ? `<a class="m-btn wsp" href="https://wa.me/55${waNum2}" target="_blank">💬 WhatsApp 2</a>` : ''}
+            ${telNum ? `<a class="m-btn" href="tel:${telNum}">📞 Telefone: ${tel}</a>` : ''}
+            ${tel2 ? `<a class="m-btn" href="tel:${tel2.replace(/\D/g,'')}">📞 Telefone 2: ${tel2}</a>` : ''}
+            ${email ? `<a class="m-btn" href="mailto:${email}">✉ ${email}</a>` : ''}
+            <a class="m-btn gmap" href="${gmapUrl}" target="_blank">📍 Google Maps</a>
+            <a class="m-btn waze" href="${wazeUrl}" target="_blank">🚗 Waze</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- PONTO COMERCIAL / MESMO ENDEREÇO -->
+      ${meta ? `
+      <div>
+        <div class="m-sec-title">🏢 Empresas no mesmo Ponto Comercial (${meta.totalAtAddr} PJs no endereço)</div>
+        <div class="wbox" style="margin-bottom:8px">
+          ${meta.isNewest ? '⭐ <strong>Este lead é o "Novo Dono"</strong> (PJ registrado mais recentemente neste ponto comercial).' : '🏚️ <strong>Este lead é um "PJ Anterior"</strong> neste ponto comercial (há um novo PJ mais recente registrado aqui).'}
+        </div>
+        <div class="m-grid">
+          ${[lead, ...meta.peers].sort((a,b)=>(getOpeningTimestamp(b)-getOpeningTimestamp(a))).map(p => {
+            const isNew = p['CNPJ'] === meta.youngestLead['CNPJ'];
+            const isCurrent = p['CNPJ'] === cnpj;
+            return `
+              <div class="m-box" style="${isCurrent ? 'border-color:var(--blue);' : ''}${isNew ? 'background:rgba(34,197,94,.08);' : ''}">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <div style="font-weight:700;font-size:12px;color:var(--t1)">${p['Nome Fantasia'] || p['Razão Social'] || '—'}</div>
+                  ${isNew ? '<span style="background:rgba(34,197,94,.2);color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">⭐ NOVO DONO</span>' : '<span style="background:var(--bg2);color:var(--t3);font-size:10px;padding:2px 6px;border-radius:10px">PJ ANTERIOR</span>'}
+                </div>
+                <div style="font-size:11px;color:var(--t2);margin-top:4px">${p['CNPJ Formatado'] || p['CNPJ']}</div>
+                <div style="font-size:11px;color:var(--t2);margin-top:2px">Abertura: <b>${p['Data de Abertura'] || '—'}</b> (${p['Idade (Anos)'] || 0} anos)</div>
+                <div style="font-size:11px;color:var(--t3);margin-top:2px">Status: ${p['Situação Cadastral'] || '—'} · Porte: ${p['Porte'] || '—'}</div>
+                ${!isCurrent ? `<button class="m-btn" style="margin-top:6px;padding:3px 8px;font-size:10px" onclick="closeLeadModal();openLeadModal('${p['CNPJ']}')">🔍 Ver este lead →</button>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- EMPRESA & FINANCEIRO -->
+      <div>
+        <div class="m-sec-title">🏢 Dados Empresariais & Financeiros</div>
+        <div class="m-grid">
+          <div class="m-box"><div class="m-lbl">CNAE Principal</div><div class="m-val">${lead['CNAE Principal'] || ''} — ${lead['Descrição CNAE'] || '—'}</div></div>
+          <div class="m-box"><div class="m-lbl">Capital Social</div><div class="m-val">${fmtCap(lead['Capital Social'])}</div></div>
+          <div class="m-box"><div class="m-lbl">Data de Abertura</div><div class="m-val">${lead['Data de Abertura'] || '—'} (${lead['Idade (Anos)'] || '0'} anos)</div></div>
+          <div class="m-box"><div class="m-lbl">Simples / MEI</div><div class="m-val">Simples: ${lead['Opção pelo Simples'] || 'N/A'} · MEI: ${lead['Opção pelo MEI'] || 'N/A'}</div></div>
+          <div class="m-box"><div class="m-lbl">Natureza Jurídica</div><div class="m-val">${lead['Natureza Jurídica'] || '—'}</div></div>
+          <div class="m-box"><div class="m-lbl">Inscrição Estadual</div><div class="m-val">${lead['Inscrição Estadual (IE)'] || 'Não informado'}</div></div>
+        </div>
+      </div>
+
+      ${cnaeSec.length ? `
+      <div>
+        <div class="m-sec-title">📋 CNAEs Secundários (${cnaeSec.length})</div>
+        <div class="m-box" style="display:flex;flex-wrap:wrap;gap:6px">
+          ${cnaeSec.map(c => `<span style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px;color:var(--t2)"><b>${c.cod}</b> ${c.desc}</span>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- QUADRO SOCIETÁRIO -->
+      ${socios.length ? `
+      <div>
+        <div class="m-sec-title">👥 Quadro de Sócios e Administradores (QSA)</div>
+        <div class="m-grid">
+          ${socios.map(s => `
+            <div class="m-box">
+              <div style="font-weight:600;color:var(--t1);font-size:12px">👤 ${s.nome}</div>
+              <div style="font-size:11px;color:var(--t2);margin-top:2px">${s.qual || 'Sócio'}</div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px">${s.faixa ? `Faixa: ${s.faixa}` : ''} ${s.entrada ? `· Entrada: ${s.entrada}` : ''}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- GEOCODIFICAÇÃO -->
+      <div>
+        <div class="m-sec-title">🌐 Precisão Geoespacial</div>
+        <div class="m-box" style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="m-lbl">Precisão Atual</div>
+            <div class="m-val" style="text-transform:uppercase">${lead._prec || 'nao_geocodificado'}</div>
+          </div>
+          <div>
+            <div class="m-lbl">Coordenadas</div>
+            <div class="m-val" style="font-family:monospace">${lead._coord ? `${lead._coord[0].toFixed(5)}, ${lead._coord[1].toFixed(5)}` : 'Não geocodificado'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('leadModalBody').innerHTML = html;
+  document.getElementById('leadModal').classList.add('op');
+
+  if (lead._coord && S.map) {
+    S.map.setView([lead._coord[0], lead._coord[1]], Math.max(S.map.getZoom(), 15), { animate: true });
+    if (S.markers[cnpj]) S.markers[cnpj].openPopup();
+  }
+}
+
+function closeLeadModal() {
+  document.getElementById('leadModal').classList.remove('op');
+}
+
+function showMatrizDetail(raiz, leds) {
+  const h = `<div class="dh"><div><div class="dname">Vínculo Matriz-Filial</div></div><button class="dcls" onclick="closeDet()">✕</button></div>
+    <div class="ds"><div class="dst">Raiz CNPJ: ${raiz}</div>
+    <div class="wbox" style="margin-bottom:8px">ℹ Conecta apenas CNPJs já minerados neste dataset</div>
+    ${leds.map(l=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:8px;margin-bottom:5px;cursor:pointer" onclick="openDetailPanel('${l['CNPJ']}')">
+      <div style="font-size:12px;font-weight:600">${l['Nome Fantasia']||l['Razão Social']||'—'}</div>
+      <div style="font-size:11px;color:var(--t2)">${l['CNPJ Formatado']} · ${l['Município']||'—'}</div>
+    </div>`).join('')}</div>`;
+  document.getElementById('panDi').innerHTML=h;
+  document.getElementById('panD').classList.add('op');
+}
+
+function showSocioDetail(la, lb, entries, matchType) {
+  const CFG = {
+    cpf_nome:      { color:'#10b981', bg:'rgba(16,185,129,0.12)', border:'rgba(16,185,129,0.35)', txt:'#6ee7b7', icon:'✅', title:'Vínculo Societário Confirmado' },
+    cpf_collision: { color:'#f97316', bg:'rgba(249,115,22,0.12)',  border:'rgba(249,115,22,0.35)',  txt:'#fdba74', icon:'⚠️', title:'CPF Parcial Coincide — Nomes Divergem' },
+    nome_only:     { color:'#f59e0b', bg:'rgba(245,158,11,0.10)',  border:'rgba(245,158,11,0.3)',   txt:'#fcd34d', icon:'❓', title:'Possível Vínculo por Nome' }
+  };
+  const cfg = CFG[matchType] || CFG.nome_only;
+
+  const warningHtml = {
+    cpf_nome:      `<div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;font-size:11px;color:${cfg.txt};margin-bottom:8px">✅ CPF parcial <strong>e</strong> nome normalizado coincidem — alta confiança de que é a mesma pessoa.</div>`,
+    cpf_collision: `<div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;font-size:11px;color:${cfg.txt};margin-bottom:8px">⚠️ O fragmento de CPF coincide, mas os <strong>nomes são diferentes</strong>. Pode ser uma colisão de CPF parcial (pessoas distintas com mesmos dígitos centrais) ou erro de cadastro.</div>`,
+    nome_only:     `<div class="wbox">❓ Match apenas por nome normalizado — sem CPF não é confirmação definitiva. Homônimos podem gerar falso vínculo.</div>`
+  }[matchType];
+
+  const socioItems = (entries||[]).map(e => {
+    let extra = '';
+    if (e.matchType==='cpf_nome')      extra = `<div style="font-size:10px;color:#6ee7b7;margin-top:2px">✅ CPF: ${e.cpf} · Nome idêntico</div>`;
+    if (e.matchType==='cpf_collision') extra = `<div style="font-size:10px;color:#fca5a5;margin-top:2px">⚠️ CPF: ${e.cpf}<br>Empresa A: "${e.nomeA}" ↔ Empresa B: "${e.nomeB}"</div>`;
+    if (e.matchType==='nome_only')     extra = `<div style="font-size:10px;color:#fcd34d;margin-top:2px">❓ Sem CPF disponível</div>`;
+    const rowCfg = CFG[e.matchType] || cfg;
+    return `<div style="background:var(--bg3);border:1px solid ${rowCfg.border};border-radius:var(--rs);padding:6px 10px;margin-bottom:5px;font-size:12px">
+      <div style="font-weight:600;color:${rowCfg.txt}">${rowCfg.icon} ${e.nomeA}</div>
+      ${extra}
+    </div>`;
+  }).join('');
+
+  const h = `<div class="dh"><div><div class="dname" style="color:${cfg.color}">${cfg.icon} ${cfg.title}</div></div><button class="dcls" onclick="closeDet()">✕</button></div>
+    ${warningHtml}
+    <div class="ds" style="margin-top:10px"><div class="dst">Sócio(s) em comum</div>${socioItems}</div>
+    <div class="ds"><div class="dst">Empresas conectadas</div>
+    ${[la,lb].map(l=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:8px;margin-bottom:5px;cursor:pointer" onclick="openDetailPanel('${l['CNPJ']}')">
+      <div style="font-size:12px;font-weight:600">${l['Nome Fantasia']||l['Razão Social']||'—'}</div>
+      <div style="font-size:11px;color:var(--t2)">${l['CNPJ Formatado']} · ${l['Município']||'—'}</div>
+    </div>`).join('')}</div>`;
+  document.getElementById('panDi').innerHTML=h;
+  document.getElementById('panD').classList.add('op');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CHARTS
+══════════════════════════════════════════════════════════════════ */
+const CH_DEFAULTS = {
+  color: '#8b949e', grid: 'rgba(48,54,61,.6)', tick: '#8b949e',
+  plugins: { legend:{ display:false }, tooltip:{ backgroundColor:'#1c2230', titleColor:'#e6edf3', bodyColor:'#8b949e', borderColor:'#30363d', borderWidth:1 } }
+};
+
+function mkBar(id, labels, data, colors) {
+  const ctx = document.getElementById(id).getContext('2d');
+  if (S.charts[id]) S.charts[id].destroy();
+  S.charts[id] = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ data, backgroundColor: colors||data.map((_,i)=>`hsl(${200+i*25},60%,50%)`), borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:true, plugins:CH_DEFAULTS.plugins, scales:{
+      x:{ ticks:{color:CH_DEFAULTS.tick,font:{size:9}}, grid:{color:CH_DEFAULTS.grid} },
+      y:{ ticks:{color:CH_DEFAULTS.tick,font:{size:9}}, grid:{color:CH_DEFAULTS.grid}, beginAtZero:true }
+    }}});
+}
+
+function mkDoughnut(id, labels, data, colors) {
+  const ctx = document.getElementById(id).getContext('2d');
+  if (S.charts[id]) S.charts[id].destroy();
+  S.charts[id] = new Chart(ctx, { type:'doughnut', data:{ labels, datasets:[{ data, backgroundColor: colors||labels.map((_,i)=>`hsl(${i*80+200},60%,50%)`), borderWidth:2, borderColor:'#1c2230' }] },
+    options:{ responsive:true, maintainAspectRatio:true, plugins:{ ...CH_DEFAULTS.plugins, legend:{display:true,position:'bottom',labels:{color:CH_DEFAULTS.tick,font:{size:9},boxWidth:10}} } }});
+}
+
+function renderCharts() {
+  const leads = S.vis;
+  if (!leads.length) return;
+
+  // Temperatura
+  const tmap = {hot:0,warm:0,cold:0};
+  leads.forEach(l => tmap[l._temp]=(tmap[l._temp]||0)+1);
+  mkDoughnut('chTemp',['🔥 Quente','⚡ Morno','❄️ Frio'],[tmap.hot,tmap.warm,tmap.cold],['#ef4444','#f59e0b','#60a5fa']);
+
+  // Score histograma
+  const sbuckets = [0,0,0,0,0]; // 0-20,20-40,40-60,60-80,80-100
+  leads.forEach(l => { const i=Math.min(Math.floor(l._scoreNum/20),4); sbuckets[i]++; });
+  mkBar('chScore',['0-20','20-40','40-60','60-80','80-100'],sbuckets);
+
+  // Bairros top 12
+  const bmap = {};
+  leads.forEach(l => { const b=(l['Bairro']||'Sem bairro').trim(); bmap[b]=(bmap[b]||0)+1; });
+  const bsorted = Object.entries(bmap).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  mkBar('chBai', bsorted.map(([k])=>k.length>15?k.substring(0,14)+'…':k), bsorted.map(([,v])=>v));
+
+  // CNAE top 10
+  const cmap = {};
+  leads.forEach(l => { const d=(l['Descrição CNAE']||l._descCnae||'Sem CNAE').trim().substring(0,30); cmap[d]=(cmap[d]||0)+1; });
+  const csorted = Object.entries(cmap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkBar('chCnae', csorted.map(([k])=>k.length>20?k.substring(0,18)+'…':k), csorted.map(([,v])=>v));
+
+  // Idade
+  const ibuckets = [0,0,0,0,0]; // <2,2-5,5-10,10-20,20+
+  leads.forEach(l => {
+    const a = Number(l['Idade (Anos)'])||0;
+    if(a<2) ibuckets[0]++;
+    else if(a<5) ibuckets[1]++;
+    else if(a<10) ibuckets[2]++;
+    else if(a<20) ibuckets[3]++;
+    else ibuckets[4]++;
+  });
+  mkBar('chId',['<2 anos','2-5 anos','5-10 anos','10-20 anos','20+ anos'],ibuckets);
+
+  // Porte
+  const pmap = {};
+  leads.forEach(l => { const p=l._porte||'N/D'; pmap[p]=(pmap[p]||0)+1; });
+  const ps = Object.entries(pmap).sort((a,b)=>b[1]-a[1]);
+  mkBar('chPort', ps.map(([k])=>k.length>15?k.substring(0,14)+'…':k), ps.map(([,v])=>v));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GEO QUALITY BANNER
+══════════════════════════════════════════════════════════════════ */
+function updateGeoQ() {
+  const total = S.all.length; if (!total) return;
+  const cnt = {cep:0,endereco:0,bairro_centroide:0,nao_geocodificado:0};
+  S.all.forEach(l => { const p=l._prec||'nao_geocodificado'; cnt[p]=(cnt[p]||0)+1; });
+  const p = n => Math.round(n/total*100);
+  document.getElementById('qCep').textContent = `${p(cnt.cep)}% CEP`;
+  document.getElementById('qEnd').textContent = `${p(cnt.endereco)}% Rua`;
+  document.getElementById('qBai').textContent = `${p(cnt.bairro_centroide)}% Bairro`;
+  document.getElementById('qNo').textContent  = `${p(cnt.nao_geocodificado)}% S/geo`;
+  if (cnt.nao_geocodificado < total) document.getElementById('geoQ').classList.add('sh');
+  const geo = total - cnt.nao_geocodificado;
+  document.getElementById('cGeo').textContent = p(geo);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════════════════════ */
+function toast(msg, dur=3000) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('sh');
+  setTimeout(()=>t.classList.remove('sh'), dur);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   INIT APP
+══════════════════════════════════════════════════════════════════ */
+async function initApp(data) {
+  // Oculta upload, mostra app
+  document.getElementById('upload').classList.add('hid');
+  document.getElementById('app').style.display = '';
+
+  // Carrega cache de geo via IndexedDB / LocalStorage
+  await loadGeoCacheDB();
+
+  // Normaliza leads com suporte duplo (chaves formatadas do Prospecta + chaves raw de APIs/Mineração)
+  const rawList = (data && data.cnpjs_enriquecidos) || (data && data.leads) || (Array.isArray(data) ? data : []);
+  S.all = rawList.map(lead => {
+    const l = {...lead};
+
+    // Mapeamento bidirecional resiliente
+    l['CNPJ'] = lead['CNPJ'] || lead.cnpj || '';
+    l['CNPJ Formatado'] = lead['CNPJ Formatado'] || (l['CNPJ'] ? String(l['CNPJ']).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : '');
+    l['Raiz CNPJ'] = lead['Raiz CNPJ'] || (l['CNPJ'] ? String(l['CNPJ']).replace(/\D/g, '').substring(0, 8) : '');
+    l['Razão Social'] = lead['Razão Social'] || lead.razao_social || lead.nome || '';
+    l['Nome Fantasia'] = lead['Nome Fantasia'] || lead.nome_fantasia || lead.fantasia || l['Razão Social'] || '';
+    l['Município'] = lead['Município'] || lead.municipio || lead.cidade || '';
+    l['UF'] = lead['UF'] || lead.uf || lead.estado || 'SP';
+    l['Bairro'] = lead['Bairro'] || lead.bairro || '';
+    l['Logradouro'] = lead['Logradouro'] || lead.logradouro || lead.endereco || '';
+    l['Número'] = lead['Número'] || lead.numero || '';
+    l['Complemento'] = lead['Complemento'] || lead.complemento || '';
+    l['CEP'] = lead['CEP'] || lead.cep || '';
+    l['CNAE Principal'] = lead['CNAE Principal'] || lead.cnae_fiscal || lead.cnae_ordem_principal || lead.cnae || '';
+    l['Descrição CNAE'] = lead['Descrição CNAE'] || lead.cnae_fiscal_descricao || lead.cnae_descricao || '';
+    l['Capital Social'] = lead['Capital Social'] !== undefined ? lead['Capital Social'] : (lead.capital_social || 0);
+    l['Porte'] = lead['Porte'] || lead.porte || '';
+    l['Situação Cadastral'] = lead['Situação Cadastral'] || lead.descricao_situacao_cadastral || lead.situacao_cadastral || 'Ativa';
+    l['Data de Abertura'] = lead['Data de Abertura'] || lead.data_inicio_atividade || lead.abertura || '';
+    l['Natureza Jurídica'] = lead['Natureza Jurídica'] || lead.natureza_juridica || '';
+    l['Inscrição Estadual (IE)'] = lead['Inscrição Estadual (IE)'] || lead.inscricao_estadual || lead.ie || '';
+
+    // Contatos
+    l['Telefone'] = lead['Telefone'] || lead.ddd_telefone_1 || lead.telefone1 || lead.telefone || '';
+    l['Telefone 2'] = lead['Telefone 2'] || lead.ddd_telefone_2 || lead.telefone2 || '';
+    l['Email'] = lead['Email'] || lead.email || '';
+    const tel1Clean = String(l['Telefone']).replace(/\D/g, '');
+    const tel2Clean = String(l['Telefone 2']).replace(/\D/g, '');
+    l['WhatsApp 1'] = lead['WhatsApp 1'] || (tel1Clean.length >= 10 ? `https://wa.me/55${tel1Clean}` : '');
+    l['WhatsApp 2'] = lead['WhatsApp 2'] || (tel2Clean.length >= 10 ? `https://wa.me/55${tel2Clean}` : '');
+
+    // Score e Temperatura
+    const scoreVal = lead['Score B2B'] !== undefined ? lead['Score B2B'] : (lead.scoreInfo?.score || lead.score || 0);
+    l['Score B2B'] = scoreVal;
+    l._scoreNum = Number(scoreVal) || 0;
+
+    const tempVal = lead['Temperatura Lead'] || lead.scoreInfo?.temp || (l._scoreNum >= 70 ? 'Quente 🔥' : l._scoreNum >= 40 ? 'Morno ⚡' : 'Frio ❄️');
+    l['Temperatura Lead'] = tempVal;
+    l._temp = tempClass(tempVal);
+
+    l._porte   = normPorte(l['Porte']);
+    l._situacao= normSit(l['Situação Cadastral']);
+    l.qsa      = lead.qsa || lead.socios || [];
+    l._socios  = extractSocios(l);
+    l._cnaesSecundarios = extractCnaeSec(l);
+    l._cnae    = String(l['CNAE Principal']);
+    l._descCnae= l['Descrição CNAE'];
+    l._capitalNum = Number(l['Capital Social']) || 0;
+    l._coord   = null;
+    l._prec    = 'nao_geocodificado';
+    l._searchStr = `${l['Nome Fantasia']} ${l['Razão Social']} ${l['CNPJ']} ${l['Logradouro']} ${l['Bairro']} ${l['Município']}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+    // Aplica cache
+    const k = cacheKey(l);
+    if (k && S.geocache[k]) { l._coord = S.geocache[k].coord; l._prec = S.geocache[k].prec; }
+    return l;
+  });
+
+  // Agrupa empresas por mesmo endereço (ponto comercial) e detecta novo dono
+  computeAddressGroups();
+
+  document.getElementById('cTotal').textContent = S.all.length;
+  toast(`📂 ${S.all.length} leads carregados — ${data.metadata?.data_exportacao?.substring(0,10)||'sem data'}`, 4000);
+
+  // Init mapa
+  initMap();
+
+  // Geocodificação offline (tabela estática)
+  quickGeoOffline();
+
+  // Links
+  computeLinks();
+
+  // Filtros e renderização inicial
+  initFilters();
+  updateGeoQ();
+
+  // Auto-geocodificação em segundo plano
+  setTimeout(startGeoBackground, 1000);
+
+  // Enquadra automaticamente
+  setTimeout(fitAll, 300);
+}
+
+// Inicialização da página
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadGeoCacheDB();
+  renderFileHistoryUI();
+
+  // Verificação de transferência automática enviada do GetLista Prospecta via localStorage
+  const transferred = localStorage.getItem('leadview_auto_transfer');
+  if (transferred) {
+    try {
+      const data = JSON.parse(transferred);
+      localStorage.removeItem('leadview_auto_transfer');
+      if (data && (data.cnpjs_enriquecidos || Array.isArray(data))) {
+        const payload = data.cnpjs_enriquecidos ? data : { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString() }, cnpjs_enriquecidos: data };
+        const fileName = `Transf_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+        await saveFileHistory(fileName, payload);
+        initApp(payload, fileName);
+        toast(`🚀 ${payload.cnpjs_enriquecidos.length} leads recebidos automaticamente do Prospecta!`, 5000);
+        return;
+      }
+    } catch(e) {
+      console.warn('[LeadView] Erro ao importar dados transferidos:', e);
+    }
+  }
+
+  // Se a página foi aberta via window.open() do Prospecta, tenta receber dados por postMessage
+  window.addEventListener('message', async (evt) => {
+    if (!evt.data || evt.data.type !== 'leadview_transfer') return;
+    try {
+      const payload = evt.data.payload;
+      if (!payload || !payload.cnpjs_enriquecidos) return;
+      const fileName = `Transf_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+      await saveFileHistory(fileName, payload);
+      initApp(payload, fileName);
+      toast(`🚀 ${payload.cnpjs_enriquecidos.length} leads recebidos automaticamente do Prospecta!`, 5000);
+    } catch(e) {
+      console.warn('[LeadView] Erro ao importar dados via postMessage:', e);
+    }
+  }, { once: true });
+});
+
+// Colar JSON da área de transferência (botão na tela de upload)
+async function pasteJsonFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || text.trim() === '') {
+      alert('Área de transferência vazia. Use "Copiar JSON (Filtrados)" no Prospecta primeiro.');
+      return;
+    }
+    let data;
+    try { data = JSON.parse(text); } catch(e) {
+      alert('❌ O conteúdo colado não é um JSON válido. Certifique-se de copiar com o botão "Copiar JSON" do Prospecta.');
+      return;
+    }
+    if (!data) { alert('JSON inválido ou vazio.'); return; }
+    // Normaliza formato
+    const payload = data.cnpjs_enriquecidos ? data
+      : Array.isArray(data) ? { metadata: { total_registros: data.length, data_exportacao: new Date().toISOString(), origem: 'Colado' }, cnpjs_enriquecidos: data }
+      : null;
+    if (!payload || !payload.cnpjs_enriquecidos || payload.cnpjs_enriquecidos.length === 0) {
+      alert('❌ JSON não contém leads válidos. Verifique se copiou corretamente do Prospecta.');
+      return;
+    }
+    const fileName = `ColJSON_${new Date().toISOString().slice(0,10)}_${payload.cnpjs_enriquecidos.length}leads.json`;
+    await saveFileHistory(fileName, payload);
+    initApp(payload, fileName);
+    toast(`📋 ${payload.cnpjs_enriquecidos.length} leads carregados via Colar JSON!`, 4000);
+  } catch(e) {
+    console.error('[pasteJson] Erro:', e);
+    if (e.name === 'NotAllowedError') {
+      alert('❌ Permissão de leitura da área de transferência negada pelo navegador.\n\nSolução: Clique em "Permitir" quando o navegador perguntar, ou use a opção de selecionar arquivo.');
+    } else {
+      alert('Erro ao colar JSON: ' + e.message);
+    }
+  }
+}
+</script>
+</body>
+</html>
