@@ -421,7 +421,11 @@ let mapMarkers = [];
 
 function initLeafletMap() {
   const mapElement = document.getElementById("leaflet-map");
-  if (!mapElement || typeof L === "undefined") return;
+  if (!mapElement) return;
+  if (typeof L === "undefined" || typeof L.map !== "function") {
+    console.warn("Leaflet (L.map) ainda não está pronto ou indisponível.");
+    return;
+  }
 
   // Centro de Piracicaba
   leafletMap = L.map("leaflet-map", {
@@ -640,55 +644,79 @@ function initProductTabs() {
   });
 }
 
-// --- 8. RENDERIZAÇÃO DA LINHA DO TEMPO (TIMELINE) ---
-function renderTimeline() {
-  const navContainer = document.getElementById("timeline-years-nav");
-  const sliderContainer = document.getElementById("timeline-slider");
-  if (!navContainer || !sliderContainer) return;
+// --- 8. PARALLAX TIMELINE COM GSAP & LENIS ---
+function initParallaxTimeline() {
+  if (typeof gsap === "undefined" || typeof ScrollTrigger === "undefined") {
+    console.warn("GSAP ou ScrollTrigger não carregados.");
+    return;
+  }
 
-  // Render Botões de Ano
-  navContainer.innerHTML = TIMELINE_DATA.map((item, index) => {
-    const activeClass = index === 0 ? "active" : "";
-    return `
-      <button class="timeline-year-btn ${activeClass}" data-year="${item.year}" onclick="selectTimelineYear('${item.year}')">
-        ${item.year}
-      </button>
-    `;
-  }).join("");
+  // 1. Registrar o plugin ScrollTrigger
+  gsap.registerPlugin(ScrollTrigger);
 
-  // Render Cards de História
-  sliderContainer.innerHTML = TIMELINE_DATA.map((item, index) => {
-    const activeClass = index === 0 ? "active" : "";
-    return `
-      <div class="timeline-card ${activeClass}" id="timeline-card-${item.year}">
-        <div class="timeline-visual">
-          <img src="684289792_18588801889040946_2585470112546310601_n.jpg" alt="${item.title}" />
-          <span class="timeline-year-badge">${item.badge}</span>
-        </div>
-        <div class="timeline-content">
-          <span class="badge-tag">Nossa Trajetória</span>
-          <h3>${item.title}</h3>
-          <p>${item.desc}</p>
-          <div class="timeline-highlight">
-            ✨ ${item.highlight}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
+  const triggerElement = document.querySelector('[data-parallax-layers]');
+  const sectionElement = document.querySelector('.history-parallax-section');
+  if (!triggerElement || !sectionElement) return;
 
-function selectTimelineYear(year) {
-  document.querySelectorAll(".timeline-year-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.getAttribute("data-year") === year);
-  });
+  // Em telas desktop e tablets aplica a timeline com parallax scrolltrigger
+  if (window.innerWidth > 768) {
+    // 2. Criar a timeline GSAP atrelada ao Scroll
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: sectionElement,
+        start: "top top",
+        end: "bottom top",
+        scrub: 1.2,
+        invalidateOnRefresh: true
+      }
+    });
 
-  document.querySelectorAll(".timeline-card").forEach((card) => {
-    card.classList.remove("active");
-  });
+    // Configuração das camadas e offset yPercent
+    const layers = [
+      { layer: "1", yPercent: 45 },
+      { layer: "2", yPercent: -35 },
+      { layer: "3", yPercent: 0 },
+      { layer: "4", yPercent: -70 }
+    ];
 
-  const targetCard = document.getElementById(`timeline-card-${year}`);
-  if (targetCard) targetCard.classList.add("active");
+    layers.forEach((layerObj, idx) => {
+      const elements = triggerElement.querySelectorAll(`[data-parallax-layer="${layerObj.layer}"]`);
+      if (elements.length > 0) {
+        tl.to(
+          elements,
+          {
+            yPercent: layerObj.yPercent,
+            ease: "none"
+          },
+          idx === 0 ? undefined : "<"
+        );
+      }
+    });
+  }
+
+  // 3. Inicializar Lenis para Rolagem Fluida (Smooth Scroll)
+  if (typeof Lenis !== "undefined") {
+    try {
+      window.lenisInstance = new Lenis({
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+        autoRaf: false
+      });
+
+      window.lenisInstance.on('scroll', ScrollTrigger.update);
+
+      gsap.ticker.add((time) => {
+        if (window.lenisInstance) {
+          window.lenisInstance.raf(time * 1000);
+        }
+      });
+
+      gsap.ticker.lagSmoothing(0);
+    } catch (err) {
+      console.warn("Erro ao iniciar Lenis:", err);
+    }
+  }
 }
 
 // --- 9. MODAL GPS ("SABOR POR PERTO?") ---
@@ -847,13 +875,31 @@ function initNavigation() {
       });
     });
   }
+
+  // Smooth scroll para links internos sem estourar segurança no protocolo file://
+  document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+    anchor.addEventListener("click", function (e) {
+      const targetId = this.getAttribute("href");
+      if (targetId && targetId !== "#") {
+        const targetElement = document.querySelector(targetId);
+        if (targetElement) {
+          e.preventDefault();
+          if (window.lenisInstance) {
+            window.lenisInstance.scrollTo(targetElement, { offset: -70 });
+          } else {
+            targetElement.scrollIntoView({ behavior: "smooth" });
+          }
+        }
+      }
+    });
+  });
 }
 
 // --- 11. INICIALIZAÇÃO GLOBAL ---
 document.addEventListener("DOMContentLoaded", () => {
   renderStoresList();
   renderProducts("all");
-  renderTimeline();
+  initParallaxTimeline();
   initProductTabs();
   initNavigation();
   initLeafletMap();
