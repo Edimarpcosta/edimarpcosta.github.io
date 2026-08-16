@@ -719,7 +719,40 @@ function initParallaxTimeline() {
   }
 }
 
-// --- 9. MODAL GPS ("SABOR POR PERTO?") ---
+// --- 9. NAVEGAÇÃO DIRETA GOOGLE MAPS & MODAL GPS ---
+function navigateToClosestStoreDirectly() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+
+        const storeDistances = STORES_DATA.map((store) => {
+          return {
+            ...store,
+            dist: calculateDistanceKm(userLat, userLng, store.lat, store.lng)
+          };
+        });
+
+        storeDistances.sort((a, b) => a.dist - b.dist);
+        const closest = storeDistances[0];
+
+        // Abre diretamente o Google Maps com a rota de navegação em tempo real
+        const gmapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${closest.lat},${closest.lng}&travelmode=driving`;
+        window.open(gmapsDirUrl, "_blank");
+      },
+      (error) => {
+        // Fallback quando não permite GPS: abre o modal de seleção de bairros
+        openGpsModal();
+      },
+      { timeout: 6000, enableHighAccuracy: true }
+    );
+  } else {
+    // Fallback quando não há GPS disponível
+    window.open(STORES_DATA[0].gmapsUrl, "_blank");
+  }
+}
+
 function openGpsModal() {
   const modal = document.getElementById("gps-modal");
   if (!modal) return;
