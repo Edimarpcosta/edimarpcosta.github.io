@@ -5,14 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestão Técnica — Ameripan</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- SheetJS para exportação em Excel (.xlsx) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- html2pdf.js para geração de PDF de alta fidelidade -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     :root {
       --primary: #003366; --primary-light: #004080; --accent: #cc0000;
-      --green: #0f9d58; --warn: #b26a00; --light: #f4f6f8;
+      --green: #0f9d58; --green-dark: #0b7a44; --warn: #b26a00; --light: #f4f6f8;
       --sidebar-w: 240px; --topbar-h: 65px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: var(--light); display: flex; height: 100vh; overflow: hidden; color: #333; }
+    
+    /* Sidebar */
     #sidebar { width: var(--sidebar-w); background: var(--primary); color: #fff; display: flex; flex-direction: column; position: fixed; height: 100%; z-index: 200; transition: transform .3s; }
     @media(max-width:768px){ #sidebar{transform:translateX(-100%);} #sidebar.open{transform:translateX(0);} }
     .brand { padding: 18px 16px; font-weight: 700; font-size: 1rem; letter-spacing: .5px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: space-between; }
@@ -27,23 +33,35 @@
     .nav-item.active { background: rgba(255,255,255,.12); border-left-color: var(--accent); color: #fff; font-weight: 600; }
     .nav-item i { width: 18px; text-align: center; }
     .sidebar-footer { padding: 12px 16px; font-size: .75rem; color: rgba(255,255,255,.4); border-top: 1px solid rgba(255,255,255,.1); }
+    
+    /* Layout Main */
     #main { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
     @media(max-width:768px){ #main{margin-left:0;} }
-    .topbar { height: var(--topbar-h); background: #fff; padding: 0 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; }
+    
+    /* Topbar */
+    .topbar { min-height: var(--topbar-h); background: #fff; padding: 8px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; }
     .topbar-left { display: flex; align-items: center; gap: 12px; }
     .hamburger { font-size: 1.3rem; cursor: pointer; color: var(--primary); display: none; }
     @media(max-width:768px){ .hamburger{display:block;} }
     .page-title { font-size: 1rem; font-weight: 700; color: var(--primary); }
+    
     .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .filter-select { padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: .82rem; color: #444; background: #fff; cursor: pointer; }
     .filter-select:focus { outline: none; border-color: var(--primary); }
+    
     .search-box { display: flex; align-items: center; gap: 6px; border: 1px solid #ddd; border-radius: 6px; padding: 0 10px; background: #fff; }
     .search-box i { color: #aaa; font-size: .85rem; }
-    .search-box input { border: none; outline: none; font-size: .82rem; width: 140px; padding: 7px 0; }
+    .search-box input { border: none; outline: none; font-size: .82rem; width: 170px; padding: 7px 0; }
+    
     .btn-icon { width: 34px; height: 34px; border-radius: 6px; border: 1px solid #ddd; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: .9rem; transition: .2s; }
     .btn-icon:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .btn-export { padding: 7px 12px; border-radius: 6px; border: none; background: var(--green); color: #fff; font-size: .82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-    .btn-export:hover { opacity: .9; }
+    
+    .btn-relatorios { padding: 7px 14px; border-radius: 6px; border: none; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: #fff; font-size: .82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(0,51,102,0.25); transition: 0.2s; }
+    .btn-relatorios:hover { opacity: .92; transform: translateY(-1px); }
+    
+    .btn-export-excel { padding: 7px 12px; border-radius: 6px; border: none; background: #107c41; color: #fff; font-size: .82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+    .btn-export-excel:hover { background: #0c5e31; }
+
     #content { flex: 1; overflow-y: auto; padding: 20px; }
     .banner { padding: 10px 14px; border-radius: 8px; font-size: .85rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
     .banner.info    { background: #e8f0fe; border: 1px solid #b3c8f5; color: #1a56c4; }
@@ -53,6 +71,8 @@
     .view { display: none; }
     .view.active { display: block; animation: fadeIn .25s; }
     @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+    
+    /* Dashboard KPIs */
     .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin-bottom: 20px; }
     .kpi { background: #fff; border-radius: 10px; padding: 18px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-left: 4px solid var(--primary); display: flex; flex-direction: column; gap: 6px; }
     .kpi.red { border-left-color: var(--accent); }
@@ -63,11 +83,13 @@
     .kpi.red .val { color: var(--accent); }
     .kpi.green .val { color: var(--green); }
     .kpi.warn .val { color: #f9a825; }
+    
     .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     @media(max-width:640px){ .dash-grid{grid-template-columns:1fr;} }
     .dash-card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
     .dash-card h3 { font-size: .88rem; color: var(--primary); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
     .dash-card h3 i { color: var(--accent); }
+    
     table.dt { width: 100%; border-collapse: collapse; font-size: .85rem; }
     table.dt th { background: #f4f6f8; color: #555; font-weight: 700; padding: 9px 10px; text-align: left; }
     table.dt td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; }
@@ -75,6 +97,8 @@
     table.dt tr:hover td { background: #fafafa; }
     .rank { display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .7rem; font-weight: 700; text-align: center; line-height: 20px; margin-right: 4px; }
     .rank.r1 { background: #f9a825; } .rank.r2 { background: #9e9e9e; } .rank.r3 { background: #8d6e63; }
+    
+    /* Mural de Trabalhos */
     .mural-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px,1fr)); gap: 18px; }
     .vcard { background: #fff; border-radius: 10px; box-shadow: 0 1px 5px rgba(0,0,0,.08); border-top: 4px solid var(--primary); display: flex; flex-direction: column; transition: box-shadow .2s; }
     .vcard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
@@ -96,6 +120,8 @@
     .btn-media i { color: var(--accent); font-size: .8rem; }
     .btn-media:hover i { color: #fff; }
     .no-files { font-size: .75rem; color: #bbb; }
+    
+    /* Relatório em Lista */
     .list-wrap { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
     table.lt { width: 100%; border-collapse: collapse; font-size: .85rem; }
     table.lt th { background: #f4f6f8; color: #555; font-weight: 700; padding: 11px 14px; text-align: left; white-space: nowrap; }
@@ -106,24 +132,140 @@
     .pill-sim { background: #e6f4ea; color: #137333; }
     .pill-nao { background: #f5f5f5; color: #888; }
     .btn-ver { background: var(--primary); color: #fff; border: none; border-radius: 5px; padding: 4px 10px; font-size: .78rem; cursor: pointer; }
-    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 999; justify-content: center; align-items: center; }
+    
+    /* Modais */
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 999; justify-content: center; align-items: center; padding: 15px; overflow-y: auto; }
     .modal-bg.open { display: flex; }
-    .modal-box { background: #fff; border-radius: 12px; width: 95%; max-width: 580px; max-height: 90vh; overflow-y: auto; position: relative; padding: 24px; }
+    .modal-box { background: #fff; border-radius: 12px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; position: relative; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
     .modal-close { position: absolute; top: 14px; right: 16px; font-size: 1.4rem; cursor: pointer; color: #aaa; background: none; border: none; }
-    .modal-title { font-size: 1.1rem; font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 16px; }
+    .modal-title { font-size: 1.15rem; font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    
     .drow { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
     .drow:last-child { border-bottom: none; }
     .dlabel { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--primary); margin-bottom: 3px; }
     .dval { font-size: .88rem; color: #444; white-space: pre-wrap; background: #f9f9f9; padding: 7px 9px; border-radius: 6px; }
     .dval.inline { background: none; padding: 0; }
     .modal-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    
+    /* Estilos do Modal de Relatórios */
+    .report-field { margin-bottom: 14px; }
+    .report-field label { display: block; font-size: 0.8rem; font-weight: 700; color: #444; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .report-field select, .report-field input { width: 100%; padding: 10px; border: 1px solid #ccd5df; border-radius: 6px; font-size: 0.9rem; }
+    .report-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .report-preview-box { background: #f0f4f8; border: 1px solid #d0dce8; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 0.88rem; }
+    .report-preview-title { font-weight: 700; color: var(--primary); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .report-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .btn-act-pdf { flex: 1.2; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; min-width: 170px; }
+    .btn-act-pdf:hover { background: var(--primary-light); }
+    .btn-act-share { flex: 1.2; background: #25D366; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; min-width: 170px; }
+    .btn-act-share:hover { background: #1ebd5a; }
+    .btn-act-xlsx { flex: 1; background: #107c41; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; min-width: 140px; }
+    .btn-act-xlsx:hover { background: #0c5e31; }
+    
     .empty { text-align: center; color: #aaa; padding: 60px 20px; }
     .empty i { font-size: 2.5rem; margin-bottom: 12px; display: block; }
     .spin { animation: rot 1s linear infinite; }
     @keyframes rot { to{transform:rotate(360deg);} }
+
+    /* =================================================================
+       TEMPLATE DE IMPRESSÃO / PDF OFICIAL (OCULTO EM TELA)
+       ================================================================= */
+    #pdfReportTemplate {
+      display: none;
+      background: #ffffff;
+      color: #222;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      padding: 24px;
+      width: 100%;
+      max-width: 850px;
+      margin: 0 auto;
+    }
+    .pdf-header {
+      border-bottom: 3px solid var(--primary);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .pdf-logo-box h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .pdf-logo-box p {
+      font-size: 0.82rem;
+      color: #666;
+      margin: 3px 0 0;
+    }
+    .pdf-meta-box {
+      text-align: right;
+      font-size: 0.78rem;
+      color: #555;
+    }
+    .pdf-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .pdf-kpi-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+    .pdf-kpi-card .lbl { font-size: 0.68rem; text-transform: uppercase; color: #777; font-weight: 700; }
+    .pdf-kpi-card .num { font-size: 1.3rem; font-weight: 800; color: var(--primary); margin-top: 2px; }
+    
+    .pdf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem;
+      margin-top: 8px;
+    }
+    .pdf-table th {
+      background: var(--primary);
+      color: white;
+      text-align: left;
+      padding: 7px 6px;
+      font-weight: 700;
+      border: 1px solid #002244;
+    }
+    .pdf-table td {
+      padding: 7px 6px;
+      border: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    .pdf-table tr:nth-child(even) {
+      background: #fbfcfd;
+    }
+    .pdf-badge {
+      display: inline-block;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+    .pdf-badge-sim { background: #e6f4ea; color: #137333; }
+    .pdf-badge-nao { background: #f1f3f4; color: #666; }
+    .pdf-footer {
+      margin-top: 20px;
+      border-top: 1px solid #ddd;
+      padding-top: 8px;
+      font-size: 0.72rem;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+    }
   </style>
 </head>
 <body>
+
 <nav id="sidebar">
   <div class="brand">
     <div class="brand-logo"><i class="fas fa-flask"></i><span>AMERIPAN</span></div>
@@ -134,8 +276,11 @@
     <div class="nav-item active" onclick="showView('dashboard')"><i class="fas fa-chart-bar"></i> Dashboard</div>
     <div class="nav-item" onclick="showView('mural')"><i class="fas fa-images"></i> Mural de Trabalhos</div>
     <div class="nav-item" onclick="showView('lista')"><i class="fas fa-table"></i> Relatório em Lista</div>
+    
+    <div class="nav-label" style="margin-top:14px;">Relatórios & Exportação</div>
+    <div class="nav-item" onclick="abrirModalRelatorios()"><i class="fas fa-file-pdf" style="color:#ff6b6b;"></i> Gerar PDF / Excel</div>
   </div>
-  <div class="sidebar-footer">Gestão Técnica v3.1</div>
+  <div class="sidebar-footer">Gestão Técnica v3.2</div>
 </nav>
 
 <main id="main">
@@ -144,23 +289,29 @@
       <i class="fas fa-bars hamburger" onclick="toggleSidebar()"></i>
       <span class="page-title" id="pageTitle">Dashboard</span>
     </div>
+    
     <div class="topbar-right">
+      <!-- Busca Otimizada (sem acentos / case insensitive) -->
       <div class="search-box">
         <i class="fas fa-search"></i>
-        <input type="text" id="searchInput" placeholder="Buscar cliente..." oninput="aplicarFiltros()">
+        <input type="text" id="searchInput" placeholder="Buscar cliente, cód..." oninput="aplicarFiltros()">
       </div>
+
       <select class="filter-select" id="filterMonth"    onchange="aplicarFiltros()"><option value="ALL">Todos os Meses</option></select>
       <select class="filter-select" id="filterTecnico"  onchange="aplicarFiltros()"><option value="ALL">Todos os Técnicos</option></select>
       <select class="filter-select" id="filterVendedor" onchange="aplicarFiltros()"><option value="ALL">Todos os Vendedores</option></select>
       <select class="filter-select" id="filterMotivo"   onchange="aplicarFiltros()"><option value="ALL">Todos os Motivos</option></select>
-      <button class="btn-icon" onclick="carregarDados()" title="Atualizar"><i class="fas fa-sync-alt" id="syncIcon"></i></button>
-      <button class="btn-export" onclick="exportarCSV()"><i class="fas fa-file-csv"></i> CSV</button>
+      
+      <button class="btn-icon" onclick="carregarDados()" title="Atualizar Dados"><i class="fas fa-sync-alt" id="syncIcon"></i></button>
+      <button class="btn-relatorios" onclick="abrirModalRelatorios()" title="Central de Relatórios"><i class="fas fa-chart-pie"></i> Relatórios</button>
+      <button class="btn-export-excel" onclick="exportarExcelXLSX()" title="Exportar para Excel"><i class="fas fa-file-excel"></i> XLSX</button>
     </div>
   </div>
 
   <div id="content">
     <div class="banner info" id="banner"><i class="fas fa-circle-notch spin"></i> <span>Conectando...</span></div>
 
+    <!-- 1. VIEW DASHBOARD -->
     <div class="view active" id="view-dashboard">
       <div class="kpi-row">
         <div class="kpi">       <label>Total de Visitas</label> <div class="val" id="kpiTotal">—</div></div>
@@ -176,10 +327,12 @@
       </div>
     </div>
 
+    <!-- 2. VIEW MURAL -->
     <div class="view" id="view-mural">
       <div class="mural-grid" id="muralGrid"></div>
     </div>
 
+    <!-- 3. VIEW LISTA -->
     <div class="view" id="view-lista">
       <div class="list-wrap"><div style="overflow-x:auto;">
         <table class="lt"><thead><tr><th>Data</th><th>Cód.</th><th>Cliente</th><th>Técnico</th><th>Vendedor</th><th>Motivo</th><th>Pedido</th><th></th></tr></thead>
@@ -189,11 +342,148 @@
   </div>
 </main>
 
+<!-- MODAL: DETALHES DA VISITA -->
 <div class="modal-bg" id="modal" onclick="fecharModal(event)">
   <div class="modal-box">
     <button class="modal-close" onclick="fecharModalBtn()">&times;</button>
-    <div class="modal-title">Detalhes da Visita</div>
+    <div class="modal-title"><i class="fas fa-clipboard-check" style="color:var(--accent);"></i> Detalhes da Visita Técnica</div>
     <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: CENTRAL DE RELATÓRIOS (PDF / XLSX / WHATSAPP) -->
+<div class="modal-bg" id="modalRelatorios" onclick="fecharModalRelatoriosOverlay(event)">
+  <div class="modal-box" style="max-width:620px;">
+    <button class="modal-close" onclick="fecharModalRelatorios()">&times;</button>
+    <div class="modal-title"><i class="fas fa-file-invoice" style="color:var(--accent);"></i> Gerador de Relatórios Técnicos</div>
+    
+    <div class="report-grid-2">
+      <div class="report-field">
+        <label for="repTecnico">Técnico Responsável</label>
+        <select id="repTecnico" onchange="atualizarPreviewRelatorio()">
+          <option value="ALL">Todos os Técnicos</option>
+        </select>
+      </div>
+      <div class="report-field">
+        <label for="repVendedor">Vendedor Responsável</label>
+        <select id="repVendedor" onchange="atualizarPreviewRelatorio()">
+          <option value="ALL">Todos os Vendedores</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="report-field">
+      <label>Tipo de Período</label>
+      <div style="display:flex; gap:10px; margin-bottom:8px;">
+        <label style="font-weight:600; font-size:0.85rem; text-transform:none; display:flex; align-items:center; gap:4px; cursor:pointer;">
+          <input type="radio" name="tipoPeriodo" value="mes" checked onchange="alternarTipoPeriodo(this.value)"> Mês / Ano Selecionado
+        </label>
+        <label style="font-weight:600; font-size:0.85rem; text-transform:none; display:flex; align-items:center; gap:4px; cursor:pointer;">
+          <input type="radio" name="tipoPeriodo" value="datas" onchange="alternarTipoPeriodo(this.value)"> Intervalo Livre de Datas
+        </label>
+      </div>
+    </div>
+
+    <div id="boxPeriodoMes" class="report-field">
+      <label for="repMes">Mês de Referência</label>
+      <select id="repMes" onchange="atualizarPreviewRelatorio()"></select>
+    </div>
+
+    <div id="boxPeriodoDatas" class="report-grid-2" style="display:none; margin-bottom:14px;">
+      <div class="report-field" style="margin-bottom:0;">
+        <label for="repDataInicio">Data Inicial</label>
+        <input type="date" id="repDataInicio" onchange="atualizarPreviewRelatorio()">
+      </div>
+      <div class="report-field" style="margin-bottom:0;">
+        <label for="repDataFim">Data Final</label>
+        <input type="date" id="repDataFim" onchange="atualizarPreviewRelatorio()">
+      </div>
+    </div>
+
+    <div class="report-field">
+      <label for="repMotivo">Motivo da Visita</label>
+      <select id="repMotivo" onchange="atualizarPreviewRelatorio()">
+        <option value="ALL">Todos os Motivos</option>
+      </select>
+    </div>
+
+    <!-- Preview do Relatório -->
+    <div class="report-preview-box">
+      <div class="report-preview-title">
+        <span><i class="fas fa-search"></i> Resumo dos Dados Filtrados</span>
+        <span id="repBadgeQtd" class="badge badge-tec" style="font-size:0.8rem; padding:3px 9px;">0 trabalhos</span>
+      </div>
+      <div id="repPreviewTexto" style="font-size:0.84rem; color:#555; line-height:1.45;">
+        Carregando...
+      </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="report-actions">
+      <button type="button" class="btn-act-pdf" onclick="gerarRelatorioPDF('download')">
+        <i class="fas fa-file-pdf"></i> Baixar PDF
+      </button>
+      <button type="button" class="btn-act-share" onclick="compartilharRelatorioWhatsApp()">
+        <i class="fab fa-whatsapp"></i> Compartilhar WhatsApp
+      </button>
+      <button type="button" class="btn-act-xlsx" onclick="gerarRelatorioXLSX()">
+        <i class="fas fa-file-excel"></i> Excel (.xlsx)
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTAINER OCULTO PARA GERAÇÃO DO PDF -->
+<div id="pdfReportTemplate">
+  <div class="pdf-header">
+    <div class="pdf-logo-box">
+      <h1>🍦 AMERIPAN ALIMENTOS</h1>
+      <p>Relatório Consolidado de Trabalhos Técnicos</p>
+    </div>
+    <div class="pdf-meta-box">
+      <div><b>Emissão:</b> <span id="pdfEmissao">—</span></div>
+      <div><b>Período:</b> <span id="pdfPeriodo">—</span></div>
+      <div><b>Filtro:</b> <span id="pdfFiltroProfissional">—</span></div>
+    </div>
+  </div>
+
+  <div class="pdf-kpi-grid">
+    <div class="pdf-kpi-card">
+      <div class="lbl">Total de Visitas</div>
+      <div class="num" id="pdfKpiTotal">0</div>
+    </div>
+    <div class="pdf-kpi-card">
+      <div class="lbl">Clientes Únicos</div>
+      <div class="num" id="pdfKpiClientes">0</div>
+    </div>
+    <div class="pdf-kpi-card">
+      <div class="lbl">Pedidos Gerados</div>
+      <div class="num" id="pdfKpiPedidos">0</div>
+    </div>
+    <div class="pdf-kpi-card">
+      <div class="lbl">Com Fotos/Vídeos</div>
+      <div class="num" id="pdfKpiArquivos">0</div>
+    </div>
+  </div>
+
+  <table class="pdf-table">
+    <thead>
+      <tr>
+        <th style="width:75px;">Data</th>
+        <th style="width:140px;">Cliente (Cód)</th>
+        <th style="width:110px;">Técnico(a)</th>
+        <th style="width:110px;">Vendedor(a)</th>
+        <th style="width:90px;">Motivo</th>
+        <th style="width:55px; text-align:center;">Pedido</th>
+        <th>Feedback / Observação</th>
+      </tr>
+    </thead>
+    <tbody id="pdfTableBody"></tbody>
+  </table>
+
+  <div class="pdf-footer">
+    <span>Ameripan Alimentos — Gestão de Trabalhos Técnicos</span>
+    <span>Documento gerado automaticamente pelo Sistema de Gestão Técnica</span>
   </div>
 </div>
 
@@ -201,122 +491,299 @@
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFQqvYINQi-uZNOrwdZZYfA8jAOzfNNy3UcJSByWzL0gaELe_YQiZEqQSLP7jwnA3U0A/exec";
   const C = { TIMESTAMP:0,COD:1,CLIENTE:2,TELEFONE:3,PESSOAS:4,MOTIVO:5,PRODUTOS:6,OPOR:7,LINKS:8,DATA:9,FEEDBACK:10,PEDIDO:11,TECNICO:12,VENDEDOR:13 };
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let rawData=[], filteredData=[];
+  
+  let rawData = [], filteredData = [];
 
-  window.onload = () => { preencherMeses(); carregarDados(); };
+  window.onload = () => {
+    preencherMeses();
+    preencherDatasIniciaisRelatorio();
+    carregarDados();
+  };
+
+  // =================================================================
+  // NORMALIZAÇÃO DE TEXTO: IGNORA ACENTOS, CEDILHAS E MAIÚSCULAS
+  // =================================================================
+  function normalizarTexto(txt) {
+    if (!txt) return '';
+    return String(txt)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
 
   function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
 
   function showView(id) {
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-    document.getElementById('view-'+id).classList.add('active');
-    document.getElementById('pageTitle').innerText = {dashboard:'Dashboard',mural:'Mural de Trabalhos',lista:'Relatório em Lista'}[id]||id;
-    document.querySelectorAll('.nav-item')[{dashboard:0,mural:1,lista:2}[id]].classList.add('active');
-    if(window.innerWidth<768) document.getElementById('sidebar').classList.remove('open');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('view-' + id).classList.add('active');
+    document.getElementById('pageTitle').innerText = { dashboard:'Dashboard', mural:'Mural de Trabalhos', lista:'Relatório em Lista' }[id] || id;
+    const navs = document.querySelectorAll('.nav-section .nav-item');
+    if (id === 'dashboard' && navs[0]) navs[0].classList.add('active');
+    if (id === 'mural' && navs[1]) navs[1].classList.add('active');
+    if (id === 'lista' && navs[2]) navs[2].classList.add('active');
+    if (window.innerWidth < 768) document.getElementById('sidebar').classList.remove('open');
   }
 
-  function setBanner(type,html){ const b=document.getElementById('banner'); b.className='banner '+type; b.innerHTML=html; }
+  function setBanner(type, html) {
+    const b = document.getElementById('banner');
+    b.className = 'banner ' + type;
+    b.innerHTML = html;
+  }
 
   async function carregarDados() {
-    const icon=document.getElementById('syncIcon');
-    icon.className='fas fa-sync-alt spin';
-    setBanner('info','<i class="fas fa-circle-notch spin"></i> <span>Carregando dados...</span>');
+    const icon = document.getElementById('syncIcon');
+    icon.className = 'fas fa-sync-alt spin';
+    setBanner('info', '<i class="fas fa-circle-notch spin"></i> <span>Carregando dados da planilha...</span>');
     try {
-      const ping = await (await fetch(SCRIPT_URL+'?action=ping')).json();
+      const ping = await (await fetch(SCRIPT_URL + '?action=ping')).json();
       const json = await (await fetch(SCRIPT_URL)).json();
-      if(json.ok===false) throw new Error(json.error||'Falha ao carregar.');
-      rawData = Array.isArray(json) ? json.filter(r=>Array.isArray(r)&&r[0]&&String(r[0])!=='Carimbo de data/hora') : [];
-      popularFiltros(); aplicarFiltros();
-      const pastaOk = ping.ok && ping.pasta && ping.pasta.ok;
-      setBanner('success', `<i class="fas fa-check-circle"></i> <span>Aba <b>${ping.aba||'NOVOS-TRABALHOS'}</b> — <b>${rawData.length}</b> registros. Pasta Drive: ${pastaOk?'<b>'+ping.pasta.nome+'</b>':'<span style="color:var(--warn)">⚠️ sem acesso</span>'}</span>`);
-    } catch(err) {
-      setBanner('error',`<i class="fas fa-exclamation-circle"></i> <span>Erro: <b>${err.message}</b></span>`);
-    } finally { icon.className='fas fa-sync-alt'; }
-  }
+      if (json.ok === false) throw new Error(json.error || 'Falha ao carregar dados.');
+      
+      rawData = Array.isArray(json)
+        ? json.filter(r => Array.isArray(r) && r[0] && String(r[0]) !== 'Carimbo de data/hora')
+        : [];
+      
+      popularFiltros();
+      aplicarFiltros();
+      atualizarPreviewRelatorio();
 
-  function preencherMeses() {
-    const sel=document.getElementById('filterMonth'), hoje=new Date();
-    for(let i=0;i<18;i++){
-      const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
-      sel.innerHTML+=`<option value="${d.toISOString().slice(0,7)}">${MESES[d.getMonth()]} ${d.getFullYear()}</option>`;
+      const pastaOk = ping.ok && ping.pasta && ping.pasta.ok;
+      setBanner('success', `<i class="fas fa-check-circle"></i> <span>Aba <b>${ping.aba || 'NOVOS-TRABALHOS'}</b> — <b>${rawData.length}</b> registros. Pasta Drive: ${pastaOk ? '<b>' + ping.pasta.nome + '</b>' : '<span style="color:var(--warn)">⚠️ sem acesso</span>'}</span>`);
+    } catch(err) {
+      setBanner('error', `<i class="fas fa-exclamation-circle"></i> <span>Erro: <b>${err.message}</b></span>`);
+    } finally {
+      icon.className = 'fas fa-sync-alt';
     }
   }
 
-  function popularFiltros() {
-    const tecs=[...new Set(rawData.map(r=>r[C.TECNICO]).filter(Boolean))].sort();
-    const vends=[...new Set(rawData.map(r=>r[C.VENDEDOR]).filter(Boolean))].sort();
-    const mots=[...new Set(rawData.map(r=>r[C.MOTIVO]).filter(Boolean))].sort();
-    const sT=document.getElementById('filterTecnico'), sV=document.getElementById('filterVendedor'), sM=document.getElementById('filterMotivo');
-    sT.innerHTML='<option value="ALL">Todos os Técnicos</option>';
-    sV.innerHTML='<option value="ALL">Todos os Vendedores</option>';
-    sM.innerHTML='<option value="ALL">Todos os Motivos</option>';
-    tecs.forEach(t=>sT.innerHTML+=`<option value="${t}">${t}</option>`);
-    vends.forEach(v=>sV.innerHTML+=`<option value="${v}">${v}</option>`);
-    mots.forEach(m=>sM.innerHTML+=`<option value="${m}">${m}</option>`);
+  function preencherMeses() {
+    const selTop = document.getElementById('filterMonth');
+    const selRep = document.getElementById('repMes');
+    const valTopAtual = selTop.value || 'ALL';
+    const valRepAtual = selRep.value || 'ALL';
+    const hoje   = new Date();
+    
+    // Coleta conjunto de meses:
+    // 1. Meses futuros (+3 meses à frente para planejamento)
+    // 2. Mês atual e meses passados (24 meses)
+    // 3. Todos os meses encontrados nos dados reais da planilha (rawData)
+    const setMeses = new Set();
+
+    // +3 meses à frente até 24 meses atrás
+    for (let i = -3; i <= 24; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      setMeses.add(d.toISOString().slice(0, 7));
+    }
+
+    // Meses encontrados nos registros da planilha
+    if (Array.isArray(rawData)) {
+      rawData.forEach(r => {
+        const d = parseDateSafe(r[C.DATA]);
+        if (d) setMeses.add(d.toISOString().slice(0, 7));
+      });
+    }
+
+    // Ordena os meses do mais recente / futuro para o mais antigo (descendente)
+    const mesesOrdenados = Array.from(setMeses).sort().reverse();
+
+    selTop.innerHTML = '<option value="ALL">Todos os Meses</option>';
+    selRep.innerHTML = '<option value="ALL">Todos os Meses</option>';
+
+    mesesOrdenados.forEach(val => {
+      const [ano, m] = val.split('-');
+      const mesNome = MESES[parseInt(m, 10) - 1] || m;
+      const label = `${mesNome} ${ano}`;
+      
+      const optTop = document.createElement('option');
+      optTop.value = val;
+      optTop.textContent = label;
+      if (val === valTopAtual) optTop.selected = true;
+      selTop.appendChild(optTop);
+
+      const optRep = document.createElement('option');
+      optRep.value = val;
+      optRep.textContent = label;
+      if (val === valRepAtual) optRep.selected = true;
+      selRep.appendChild(optRep);
+    });
   }
 
-  function parseDateSafe(v){ const d=new Date(v); return isNaN(d.getTime())?null:d; }
+  function preencherDatasIniciaisRelatorio() {
+    const hoje = new Date();
+    const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0];
+    const ultimoDia   = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split('T')[0];
+    document.getElementById('repDataInicio').value = primeiroDia;
+    document.getElementById('repDataFim').value    = ultimoDia;
+  }
 
+  function popularFiltros() {
+    preencherMeses(); // Atualiza a lista dinâmica de meses com base nos dados recebidos
+
+    const tecs  = [...new Set(rawData.map(r => r[C.TECNICO]).filter(Boolean))].sort();
+    const vends = [...new Set(rawData.map(r => r[C.VENDEDOR]).filter(Boolean))].sort();
+    const mots  = [...new Set(rawData.map(r => r[C.MOTIVO]).filter(Boolean))].sort();
+
+    // Topbar
+    const sT = document.getElementById('filterTecnico');
+    const sV = document.getElementById('filterVendedor');
+    const sM = document.getElementById('filterMotivo');
+    sT.innerHTML = '<option value="ALL">Todos os Técnicos</option>';
+    sV.innerHTML = '<option value="ALL">Todos os Vendedores</option>';
+    sM.innerHTML = '<option value="ALL">Todos os Motivos</option>';
+    tecs.forEach(t => sT.innerHTML += `<option value="${t}">${t}</option>`);
+    vends.forEach(v => sV.innerHTML += `<option value="${v}">${v}</option>`);
+    mots.forEach(m => sM.innerHTML += `<option value="${m}">${m}</option>`);
+
+    // Modal de Relatórios
+    const rT = document.getElementById('repTecnico');
+    const rV = document.getElementById('repVendedor');
+    const rM = document.getElementById('repMotivo');
+    rT.innerHTML = '<option value="ALL">Todos os Técnicos</option>';
+    rV.innerHTML = '<option value="ALL">Todos os Vendedores</option>';
+    rM.innerHTML = '<option value="ALL">Todos os Motivos</option>';
+    tecs.forEach(t => rT.innerHTML += `<option value="${t}">${t}</option>`);
+    vends.forEach(v => rV.innerHTML += `<option value="${v}">${v}</option>`);
+    mots.forEach(m => rM.innerHTML += `<option value="${m}">${m}</option>`);
+  }
+
+  function parseDateSafe(v) {
+    if (!v) return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatarDataBR(isoStr) {
+    if (!isoStr) return '—';
+    const partes = String(isoStr).split('T')[0].split('-');
+    if (partes.length === 3) {
+      return partes[2] + '/' + partes[1] + '/' + partes[0];
+    }
+    return isoStr;
+  }
+
+  // =================================================================
+  // APLICAÇÃO DE FILTROS COM BUSCA NORMALIZADA (ACENTOS / CASE)
+  // =================================================================
   function aplicarFiltros() {
-    const mes=document.getElementById('filterMonth').value;
-    const tec=document.getElementById('filterTecnico').value;
-    const vend=document.getElementById('filterVendedor').value;
-    const mot=document.getElementById('filterMotivo').value;
-    const busca=(document.getElementById('searchInput').value||'').toLowerCase().trim();
-    filteredData=rawData.filter(row=>{
-      if(mes!=='ALL'){ const d=parseDateSafe(row[C.DATA]); if(!d||d.toISOString().slice(0,7)!==mes) return false; }
-      if(tec!=='ALL'&&row[C.TECNICO]!==tec) return false;
-      if(vend!=='ALL'&&row[C.VENDEDOR]!==vend) return false;
-      if(mot!=='ALL'&&row[C.MOTIVO]!==mot) return false;
-      if(busca){ const h=[row[C.CLIENTE],row[C.COD],row[C.MOTIVO],row[C.FEEDBACK]].join(' ').toLowerCase(); if(!h.includes(busca)) return false; }
+    const mes   = document.getElementById('filterMonth').value;
+    const tec   = document.getElementById('filterTecnico').value;
+    const vend  = document.getElementById('filterVendedor').value;
+    const mot   = document.getElementById('filterMotivo').value;
+    const busca = normalizarTexto(document.getElementById('searchInput').value);
+
+    filteredData = rawData.filter(row => {
+      if (mes !== 'ALL') {
+        const d = parseDateSafe(row[C.DATA]);
+        if (!d || d.toISOString().slice(0, 7) !== mes) return false;
+      }
+      if (tec !== 'ALL' && row[C.TECNICO] !== tec) return false;
+      if (vend !== 'ALL' && row[C.VENDEDOR] !== vend) return false;
+      if (mot !== 'ALL' && row[C.MOTIVO] !== mot) return false;
+
+      if (busca) {
+        const textoCompletoLinha = normalizarTexto([
+          row[C.CLIENTE],
+          row[C.COD],
+          row[C.TECNICO],
+          row[C.VENDEDOR],
+          row[C.MOTIVO],
+          row[C.FEEDBACK],
+          row[C.PRODUTOS],
+          row[C.TELEFONE]
+        ].join(' '));
+
+        if (!textoCompletoLinha.includes(busca)) return false;
+      }
       return true;
     });
-    filteredData.sort((a,b)=>{ const da=parseDateSafe(a[C.DATA]),db=parseDateSafe(b[C.DATA]); return (db?db.getTime():0)-(da?da.getTime():0); });
-    renderDashboard(); renderMural(); renderLista();
+
+    filteredData.sort((a, b) => {
+      const da = parseDateSafe(a[C.DATA]), db = parseDateSafe(b[C.DATA]);
+      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+    });
+
+    renderDashboard();
+    renderMural();
+    renderLista();
   }
 
-  function renderTabela(id,entries){
-    const tb=document.getElementById(id);
-    if(!entries.length){ tb.innerHTML='<tr><td colspan="3" style="color:#bbb;text-align:center;padding:20px;">Sem dados</td></tr>'; return; }
-    tb.innerHTML=entries.map(([n,q],i)=>`<tr><td><span class="rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td><td>${n}</td><td><b>${q}</b></td></tr>`).join('');
+  function renderTabela(id, entries) {
+    const tb = document.getElementById(id);
+    if (!entries.length) {
+      tb.innerHTML = '<tr><td colspan="3" style="color:#bbb;text-align:center;padding:20px;">Sem dados</td></tr>';
+      return;
+    }
+    tb.innerHTML = entries.map(([n, q], i) => `
+      <tr>
+        <td><span class="rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
+        <td>${n}</td>
+        <td><b>${q}</b></td>
+      </tr>
+    `).join('');
   }
 
-  function renderDashboard(){
-    document.getElementById('kpiTotal').innerText=filteredData.length;
-    document.getElementById('kpiClientes').innerText=new Set(filteredData.map(r=>r[C.CLIENTE])).size;
-    document.getElementById('kpiPedidos').innerText=filteredData.filter(r=>(r[C.PEDIDO]||'').toString().toUpperCase().includes('SIM')).length;
-    document.getElementById('kpiArquivos').innerText=filteredData.filter(r=>r[C.LINKS]&&r[C.LINKS].toString().trim().length>5).length;
-    const count=f=>{ const m={}; filteredData.forEach(r=>{const k=r[f]||'Não informado'; m[k]=(m[k]||0)+1;}); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
-    renderTabela('tbTecnico',count(C.TECNICO)); renderTabela('tbVendedor',count(C.VENDEDOR)); renderTabela('tbMotivo',count(C.MOTIVO));
-    const mMap={}; filteredData.forEach(r=>{ const d=parseDateSafe(r[C.DATA]); if(!d) return; const k=MESES[d.getMonth()]+' '+d.getFullYear(); mMap[k]=(mMap[k]||0)+1; });
-    const tbMes=document.getElementById('tbMes');
-    const em=Object.entries(mMap).sort((a,b)=>b[1]-a[1]);
-    tbMes.innerHTML=em.length?em.map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join(''):'<tr><td colspan="2" style="color:#bbb;text-align:center;padding:20px;">Sem dados</td></tr>';
+  function renderDashboard() {
+    document.getElementById('kpiTotal').innerText    = filteredData.length;
+    document.getElementById('kpiClientes').innerText = new Set(filteredData.map(r => r[C.CLIENTE])).size;
+    document.getElementById('kpiPedidos').innerText  = filteredData.filter(r => (r[C.PEDIDO]||'').toString().toUpperCase().includes('SIM')).length;
+    document.getElementById('kpiArquivos').innerText = filteredData.filter(r => r[C.LINKS] && r[C.LINKS].toString().trim().length > 5).length;
+
+    const count = f => {
+      const m = {};
+      filteredData.forEach(r => { const k = r[f] || 'Não informado'; m[k] = (m[k] || 0) + 1; });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    };
+
+    renderTabela('tbTecnico',  count(C.TECNICO));
+    renderTabela('tbVendedor', count(C.VENDEDOR));
+    renderTabela('tbMotivo',   count(C.MOTIVO));
+
+    const mMap = {};
+    filteredData.forEach(r => {
+      const d = parseDateSafe(r[C.DATA]);
+      if (!d) return;
+      const k = MESES[d.getMonth()] + ' ' + d.getFullYear();
+      mMap[k] = (mMap[k] || 0) + 1;
+    });
+
+    const tbMes = document.getElementById('tbMes');
+    const em = Object.entries(mMap).sort((a, b) => b[1] - a[1]);
+    tbMes.innerHTML = em.length
+      ? em.map(([k, v]) => `<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('')
+      : '<tr><td colspan="2" style="color:#bbb;text-align:center;padding:20px;">Sem dados</td></tr>';
   }
 
-  function renderMural(){
-    const grid=document.getElementById('muralGrid');
-    if(!filteredData.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1"><i class="fas fa-inbox"></i>Nenhum registro encontrado.</div>'; return; }
-    grid.innerHTML='';
-    filteredData.forEach(row=>{
-      const d=parseDateSafe(row[C.DATA]), dataFmt=d?d.toLocaleDateString('pt-BR'):(row[C.DATA]||'—');
-      const feedback=(row[C.FEEDBACK]||'').toString();
-      const preview=feedback.length>100?feedback.slice(0,100)+'...':feedback;
-      const links=row[C.LINKS]?row[C.LINKS].toString().split(',').map(s=>s.trim()).filter(Boolean):[];
-      const mediaHTML=links.length?links.map((l,i)=>`<a href="${l}" target="_blank" rel="noopener" class="btn-media"><i class="fas fa-external-link-alt"></i> Arquivo ${i+1}</a>`).join(''):'<span class="no-files">Sem arquivos</span>';
-      const card=document.createElement('div'); card.className='vcard';
-      card.innerHTML=`
+  function renderMural() {
+    const grid = document.getElementById('muralGrid');
+    if (!filteredData.length) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><i class="fas fa-inbox"></i>Nenhum registro encontrado.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    filteredData.forEach(row => {
+      const d = parseDateSafe(row[C.DATA]), dataFmt = d ? d.toLocaleDateString('pt-BR') : (row[C.DATA] || '—');
+      const feedback = (row[C.FEEDBACK] || '').toString();
+      const preview  = feedback.length > 100 ? feedback.slice(0, 100) + '...' : feedback;
+      const links    = row[C.LINKS] ? row[C.LINKS].toString().split(',').map(s => s.trim()).filter(Boolean) : [];
+      const mediaHTML = links.length
+        ? links.map((l, i) => `<a href="${l}" target="_blank" rel="noopener" class="btn-media"><i class="fas fa-external-link-alt"></i> Arquivo ${i+1}</a>`).join('')
+        : '<span class="no-files">Sem arquivos</span>';
+
+      const card = document.createElement('div');
+      card.className = 'vcard';
+      card.innerHTML = `
         <div class="vcard-head">
-          <h4>${row[C.CLIENTE]||'—'}</h4>
+          <h4>${row[C.CLIENTE] || '—'}</h4>
           <div class="vcard-date"><i class="far fa-calendar-alt"></i> ${dataFmt}</div>
           <div class="vcard-badges">
-            ${row[C.TECNICO]?`<span class="badge badge-tec">${row[C.TECNICO].split(' ')[0]}</span>`:''}
-            ${row[C.VENDEDOR]?`<span class="badge badge-vend">${row[C.VENDEDOR].split(' ')[0]}</span>`:''}
-            ${row[C.MOTIVO]?`<span class="badge badge-motivo">${row[C.MOTIVO]}</span>`:''}
+            ${row[C.TECNICO] ? `<span class="badge badge-tec">${row[C.TECNICO].split(' ')[0]}</span>` : ''}
+            ${row[C.VENDEDOR] ? `<span class="badge badge-vend">${row[C.VENDEDOR].split(' ')[0]}</span>` : ''}
+            ${row[C.MOTIVO] ? `<span class="badge badge-motivo">${row[C.MOTIVO]}</span>` : ''}
           </div>
         </div>
-        <div class="vcard-body"><span class="lbl">Feedback:</span> ${preview||'—'}</div>
+        <div class="vcard-body"><span class="lbl">Feedback:</span> ${preview || '—'}</div>
         <div class="vcard-footer">
           <button class="btn-details" onclick='abrirModal(${JSON.stringify(row).replace(/'/g,"&#39;")})'>Ver detalhes</button>
           <div class="media-links">${mediaHTML}</div>
@@ -325,52 +792,410 @@
     });
   }
 
-  function renderLista(){
-    const tbody=document.getElementById('listaTbody');
-    if(!filteredData.length){ tbody.innerHTML='<tr><td colspan="8"><div class="empty"><i class="fas fa-inbox"></i>Nenhum registro.</div></td></tr>'; return; }
-    tbody.innerHTML='';
-    filteredData.slice(0,150).forEach(row=>{
-      const d=parseDateSafe(row[C.DATA]), dataFmt=d?d.toLocaleDateString('pt-BR'):(row[C.DATA]||'—');
-      const pedido=(row[C.PEDIDO]||'').toString().toUpperCase().includes('SIM');
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td style="white-space:nowrap">${dataFmt}</td><td>${row[C.COD]||'—'}</td><td><b>${row[C.CLIENTE]||'—'}</b></td><td>${row[C.TECNICO]||'—'}</td><td>${row[C.VENDEDOR]||'—'}</td><td>${row[C.MOTIVO]||'—'}</td><td><span class="pill ${pedido?'pill-sim':'pill-nao'}">${pedido?'SIM':'NÃO'}</span></td><td><button class="btn-ver" onclick='abrirModal(${JSON.stringify(row).replace(/'/g,"&#39;")})'>Ver</button></td>`;
+  function renderLista() {
+    const tbody = document.getElementById('listaTbody');
+    if (!filteredData.length) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><i class="fas fa-inbox"></i>Nenhum registro encontrado.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    filteredData.slice(0, 200).forEach(row => {
+      const d = parseDateSafe(row[C.DATA]), dataFmt = d ? d.toLocaleDateString('pt-BR') : (row[C.DATA] || '—');
+      const pedido = (row[C.PEDIDO] || '').toString().toUpperCase().includes('SIM');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="white-space:nowrap">${dataFmt}</td>
+        <td>${row[C.COD] || '—'}</td>
+        <td><b>${row[C.CLIENTE] || '—'}</b></td>
+        <td>${row[C.TECNICO] || '—'}</td>
+        <td>${row[C.VENDEDOR] || '—'}</td>
+        <td>${row[C.MOTIVO] || '—'}</td>
+        <td><span class="pill ${pedido ? 'pill-sim' : 'pill-nao'}">${pedido ? 'SIM' : 'NÃO'}</span></td>
+        <td><button class="btn-ver" onclick='abrirModal(${JSON.stringify(row).replace(/'/g,"&#39;")})'>Ver</button></td>
+      `;
       tbody.appendChild(tr);
     });
   }
 
-  function abrirModal(row){
-    const d=parseDateSafe(row[C.DATA]), dataFmt=d?d.toLocaleDateString('pt-BR'):(row[C.DATA]||'—');
-    const links=row[C.LINKS]?row[C.LINKS].toString().split(',').map(s=>s.trim()).filter(Boolean):[];
-    const filesHtml=links.length?links.map((l,i)=>`<a href="${l}" target="_blank" rel="noopener" class="btn-media"><i class="fas fa-eye"></i> Arquivo ${i+1}</a>`).join(''):'<span class="no-files">Nenhum arquivo anexado</span>';
-    document.getElementById('modalBody').innerHTML=`
-      <div class="drow"><div class="dlabel">Cliente</div><div class="dval inline"><b>${row[C.CLIENTE]||'—'}</b> &nbsp;|&nbsp; Cód: ${row[C.COD]||'—'}</div></div>
+  function abrirModal(row) {
+    const d = parseDateSafe(row[C.DATA]), dataFmt = d ? d.toLocaleDateString('pt-BR') : (row[C.DATA] || '—');
+    const links = row[C.LINKS] ? row[C.LINKS].toString().split(',').map(s => s.trim()).filter(Boolean) : [];
+    const filesHtml = links.length
+      ? links.map((l, i) => `<a href="${l}" target="_blank" rel="noopener" class="btn-media"><i class="fas fa-eye"></i> Arquivo ${i+1}</a>`).join('')
+      : '<span class="no-files">Nenhum arquivo anexado</span>';
+    
+    document.getElementById('modalBody').innerHTML = `
+      <div class="drow"><div class="dlabel">Cliente</div><div class="dval inline"><b>${row[C.CLIENTE] || '—'}</b> &nbsp;|&nbsp; Cód: ${row[C.COD] || '—'}</div></div>
       <div class="drow"><div class="dlabel">Data da Visita</div><div class="dval inline">${dataFmt}</div></div>
-      <div class="drow"><div class="dlabel">Técnico Responsável</div><div class="dval inline">${row[C.TECNICO]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Vendedor Responsável</div><div class="dval inline">${row[C.VENDEDOR]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Motivo</div><div class="dval inline">${row[C.MOTIVO]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Telefone</div><div class="dval inline">${row[C.TELEFONE]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Pessoas Contatadas</div><div class="dval">${row[C.PESSOAS]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Produtos Utilizados</div><div class="dval">${row[C.PRODUTOS]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Oportunidades</div><div class="dval">${row[C.OPOR]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Feedback Completo</div><div class="dval">${row[C.FEEDBACK]||'—'}</div></div>
-      <div class="drow"><div class="dlabel">Pedido Gerado?</div><div class="dval inline">${row[C.PEDIDO]||'NÃO'}</div></div>
+      <div class="drow"><div class="dlabel">Técnico Responsável</div><div class="dval inline">${row[C.TECNICO] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Vendedor Responsável</div><div class="dval inline">${row[C.VENDEDOR] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Motivo</div><div class="dval inline">${row[C.MOTIVO] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Telefone / WhatsApp</div><div class="dval inline">${row[C.TELEFONE] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Pessoas Contatadas</div><div class="dval">${row[C.PESSOAS] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Produtos Utilizados</div><div class="dval">${row[C.PRODUTOS] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Oportunidades</div><div class="dval">${row[C.OPOR] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Feedback Completo</div><div class="dval">${row[C.FEEDBACK] || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Pedido Gerado?</div><div class="dval inline">${row[C.PEDIDO] || 'NÃO'}</div></div>
       <div class="drow"><div class="dlabel">Arquivos Anexados</div><div class="modal-files">${filesHtml}</div></div>`;
     document.getElementById('modal').classList.add('open');
   }
 
-  function fecharModalBtn(){ document.getElementById('modal').classList.remove('open'); }
-  function fecharModal(e){ if(e.target===document.getElementById('modal')) fecharModalBtn(); }
+  function fecharModalBtn() { document.getElementById('modal').classList.remove('open'); }
+  function fecharModal(e) { if (e.target === document.getElementById('modal')) fecharModalBtn(); }
 
-  function exportarCSV(){
-    if(!filteredData.length){ alert('Nenhum dado para exportar.'); return; }
-    const headers=['Data','Cód','Cliente','Telefone','Pessoas','Motivo','Produtos','Oportunidades','Links','DataVisita','Feedback','Pedido','Tecnico','Vendedor'];
-    const esc=v=>'"'+String(v||'').replace(/"/g,'""')+'"';
-    const rows=[headers.join(',')].concat(filteredData.map(r=>r.map(esc).join(',')));
-    const blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='trabalhos_tecnicos_'+new Date().toISOString().slice(0,10)+'.csv';
-    a.click();
+  // =================================================================
+  // CENTRAL DE RELATÓRIOS (MODAL & GERAÇÃO)
+  // =================================================================
+  function abrirModalRelatorios() {
+    // Sincroniza filtros do modal com os do topbar
+    const selTec = document.getElementById('filterTecnico').value;
+    const selVen = document.getElementById('filterVendedor').value;
+    const selMes = document.getElementById('filterMonth').value;
+    const selMot = document.getElementById('filterMotivo').value;
+
+    if (selTec) document.getElementById('repTecnico').value = selTec;
+    if (selVen) document.getElementById('repVendedor').value = selVen;
+    if (selMes) document.getElementById('repMes').value = selMes;
+    if (selMot) document.getElementById('repMotivo').value = selMot;
+
+    atualizarPreviewRelatorio();
+    document.getElementById('modalRelatorios').classList.add('open');
+  }
+
+  function fecharModalRelatorios() {
+    document.getElementById('modalRelatorios').classList.remove('open');
+  }
+
+  function fecharModalRelatoriosOverlay(e) {
+    if (e.target === document.getElementById('modalRelatorios')) {
+      fecharModalRelatorios();
+    }
+  }
+
+  function alternarTipoPeriodo(tipo) {
+    document.getElementById('boxPeriodoMes').style.display   = (tipo === 'mes') ? 'block' : 'none';
+    document.getElementById('boxPeriodoDatas').style.display = (tipo === 'datas') ? 'grid' : 'none';
+    atualizarPreviewRelatorio();
+  }
+
+  function obterDadosFiltradosRelatorio() {
+    const tec  = document.getElementById('repTecnico').value;
+    const vend = document.getElementById('repVendedor').value;
+    const mot  = document.getElementById('repMotivo').value;
+    const tipoPer = document.querySelector('input[name="tipoPeriodo"]:checked').value;
+
+    let dados = rawData.filter(row => {
+      if (tec !== 'ALL' && row[C.TECNICO] !== tec) return false;
+      if (vend !== 'ALL' && row[C.VENDEDOR] !== vend) return false;
+      if (mot !== 'ALL' && row[C.MOTIVO] !== mot) return false;
+
+      const d = parseDateSafe(row[C.DATA]);
+      if (tipoPer === 'mes') {
+        const mes = document.getElementById('repMes').value;
+        if (mes !== 'ALL') {
+          if (!d || d.toISOString().slice(0, 7) !== mes) return false;
+        }
+      } else {
+        const dIni = document.getElementById('repDataInicio').value;
+        const dFim = document.getElementById('repDataFim').value;
+        if (dIni || dFim) {
+          if (!d) return false;
+          const strData = d.toISOString().slice(0, 10);
+          if (dIni && strData < dIni) return false;
+          if (dFim && strData > dFim) return false;
+        }
+      }
+      return true;
+    });
+
+    dados.sort((a, b) => {
+      const da = parseDateSafe(a[C.DATA]), db = parseDateSafe(b[C.DATA]);
+      return (da ? da.getTime() : 0) - (db ? db.getTime() : 0); // Ordem cronológica para relatório
+    });
+
+    return dados;
+  }
+
+  function obterTextoPeriodoRelatorio() {
+    const tipoPer = document.querySelector('input[name="tipoPeriodo"]:checked').value;
+    if (tipoPer === 'mes') {
+      const mes = document.getElementById('repMes').value;
+      if (mes === 'ALL') return 'Todos os Meses';
+      const [ano, m] = mes.split('-');
+      return `${MESES[parseInt(m, 10) - 1]} de ${ano}`;
+    } else {
+      const dIni = document.getElementById('repDataInicio').value;
+      const dFim = document.getElementById('repDataFim').value;
+      if (dIni && dFim) return `De ${formatarDataBR(dIni)} até ${formatarDataBR(dFim)}`;
+      if (dIni) return `A partir de ${formatarDataBR(dIni)}`;
+      if (dFim) return `Até ${formatarDataBR(dFim)}`;
+      return 'Período Completo';
+    }
+  }
+
+  function atualizarPreviewRelatorio() {
+    const dados = obterDadosFiltradosRelatorio();
+    const tec   = document.getElementById('repTecnico').value;
+    const vend  = document.getElementById('repVendedor').value;
+    const pedCount = dados.filter(r => (r[C.PEDIDO]||'').toString().toUpperCase().includes('SIM')).length;
+    const cliCount = new Set(dados.map(r => r[C.CLIENTE])).size;
+
+    document.getElementById('repBadgeQtd').innerText = `${dados.length} trabalho(s)`;
+    
+    let infoProf = [];
+    if (tec !== 'ALL') infoProf.push(`<b>Técnico:</b> ${tec}`);
+    if (vend !== 'ALL') infoProf.push(`<b>Vendedor:</b> ${vend}`);
+    if (infoProf.length === 0) infoProf.push('<b>Profissionais:</b> Todos os Técnicos e Vendedores');
+
+    document.getElementById('repPreviewTexto').innerHTML = `
+      <div>${infoProf.join(' | ')}</div>
+      <div style="margin-top:4px;"><b>Período:</b> ${obterTextoPeriodoRelatorio()}</div>
+      <div style="margin-top:4px;"><b>Métricas:</b> ${cliCount} cliente(s) único(s) | ${pedCount} pedido(s) gerado(s).</div>
+    `;
+  }
+
+  // =================================================================
+  // EXPORTAÇÃO EXCEL (.XLSX) PROFISSIONAL COM SHEETJS
+  // =================================================================
+  function gerarRelatorioXLSX() {
+    const dados = obterDadosFiltradosRelatorio();
+    if (!dados.length) {
+      alert('⚠️ Nenhum trabalho técnico encontrado com os filtros selecionados.');
+      return;
+    }
+
+    const headers = [
+      'Data Visita',
+      'Cód. Cliente',
+      'Nome Fantasia',
+      'Telefone / WhatsApp',
+      'Participantes',
+      'Técnico Responsável',
+      'Vendedor Responsável',
+      'Motivo da Visita',
+      'Produtos Utilizados',
+      'Oportunidades',
+      'Feedback do Trabalho',
+      'Fez Pedido?',
+      'Links Arquivos Drive',
+      'Carimbo Gravação'
+    ];
+
+    const rows = dados.map(r => {
+      const d = parseDateSafe(r[C.DATA]);
+      const dataFmt = d ? d.toLocaleDateString('pt-BR') : (r[C.DATA] || '');
+      return [
+        dataFmt,
+        r[C.COD] || '',
+        r[C.CLIENTE] || '',
+        r[C.TELEFONE] || '',
+        r[C.PESSOAS] || '',
+        r[C.TECNICO] || '',
+        r[C.VENDEDOR] || '',
+        r[C.MOTIVO] || '',
+        r[C.PRODUTOS] || '',
+        r[C.OPOR] || '',
+        r[C.FEEDBACK] || '',
+        r[C.PEDIDO] || 'NÃO',
+        r[C.LINKS] || '',
+        r[C.TIMESTAMP] ? new Date(r[C.TIMESTAMP]).toLocaleString('pt-BR') : ''
+      ];
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Ajuste de largura das colunas
+    ws['!cols'] = [
+      { wch: 12 }, // Data Visita
+      { wch: 12 }, // Cód. Cliente
+      { wch: 28 }, // Cliente
+      { wch: 18 }, // Telefone
+      { wch: 22 }, // Participantes
+      { wch: 26 }, // Técnico
+      { wch: 26 }, // Vendedor
+      { wch: 24 }, // Motivo
+      { wch: 28 }, // Produtos
+      { wch: 28 }, // Oportunidades
+      { wch: 45 }, // Feedback
+      { wch: 12 }, // Pedido
+      { wch: 35 }, // Links
+      { wch: 20 }  // Carimbo
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Trabalhos Técnicos");
+
+    const periodoStr = obterTextoPeriodoRelatorio().replace(/[^a-zA-Z0-9]/g, '_');
+    const nomeArquivo = `Relatorio_Trabalhos_Tecnicos_${periodoStr}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, nomeArquivo);
+  }
+
+  function exportarExcelXLSX() {
+    // Atalho do topbar: exporta o filteredData atual
+    if (!filteredData.length) {
+      alert('Nenhum dado filtrado para exportar.');
+      return;
+    }
+
+    const headers = [
+      'Data Visita', 'Cód. Cliente', 'Nome Fantasia', 'Telefone', 'Participantes',
+      'Técnico', 'Vendedor', 'Motivo', 'Produtos', 'Oportunidades', 'Feedback', 'Pedido', 'Links Drive'
+    ];
+
+    const rows = filteredData.map(r => [
+      formatarDataBR(r[C.DATA]),
+      r[C.COD] || '',
+      r[C.CLIENTE] || '',
+      r[C.TELEFONE] || '',
+      r[C.PESSOAS] || '',
+      r[C.TECNICO] || '',
+      r[C.VENDEDOR] || '',
+      r[C.MOTIVO] || '',
+      r[C.PRODUTOS] || '',
+      r[C.OPOR] || '',
+      r[C.FEEDBACK] || '',
+      r[C.PEDIDO] || 'NÃO',
+      r[C.LINKS] || ''
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 12 }, { wch: 28 }, { wch: 18 }, { wch: 20 },
+      { wch: 24 }, { wch: 24 }, { wch: 22 }, { wch: 25 }, { wch: 25 }, { wch: 40 }, { wch: 10 }, { wch: 30 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Trabalhos Técnicos");
+    XLSX.writeFile(wb, `Trabalhos_Tecnicos_Ameripan_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  // =================================================================
+  // GERAÇÃO DE RELATÓRIO PDF ELEGANTE & WHATSAPP
+  // =================================================================
+  function preencherTemplatePDF(dados) {
+    const tec  = document.getElementById('repTecnico').value;
+    const vend = document.getElementById('repVendedor').value;
+    const pedCount = dados.filter(r => (r[C.PEDIDO]||'').toString().toUpperCase().includes('SIM')).length;
+    const cliCount = new Set(dados.map(r => r[C.CLIENTE])).size;
+    const arqCount = dados.filter(r => r[C.LINKS] && r[C.LINKS].toString().trim().length > 5).length;
+
+    document.getElementById('pdfEmissao').innerText = new Date().toLocaleString('pt-BR');
+    document.getElementById('pdfPeriodo').innerText = obterTextoPeriodoRelatorio();
+    
+    let filtroStr = 'Todos';
+    if (tec !== 'ALL' && vend !== 'ALL') filtroStr = `Técnico: ${tec} | Vendedor: ${vend}`;
+    else if (tec !== 'ALL') filtroStr = `Técnico: ${tec}`;
+    else if (vend !== 'ALL') filtroStr = `Vendedor: ${vend}`;
+    document.getElementById('pdfFiltroProfissional').innerText = filtroStr;
+
+    document.getElementById('pdfKpiTotal').innerText    = dados.length;
+    document.getElementById('pdfKpiClientes').innerText = cliCount;
+    document.getElementById('pdfKpiPedidos').innerText  = pedCount;
+    document.getElementById('pdfKpiArquivos').innerText = arqCount;
+
+    const tbody = document.getElementById('pdfTableBody');
+    tbody.innerHTML = '';
+
+    dados.forEach(r => {
+      const dataFmt = formatarDataBR(r[C.DATA]);
+      const pedido = (r[C.PEDIDO] || '').toString().toUpperCase().includes('SIM');
+      const feedback = r[C.FEEDBACK] || '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="white-space:nowrap; font-weight:700; color:var(--primary);">${dataFmt}</td>
+        <td><b>${r[C.CLIENTE] || '—'}</b><br><span style="color:#777; font-size:0.68rem;">Cód: ${r[C.COD] || '—'}</span></td>
+        <td>${r[C.TECNICO] || '—'}</td>
+        <td>${r[C.VENDEDOR] || '—'}</td>
+        <td>${r[C.MOTIVO] || '—'}</td>
+        <td style="text-align:center;"><span class="pdf-badge ${pedido ? 'pdf-badge-sim' : 'pdf-badge-nao'}">${pedido ? 'SIM' : 'NÃO'}</span></td>
+        <td style="color:#444; line-height:1.35; font-size:0.72rem;">${feedback}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function gerarRelatorioPDF(modo = 'download') {
+    const dados = obterDadosFiltradosRelatorio();
+    if (!dados.length) {
+      alert('⚠️ Nenhum trabalho técnico encontrado para gerar o PDF.');
+      return null;
+    }
+
+    preencherTemplatePDF(dados);
+    const element = document.getElementById('pdfReportTemplate');
+    element.style.display = 'block';
+
+    const periodoClean = obterTextoPeriodoRelatorio().replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `Relatorio_Tecnico_Ameripan_${periodoClean}.pdf`;
+
+    const opt = {
+      margin:       [10, 10, 10, 10],
+      filename:     filename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    try {
+      if (modo === 'download') {
+        await html2pdf().set(opt).from(element).save();
+      } else if (modo === 'blob') {
+        const worker = html2pdf().set(opt).from(element);
+        const pdfBlob = await worker.outputPdf('blob');
+        return new File([pdfBlob], filename, { type: 'application/pdf' });
+      }
+    } finally {
+      element.style.display = 'none';
+    }
+  }
+
+  async function compartilharRelatorioWhatsApp() {
+    const dados = obterDadosFiltradosRelatorio();
+    if (!dados.length) {
+      alert('⚠️ Nenhum trabalho técnico encontrado com os filtros selecionados.');
+      return;
+    }
+
+    const tec  = document.getElementById('repTecnico').value;
+    const vend = document.getElementById('repVendedor').value;
+    const pedCount = dados.filter(r => (r[C.PEDIDO]||'').toString().toUpperCase().includes('SIM')).length;
+    const cliCount = new Set(dados.map(r => r[C.CLIENTE])).size;
+    const periodo = obterTextoPeriodoRelatorio();
+
+    let profStr = 'Todos os Profissionais';
+    if (tec !== 'ALL' && vend !== 'ALL') profStr = `Técnico: ${tec} | Vendedor: ${vend}`;
+    else if (tec !== 'ALL') profStr = `Técnico(a): ${tec}`;
+    else if (vend !== 'ALL') profStr = `Vendedor(a): ${vend}`;
+
+    const textoResumo = 
+`📊 *RELATÓRIO DE TRABALHOS TÉCNICOS — AMERIPAN*
+📅 *Período:* ${periodo}
+👤 *Filtro:* ${profStr}
+──────────────────────────────
+📈 *Total de Visitas:* ${dados.length}
+🏢 *Clientes Atendidos:* ${cliCount}
+🛒 *Pedidos Gerados:* ${pedCount}
+──────────────────────────────
+_Consolidado gerado no Sistema de Gestão Técnica Ameripan_`;
+
+    // 1. Tenta compartilhamento nativo do arquivo PDF (Android, iOS, etc.)
+    try {
+      const pdfFile = await gerarRelatorioPDF('blob');
+      if (pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          files: [pdfFile],
+          title: 'Relatório Técnico Ameripan',
+          text: textoResumo
+        });
+        return;
+      }
+    } catch (err) {
+      console.log('Compartilhamento de arquivo não suportado, usando fallback WhatsApp Web:', err);
+    }
+
+    // 2. Fallback: Baixa o PDF e abre o WhatsApp Web / App com o resumo estruturado
+    await gerarRelatorioPDF('download');
+    const urlWhats = `https://api.whatsapp.com/send?text=${encodeURIComponent(textoResumo)}`;
+    window.open(urlWhats, '_blank');
   }
 </script>
 </body>
