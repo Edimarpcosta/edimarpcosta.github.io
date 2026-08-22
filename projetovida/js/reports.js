@@ -97,9 +97,20 @@ const Reports = {
   },
 
   /**
-   * Dispara Impressão / Salvar PDF
+   * Dispara Exportação Direta para PDF A4 (Sem cortes ou scrollbars)
    */
   exportToPDF() {
+    if (typeof PdfService !== 'undefined') {
+      PdfService.exportReportPDF(this.currentReportType);
+    } else {
+      window.print();
+    }
+  },
+
+  /**
+   * Impressão tradicional pelo navegador (fallback)
+   */
+  printReport() {
     window.print();
   },
 
@@ -287,11 +298,14 @@ const Reports = {
             <p class="text-muted small mb-0">Período de Referência: <strong>${periodoStr}</strong> | Base Consolidada</p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()">
+            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()" title="Baixar PDF A4 diretamente">
+              <i class="fas fa-file-pdf mr-1"></i> Baixar PDF
+            </button>
+            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()" title="Exportar para Excel (.xlsx)">
               <i class="fas fa-file-excel mr-1"></i> Excel (.xlsx)
             </button>
-            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()">
-              <i class="fas fa-print mr-1"></i> Imprimir / PDF
+            <button class="btn btn-ghost btn-sm" onclick="Reports.printReport()" title="Imprimir pelo navegador">
+              <i class="fas fa-print"></i>
             </button>
           </div>
         </div>
@@ -493,11 +507,14 @@ const Reports = {
             <p class="text-muted small mb-0">Período: <strong>${periodoStr}</strong> | Consolidação por código gerencial</p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()">
+            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()" title="Baixar PDF A4 diretamente">
+              <i class="fas fa-file-pdf mr-1"></i> Baixar PDF
+            </button>
+            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()" title="Exportar para Excel (.xlsx)">
               <i class="fas fa-file-excel mr-1"></i> Excel (.xlsx)
             </button>
-            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()">
-              <i class="fas fa-print mr-1"></i> Imprimir / PDF
+            <button class="btn btn-ghost btn-sm" onclick="Reports.printReport()" title="Imprimir pelo navegador">
+              <i class="fas fa-print"></i>
             </button>
           </div>
         </div>
@@ -570,11 +587,14 @@ const Reports = {
             <p class="text-muted small mb-0">Período: <strong>${periodoStr}</strong> | Verificação de saldos das contas e caixas</p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()">
+            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()" title="Baixar PDF A4 diretamente">
+              <i class="fas fa-file-pdf mr-1"></i> Baixar PDF
+            </button>
+            <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()" title="Exportar para Excel (.xlsx)">
               <i class="fas fa-file-excel mr-1"></i> Excel (.xlsx)
             </button>
-            <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()">
-              <i class="fas fa-print mr-1"></i> Imprimir / PDF
+            <button class="btn btn-ghost btn-sm" onclick="Reports.printReport()" title="Imprimir pelo navegador">
+              <i class="fas fa-print"></i>
             </button>
           </div>
         </div>

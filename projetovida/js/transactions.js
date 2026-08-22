@@ -494,12 +494,16 @@ const Transactions = {
     }
   },
 
+  currentReceiptItem: null,
+
   /**
    * Modal de Recibo Financeiro (Estilo Cupom Fiscal / Salmão Térmico)
    */
   openReceiptModal(id) {
     const item = State.transactions.find(t => t.id === id);
     if (!item) return;
+
+    this.currentReceiptItem = item;
 
     const isEntrada = Number(item.valor) >= 0;
     const formattedValor = Dashboard.formatCurrency(Math.abs(item.valor));
@@ -593,7 +597,40 @@ const Transactions = {
   },
 
   /**
-   * Imprime apenas o comprovante salmão em alta qualidade
+   * Baixa o Recibo em PDF no formato térmico de 80mm
+   */
+  exportReceiptPDF() {
+    if (this.currentReceiptItem && typeof PdfService !== 'undefined') {
+      PdfService.exportReceiptPDF(this.currentReceiptItem);
+    } else {
+      App.showToast('Selecione um recibo para exportar.', 'warning');
+    }
+  },
+
+  /**
+   * Baixa o Recibo como imagem PNG de alta resolução
+   */
+  exportReceiptPNG() {
+    if (this.currentReceiptItem && typeof PdfService !== 'undefined') {
+      PdfService.exportReceiptPNG(this.currentReceiptItem);
+    } else {
+      App.showToast('Selecione um recibo para exportar.', 'warning');
+    }
+  },
+
+  /**
+   * Compartilha o Recibo no WhatsApp / WebShare
+   */
+  shareReceipt() {
+    if (this.currentReceiptItem && typeof PdfService !== 'undefined') {
+      PdfService.shareReceipt(this.currentReceiptItem);
+    } else {
+      App.showToast('Selecione um recibo para compartilhar.', 'warning');
+    }
+  },
+
+  /**
+   * Imprime o comprovante salmão
    */
   printReceipt() {
     document.body.classList.add('printing-receipt-mode');
@@ -601,6 +638,17 @@ const Transactions = {
     setTimeout(() => {
       document.body.classList.remove('printing-receipt-mode');
     }, 500);
+  },
+
+  /**
+   * Exporta a lista filtrada de lançamentos para PDF (Extrato A4)
+   */
+  exportToPDF() {
+    if (typeof PdfService !== 'undefined') {
+      PdfService.exportTransactionsPDF();
+    } else {
+      App.showToast('Serviço de PDF indisponível.', 'error');
+    }
   },
 
   /**
