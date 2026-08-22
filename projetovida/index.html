@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROJETO VIDA | Gestão Financeira ONG</title>
+  <meta name="description" content="Sistema de Gestão Financeira para ONGs - Entradas, Saídas, DRE, Centros de Custo e Conciliação Bancária via Google Sheets e GitHub Pages.">
+  <meta name="theme-color" content="#0b0f19">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
+
+  <!-- Fontes Google & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- CSS Customizado -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- SheetJS (XLSX Export) CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. TELA DE LOGIN (AUTENTICAÇÃO)
+       ========================================================================= -->
+  <div id="screen-login" class="login-wrapper">
+    <div class="login-card">
+      <div class="text-center mb-4">
+        <div class="brand-icon mb-3">
+          <i class="fas fa-hand-holding-heart"></i>
+        </div>
+        <h2 class="font-bold text-2xl mb-1">PROJETO VIDA</h2>
+        <p class="text-muted text-sm">Gestão Financeira & Transparência</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email de Acesso</label>
+          <div class="input-with-icon">
+            <input type="email" id="login-email" class="form-control" placeholder="seuemail@ong.org" autocomplete="email" required>
+          </div>
+        </div>
+
+        <div class="form-group mb-4">
+          <label class="form-label" for="login-password">Senha de Segurança</label>
+          <input type="password" id="login-password" class="form-control" placeholder="Digite sua senha" autocomplete="current-password" required>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-4 text-xs">
+          <label class="d-flex align-items-center gap-1 text-muted cursor-pointer">
+            <input type="checkbox" id="login-remember" checked> Manter conectado
+          </label>
+          <span class="text-muted"><i class="fas fa-shield-alt text-success mr-1"></i> SHA-256 Seguro</span>
+        </div>
+
+        <button type="submit" id="btn-login-submit" class="btn btn-primary w-100 py-3 font-semibold">
+          <span>Acessar Painel Financeiro</span>
+          <i class="fas fa-arrow-right ml-2"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- =========================================================================
+       2. TELA PRINCIPAL DO APLICATIVO (SPA)
+       ========================================================================= -->
+  <div id="screen-app" class="app-container d-none">
+
+    <!-- SIDEBAR DE NAVEGAÇÃO -->
+    <aside id="app-sidebar" class="app-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand-icon">
+          <i class="fas fa-hand-holding-heart"></i>
+        </div>
+        <div>
+          <div class="sidebar-brand-title">PROJETO VIDA</div>
+          <div class="text-xs text-muted">Controle Financeiro ONG</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="dashboard" data-permission="dashboard,reports,settings,Admin,Diretoria,Auditor">
+          <i class="fas fa-chart-pie"></i>
+          <span>Dashboard Geral</span>
+        </button>
+        <button class="nav-item" data-tab="transactions" data-permission="transactions,Admin,Entradas,Saidas,Auditor">
+          <i class="fas fa-exchange-alt"></i>
+          <span>Lançamentos (E/S)</span>
+        </button>
+        <button class="nav-item" data-tab="reports" data-permission="reports,Admin,Diretoria,Auditor">
+          <i class="fas fa-file-invoice-dollar"></i>
+          <span>DRE & Relatórios</span>
+        </button>
+        <button class="nav-item" data-tab="settings" data-permission="settings,Admin">
+          <i class="fas fa-sliders-h"></i>
+          <span>Configurações & BD</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile-widget justify-content-between">
+          <div class="d-flex align-items-center gap-2">
+            <div id="user-profile-avatar" class="avatar-circle">A</div>
+            <div>
+              <div id="user-profile-name" class="font-semibold text-xs text-light">Administrador</div>
+              <div id="user-profile-role" class="badge badge-neutral text-xs">Admin</div>
+            </div>
+          </div>
+          <button id="btn-logout" class="btn btn-icon btn-ghost text-danger" title="Sair do Sistema">
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="app-main">
+
+      <!-- LOADING OVERLAY (aparece enquanto dados são carregados) -->
+      <div id="loading-overlay" class="loading-overlay" aria-live="polite">
+        <div class="loading-overlay-content">
+          <div class="loading-logo-wrap">
+            <div class="sidebar-brand-icon" style="width:56px;height:56px;font-size:1.5rem;margin:0 auto 1.25rem;">
+              <i class="fas fa-hand-holding-heart"></i>
+            </div>
+            <div class="font-bold text-light" style="font-size:1.2rem;margin-bottom:0.25rem;">PROJETO VIDA</div>
+            <div class="text-muted text-xs">Controle Financeiro ONG</div>
+          </div>
+          <div id="loading-message" class="loading-message">Verificando autenticação...</div>
+          <div class="loading-bar-track">
+            <div id="loading-bar" class="loading-bar-fill"></div>
+          </div>
+          <div id="loading-step" class="text-muted text-xs mt-2">Aguarde...</div>
+        </div>
+      </div>
+
+      <!-- TOP HEADER -->
+      <header class="app-header">
+        <div class="d-flex align-items-center gap-3">
+          <!-- Botão Menu Sanduíche (Alternador da Sidebar) -->
+          <button id="btn-toggle-sidebar" class="btn btn-icon btn-ghost" title="Recolher / Expandir Menu (Alt+M)">
+            <i class="fas fa-bars fa-lg"></i>
+          </button>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge badge-success text-xs"><i class="fas fa-circle text-xs mr-1"></i> Online</span>
+            <span class="text-muted text-xs d-none d-md-inline">Base 2026 (Jan - Jul)</span>
+          </div>
+        </div>
+
+        <!-- Ações Rápidas no Topo -->
+        <div class="d-flex align-items-center gap-2">
+          <button id="btn-header-new-entry" class="btn btn-success btn-sm" onclick="Transactions.openNewEntryModal()" title="Adicionar Entrada (Alt+E)">
+            <i class="fas fa-plus"></i>
+            <span>Nova Entrada</span>
+          </button>
+          <button id="btn-header-new-exit" class="btn btn-danger btn-sm" onclick="Transactions.openNewExitModal()" title="Adicionar Saída (Alt+S)">
+            <i class="fas fa-minus"></i>
+            <span>Nova Saída</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- CONTEÚDO PRINCIPAL DAS ABAS -->
+      <main class="app-content">
+
+        <!-- ===================================================================
+             ABA 1: DASHBOARD
+             =================================================================== -->
+        <section id="tab-section-dashboard" class="tab-section">
+          <!-- Linha de KPIs -->
+          <div class="row mb-4">
+            <div class="col-3">
+              <div class="card kpi-card kpi-primary">
+                <div class="kpi-title">Saldo Consolidado Geral</div>
+                <div id="kpi-saldo-geral" class="kpi-value text-light">R$ 0,00</div>
+                <div class="text-xs text-muted mt-2">
+                  <i class="fas fa-university mr-1"></i> Banco do Brasil + Caixas
+                </div>
+              </div>
+            </div>
+
+            <div class="col-3">
+              <div class="card kpi-card kpi-success">
+                <div class="kpi-title">Total de Entradas (Filtro)</div>
+                <div id="kpi-total-entradas" class="kpi-value text-success">+ R$ 0,00</div>
+                <div class="text-xs text-muted mt-2">
+                  <i class="fas fa-arrow-down mr-1"></i> Doações e Subvenções
+                </div>
+              </div>
+            </div>
+
+            <div class="col-3">
+              <div class="card kpi-card kpi-danger">
+                <div class="kpi-title">Total de Saídas (Filtro)</div>
+                <div id="kpi-total-saidas" class="kpi-value text-danger">- R$ 0,00</div>
+                <div class="text-xs text-muted mt-2">
+                  <i class="fas fa-arrow-up mr-1"></i> Obras, Aluguel e Folha
+                </div>
+              </div>
+            </div>
+
+            <div class="col-3">
+              <div class="card kpi-card kpi-info">
+                <div class="kpi-title">Resultado do Período</div>
+                <div id="kpi-resultado-mes" class="kpi-value">R$ 0,00</div>
+                <div class="mt-2">
+                  <span id="kpi-badge-resultado" class="badge badge-success text-xs">Superávit</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linha de Gráficos -->
+          <div class="row mb-4">
+            <!-- Gráfico 1: Evolução Mensal -->
+            <div class="col-8">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-chart-column text-primary mr-2"></i> Evolução Financeira Mensal (2026)
+                  </h4>
+                  <span class="text-xs text-muted">Entradas vs Saídas</span>
+                </div>
+                <div class="card-body" style="height: 320px;">
+                  <canvas id="chart-evolucao-mensal"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gráfico 2: Despesas por Centro de Custo -->
+            <div class="col-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-chart-pie text-secondary mr-2"></i> Despesas por C. Custo
+                  </h4>
+                </div>
+                <div class="card-body" style="height: 320px;">
+                  <canvas id="chart-ccusto-doughnut"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linha Inferior: Maiores Doadores & Lançamentos Recentes -->
+          <div class="row">
+            <div class="col-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-award text-amber-400 mr-2"></i> Principais Contribuições
+                  </h4>
+                </div>
+                <div class="card-body" style="height: 280px;">
+                  <canvas id="chart-maiores-doadores"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-8">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-history text-info mr-2"></i> Movimentações Recentes
+                  </h4>
+                  <button class="btn btn-ghost btn-sm" onclick="App.switchTab('transactions')">
+                    Ver Todos <i class="fas fa-arrow-right ml-1"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table mb-0">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Descrição / Doador</th>
+                        <th>Centro de Custo</th>
+                        <th>Conta</th>
+                        <th class="text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboard-recent-table-body">
+                      <!-- Linhas dinâmicas -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ===================================================================
+             ABA 2: LANÇAMENTOS (ENTRADAS E SAÍDAS)
+             =================================================================== -->
+        <section id="tab-section-transactions" class="tab-section d-none">
+          <!-- Barra de Totais Rápidos do Filtro -->
+          <div class="row mb-3">
+            <div class="col-4">
+              <div class="card p-3 d-flex align-items-center justify-content-between">
+                <span class="text-muted text-xs">Entradas Filtradas:</span>
+                <span id="tx-header-entradas" class="font-bold font-mono text-success text-md">+ R$ 0,00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="card p-3 d-flex align-items-center justify-content-between">
+                <span class="text-muted text-xs">Saídas Filtradas:</span>
+                <span id="tx-header-saidas" class="font-bold font-mono text-danger text-md">- R$ 0,00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="card p-3 d-flex align-items-center justify-content-between">
+                <span class="text-muted text-xs">Resultado Filtrado:</span>
+                <span id="tx-header-resultado" class="font-bold font-mono text-md">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Filtros e Busca Completa -->
+          <div class="card p-3 mb-3">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <!-- Busca Texto -->
+              <div class="flex-grow-1" style="min-width: 220px;">
+                <input type="text" id="filter-search" class="form-control form-control-sm" placeholder="🔍 Buscar descrição, favorecido, valor...">
+              </div>
+
+              <!-- Filtro Ano -->
+              <div style="min-width: 110px;">
+                <select id="filter-year" class="form-select form-select-sm">
+                  <option value="2026">Ano: 2026</option>
+                  <option value="todos">Todos Anos</option>
+                </select>
+              </div>
+
+              <!-- Filtro Mês -->
+              <div style="min-width: 140px;">
+                <select id="filter-month" class="form-select form-select-sm">
+                  <option value="todos">Todos os Meses</option>
+                  <option value="01">01 - Janeiro</option>
+                  <option value="02">02 - Fevereiro</option>
+                  <option value="03">03 - Março</option>
+                  <option value="04">04 - Abril</option>
+                  <option value="05">05 - Maio</option>
+                  <option value="06">06 - Junho</option>
+                  <option value="07">07 - Julho</option>
+                  <option value="08">08 - Agosto</option>
+                  <option value="09">09 - Setembro</option>
+                  <option value="10">10 - Outubro</option>
+                  <option value="11">11 - Novembro</option>
+                  <option value="12">12 - Dezembro</option>
+                </select>
+              </div>
+
+              <!-- Filtro Tipo -->
+              <div style="min-width: 130px;">
+                <select id="filter-type" class="form-select form-select-sm">
+                  <option value="todos">Todos Tipos</option>
+                  <option value="Entrada">Entradas (+)</option>
+                  <option value="Saida">Saídas (-)</option>
+                </select>
+              </div>
+
+              <!-- Filtro Centro de Custo -->
+              <div style="min-width: 220px;">
+                <select id="filter-ccusto" class="form-select form-select-sm">
+                  <option value="todos">Todos os Centros de Custo</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Linha 2: Intervalo de Datas e Exportações -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2 border-t">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="text-muted text-xs font-semibold"><i class="far fa-calendar-alt mr-1"></i> Intervalo de Datas:</span>
+                <input type="date" id="filter-date-start" class="form-control form-control-sm font-mono" style="width: 140px;" title="Data Inicial">
+                <span class="text-muted text-xs">até</span>
+                <input type="date" id="filter-date-end" class="form-control form-control-sm font-mono" style="width: 140px;" title="Data Final">
+                <button class="btn btn-ghost btn-sm text-xs" onclick="Transactions.clearFilters()" title="Limpar todos os filtros">
+                  <i class="fas fa-times mr-1"></i> Limpar Filtros
+                </button>
+              </div>
+
+              <!-- Botões de Exportação -->
+              <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm" onclick="Transactions.exportToExcel()" title="Exportar planilha Excel (.xlsx)">
+                  <i class="fas fa-file-excel mr-1"></i> Exportar Excel (.xlsx)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabela Principal de Lançamentos -->
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">Data</th>
+                    <th style="width: 100px;">Tipo</th>
+                    <th>Descrição / Favorecido</th>
+                    <th>Centro de Custo</th>
+                    <th style="width: 110px;">Conta</th>
+                    <th class="text-right" style="width: 140px;">Valor (R$)</th>
+                    <th class="text-right" style="width: 140px;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="transactions-table-body">
+                  <!-- Linhas dinâmicas -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Paginação -->
+            <div class="card-body py-2 border-t">
+              <div id="transactions-pagination" class="pagination-container"></div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ===================================================================
+             ABA 3: DRE & RELATÓRIOS FINANCEIROS
+             =================================================================== -->
+        <section id="tab-section-reports" class="tab-section d-none">
+          <!-- Filtros e Ações de Relatório -->
+          <div class="card p-3 mb-4 no-print">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small font-semibold">Tipo de Relatório:</label>
+                <select id="report-type" class="form-select form-select-sm" style="width: 270px;">
+                  <option value="dre">📊 DRE - Demonstrativo de Resultado (Final Mês)</option>
+                  <option value="ccusto">📑 Lançamentos por Centro de Custo (CCusto)</option>
+                  <option value="conciliacao">🏦 Conciliação Bancária & Saldos</option>
+                </select>
+              </div>
+
+              <!-- Atalhos Rápidos Mês/Ano -->
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small font-semibold">Período:</label>
+                <select id="report-year" class="form-select form-select-sm" style="width: 110px;">
+                  <option value="2026">2026</option>
+                  <option value="todos">Todos</option>
+                </select>
+                <select id="report-month" class="form-select form-select-sm" style="width: 140px;">
+                  <option value="todos">Ano Completo</option>
+                  <option value="01">01 - Janeiro</option>
+                  <option value="02">02 - Fevereiro</option>
+                  <option value="03">03 - Março</option>
+                  <option value="04">04 - Abril</option>
+                  <option value="05">05 - Maio</option>
+                  <option value="06">06 - Junho</option>
+                  <option value="07">07 - Julho</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Linha 2 de Relatórios: Intervalo de datas personalizado e Exportações -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2 border-t">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="text-muted text-xs font-semibold"><i class="far fa-calendar-alt mr-1"></i> Intervalo Específico:</span>
+                <input type="date" id="report-date-start" class="form-control form-control-sm font-mono" style="width: 140px;" title="Data Inicial do Relatório">
+                <span class="text-muted text-xs">até</span>
+                <input type="date" id="report-date-end" class="form-control form-control-sm font-mono" style="width: 140px;" title="Data Final do Relatório">
+                <button class="btn btn-ghost btn-sm text-xs" onclick="Reports.clearDateRange()" title="Limpar intervalo de datas">
+                  <i class="fas fa-undo mr-1"></i> Limpar
+                </button>
+              </div>
+
+              <!-- Exportações do Relatório -->
+              <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm" onclick="Reports.exportToExcel()" title="Exportar Relatório para Excel (.xlsx)">
+                  <i class="fas fa-file-excel mr-1"></i> Exportar XLSX
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="Reports.exportToPDF()" title="Imprimir / Salvar em PDF">
+                  <i class="fas fa-file-pdf mr-1"></i> Gerar PDF / Imprimir
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Container do Relatório Gerado -->
+          <div id="report-content-container"></div>
+        </section>
+
+
+        <!-- ===================================================================
+             ABA 4: CONFIGURAÇÕES & BANCO DE DADOS
+             =================================================================== -->
+        <section id="tab-section-settings" class="tab-section d-none">
+          <div class="row">
+            
+            <!-- Conexão com Apps Script -->
+            <div class="col-6 mb-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-link text-primary mr-2"></i> Conexão Google Apps Script & Google Sheets
+                  </h4>
+                  <span id="settings-api-status" class="badge badge-success">Conectado</span>
+                </div>
+                <div class="card-body">
+                  <form id="form-settings-api">
+                    <div class="form-group">
+                      <label class="form-label" for="settings-api-url">URL do App da Web (Google Apps Script)</label>
+                      <input type="url" id="settings-api-url" class="form-control font-mono text-sm" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+                      <div class="text-muted text-xs mt-1">
+                        Cole o link gerado em <em>Implantar > App da Web</em> no Google Apps Script.
+                      </div>
+                    </div>
+
+                    <div class="form-group d-flex align-items-center justify-content-between p-3 rounded bg-slate-800">
+                      <div>
+                        <div class="font-semibold text-sm">Modo Demonstração / Offline</div>
+                        <div class="text-muted text-xs">Utilizar dados locais (232 lançamentos de 2026 inclusos)</div>
+                      </div>
+                      <input type="checkbox" id="switch-demo-mode" style="transform: scale(1.3);">
+                    </div>
+
+                    <div class="d-flex gap-2">
+                      <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-save mr-1"></i> Salvar URL
+                      </button>
+                      <button type="button" id="btn-test-connection" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-plug mr-1"></i> Testar Conexão
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- Backup & Exportação -->
+            <div class="col-6 mb-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-database text-warning mr-2"></i> Backup & Segurança
+                  </h4>
+                </div>
+                <div class="card-body">
+                  <p class="text-muted text-sm mb-3">
+                    Exporte todo o histórico financeiro, centros de custo e contas em formato JSON seguro para backup local.
+                  </p>
+                  <button class="btn btn-secondary btn-sm" onclick="Settings.exportFullBackup()">
+                    <i class="fas fa-download mr-1"></i> Baixar Backup Completo (JSON)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabela de Centros de Custo -->
+            <div class="col-12 mb-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-tags text-indigo-400 mr-2"></i> Cadastro de Centros de Custo (500 a 651)
+                  </h4>
+                  <button class="btn btn-primary btn-sm" onclick="Settings.openNewCostCenterModal()">
+                    <i class="fas fa-plus"></i> Novo Centro de Custo
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th style="width: 80px;">Código</th>
+                        <th>Nome do Centro de Custo</th>
+                        <th>Natureza</th>
+                        <th>Categoria DRE</th>
+                        <th>Status</th>
+                        <th class="text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="settings-ccusto-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contas Bancárias & Caixas -->
+            <div class="col-12 mb-4">
+              <div class="card">
+                <div class="card-header">
+                  <h4 class="font-bold text-sm text-light mb-0">
+                    <i class="fas fa-landmark text-sky-400 mr-2"></i> Contas Bancárias & Caixas
+                  </h4>
+                </div>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Nome da Conta</th>
+                        <th>Tipo</th>
+                        <th class="text-right">Saldo Inicial</th>
+                        <th class="text-right">Saldo Atual</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="settings-accounts-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gestão Completa de Usuários & Setores -->
+            <div class="col-12 mb-4">
+              <div class="card">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <h4 class="font-bold text-sm text-light mb-0">
+                      <i class="fas fa-users-cog text-emerald-400 mr-2"></i> Gestão de Usuários & Controle de Acessos por Setor
+                    </h4>
+                    <span class="badge badge-primary text-xs" id="badge-settings-users-count">5 usuários</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Settings.openNewUserModal()">
+                      <i class="fas fa-user-plus mr-1"></i> Novo Usuário
+                    </button>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table mb-0">
+                    <thead>
+                      <tr>
+                        <th style="width: 50px;">Avatar</th>
+                        <th>Nome Completo</th>
+                        <th>Email de Acesso</th>
+                        <th>Setor Organizacional</th>
+                        <th>Nível / Perfil</th>
+                        <th>Escopo de Permissões</th>
+                        <th style="width: 100px;">Status</th>
+                        <th class="text-right" style="width: 140px;">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="settings-users-tbody"></tbody>
+                  </table>
+                </div>
+                <div class="card-body py-2 border-t text-xs text-muted d-flex justify-content-between align-items-center">
+                  <span><i class="fas fa-shield-alt text-success mr-1"></i> Senhas protegidas e criptografadas via SHA-256</span>
+                  <button class="btn btn-ghost btn-sm text-xs" onclick="Settings.exportUsersBackup()">
+                    <i class="fas fa-download mr-1"></i> Exportar Usuários (JSON)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+
+  <!-- =========================================================================
+       MODAIS
+       ========================================================================= -->
+
+  <!-- MODAL: NOVO / EDITAR LANÇAMENTO -->
+  <div id="modal-transaction" class="modal-container">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-tx-title" class="font-bold text-md text-light">Novo Lançamento</h3>
+        <button class="btn btn-icon btn-ghost btn-close-modal">&times;</button>
+      </div>
+
+      <form id="transaction-form">
+        <div class="modal-body">
+          <input type="hidden" id="tx-id">
+
+          <div class="row">
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="tx-tipo">Tipo de Operação</label>
+                <select id="tx-tipo" class="form-select" required>
+                  <option value="Entrada">Entrada (+) - Doação / Receita</option>
+                  <option value="Saida">Saída (-) - Despesa / Pagamento</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="tx-data">Data da Operação</label>
+                <input type="date" id="tx-data" class="form-control font-mono" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="tx-conta">Conta / Origem</label>
+                <select id="tx-conta" class="form-select" required>
+                  <option value="BRASIL">BRASIL (Banco do Brasil)</option>
+                  <option value="CAIXA">CAIXA (Geral)</option>
+                  <option value="CAIXAPEQUENO">CAIXAPEQUENO</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="tx-valor">Valor (R$)</label>
+                <input type="text" id="tx-valor" class="form-control font-mono font-bold text-lg" placeholder="0,00" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tx-ccusto">Centro de Custo</label>
+            <select id="tx-ccusto" class="form-select" required></select>
+            <input type="hidden" id="tx-nome-ccusto">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tx-descricao">Descrição da Operação</label>
+            <input type="text" id="tx-descricao" class="form-control" placeholder="Ex: DOAÇÃO, ALUGUEL SALA 102, TAXA PIX..." required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tx-favorecido">Favorecido / Doador / Referência</label>
+            <input type="text" id="tx-favorecido" class="form-control" placeholder="Ex: ARILDO SANTAROSA, CPFL, BB, VALDEIR...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tx-comprovante">Link do Comprovante / Google Drive (Opcional)</label>
+            <input type="url" id="tx-comprovante" class="form-control text-sm" placeholder="https://drive.google.com/...">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-close-modal">Cancelar</button>
+          <button type="submit" id="btn-save-transaction" class="btn btn-primary">
+            <i class="fas fa-check mr-1"></i> Salvar Lançamento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- MODAL: RECIBO FINANCEIRO -->
+  <div id="modal-receipt" class="modal-container">
+    <div class="modal-overlay"></div>
+    <div class="modal-content" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 class="font-bold text-md text-light"><i class="fas fa-receipt mr-2 text-indigo-400"></i> Recibo de Movimentação</h3>
+        <button class="btn btn-icon btn-ghost btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="receipt-print-area"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-close-modal">Fechar</button>
+        <button type="button" class="btn btn-primary" onclick="Transactions.printReceipt()">
+          <i class="fas fa-print mr-1"></i> Imprimir Recibo
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL: CENTRO DE CUSTO -->
+  <div id="modal-settings-ccusto" class="modal-container">
+    <div class="modal-overlay"></div>
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="font-bold text-md text-light">Centro de Custo</h3>
+        <button class="btn btn-icon btn-ghost btn-close-modal">&times;</button>
+      </div>
+      <form id="form-ccusto">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Código Numérico</label>
+            <input type="text" id="cc-codigo" class="form-control font-mono" placeholder="Ex: 500, 650..." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nome do Centro de Custo</label>
+            <input type="text" id="cc-nome" class="form-control" placeholder="Ex: DOAÇÕES E SUBVENÇÕES" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Natureza</label>
+            <select id="cc-natureza" class="form-select">
+              <option value="DR">DR - Demonstração de Resultado</option>
+              <option value="A">A - Ativo</option>
+              <option value="P">P - Passivo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Categoria no DRE</label>
+            <input type="text" id="cc-categoria" class="form-control" placeholder="Ex: Receita Bruta, Despesas Administrativas...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select id="cc-ativo" class="form-select">
+              <option value="SIM">SIM (Ativo)</option>
+              <option value="NAO">NÃO (Inativo)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-close-modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO / EDITAR USUÁRIO -->
+  <div id="modal-settings-user" class="modal-container">
+    <div class="modal-overlay"></div>
+    <div class="modal-content" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 id="modal-settings-user-title" class="font-bold text-md text-light">Cadastrar Novo Usuário</h3>
+        <button class="btn btn-icon btn-ghost btn-close-modal">&times;</button>
+      </div>
+
+      <form id="form-settings-user" onsubmit="Settings.handleSaveUser(event)">
+        <div class="modal-body">
+          <input type="hidden" id="usr-modal-id">
+
+          <div class="form-group">
+            <label class="form-label" for="usr-modal-nome">Nome Completo</label>
+            <input type="text" id="usr-modal-nome" class="form-control" placeholder="Ex: Maria da Silva, Carlos Oliveira..." required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="usr-modal-email">Email de Acesso (Login)</label>
+            <input type="email" id="usr-modal-email" class="form-control font-mono" placeholder="usuario@ong.org" required>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="usr-modal-nivel">Nível de Acesso (Perfil)</label>
+                <select id="usr-modal-nivel" class="form-select" onchange="Settings.onRoleChangeInModal()" required>
+                  <option value="Admin">Super Admin (Acesso Total)</option>
+                  <option value="Diretoria">Diretoria & Conselheiros (Consulta)</option>
+                  <option value="Entradas">Operador de Entradas (Receitas)</option>
+                  <option value="Saídas">Operador de Saídas (Despesas)</option>
+                  <option value="Auditor">Auditor & Contador (DRE)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <div class="form-group">
+                <label class="form-label" for="usr-modal-setor">Setor Organizacional</label>
+                <input type="text" id="usr-modal-setor" class="form-control" placeholder="Ex: Administração Geral" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="usr-modal-senha">
+              <span id="label-usr-modal-senha">Senha de Acesso</span>
+              <span id="hint-usr-modal-senha" class="text-muted text-xs font-normal d-none">(deixe em branco para manter a senha atual)</span>
+            </label>
+            <input type="password" id="usr-modal-senha" class="form-control font-mono" placeholder="••••••••" minlength="4">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="usr-modal-permissoes">Descrição / Escopo de Permissões</label>
+            <input type="text" id="usr-modal-permissoes" class="form-control text-sm" placeholder="Ex: Lançamentos de despesas e comprovantes">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="usr-modal-ativo">Status do Usuário</label>
+            <select id="usr-modal-ativo" class="form-select">
+              <option value="SIM">SIM (Ativo - Pode acessar o sistema)</option>
+              <option value="NAO">NÃO (Inativo - Acesso bloqueado)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-close-modal">Cancelar</button>
+          <button type="submit" id="btn-save-usr-modal" class="btn btn-primary">
+            <i class="fas fa-check mr-1"></i> Salvar Usuário
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- MODAL: REDEFINIR SENHA RÁPIDA DE USUÁRIO -->
+  <div id="modal-settings-reset-pwd" class="modal-container">
+    <div class="modal-overlay"></div>
+    <div class="modal-content" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3 class="font-bold text-md text-light"><i class="fas fa-key text-warning mr-2"></i> Alterar Senha de Usuário</h3>
+        <button class="btn btn-icon btn-ghost btn-close-modal">&times;</button>
+      </div>
+
+      <form id="form-settings-reset-pwd" onsubmit="Settings.handleResetPasswordSubmit(event)">
+        <div class="modal-body">
+          <input type="hidden" id="reset-modal-usr-id">
+          <input type="hidden" id="reset-modal-usr-email">
+
+          <p class="text-sm text-muted mb-3">
+            Alterando senha de acesso para o usuário <strong id="reset-modal-usr-name-text" class="text-light">-</strong> (<span id="reset-modal-usr-email-text" class="font-mono text-xs"></span>):
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="reset-modal-new-pwd">Nova Senha</label>
+            <input type="password" id="reset-modal-new-pwd" class="form-control font-mono" placeholder="Digite a nova senha" minlength="4" required>
+          </div>
+
+          <div class="form-group mb-0">
+            <label class="form-label" for="reset-modal-confirm-pwd">Confirmar Nova Senha</label>
+            <input type="password" id="reset-modal-confirm-pwd" class="form-control font-mono" placeholder="Repita a nova senha" minlength="4" required>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-close-modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save mr-1"></i> Atualizar Senha
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+
+  <!-- TOAST NOTIFICATIONS CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
+
+  <!-- =========================================================================
+       SCRIPTS DA APLICAÇÃO (ES6 MODULAR)
+       ========================================================================= -->
+  <script src="js/seedData.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/transactions.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
