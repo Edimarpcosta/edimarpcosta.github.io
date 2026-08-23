@@ -2716,7 +2716,7 @@ window.ordenarRotaPorHorarioAbertura = function() {
     });
 
     arrayOrdemRota = clients.map(c => c.ID);
-    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
     
     if (typeof renderizarListaClientesArrastavel === 'function') {
         renderizarListaClientesArrastavel();
@@ -3127,7 +3127,7 @@ window.otimizarRotaInteligente = async function() {
         // Nova lista de IDs da rota
         const newOrderIds = orderedSequence.map(item => item.client.ID).concat(withoutCoords.map(c => c.ID));
         arrayOrdemRota = newOrderIds;
-        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
 
         // Distância após otimização
         let distAfter = 0;
@@ -3180,7 +3180,7 @@ window.moverPosicaoRota = function(id, direcao, event) {
         arrayOrdemRota.push(item);
     }
 
-    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
     renderizarListaClientesArrastavel();
     if (typeof desenharRotaGMaps === 'function' && arrayOrdemRota.length >= 2) {
         desenharRotaGMaps();
@@ -3193,7 +3193,7 @@ window.moverPosicaoRota = function(id, direcao, event) {
 window.inverterOrdemRota = function() {
     if (!arrayOrdemRota || arrayOrdemRota.length < 2) return;
     arrayOrdemRota.reverse();
-    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
     renderizarListaClientesArrastavel();
     if (typeof desenharRotaGMaps === 'function') {
         desenharRotaGMaps();
@@ -3214,7 +3214,7 @@ window.ordenarRotaPorBairro = function() {
         return (parseInt(a.Ordem) || 0) - (parseInt(b.Ordem) || 0);
     });
     arrayOrdemRota = clients.map(c => c.ID);
-    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
     renderizarListaClientesArrastavel();
     if (typeof desenharRotaGMaps === 'function') {
         desenharRotaGMaps();
@@ -3240,7 +3240,7 @@ window.toggleModoSelecaoMapa = function() {
             if (sequenciaSelecionadaMapa.length > 0) {
                 const naoClicados = arrayOrdemRota.filter(id => !sequenciaSelecionadaMapa.includes(id));
                 arrayOrdemRota = [...sequenciaSelecionadaMapa, ...naoClicados];
-                sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+                sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
                 renderizarListaClientesArrastavel();
                 if (typeof desenharRotaGMaps === 'function') {
                     desenharRotaGMaps();
@@ -3329,6 +3329,14 @@ window.focarClienteNoMapa = function(clientId) {
 /**
  * Alterna a visibilidade do campo de endereço de partida personalizado
  */
+/**
+ * Alterna a opção de omitir clientes de WhatsApp (Ordem 99)
+ */
+window.toggleMapOmitWhats = function(isChecked) {
+    localStorage.setItem('map_omit_whats', isChecked ? 'true' : 'false');
+    render();
+};
+
 window.toggleMapStartInput = function() {
     const startType = document.getElementById('map-start-type')?.value;
     const container = document.getElementById('map-start-address-container');
@@ -3358,10 +3366,11 @@ window.toggleMapBackInput = function() {
 window.inicializarRoteiroMapa = function(clientesDia) {
     if (!clientesDia || !Array.isArray(clientesDia)) return;
     
+    // PADRÃO PADRONIZADO: Segue sempre a ordem da aba Roteiro (ORD: 1, ORD: 2, ORD: 3...)
     const cacheOrdem = JSON.parse(sessionStorage.getItem('ordem_manual_dia') || 'null');
+    const isManualReordered = sessionStorage.getItem('reordenado_manualmente') === 'true';
     
-    if (cacheOrdem && Array.isArray(cacheOrdem) && cacheOrdem.length > 0) {
-        // Valida se os IDs do cache pertencem aos clientes do dia atual
+    if (isManualReordered && cacheOrdem && Array.isArray(cacheOrdem) && cacheOrdem.length > 0) {
         const diaIds = clientesDia.map(c => c.ID.toString().trim());
         const validCache = cacheOrdem.filter(id => diaIds.includes(id.toString().trim()));
         if (validCache.length > 0) {
@@ -3373,7 +3382,7 @@ window.inicializarRoteiroMapa = function(clientesDia) {
                 .map(c => c.ID.toString().trim());
         }
     } else {
-        // Padrão: segue rigorosamente a ordem da aba Roteiro (ORD: 1, ORD: 2, ORD: 3...)
+        // Padrão Absoluto: Segue a ordem de visita configurada na aba Roteiro
         arrayOrdemRota = clientesDia
             .filter(c => c.Endereco && c.Endereco.trim().length > 4 && parseInt(c.Ordem) !== 99)
             .sort(compararOrdemRoteiro)
@@ -3388,10 +3397,11 @@ window.inicializarRoteiroMapa = function(clientesDia) {
 /**
  * Força a sequência da rota a seguir rigorosamente a ordem de visita da aba Roteiro (ORD: 1, ORD: 2...)
  */
-window.seguirOrdemRoteiro = function() {
+window.seguirOrdemRoteiro = function(silencioso = false) {
     sessionStorage.removeItem('ordem_manual_dia');
+    sessionStorage.removeItem('reordenado_manualmente');
     
-    // Obtém todos os clientes agendados do dia/filtro ativo ordenados por ORD
+    // Sincroniza e ordena os clientes do dia estritamente por ORD
     const fVisitaVal = document.getElementById('mapa-fVisita') ? document.getElementById('mapa-fVisita').value : 
         (document.getElementById('fVisita') ? document.getElementById('fVisita').value : '');
     
@@ -3400,15 +3410,16 @@ window.seguirOrdemRoteiro = function() {
     clientesDia.sort(compararOrdemRoteiro);
     
     arrayOrdemRota = clientesDia.map(c => c.ID.toString().trim());
-    sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
     
     // Re-renderiza o mapa e as listas
     render();
     
-    customAlert(`✅ Rota sincronizada com sucesso!\n\nAgora o mapa e os marcadores seguem rigorosamente a ordem da aba ROTEIRO (ORD: 1, ORD: 2, ORD: 3...).`, 'Ordem Roteiro Aplicada');
+    if (!silencioso) {
+        customAlert(`✅ Padrão Roteiro Ativo!
+
+O mapa e os marcadores estão seguindo rigorosamente a ordem cadastrada (ORD: 1, ORD: 2, ORD: 3...).`, 'Ordem Roteiro (Padrão)');
+    }
 };
-
-
 async function renderLeafletMap(clients, targetDate) {
     mapRenderInstanceId++;
     const currentInstanceId = mapRenderInstanceId;
@@ -3499,14 +3510,15 @@ async function renderLeafletMap(clients, targetDate) {
     }
     if (currentInstanceId !== mapRenderInstanceId) return;
 
-    // Ordenar rawResolvedClients estritamente pela ordem numérica (ORD: 1, ORD: 2, ORD: 3...)
+        // Ordenar rawResolvedClients estritamente pela ordem numérica (ORD: 1, ORD: 2, ORD: 3...)
     rawResolvedClients.sort(compararOrdemRoteiro);
 
-    // Ordenar resolvedClients conforme sessionStorage (apenas se houver ordem manual salva) ou pela Ordem da planilha
+    // Ordenar resolvedClients: PADRÃO É SEGUIR A ORDEM DO ROTEIRO (ORD: 1, ORD: 2, ORD: 3...)
     const resolvedClients = [];
     const cacheOrdem = JSON.parse(sessionStorage.getItem('ordem_manual_dia') || 'null');
+    const isManualReordered = sessionStorage.getItem('reordenado_manualmente') === 'true';
     
-    if (cacheOrdem && Array.isArray(cacheOrdem) && cacheOrdem.length > 0 && cacheOrdem.some(id => rawResolvedClients.some(rc => rc.client.ID.toString().trim() === id.toString().trim()))) {
+    if (isManualReordered && cacheOrdem && Array.isArray(cacheOrdem) && cacheOrdem.length > 0 && cacheOrdem.some(id => rawResolvedClients.some(rc => rc.client.ID.toString().trim() === id.toString().trim()))) {
         cacheOrdem.forEach(id => {
             const found = rawResolvedClients.find(rc => rc.client.ID.toString().trim() === id.toString().trim());
             if (found && !resolvedClients.includes(found)) {
@@ -3520,7 +3532,7 @@ async function renderLeafletMap(clients, targetDate) {
         });
         arrayOrdemRota = resolvedClients.map(rc => rc.client.ID);
     } else {
-        // PADRÃO 100% FIEL AO ROTEIRO: Segue rigorosamente a Ordem da planilha (ORD: 1, ORD: 2, ORD: 3...)
+        // PADRÃO PADRONIZADO 100% FIEL AO ROTEIRO: Segue rigorosamente a Ordem da planilha (ORD: 1, ORD: 2, ORD: 3...)
         rawResolvedClients.forEach(rc => resolvedClients.push(rc));
         arrayOrdemRota = resolvedClients.map(rc => rc.client.ID);
     }
@@ -4008,7 +4020,7 @@ onEnd: function() {
                         arrayOrdemRota = Array.from(container.children).map(child => child.getAttribute('data-id'));
                     
 
-                        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+                        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
                     
 desenharRotaGMaps(); // Recalcula a rota com o novo trajeto
 }
@@ -4356,7 +4368,7 @@ render();
 window.removerClienteRoteiro = function(id) {
 arrayOrdemRota = arrayOrdemRota.filter(itemId => itemId !== id);
 
-                        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota));
+                        sessionStorage.setItem('ordem_manual_dia', JSON.stringify(arrayOrdemRota)); sessionStorage.setItem('reordenado_manualmente', 'true');
                     
 renderizarListaClientesArrastavel();
 desenharRotaGMaps();
@@ -5026,7 +5038,7 @@ if (localStorage.getItem('map_back_type') === null) {
 localStorage.setItem('map_back_type', 'planilha');
 }
 if (localStorage.getItem('map_omit_whats') === null) {
-localStorage.setItem('map_omit_whats', 'true');
+localStorage.setItem('map_omit_whats', 'false');
 }
 
 const user = localStorage.getItem('pref_user');
@@ -7874,7 +7886,7 @@ onchange="localStorage.setItem('map_custom_back', this.value)">
 <div class="d-flex flex-wrap justify-content-center gap-2 mt-3 px-2">
     
     <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-sm map-toolbar-btn text-white" onclick="seguirOrdemRoteiro()" title="Forçar o mapa a seguir rigorosamente a ordem da aba Roteiro (ORD: 1, ORD: 2...)">
-        <i class="fas fa-list-ol me-1"></i>🎯 Seguir Ordem "Roteiro"
+        <i class="fas fa-check-circle me-1"></i>🎯 Seguir Ordem "Roteiro" (Padrão)
     </button>
 
     <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold shadow-sm map-toolbar-btn" onclick="restaurarOrdemOriginalPlanilha()" title="Restaurar para a ordem original do Roteiro (ORD: 1, 2, 3...)"><i class="fas fa-undo me-1"></i>📋 Ordem do Roteiro</button>
