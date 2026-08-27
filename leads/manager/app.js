@@ -6,22 +6,14 @@
  * - Múltiplas Licenças (1 a 5) com Desconto Progressivo (20%, 30%, 40%, 50%)
  * - Pagamento PIX com +10% OFF Adicional Instantâneo
  * - Pagamento no Cartão de Crédito em até 3x SEM JUROS
+ * - Auto-format de Celular no modelo (19)9 1234-5678
+ * - Validador Inteligente de E-mail com Verificação de Domínio MX via Google DNS
  * - Recuperação Automática de Chaves por E-mail
  * ============================================================================
  */
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzNbovL8ijHvHkHmwTAMGW1fomGEcpmXTdJGLB8114M0L1bcuMRqyvCyP0RU1252mECRw/exec';
 const MP_PUBLIC_KEY = 'APP_USR-23492382-d2fd-4c69-8a2f-0123e4036d46';
-
-// Inicializa SDK do Mercado Pago
-let mp = null;
-try {
-  if (typeof MercadoPago !== 'undefined') {
-    mp = new MercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
-  }
-} catch (e) {
-  console.warn('Mercado Pago SDK load warning:', e);
-}
 
 // Planos Configurados
 const PLANS = {
@@ -50,10 +42,34 @@ const QTY_DISCOUNTS = {
   5: { rate: 0.50, label: '5 Licenças (50% OFF - Metade do Preço!)' }
 };
 
+// Dicionário de Typos Comuns em Provedores de E-mail
+const COMMON_EMAIL_TYPOS = {
+  'gmai.com': 'gmail.com',
+  'gmal.com': 'gmail.com',
+  'gmail.con': 'gmail.com',
+  'gamil.com': 'gmail.com',
+  'gmaill.com': 'gmail.com',
+  'hotmial.com': 'hotmail.com',
+  'hotmai.com': 'hotmail.com',
+  'hotmal.com': 'hotmail.com',
+  'outlok.com': 'outlook.com',
+  'outloo.com': 'outlook.com',
+  'yaho.com': 'yahoo.com',
+  'yahoo.con': 'yahoo.com',
+  'yahoo.com.b': 'yahoo.com.br'
+};
+
+// Domínios de E-mail Descartáveis/Temporários Bloqueados
+const DISPOSABLE_DOMAINS = [
+  'tempmail.com', '10minutemail.com', 'mailinator.com', 'guerrillamail.com',
+  'trashmail.com', 'yopmail.com', 'sharklasers.com', 'getnada.com',
+  'dispostable.com', 'temp-mail.org', 'crazymailing.com', 'dropmail.me'
+];
+
 let selectedPlanKey = 'vitalicio'; // Default: Vitalício
 let selectedQty = 1;               // Default: 1 Licença
 let selectedMethod = 'pix';        // Default: PIX (+10% OFF)
-let devUnlocked = false;
+let isEmailVerifiedValid = false;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Elementos de Planos e Quantidade
@@ -82,6 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Elementos do Form
   const form = document.getElementById('checkout-form');
+  const payerNameInput = document.getElementById('payer-name');
+  const payerEmailInput = document.getElementById('payer-email');
+  const payerPhoneInput = document.getElementById('payer-phone');
+  const emailFeedback = document.getElementById('email-validation-feedback');
   const pixContainer = document.getElementById('pix-container');
   const pixQrImg = document.getElementById('pix-qr-img');
   const pixCodeInput = document.getElementById('pix-code-input');
@@ -115,8 +135,159 @@ document.addEventListener('DOMContentLoaded', () => {
   let pollingInterval = null;
   let currentPaymentId = null;
   let allGeneratedKeys = [];
+  let emailCheckTimeout = null;
 
-  // 1. Seleção de Plano
+  // =========================================================================
+  // 1. AUTO-FORMAT DE TELEFONE CELULAR NO MODELO (19)9 1234-5678
+  // =========================================================================
+  function formatCelular(val) {
+    let digits = val.replace(/\D/g, '').substring(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 3) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2, 3)} ${digits.slice(3)}`;
+    return `(${digits.slice(0, 2)})${digits.slice(2, 3)} ${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  if (payerPhoneInput) {
+    payerPhoneInput.addEventListener('input', (e) => {
+      const formatted = formatCelular(e.target.value);
+      e.target.value = formatted;
+    });
+
+    payerPhoneInput.addEventListener('blur', (e) => {
+      const digits = e.target.value.replace(/\D/g, '');
+      if (digits.length > 0 && digits.length < 10) {
+        payerPhoneInput.style.borderColor = '#ef4444';
+      } else {
+        payerPhoneInput.style.borderColor = '';
+      }
+    });
+  }
+
+  // =========================================================================
+  // 2. VALIDADOR DE E-MAIL COM VERIFICAÇÃO DE DOMÍNIO MX VIA GOOGLE DNS
+  // =========================================================================
+  async function validateEmailAdvanced(email) {
+    if (!email || !email.includes('@')) {
+      return { valid: false, message: 'Digite um e-mail válido.' };
+    }
+
+    const clean = email.trim().toLowerCase();
+    const parts = clean.split('@');
+    if (parts.length !== 2) {
+      return { valid: false, message: 'Formato de e-mail inválido.' };
+    }
+
+    const user = parts[0];
+    const domain = parts[1];
+
+    if (!user || user.length < 1 || !domain || domain.length < 3 || !domain.includes('.')) {
+      return { valid: false, message: 'Domínio do e-mail incompleto.' };
+    }
+
+    // Nível 1: Regex RFC 5322
+    const regex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    if (!regex.test(clean)) {
+      return { valid: false, message: 'Caracteres inválidos no e-mail.' };
+    }
+
+    // Nível 2: Detector de E-mails Temporários / Descartáveis
+    if (DISPOSABLE_DOMAINS.includes(domain)) {
+      return { valid: false, message: 'E-mails temporários/descartáveis não são permitidos para entrega de licenças.' };
+    }
+
+    // Nível 3: Detector de Typos
+    if (COMMON_EMAIL_TYPOS[domain]) {
+      const suggestedDomain = COMMON_EMAIL_TYPOS[domain];
+      const suggestedEmail = `${user}@${suggestedDomain}`;
+      return {
+        valid: false,
+        isTypo: true,
+        suggestion: suggestedEmail,
+        message: `Você quis dizer <strong>${suggestedEmail}</strong>?`
+      };
+    }
+
+    // Nível 4: Verificação de Domínio MX via DNS over HTTPS (Google DoH)
+    try {
+      const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      const data = await res.json();
+      const hasMx = data && data.Status === 0 && Array.isArray(data.Answer) && data.Answer.length > 0;
+
+      if (!hasMx) {
+        // Tenta checar registro A se MX não responder explicitamente
+        const resA = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        const dataA = await resA.json();
+        const hasA = dataA && dataA.Status === 0 && Array.isArray(dataA.Answer) && dataA.Answer.length > 0;
+
+        if (!hasA) {
+          return { valid: false, message: `O domínio <strong>@${domain}</strong> não existe na internet.` };
+        }
+      }
+    } catch (netErr) {
+      // Fallback em caso de erro na consulta de DNS (não bloqueia usuário)
+      console.warn('DNS validation fallback:', netErr);
+    }
+
+    return { valid: true, message: 'E-mail válido e verificado!' };
+  }
+
+  // Listener em Tempo Real do E-mail
+  if (payerEmailInput && emailFeedback) {
+    payerEmailInput.addEventListener('input', () => {
+      clearTimeout(emailCheckTimeout);
+      const val = payerEmailInput.value.trim();
+
+      if (!val || val.length < 5 || !val.includes('@')) {
+        emailFeedback.style.display = 'none';
+        payerEmailInput.style.borderColor = '';
+        isEmailVerifiedValid = false;
+        return;
+      }
+
+      emailFeedback.style.display = 'block';
+      emailFeedback.style.color = '#9ca3af';
+      emailFeedback.innerHTML = '🔍 Verificando domínio...';
+
+      emailCheckTimeout = setTimeout(async () => {
+        const result = await validateEmailAdvanced(val);
+
+        if (result.valid) {
+          emailFeedback.style.color = '#34d399';
+          emailFeedback.innerHTML = '✅ E-mail válido e verificado!';
+          payerEmailInput.style.borderColor = '#10b981';
+          isEmailVerifiedValid = true;
+        } else if (result.isTypo) {
+          emailFeedback.style.color = '#fbbf24';
+          emailFeedback.innerHTML = `⚠️ ${result.message} <button type="button" id="btn-fix-email" style="background: none; border: underline; color: #60a5fa; cursor: pointer; padding: 0 4px; font-weight: bold;">Corrigir</button>`;
+          payerEmailInput.style.borderColor = '#f59e0b';
+          isEmailVerifiedValid = false;
+
+          const btnFix = document.getElementById('btn-fix-email');
+          if (btnFix) {
+            btnFix.addEventListener('click', () => {
+              payerEmailInput.value = result.suggestion;
+              payerEmailInput.dispatchEvent(new Event('input'));
+            });
+          }
+        } else {
+          emailFeedback.style.color = '#f87171';
+          emailFeedback.innerHTML = `❌ ${result.message}`;
+          payerEmailInput.style.borderColor = '#ef4444';
+          isEmailVerifiedValid = false;
+        }
+      }, 400);
+    });
+  }
+
+  // =========================================================================
+  // 3. SELEÇÃO DE PLANOS E QUANTIDADE (1 A 5)
+  // =========================================================================
   planCards.forEach(card => {
     card.addEventListener('click', () => {
       document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('active'));
@@ -127,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 2. Seleção de Quantidade (1 a 5)
   qtyButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       qtyButtons.forEach(b => b.classList.remove('active'));
@@ -138,7 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 3. Seleção de Forma de Pagamento (PIX vs Cartão)
+  // =========================================================================
+  // 4. FORMAS DE PAGAMENTO (PIX VS CARTÃO)
+  // =========================================================================
   if (tabPix && tabCard) {
     tabPix.addEventListener('click', () => {
       tabPix.classList.add('active');
@@ -179,7 +351,6 @@ document.addEventListener('DOMContentLoaded', () => {
       finalTotal = Math.max(0.10, cardTotal - pixDiscountAmount);
     }
 
-    // Atualiza Badges e Labels
     if (qtyDiscountBadge) {
       qtyDiscountBadge.textContent = qtyInfo.label;
     }
@@ -196,7 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
       summaryBasePrice.textContent = `R$ ${baseTotal.toFixed(2).replace('.', ',')}`;
     }
 
-    // Linha de Desconto de Quantidade
     if (rowQtyDiscount) {
       if (qtyDiscountAmount > 0) {
         rowQtyDiscount.style.display = 'flex';
@@ -207,7 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Linha de Desconto do PIX
     if (rowPixDiscount) {
       if (selectedMethod === 'pix' && pixDiscountAmount > 0) {
         rowPixDiscount.style.display = 'flex';
@@ -217,12 +386,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Total
     if (summaryTotalPrice) {
       summaryTotalPrice.textContent = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
     }
 
-    // Parcelamento em até 3x SEM JUROS no Cartão
     if (summaryInstallmentsHint && cardInstallmentsSelect) {
       if (selectedMethod === 'card') {
         const p1 = cardTotal;
@@ -244,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Texto do Botão de Envio
     if (btnSubmitPayment) {
       if (selectedMethod === 'pix') {
         btnSubmitPayment.textContent = `📱 Gerar QR Code PIX de R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
@@ -264,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Inicializa cálculos
   updateCheckoutCalculations();
 
   // Máscaras de Cartão
@@ -297,32 +462,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Submissão do Checkout Unificado (PIX ou Cartão)
+  // =========================================================================
+  // 5. SUBMISSÃO DO CHECKOUT (PIX OU CARTÃO)
+  // =========================================================================
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const name = document.getElementById('payer-name').value.trim();
-      const email = document.getElementById('payer-email').value.trim();
-      const phone = document.getElementById('payer-phone').value.trim();
+      const name = (payerNameInput ? payerNameInput.value : '').trim();
+      const email = (payerEmailInput ? payerEmailInput.value : '').trim();
+      const phone = (payerPhoneInput ? payerPhoneInput.value : '').trim();
       const devPassword = (selectedPlanKey === 'dev_test' && devPasswordInput) ? devPasswordInput.value.trim() : '';
 
-      if (!email || !name) {
-        alert('Por favor, preencha seu nome e e-mail.');
+      if (!name) {
+        alert('Por favor, informe o seu nome.');
+        if (payerNameInput) payerNameInput.focus();
+        return;
+      }
+
+      // Validação profunda de e-mail antes do envio
+      const emailCheck = await validateEmailAdvanced(email);
+      if (!emailCheck.valid) {
+        alert('Por favor, verifique o seu e-mail: ' + (emailCheck.message.replace(/<[^>]+>/g, '')));
+        if (payerEmailInput) payerEmailInput.focus();
+        return;
+      }
+
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10) {
+        alert('Por favor, informe um número de telefone/celular válido no modelo (19)9 1234-5678.');
+        if (payerPhoneInput) payerPhoneInput.focus();
         return;
       }
 
       const calcs = updateCheckoutCalculations();
 
-      // =======================================================================
-      // FLUXO A: PAGAMENTO VIA PIX (+10% OFF)
-      // =======================================================================
+      // FLUXO PIX
       if (selectedMethod === 'pix') {
         btnSubmitPayment.disabled = true;
         btnSubmitPayment.textContent = 'Gerando QR Code PIX no Mercado Pago...';
 
         try {
-          let createUrl = `${APPS_SCRIPT_URL}?action=create_pix&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&amount=${calcs.finalTotal.toFixed(2)}&plan=${selectedPlanKey}&quantity=${selectedQty}`;
+          let createUrl = `${APPS_SCRIPT_URL}?action=create_pix&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(cleanPhone)}&amount=${calcs.finalTotal.toFixed(2)}&plan=${selectedPlanKey}&quantity=${selectedQty}`;
           
           if (selectedPlanKey === 'dev_test') {
             createUrl += `&dev_password=${encodeURIComponent(devPassword || '1ktn130534')}`;
@@ -344,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
             form.style.display = 'none';
             pixContainer.style.display = 'block';
 
-            startPaymentPolling(currentPaymentId, email, phone, PLANS[selectedPlanKey].name);
+            startPaymentPolling(currentPaymentId, email, cleanPhone, PLANS[selectedPlanKey].name);
           } else {
             alert(data.message || 'Erro ao gerar o QR Code no Mercado Pago.');
           }
@@ -357,9 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // =======================================================================
-      // FLUXO B: PAGAMENTO VIA CARTÃO DE CRÉDITO (Até 3x sem juros)
-      // =======================================================================
+      // FLUXO CARTÃO
       else if (selectedMethod === 'card') {
         const rawCardNumber = (document.getElementById('card-number').value || '').replace(/\s/g, '');
         const cardHolder = document.getElementById('card-holder-name').value.trim();
@@ -392,7 +571,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmitPayment.textContent = 'Processando cartão no Mercado Pago...';
 
         try {
-          // 1. Gera Token Seguro de Cartão via API do Mercado Pago
           const tokenUrl = `https://api.mercadopago.com/v1/card_tokens?public_key=${MP_PUBLIC_KEY}`;
           const tokenRes = await fetch(tokenUrl, {
             method: 'POST',
@@ -419,17 +597,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const cardToken = tokenData.id;
 
-          // 2. Envia Token para o Backend Apps Script processar
-          const payUrl = `${APPS_SCRIPT_URL}?action=create_card_payment&token=${encodeURIComponent(cardToken)}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&amount=${calcs.cardTotal.toFixed(2)}&plan=${selectedPlanKey}&quantity=${selectedQty}&installments=${installments}&doc_number=${encodeURIComponent(docNumber)}`;
+          const payUrl = `${APPS_SCRIPT_URL}?action=create_card_payment&token=${encodeURIComponent(cardToken)}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(cleanPhone)}&amount=${calcs.cardTotal.toFixed(2)}&plan=${selectedPlanKey}&quantity=${selectedQty}&installments=${installments}&doc_number=${encodeURIComponent(docNumber)}`;
 
           const payRes = await fetch(payUrl, { method: 'GET', redirect: 'follow' });
           const payResult = await payRes.json();
 
           if (payResult && payResult.success && payResult.status === 'approved') {
-            // Pagamento Aprovado com Sucesso!
             showSuccessModal(payResult.licenseKeys || [payResult.licenseKey], PLANS[selectedPlanKey].name, payResult.downloadUrl);
           } else {
-            alert(payResult.message || 'Pagamento recusado pela operadora do cartão.');
+            alert(payResult.message || 'Pagamento não aprovado pela operadora do cartão.');
           }
         } catch (cardErr) {
           console.error('Erro ao processar cartão:', cardErr);
@@ -442,7 +618,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 5. Exibe Modal com Múltiplas Chaves de Licença
+  // =========================================================================
+  // 6. MODAL DE SUCESSO COM MÚLTIPLAS CHAVES
+  // =========================================================================
   function showSuccessModal(keys, planName, downloadUrl) {
     allGeneratedKeys = Array.isArray(keys) ? keys : [keys];
 
@@ -471,7 +649,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modalKeysContainer.appendChild(keyBox);
       });
 
-      // Listeners dos botões individuais de cópia
       document.querySelectorAll('.btn-copy-single').forEach(btn => {
         btn.addEventListener('click', () => {
           navigator.clipboard.writeText(btn.dataset.key);
@@ -518,7 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Polling de Aprovação do Pix
+  // Polling de Pagamento Pix
   function startPaymentPolling(paymentId, email, phone, planName) {
     if (pollingInterval) clearInterval(pollingInterval);
 
@@ -543,7 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
-  // 6. Modal de Recuperação de Chaves
+  // =========================================================================
+  // 7. MODAL DE RECUPERAÇÃO DE CHAVES
+  // =========================================================================
   function openRecoveryModal(e) {
     if (e) e.preventDefault();
     if (recoveryModal) {
@@ -602,7 +781,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7. Modo Desenvolvedor
+  // =========================================================================
+  // 8. MODO DESENVOLVEDOR (SENHA MESTRA)
+  // =========================================================================
   if (btnToggleDev) {
     btnToggleDev.addEventListener('click', (e) => {
       e.preventDefault();
@@ -617,7 +798,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnUnlockDev.addEventListener('click', () => {
       const pwd = devPasswordInput ? devPasswordInput.value.trim() : '';
       if (pwd === '1ktn130534') {
-        devUnlocked = true;
         if (devPlanCard) {
           devPlanCard.style.display = 'flex';
           document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('active'));
