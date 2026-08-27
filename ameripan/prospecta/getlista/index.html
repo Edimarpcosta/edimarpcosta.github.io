@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
     <style>
         /* ===== SYSTEM THEME VARIABLES ===== */
         /* Default: Light Mode (WCAG compliant) */
@@ -210,6 +211,9 @@
         .modal-overlay {
             position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
             display:flex; align-items:center; justify-content:center; z-index:50;
+        }
+        .modal-overlay.hidden, #licenseSalesModal.hidden {
+            display: none !important;
         }
         .modal-content {
             background:var(--bg-modal); border:1px solid var(--border-modal);
@@ -482,6 +486,10 @@
                 <a href="https://edimarpcosta.github.io/ameripan/prospecta/getlista/leadview/" target="_blank" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(245,158,11,0.4); color:#fbbf24; font-weight:600;" title="Visualizador de Mapa e JSON (LeadView)">
                     <span>🗺️ LeadView</span>
                 </a>
+                <button id="topLicenseBtn" type="button" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(99,102,241,0.4); color:#a5b4fc; font-weight:600;" title="Gerenciar Licença">
+                    <span id="licenseStatusIcon">🔑</span>
+                    <span id="licenseStatusText">Licença Pro</span>
+                </button>
                 <button id="topProxySettingsBtn" type="button" onclick="if(typeof proxyController !== 'undefined') proxyController.openModal();" class="btn-secondary text-xs flex items-center gap-1.5" style="border-color:rgba(16,185,129,0.4); color:#10b981; font-weight:600;">
                     <span>🌐 Proxy Settings</span>
                 </button>
@@ -680,21 +688,29 @@
                     <div class="circle" style="background:linear-gradient(135deg,#f59e0b,#d97706)">1</div>
                     <div><h3 style="color:#fbbf24">FILTRAR</h3><p>Defina UF, municípios e ramo de atuação para gerar a lista de CNPJs</p></div>
                 </div>
-                <!-- API Key e Endpoint -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                    <div>
-                        <label class="block text-xs font-semibold mb-1" style="color:#fbbf24; text-transform:uppercase; letter-spacing:0.05em;">🔑 API Key Casa dos Dados</label>
-                        <div class="flex gap-2">
-                            <input type="password" id="mineApiKey" placeholder="Insira sua chave da API..." class="flex-1 p-3 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(245,158,11,0.25); color:var(--color-text); border-radius:0.5rem;">
-                            <button id="testApiKeyBtn" class="btn-secondary" style="padding:0.5rem 0.75rem; font-size:0.75rem; white-space:nowrap; border-color:rgba(245,158,11,0.3); color:#fbbf24;">🔑 Testar</button>
+                <!-- Configuração de API Própria (Opcional - Servidor já conectado) -->
+                <details class="adv-details mb-5" id="customApiSettingsDetails">
+                    <summary style="font-size:0.75rem; color:#94a3b8;">
+                        <span>⚙️ Configuração de API Própria (Opcional — O sistema já utiliza a chave automática do servidor)</span>
+                        <span class="adv-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 Servidor Conectado</span>
+                    </summary>
+                    <div class="adv-body pt-2">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:#fbbf24; text-transform:uppercase; letter-spacing:0.05em;">🔑 Sua Chave de API Própria (Deixe vazio para usar a do servidor)</label>
+                                <div class="flex gap-2">
+                                    <input type="password" id="mineApiKey" placeholder="Deixe em branco para usar a chave automática..." class="flex-1 p-2.5 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(245,158,11,0.25); color:var(--color-text); border-radius:0.5rem;" autocomplete="off">
+                                    <button id="testApiKeyBtn" class="btn-secondary" style="padding:0.5rem 0.75rem; font-size:0.75rem; white-space:nowrap; border-color:rgba(245,158,11,0.3); color:#fbbf24;">🔑 Testar</button>
+                                </div>
+                                <span id="mineKeyTestResult" class="text-xs mt-1 block" style="color:#64748b; min-height:1.2em;"></span>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--color-text-muted); text-transform:uppercase; letter-spacing:0.05em;">🌐 Endpoint Customizado</label>
+                                <input type="text" id="mineEndpoint" value="https://api.casadosdados.com.br/v5/cnpj/pesquisa" class="w-full p-2.5 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text-muted); border-radius:0.5rem; font-size:0.8rem;">
+                            </div>
                         </div>
-                        <span id="mineKeyTestResult" class="text-xs mt-1 block" style="color:#64748b; min-height:1.2em;"></span>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold mb-1" style="color:var(--color-text-muted); text-transform:uppercase; letter-spacing:0.05em;">🌐 Endpoint</label>
-                        <input type="text" id="mineEndpoint" value="https://api.casadosdados.com.br/v5/cnpj/pesquisa" class="w-full p-3 text-sm" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--color-text-muted); border-radius:0.5rem; font-size:0.8rem;">
-                    </div>
-                </div>
+                </details>
 
                 <!-- Presets e Ramos de Filtros -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
@@ -1624,24 +1640,1140 @@
 
 
     <!-- Script v5: Toggle de colapso/expansão do cnpjInputSection -->
+    <!-- ================================================================= -->
+    <!-- MODAL INTEGRADO DE VENDAS, CHECKOUT & ATIVAÇÃO DE LICENÇAS -->
+    <!-- ================================================================= -->
+    <div id="licenseSalesModal" class="modal-overlay hidden" style="z-index: 9999; backdrop-filter: blur(12px); background: rgba(15, 23, 42, 0.88);">
+        <div class="modal-content" style="max-width: 680px; width: 95%; background: #0f172a; border: 2px solid #6366f1; border-radius: 18px; padding: 24px; color: #f8fafc; box-shadow: 0 25px 60px rgba(0,0,0,0.85); position: relative; max-height: 92vh; overflow-y: auto;">
+            
+            <!-- Botão Fechar Modal (apenas quando já licenciado) -->
+            <button id="btnCloseSalesModal" type="button" class="hidden" style="position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #94a3b8; font-size: 16px; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+
+            <!-- Header do Modal -->
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 800; color: #fff;">
+                    🔍 GetLista <span style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px;">PRO v3.0</span>
+                </div>
+                <p style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Mineração em Alta Escala, Quadro de Sócios (QSA) & Multi-API Inteligente</p>
+            </div>
+
+            <!-- Navegação de Abas do Modal -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 10px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.08);">
+                <button type="button" id="tabBtnBuy" class="modal-tab-btn active" style="padding: 8px 6px; border-radius: 8px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; background: #6366f1; color: #fff;">
+                    🛒 Comprar Acesso
+                </button>
+                <button type="button" id="tabBtnActivate" class="modal-tab-btn" style="padding: 8px 6px; border-radius: 8px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; background: transparent; color: #94a3b8;">
+                    🔑 Já Tenho Chave
+                </button>
+                <button type="button" id="tabBtnRecover" class="modal-tab-btn" style="padding: 8px 6px; border-radius: 8px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; background: transparent; color: #94a3b8;">
+                    🔄 Recuperar Chave
+                </button>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- CONTEÚDO DA ABA 1: COMPRAR ACESSO          -->
+            <!-- ========================================== -->
+            <div id="tabContentBuy">
+                
+                <!-- Grade de Planos -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px;">
+                    
+                    <!-- Plano 6 Meses -->
+                    <div class="inapp-plan-card" data-plan="semestral" style="background: rgba(30, 41, 59, 0.6); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px 12px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">6 Meses</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #fff; line-height: 1;">R$ 47,90</div>
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">180 dias com suporte</div>
+                    </div>
+
+                    <!-- Plano Vitalício (Padrão) -->
+                    <div class="inapp-plan-card active" data-plan="vitalicio" style="background: linear-gradient(180deg, rgba(99,102,241,0.15) 0%, rgba(30,41,59,0.8) 100%); border: 2px solid #6366f1; border-radius: 12px; padding: 14px 12px; text-align: center; cursor: pointer; position: relative; transition: all 0.2s; box-shadow: 0 4px 20px rgba(99,102,241,0.25);">
+                        <span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #6366f1; color: #fff; font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap;">⭐ MAIS POPULAR / VITALÍCIO</span>
+                        <div style="font-size: 13px; font-weight: 700; color: #a5b4fc; margin-bottom: 4px;">Vitalício Pro</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #fff; line-height: 1;">R$ 99,90</div>
+                        <div style="font-size: 10px; color: #34d399; margin-top: 4px;">Acesso permanente</div>
+                    </div>
+
+                    <!-- Plano Dev (Oculto) -->
+                    <div id="inapp-dev-card" class="inapp-plan-card" data-plan="dev_test" style="display: none; background: rgba(139, 92, 246, 0.1); border: 2px solid #8b5cf6; border-radius: 12px; padding: 14px 12px; text-align: center; cursor: pointer;">
+                        <div style="font-size: 13px; font-weight: 700; color: #c4b5fd;">Dev Teste</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #fff; line-height: 1;">R$ 0,10</div>
+                        <div style="font-size: 10px; color: #a78bfa;">Vitalício Testes</div>
+                    </div>
+                </div>
+
+                <!-- Seletor de Quantidade com Desconto Progressivo -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 12px; font-weight: 700; color: #cbd5e1;">Quantas licenças você precisa?</span>
+                        <span id="inapp-qty-badge" style="font-size: 10px; background: rgba(99,102,241,0.2); color: #a5b4fc; padding: 2px 6px; border-radius: 999px; font-weight: 600;">1 Licença</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
+                        <div class="inapp-qty-btn active" data-qty="1" style="background: #6366f1; border: 1px solid #6366f1; border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; color: #fff;">
+                            <span style="font-size: 14px; font-weight: 800; display: block;">1</span>
+                            <span style="font-size: 9px; opacity: 0.8; display: block;">Normal</span>
+                        </div>
+                        <div class="inapp-qty-btn" data-qty="2" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; color: #cbd5e1;">
+                            <span style="font-size: 14px; font-weight: 800; display: block;">2</span>
+                            <span style="font-size: 9px; color: #34d399; display: block;">-20%</span>
+                        </div>
+                        <div class="inapp-qty-btn" data-qty="3" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; color: #cbd5e1;">
+                            <span style="font-size: 14px; font-weight: 800; display: block;">3</span>
+                            <span style="font-size: 9px; color: #34d399; display: block;">-30%</span>
+                        </div>
+                        <div class="inapp-qty-btn" data-qty="4" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; color: #cbd5e1;">
+                            <span style="font-size: 14px; font-weight: 800; display: block;">4</span>
+                            <span style="font-size: 9px; color: #34d399; display: block;">-40%</span>
+                        </div>
+                        <div class="inapp-qty-btn" data-qty="5" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; color: #cbd5e1;">
+                            <span style="font-size: 14px; font-weight: 800; display: block;">5</span>
+                            <span style="font-size: 9px; color: #34d399; font-weight: 700; display: block;">-50% 🔥</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Abas PIX vs Cartão -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                    <div id="inapp-pay-pix" class="inapp-pay-btn active" style="padding: 10px; background: rgba(99,102,241,0.15); border: 2px solid #6366f1; border-radius: 10px; cursor: pointer; text-align: center;">
+                        <div style="font-size: 12px; font-weight: 800; color: #fff;">📱 Pagar com PIX</div>
+                        <div style="font-size: 10px; color: #34d399; font-weight: 700;">+10% OFF EXTRA Instantâneo</div>
+                    </div>
+                    <div id="inapp-pay-card" class="inapp-pay-btn" style="padding: 10px; background: rgba(255,255,255,0.04); border: 2px solid rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; text-align: center;">
+                        <div style="font-size: 12px; font-weight: 800; color: #cbd5e1;">💳 Cartão de Crédito</div>
+                        <div style="font-size: 10px; color: #94a3b8;">Até 3x SEM JUROS</div>
+                    </div>
+                </div>
+
+                <!-- Resumo do Pedido -->
+                <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; margin-bottom: 16px; font-size: 12px;">
+                    <div style="display: flex; justify-content: space-between; color: #94a3b8; margin-bottom: 4px;">
+                        <span>Plano & Licenças:</span>
+                        <span id="inapp-sum-plan" style="color: #fff; font-weight: 600;">1x Vitalício</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: #94a3b8; margin-bottom: 4px;">
+                        <span>Valor Base:</span>
+                        <span id="inapp-sum-base">R$ 99,90</span>
+                    </div>
+                    <div id="inapp-sum-qty-row" style="display: none; justify-content: space-between; color: #34d399; margin-bottom: 4px;">
+                        <span id="inapp-sum-qty-label">Desconto por Quantidade:</span>
+                        <span id="inapp-sum-qty-val">- R$ 0,00</span>
+                    </div>
+                    <div id="inapp-sum-pix-row" style="display: flex; justify-content: space-between; color: #34d399; margin-bottom: 4px;">
+                        <span>Desconto Extra PIX (10% OFF):</span>
+                        <span id="inapp-sum-pix-val">- R$ 9,99</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: #fff; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; margin-top: 6px;">
+                        <span>Total a Pagar:</span>
+                        <span id="inapp-sum-total" style="color: #34d399;">R$ 89,91</span>
+                    </div>
+                    <div id="inapp-sum-installments-hint" style="font-size: 10px; color: #94a3b8; text-align: right; margin-top: 2px; display: none;">
+                        Ou em até 3x de R$ 33,30 sem juros
+                    </div>
+                </div>
+
+                <!-- Formulário de Pagamento -->
+                <form id="inapp-checkout-form">
+                    <div style="margin-bottom: 10px;">
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 3px;">Seu Nome Completo:</label>
+                        <input type="text" id="inapp-payer-name" placeholder="Ex: João da Silva" required class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2" style="margin-bottom: 10px;">
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 3px;">Seu E-mail Principal:</label>
+                            <input type="email" id="inapp-payer-email" placeholder="seuemail@gmail.com" required class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                            <div id="inapp-email-feedback" style="font-size: 10px; margin-top: 2px; display: none;"></div>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 3px;">WhatsApp / Telefone:</label>
+                            <input type="tel" id="inapp-payer-phone" placeholder="(19)9 1234-5678" maxlength="15" required class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                            <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Formato: (19)9 1234-5678</div>
+                        </div>
+                    </div>
+
+                    <!-- Campos do Cartão (Ocultos no modo PIX) -->
+                    <div id="inapp-card-fields" style="display: none; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px; margin-top: 10px;">
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">Número do Cartão:</label>
+                            <input type="text" id="inapp-card-number" placeholder="0000 0000 0000 0000" maxlength="19" class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">Nome Impresso no Cartão:</label>
+                            <input type="text" id="inapp-card-holder" placeholder="NOME COMO NO CARTAO" class="w-full p-2 rounded text-xs uppercase" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2" style="margin-bottom: 8px;">
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">Validade (MM/AA):</label>
+                                <input type="text" id="inapp-card-exp" placeholder="MM/AA" maxlength="5" class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">CVV:</label>
+                                <input type="password" id="inapp-card-cvv" placeholder="123" maxlength="4" class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2" style="margin-bottom: 10px;">
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">CPF do Titular:</label>
+                                <input type="text" id="inapp-card-cpf" placeholder="000.000.000-00" maxlength="14" class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">Parcelamento:</label>
+                                <select id="inapp-card-installments" class="w-full p-2 rounded text-xs" style="background: #1e293b; border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                                    <option value="1">1x de R$ 99,90 (Sem Juros)</option>
+                                    <option value="2">2x de R$ 49,95 (Sem Juros)</option>
+                                    <option value="3" selected>3x de R$ 33,30 (Sem Juros)</option>
+                                    <option value="6">6x (com juros Mercado Pago)</option>
+                                    <option value="12">12x (com juros Mercado Pago)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="inapp-btn-submit" class="w-full py-3 rounded-lg font-bold text-sm text-white" style="background: linear-gradient(135deg, #6366f1, #4f46e5); box-shadow: 0 4px 15px rgba(99,102,241,0.4); border: none; cursor: pointer; transition: all 0.2s;">
+                        📱 Gerar QR Code PIX de R$ 89,91
+                    </button>
+                </form>
+
+                <!-- Box de Exibição do QR Code Pix -->
+                <div id="inapp-pix-box" style="display: none; background: #ffffff; border-radius: 12px; padding: 18px; color: #0f172a; text-align: center; margin-top: 14px;">
+                    <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 2px;">📱 Pague com o PIX (+10% OFF Aplicado)</div>
+                    <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">Escaneie o QR Code no app do seu banco:</div>
+                    
+                    <img id="inapp-pix-qr-img" src="" alt="QR Code Pix" style="width: 180px; height: 180px; margin: 0 auto 12px auto; display: block; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px;">
+                    
+                    <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                        <input type="text" id="inapp-pix-code-input" readonly style="flex: 1; padding: 8px 10px; font-family: monospace; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; color: #334155;">
+                        <button type="button" id="inapp-btn-copy-pix" style="padding: 8px 14px; font-size: 11px; font-weight: 700; background: #6366f1; color: #fff; border: none; border-radius: 6px; cursor: pointer;">Copiar</button>
+                    </div>
+
+                    <div id="inapp-pix-status-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e;">
+                        <span class="loading-spinner" style="width: 12px; height: 12px; border-width: 2px;"></span>
+                        <span>Aguardando confirmação do Mercado Pago...</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- CONTEÚDO DA ABA 2: JÁ TENHO UMA CHAVE      -->
+            <!-- ========================================== -->
+            <div id="tabContentActivate" style="display: none; padding: 10px 0;">
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <div style="font-size: 32px; margin-bottom: 6px;">🔑</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #fff;">Ativar Chave de Licença</div>
+                    <div style="font-size: 12px; color: #94a3b8;">Insira seu código de ativação recebido por e-mail ou na compra.</div>
+                </div>
+
+                <div style="max-width: 440px; margin: 0 auto;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Código de Licença:</label>
+                        <input type="text" id="inapp-manual-key-input" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="19" class="w-full p-3 rounded-lg text-sm text-center font-mono uppercase" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); color: #fff; letter-spacing: 2px;">
+                    </div>
+
+                    <button type="button" id="inapp-btn-manual-activate" class="w-full py-2.5 rounded-lg font-bold text-sm text-white" style="background: linear-gradient(135deg, #10b981, #059669); border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(16,185,129,0.3);">
+                        🔓 Validar e Desbloquear Acesso
+                    </button>
+
+                    <div id="inapp-manual-feedback" style="display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 12px; text-align: center;"></div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- CONTEÚDO DA ABA 3: RECUPERAR POR E-MAIL    -->
+            <!-- ========================================== -->
+            <div id="tabContentRecover" style="display: none; padding: 10px 0;">
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <div style="font-size: 32px; margin-bottom: 6px;">🔄</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #fff;">Recuperar Minhas Licenças</div>
+                    <div style="font-size: 12px; color: #94a3b8;">Informe seu e-mail de compra para reenviar todas as suas chaves ativas.</div>
+                </div>
+
+                <div style="max-width: 440px; margin: 0 auto;">
+                    <form id="inapp-recover-form">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Seu E-mail:</label>
+                            <input type="email" id="inapp-recover-email" placeholder="seuemail@gmail.com" required class="w-full p-2.5 rounded-lg text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        </div>
+
+                        <button type="submit" id="inapp-btn-submit-recover" class="w-full py-2.5 rounded-lg font-bold text-sm text-white" style="background: #6366f1; border: none; cursor: pointer;">
+                            📨 Reenviar Chaves por E-mail
+                        </button>
+                    </form>
+
+                    <div id="inapp-recover-feedback" style="display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 12px; text-align: center;"></div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TELA DE SUCESSO: CHAVES & GERADOR DE PDF   -->
+            <!-- ========================================== -->
+            <div id="inapp-success-view" style="display: none; text-align: center; padding: 10px 0;">
+                <div style="font-size: 40px; margin-bottom: 6px;">🎉</div>
+                <div style="font-size: 18px; font-weight: 800; color: #34d399; margin-bottom: 2px;">Pagamento Confirmado & Sistema Ativado!</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 14px;">Sua licença já foi salva localmente e enviada para seu e-mail.</div>
+
+                <div id="inapp-success-keys-box" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; max-height: 180px; overflow-y: auto;"></div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                    <button type="button" id="inapp-btn-copy-all-keys" style="padding: 10px; font-size: 12px; font-weight: 700; background: rgba(99,102,241,0.2); border: 1px solid #6366f1; color: #a5b4fc; border-radius: 8px; cursor: pointer;">
+                        📋 Copiar Chave(s)
+                    </button>
+                    <button type="button" id="inapp-btn-download-pdf" style="padding: 10px; font-size: 12px; font-weight: 700; background: rgba(16,185,129,0.2); border: 1px solid #10b981; color: #34d399; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        📄 Baixar PDF das Licenças
+                    </button>
+                </div>
+
+                <button type="button" id="inapp-btn-open-system-now" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(16,185,129,0.4);">
+                    🚀 Começar a Usar o GetLista Agora
+                </button>
+            </div>
+
+            <!-- Footer com Link Dev Discreto -->
+            <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #64748b;">
+                <span>Suporte: edmaispinheiro@gmail.com</span>
+                <span id="inapp-dev-link" style="cursor: pointer; opacity: 0.4;">🔒 VIP / Dev</span>
+            </div>
+
+            <!-- Box Senha Dev -->
+            <div id="inapp-dev-box" style="display: none; margin-top: 8px; padding: 6px; background: rgba(0,0,0,0.4); border-radius: 6px; text-align: center;">
+                <div style="display: flex; gap: 4px; max-width: 240px; margin: 0 auto;">
+                    <input type="password" id="inapp-dev-pwd" placeholder="Senha dev..." style="flex: 1; padding: 4px 8px; font-size: 11px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px;">
+                    <button type="button" id="inapp-dev-btn-unlock" style="padding: 4px 8px; font-size: 10px; font-weight: 700; background: #6366f1; color: #fff; border: none; border-radius: 4px; cursor: pointer;">OK</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Script do License Manager -->
+    <script src="license-manager.js"></script>
+
+    <!-- ================================================================= -->
+    <!-- MOTOR INTEGRADO DE CHECKOUT, VALIDAÇÃO & GERAÇÃO DE PDF           -->
+    <!-- ================================================================= -->
     <script>
     (function () {
-        var btn = document.getElementById('cnpjInputToggleBtn');
-        var content = document.getElementById('cnpjInputContent');
-        var icon = document.getElementById('cnpjInputToggleIcon');
-        if (btn && content) {
-            btn.addEventListener('click', function (e) {
-                if (e.target.closest('#transferMineBtnFase2')) return;
-                var isHidden = content.classList.contains('hidden');
-                if (isHidden) {
-                    content.classList.remove('hidden');
-                    if (icon) icon.textContent = '▼';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtddYDHJmvEmFqfwbX66X-Pr7ae4va72icdN5JmsahsV_ylFqXOSflW7Ae3ds52I6R/exec';
+        const MP_PUBLIC_KEY = 'APP_USR-e2a505c6-9a2b-4e41-bea3-a34e800b7acc';
+
+        const PLANS = {
+            semestral: { name: 'Acesso 6 Meses', price: 47.90 },
+            vitalicio: { name: 'Acesso Vitalício', price: 99.90 },
+            dev_test: { name: 'Licença Dev (Vitalícia)', price: 0.10 }
+        };
+
+        const QTY_DISCOUNTS = {
+            1: { rate: 0.00, label: '1 Licença (Individual)' },
+            2: { rate: 0.20, label: '2 Licenças (20% OFF)' },
+            3: { rate: 0.30, label: '3 Licenças (30% OFF)' },
+            4: { rate: 0.40, label: '4 Licenças (40% OFF)' },
+            5: { rate: 0.50, label: '5 Licenças (50% OFF 🔥)' }
+        };
+
+        const COMMON_EMAIL_TYPOS = {
+            'gmai.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gmail.con': 'gmail.com',
+            'gamil.com': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmai.com': 'hotmail.com',
+            'outlok.com': 'outlook.com', 'yaho.com': 'yahoo.com', 'yahoo.com.b': 'yahoo.com.br'
+        };
+
+        let selectedPlan = 'vitalicio';
+        let selectedQty = 1;
+        let selectedPayMethod = 'pix';
+        let latestPurchasedData = null;
+        let pollingTimer = null;
+        let emailDebounce = null;
+
+        // Elementos UI
+        const topLicenseBtn = document.getElementById('topLicenseBtn');
+        const licenseStatusIcon = document.getElementById('licenseStatusIcon');
+        const licenseStatusText = document.getElementById('licenseStatusText');
+        const modal = document.getElementById('licenseSalesModal');
+        const btnCloseModal = document.getElementById('btnCloseSalesModal');
+
+        const tabBtnBuy = document.getElementById('tabBtnBuy');
+        const tabBtnActivate = document.getElementById('tabBtnActivate');
+        const tabBtnRecover = document.getElementById('tabBtnRecover');
+        const tabContentBuy = document.getElementById('tabContentBuy');
+        const tabContentActivate = document.getElementById('tabContentActivate');
+        const tabContentRecover = document.getElementById('tabContentRecover');
+        const inappSuccessView = document.getElementById('inapp-success-view');
+
+        const inappPayPix = document.getElementById('inapp-pay-pix');
+        const inappPayCard = document.getElementById('inapp-pay-card');
+        const inappCardFields = document.getElementById('inapp-card-fields');
+        const inappQtyBadge = document.getElementById('inapp-qty-badge');
+        const inappSumPlan = document.getElementById('inapp-sum-plan');
+        const inappSumBase = document.getElementById('inapp-sum-base');
+        const inappSumQtyRow = document.getElementById('inapp-sum-qty-row');
+        const inappSumQtyLabel = document.getElementById('inapp-sum-qty-label');
+        const inappSumQtyVal = document.getElementById('inapp-sum-qty-val');
+        const inappSumPixRow = document.getElementById('inapp-sum-pix-row');
+        const inappSumPixVal = document.getElementById('inapp-sum-pix-val');
+        const inappSumTotal = document.getElementById('inapp-sum-total');
+        const inappSumInstallmentsHint = document.getElementById('inapp-sum-installments-hint');
+        const inappCardInstallments = document.getElementById('inapp-card-installments');
+        const inappBtnSubmit = document.getElementById('inapp-btn-submit');
+
+        const inappCheckoutForm = document.getElementById('inapp-checkout-form');
+        const inappPayerName = document.getElementById('inapp-payer-name');
+        const inappPayerEmail = document.getElementById('inapp-payer-email');
+        const inappPayerPhone = document.getElementById('inapp-payer-phone');
+        const inappEmailFeedback = document.getElementById('inapp-email-feedback');
+
+        const inappPixBox = document.getElementById('inapp-pix-box');
+        const inappPixQrImg = document.getElementById('inapp-pix-qr-img');
+        const inappPixCodeInput = document.getElementById('inapp-pix-code-input');
+        const inappBtnCopyPix = document.getElementById('inapp-btn-copy-pix');
+        const inappPixStatusBadge = document.getElementById('inapp-pix-status-badge');
+
+        const inappManualKeyInput = document.getElementById('inapp-manual-key-input');
+        const inappBtnManualActivate = document.getElementById('inapp-btn-manual-activate');
+        const inappManualFeedback = document.getElementById('inapp-manual-feedback');
+
+        const inappRecoverForm = document.getElementById('inapp-recover-form');
+        const inappRecoverEmail = document.getElementById('inapp-recover-email');
+        const inappBtnSubmitRecover = document.getElementById('inapp-btn-submit-recover');
+        const inappRecoverFeedback = document.getElementById('inapp-recover-feedback');
+
+        const inappSuccessKeysBox = document.getElementById('inapp-success-keys-box');
+        const inappBtnCopyAllKeys = document.getElementById('inapp-btn-copy-all-keys');
+        const inappBtnDownloadPdf = document.getElementById('inapp-btn-download-pdf');
+        const inappBtnOpenSystemNow = document.getElementById('inapp-btn-open-system-now');
+
+        const inappDevLink = document.getElementById('inapp-dev-link');
+        const inappDevBox = document.getElementById('inapp-dev-box');
+        const inappDevPwd = document.getElementById('inapp-dev-pwd');
+        const inappDevBtnUnlock = document.getElementById('inapp-dev-btn-unlock');
+        const inappDevCard = document.getElementById('inapp-dev-card');
+
+        // 1. MÁSCARA AUTOMÁTICA DE CELULAR (19)9 1234-5678
+        function formatPhone(val) {
+            let digits = val.replace(/\D/g, '').substring(0, 11);
+            if (!digits) return '';
+            if (digits.length <= 2) return `(${digits}`;
+            if (digits.length <= 3) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+            if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2, 3)} ${digits.slice(3)}`;
+            return `(${digits.slice(0, 2)})${digits.slice(2, 3)} ${digits.slice(3, 7)}-${digits.slice(7)}`;
+        }
+
+        if (inappPayerPhone) {
+            inappPayerPhone.addEventListener('input', e => {
+                e.target.value = formatPhone(e.target.value);
+            });
+        }
+
+        // 2. MÁSCARA DE CHAVE XXXX-XXXX-XXXX-XXXX
+        if (inappManualKeyInput) {
+            inappManualKeyInput.addEventListener('input', e => {
+                let clean = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 16);
+                let parts = clean.match(/.{1,4}/g);
+                e.target.value = parts ? parts.join('-') : clean;
+            });
+        }
+
+        // 3. VALIDAÇÃO REAL DE E-MAIL VIA DNS GOOGLE
+        async function validateEmail(email) {
+            if (!email || !email.includes('@')) return { valid: false, message: 'Digite um e-mail válido.' };
+            const clean = email.trim().toLowerCase();
+            const parts = clean.split('@');
+            if (parts.length !== 2) return { valid: false, message: 'Formato de e-mail inválido.' };
+            const [user, domain] = parts;
+            if (!user || !domain || !domain.includes('.')) return { valid: false, message: 'Domínio incompleto.' };
+
+            if (COMMON_EMAIL_TYPOS[domain]) {
+                const suggested = `${user}@${COMMON_EMAIL_TYPOS[domain]}`;
+                return { valid: false, isTypo: true, suggestion: suggested, message: `Você quis dizer <strong>${suggested}</strong>?` };
+            }
+
+            try {
+                const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!data || data.Status !== 0 || !Array.isArray(data.Answer) || data.Answer.length === 0) {
+                    const resA = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, { headers: { 'Accept': 'application/json' } });
+                    const dataA = await resA.json();
+                    if (!dataA || dataA.Status !== 0 || !Array.isArray(dataA.Answer) || dataA.Answer.length === 0) {
+                        return { valid: false, message: `O domínio @${domain} não existe.` };
+                    }
+                }
+            } catch (e) {}
+
+            return { valid: true, message: 'E-mail válido!' };
+        }
+
+        if (inappPayerEmail && inappEmailFeedback) {
+            inappPayerEmail.addEventListener('input', () => {
+                clearTimeout(emailDebounce);
+                const val = inappPayerEmail.value.trim();
+                if (!val || val.length < 5 || !val.includes('@')) {
+                    inappEmailFeedback.style.display = 'none';
+                    return;
+                }
+                inappEmailFeedback.style.display = 'block';
+                inappEmailFeedback.style.color = '#94a3b8';
+                inappEmailFeedback.textContent = 'Verificando...';
+
+                emailDebounce = setTimeout(async () => {
+                    const result = await validateEmail(val);
+                    if (result.valid) {
+                        inappEmailFeedback.style.color = '#34d399';
+                        inappEmailFeedback.textContent = '✅ E-mail válido e verificado!';
+                    } else if (result.isTypo) {
+                        inappEmailFeedback.style.color = '#fbbf24';
+                        inappEmailFeedback.innerHTML = `⚠️ ${result.message} <a href="#" id="fixEmailLink" style="color:#818cf8; text-decoration:underline;">Corrigir</a>`;
+                        const fixLink = document.getElementById('fixEmailLink');
+                        if (fixLink) {
+                            fixLink.addEventListener('click', (ev) => {
+                                ev.preventDefault();
+                                inappPayerEmail.value = result.suggestion;
+                                inappPayerEmail.dispatchEvent(new Event('input'));
+                            });
+                        }
+                    } else {
+                        inappEmailFeedback.style.color = '#f87171';
+                        inappEmailFeedback.textContent = `❌ ${result.message}`;
+                    }
+                }, 400);
+            });
+        }
+
+        // 4. TROCA DE ABAS DO MODAL
+        function switchModalTab(tab) {
+            [tabBtnBuy, tabBtnActivate, tabBtnRecover].forEach(b => {
+                b.style.background = 'transparent';
+                b.style.color = '#94a3b8';
+            });
+            [tabContentBuy, tabContentActivate, tabContentRecover, inappSuccessView].forEach(c => c.style.display = 'none');
+
+            if (tab === 'buy') {
+                tabBtnBuy.style.background = '#6366f1';
+                tabBtnBuy.style.color = '#fff';
+                tabContentBuy.style.display = 'block';
+            } else if (tab === 'activate') {
+                tabBtnActivate.style.background = '#6366f1';
+                tabBtnActivate.style.color = '#fff';
+                tabContentActivate.style.display = 'block';
+            } else if (tab === 'recover') {
+                tabBtnRecover.style.background = '#6366f1';
+                tabBtnRecover.style.color = '#fff';
+                tabContentRecover.style.display = 'block';
+            }
+        }
+
+        if (tabBtnBuy) tabBtnBuy.addEventListener('click', () => switchModalTab('buy'));
+        if (tabBtnActivate) tabBtnActivate.addEventListener('click', () => switchModalTab('activate'));
+        if (tabBtnRecover) tabBtnRecover.addEventListener('click', () => switchModalTab('recover'));
+
+        // 5. SELEÇÃO DE PLANO & QUANTIDADE & CÁLCULOS
+        document.querySelectorAll('.inapp-plan-card').forEach(card => {
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.inapp-plan-card').forEach(c => {
+                    c.style.border = '2px solid rgba(255,255,255,0.1)';
+                    c.style.background = 'rgba(30, 41, 59, 0.6)';
+                    c.style.boxShadow = 'none';
+                });
+                card.style.border = '2px solid #6366f1';
+                card.style.background = 'linear-gradient(180deg, rgba(99,102,241,0.15) 0%, rgba(30,41,59,0.8) 100%)';
+                card.style.boxShadow = '0 4px 20px rgba(99,102,241,0.25)';
+
+                selectedPlan = card.dataset.plan || 'vitalicio';
+                recalcOrder();
+            });
+        });
+
+        document.querySelectorAll('.inapp-qty-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.inapp-qty-btn').forEach(b => {
+                    b.style.background = 'rgba(255,255,255,0.05)';
+                    b.style.borderColor = 'rgba(255,255,255,0.1)';
+                    b.style.color = '#cbd5e1';
+                });
+                btn.style.background = '#6366f1';
+                btn.style.borderColor = '#6366f1';
+                btn.style.color = '#fff';
+
+                selectedQty = parseInt(btn.dataset.qty, 10) || 1;
+                recalcOrder();
+            });
+        });
+
+        if (inappPayPix && inappPayCard) {
+            inappPayPix.addEventListener('click', () => {
+                inappPayPix.style.background = 'rgba(99,102,241,0.15)';
+                inappPayPix.style.borderColor = '#6366f1';
+                inappPayCard.style.background = 'rgba(255,255,255,0.04)';
+                inappPayCard.style.borderColor = 'rgba(255,255,255,0.1)';
+                selectedPayMethod = 'pix';
+                if (inappCardFields) inappCardFields.style.display = 'none';
+                recalcOrder();
+            });
+
+            inappPayCard.addEventListener('click', () => {
+                inappPayCard.style.background = 'rgba(99,102,241,0.15)';
+                inappPayCard.style.borderColor = '#6366f1';
+                inappPayPix.style.background = 'rgba(255,255,255,0.04)';
+                inappPayPix.style.borderColor = 'rgba(255,255,255,0.1)';
+                selectedPayMethod = 'card';
+                if (inappCardFields) inappCardFields.style.display = 'block';
+                recalcOrder();
+            });
+        }
+
+        function recalcOrder() {
+            const plan = PLANS[selectedPlan];
+            const baseUnit = plan.price;
+            const baseTotal = baseUnit * selectedQty;
+
+            const qtyInfo = QTY_DISCOUNTS[selectedQty] || { rate: 0, label: '' };
+            const qtyDiscountRate = selectedPlan === 'dev_test' ? 0 : qtyInfo.rate;
+            const qtyDiscountAmount = baseTotal * qtyDiscountRate;
+            const cardTotal = Math.max(0.10, baseTotal - qtyDiscountAmount);
+
+            let pixDiscountAmount = 0;
+            let finalTotal = cardTotal;
+            if (selectedPayMethod === 'pix' && selectedPlan !== 'dev_test') {
+                pixDiscountAmount = cardTotal * 0.10;
+                finalTotal = Math.max(0.10, cardTotal - pixDiscountAmount);
+            }
+
+            if (inappQtyBadge) inappQtyBadge.textContent = qtyInfo.label;
+            if (inappSumPlan) inappSumPlan.textContent = `${selectedQty}x ${plan.name}`;
+            if (inappSumBase) inappSumBase.textContent = `R$ ${baseTotal.toFixed(2).replace('.', ',')}`;
+
+            if (inappSumQtyRow) {
+                if (qtyDiscountAmount > 0) {
+                    inappSumQtyRow.style.display = 'flex';
+                    inappSumQtyLabel.textContent = `Desconto por Quantidade (${(qtyDiscountRate * 100).toFixed(0)}% OFF):`;
+                    inappSumQtyVal.textContent = `- R$ ${qtyDiscountAmount.toFixed(2).replace('.', ',')}`;
                 } else {
-                    content.classList.add('hidden');
-                    if (icon) icon.textContent = '▶';
+                    inappSumQtyRow.style.display = 'none';
+                }
+            }
+
+            if (inappSumPixRow) {
+                if (selectedPayMethod === 'pix' && pixDiscountAmount > 0) {
+                    inappSumPixRow.style.display = 'flex';
+                    inappSumPixVal.textContent = `- R$ ${pixDiscountAmount.toFixed(2).replace('.', ',')}`;
+                } else {
+                    inappSumPixRow.style.display = 'none';
+                }
+            }
+
+            if (inappSumTotal) inappSumTotal.textContent = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
+
+            if (inappSumInstallmentsHint && inappCardInstallments) {
+                if (selectedPayMethod === 'card') {
+                    const p1 = cardTotal;
+                    const p2 = cardTotal / 2;
+                    const p3 = cardTotal / 3;
+
+                    inappSumInstallmentsHint.style.display = 'block';
+                    inappSumInstallmentsHint.textContent = `Ou em até 3x de R$ ${p3.toFixed(2).replace('.', ',')} SEM JUROS`;
+
+                    inappCardInstallments.innerHTML = `
+                        <option value="1">1x de R$ ${p1.toFixed(2).replace('.', ',')} (Sem Juros)</option>
+                        <option value="2">2x de R$ ${p2.toFixed(2).replace('.', ',')} (Sem Juros)</option>
+                        <option value="3" selected>3x de R$ ${p3.toFixed(2).replace('.', ',')} (Sem Juros)</option>
+                        <option value="6">6x de R$ ${(cardTotal * 1.15 / 6).toFixed(2).replace('.', ',')} (com juros MP)</option>
+                        <option value="12">12x de R$ ${(cardTotal * 1.25 / 12).toFixed(2).replace('.', ',')} (com juros MP)</option>
+                    `;
+                } else {
+                    inappSumInstallmentsHint.style.display = 'none';
+                }
+            }
+
+            if (inappBtnSubmit) {
+                if (selectedPayMethod === 'pix') {
+                    inappBtnSubmit.textContent = `📱 Gerar QR Code PIX de R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
+                } else {
+                    const installments = inappCardInstallments ? inappCardInstallments.value : '3';
+                    const installmentVal = cardTotal / parseInt(installments || '1', 10);
+                    inappBtnSubmit.textContent = `💳 Pagar R$ ${cardTotal.toFixed(2).replace('.', ',')} no Cartão (${installments}x de R$ ${installmentVal.toFixed(2).replace('.', ',')})`;
+                }
+            }
+
+            return { baseTotal, cardTotal, finalTotal };
+        }
+
+        recalcOrder();
+
+        // 6. CHECKOUT FORM SUBMISSION
+        if (inappCheckoutForm) {
+            inappCheckoutForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const name = (inappPayerName ? inappPayerName.value : '').trim();
+                const email = (inappPayerEmail ? inappPayerEmail.value : '').trim();
+                const phone = (inappPayerPhone ? inappPayerPhone.value : '').trim();
+                const devPwd = (selectedPlan === 'dev_test' && inappDevPwd) ? inappDevPwd.value.trim() : '';
+
+                if (!name) { alert('Informe seu nome completo.'); return; }
+                const emailCheck = await validateEmail(email);
+                if (!emailCheck.valid) { alert('Por favor, informe um e-mail válido: ' + (emailCheck.message.replace(/<[^>]+>/g, ''))); return; }
+                const cleanPhone = phone.replace(/\D/g, '');
+                if (cleanPhone.length < 10) { alert('Informe um telefone válido no formato (19)9 1234-5678.'); return; }
+
+                const calcs = recalcOrder();
+                const apiUrl = await LicenseManager.getApiUrl();
+
+                if (selectedPayMethod === 'pix') {
+                    inappBtnSubmit.disabled = true;
+                    inappBtnSubmit.textContent = 'Gerando PIX no Mercado Pago...';
+
+                    try {
+                        let createUrl = `${apiUrl}?action=create_pix&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(cleanPhone)}&amount=${calcs.finalTotal.toFixed(2)}&plan=${selectedPlan}&quantity=${selectedQty}`;
+                        if (selectedPlan === 'dev_test') createUrl += `&dev_password=${encodeURIComponent(devPwd || '1ktn130534')}`;
+
+                        const res = await fetch(createUrl, { method: 'GET', redirect: 'follow' });
+                        const data = await res.json();
+
+                        if (data && data.success && data.qr_code) {
+                            if (data.qr_code_base64) inappPixQrImg.src = `data:image/png;base64,${data.qr_code_base64}`;
+                            else inappPixQrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.qr_code)}`;
+
+                            inappPixCodeInput.value = data.qr_code;
+                            inappCheckoutForm.style.display = 'none';
+                            inappPixBox.style.display = 'block';
+
+                            startPollingPayment(data.payment_id, email, cleanPhone, name, PLANS[selectedPlan].name);
+                        } else {
+                            alert(data.message || 'Erro ao gerar QR Code.');
+                        }
+                    } catch (err) {
+                        alert('Erro ao conectar com o servidor.');
+                    } finally {
+                        inappBtnSubmit.disabled = false;
+                        recalcOrder();
+                    }
+                } else if (selectedPayMethod === 'card') {
+                    const rawCard = (document.getElementById('inapp-card-number').value || '').replace(/\s/g, '');
+                    const holder = document.getElementById('inapp-card-holder').value.trim();
+                    const exp = document.getElementById('inapp-card-exp').value.trim();
+                    const cvv = document.getElementById('inapp-card-cvv').value.trim();
+                    const cpf = (document.getElementById('inapp-card-cpf').value || '').replace(/\D/g, '');
+                    const installments = inappCardInstallments.value || '3';
+
+                    if (!rawCard || rawCard.length < 13 || !holder || !exp || !cvv) {
+                        alert('Preencha os dados do cartão.');
+                        return;
+                    }
+
+                    const [expMonth, expYearShort] = exp.split('/');
+                    const expYear = expYearShort.length === 2 ? '20' + expYearShort : expYearShort;
+
+                    inappBtnSubmit.disabled = true;
+                    inappBtnSubmit.textContent = 'Processando cartão...';
+
+                    try {
+                        const tokenUrl = `https://api.mercadopago.com/v1/card_tokens?public_key=${MP_PUBLIC_KEY}`;
+                        const tokenRes = await fetch(tokenUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                card_number: rawCard,
+                                cardholder: { name: holder, identification: { type: 'CPF', number: cpf || '00000000000' } },
+                                expiration_month: parseInt(expMonth, 10),
+                                expiration_year: parseInt(expYear, 10),
+                                security_code: cvv
+                            })
+                        });
+
+                        const tokenData = await tokenRes.json();
+                        if (!tokenData.id) throw new Error(tokenData.message || 'Falha ao tokenizar cartão.');
+
+                        const payUrl = `${apiUrl}?action=create_card_payment&token=${encodeURIComponent(tokenData.id)}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(cleanPhone)}&amount=${calcs.cardTotal.toFixed(2)}&plan=${selectedPlan}&quantity=${selectedQty}&installments=${installments}&doc_number=${encodeURIComponent(cpf)}`;
+
+                        const payRes = await fetch(payUrl, { method: 'GET', redirect: 'follow' });
+                        const payResult = await payRes.json();
+
+                        if (payResult && payResult.success && payResult.status === 'approved') {
+                            handleSuccessfulPurchase({
+                                keys: payResult.licenseKeys || [payResult.licenseKey],
+                                name: name,
+                                email: email,
+                                phone: cleanPhone,
+                                planName: PLANS[selectedPlan].name
+                            });
+                        } else {
+                            alert(payResult.message || 'Pagamento não aprovado.');
+                        }
+                    } catch (cardErr) {
+                        alert('Erro ao processar cartão: ' + cardErr.message);
+                    } finally {
+                        inappBtnSubmit.disabled = false;
+                        recalcOrder();
+                    }
                 }
             });
         }
+
+        if (inappBtnCopyPix) {
+            inappBtnCopyPix.addEventListener('click', () => {
+                inappPixCodeInput.select();
+                navigator.clipboard.writeText(inappPixCodeInput.value);
+                inappBtnCopyPix.textContent = 'Copiado!';
+                setTimeout(() => inappBtnCopyPix.textContent = 'Copiar', 2000);
+            });
+        }
+
+        function startPollingPayment(paymentId, email, phone, name, planName) {
+            if (pollingTimer) clearInterval(pollingTimer);
+
+            pollingTimer = setInterval(async () => {
+                try {
+                    const apiUrl = await LicenseManager.getApiUrl();
+                    const checkUrl = `${apiUrl}?action=check_payment&payment_id=${encodeURIComponent(paymentId)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone || '')}`;
+                    const res = await fetch(checkUrl, { method: 'GET', redirect: 'follow' });
+                    const result = await res.json();
+
+                    if (result && result.approved === true) {
+                        clearInterval(pollingTimer);
+                        handleSuccessfulPurchase({
+                            keys: result.licenseKeys || [result.licenseKey],
+                            name: name,
+                            email: email,
+                            phone: phone,
+                            planName: planName
+                        });
+                    }
+                } catch (e) {}
+            }, 3000);
+        }
+
+        // 7. COMPRA BEM-SUCEDIDA: SALVA E ATIVA AUTOMATICAMENTE
+        async function handleSuccessfulPurchase(data) {
+            latestPurchasedData = data;
+            const primaryKey = Array.isArray(data.keys) ? data.keys[0] : data.keys;
+
+            // Salva e ativa automaticamente no navegador
+            await LicenseManager.validate(primaryKey, true);
+            updateHeaderStatus(true);
+
+            // Monta a tela de sucesso
+            [tabContentBuy, tabContentActivate, tabContentRecover].forEach(c => c.style.display = 'none');
+            [tabBtnBuy, tabBtnActivate, tabBtnRecover].forEach(b => b.style.display = 'none');
+
+            inappSuccessKeysBox.innerHTML = '';
+            const keysArray = Array.isArray(data.keys) ? data.keys : [data.keys];
+
+            keysArray.forEach((k, idx) => {
+                const item = document.createElement('div');
+                item.style.background = 'rgba(99, 102, 241, 0.12)';
+                item.style.border = '1px dashed #6366f1';
+                item.style.borderRadius = '8px';
+                item.style.padding = '8px 12px';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.innerHTML = `
+                    <div style="text-align: left;">
+                        <span style="font-size: 10px; color: #94a3b8; font-weight: 700;">Licença #${idx + 1}:</span>
+                        <span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #a5b4fc; display: block;">${k}</span>
+                    </div>
+                    <button type="button" class="btn-copy-single" data-key="${k}" style="padding: 4px 8px; font-size: 10px; background: #6366f1; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Copiar</button>
+                `;
+                inappSuccessKeysBox.appendChild(item);
+            });
+
+            document.querySelectorAll('.btn-copy-single').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(btn.dataset.key);
+                    btn.textContent = 'Copiado!';
+                    setTimeout(() => btn.textContent = 'Copiar', 2000);
+                });
+            });
+
+            inappSuccessView.style.display = 'block';
+            if (btnCloseModal) btnCloseModal.classList.remove('hidden');
+        }
+
+        if (inappBtnCopyAllKeys) {
+            inappBtnCopyAllKeys.addEventListener('click', () => {
+                if (!latestPurchasedData) return;
+                const text = (Array.isArray(latestPurchasedData.keys) ? latestPurchasedData.keys : [latestPurchasedData.keys]).join('\n');
+                navigator.clipboard.writeText(text);
+                inappBtnCopyAllKeys.textContent = 'Todas as Chaves Copiadas!';
+                setTimeout(() => inappBtnCopyAllKeys.textContent = '📋 Copiar Chave(s)', 2000);
+            });
+        }
+
+        // 8. GERADOR OFICIAL DE PDF VIA jsPDF
+        if (inappBtnDownloadPdf) {
+            inappBtnDownloadPdf.addEventListener('click', () => {
+                if (!latestPurchasedData) return;
+                generateLicensePdf(latestPurchasedData);
+            });
+        }
+
+        function generateLicensePdf(licenseData) {
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                alert('Carregando biblioteca de PDF, tente novamente em alguns segundos.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            // Cabeçalho estilizado
+            doc.setFillColor(15, 23, 42); // #0f172a
+            doc.rect(0, 0, 210, 42, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            doc.text('GETLISTA PROSPECTA CNPJ PRO', 14, 20);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(165, 180, 252);
+            doc.text('Certificado Oficial de Licenciamento & Comprovante de Ativação', 14, 30);
+
+            // Dados da Compra
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.text('DADOS DA COMPRA', 14, 54);
+
+            doc.setDrawColor(99, 102, 241);
+            doc.setLineWidth(0.4);
+            doc.line(14, 57, 196, 57);
+
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(71, 85, 105);
+
+            doc.text(`Cliente: ${licenseData.name || 'Cliente Pro'}`, 14, 65);
+            doc.text(`E-mail de Cadastro: ${licenseData.email}`, 14, 72);
+            doc.text(`WhatsApp / Contato: ${licenseData.phone || '-'}`, 14, 79);
+            doc.text(`Plano Contratado: ${licenseData.planName}`, 14, 86);
+            doc.text(`Data da Ativação: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 93);
+            doc.text(`Status: ATIVADO E VÁLIDO NO SERVIDOR`, 14, 100);
+
+            // Chaves de Licença
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 41, 59);
+            doc.text('SUAS CHAVES DE LICENÇA', 14, 114);
+            doc.line(14, 117, 196, 117);
+
+            let y = 126;
+            const keys = Array.isArray(licenseData.keys) ? licenseData.keys : [licenseData.keys];
+            keys.forEach((k, idx) => {
+                doc.setFillColor(241, 245, 249);
+                doc.roundedRect(14, y - 5, 182, 12, 2, 2, 'F');
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(99, 102, 241);
+                doc.text(`Licença #${idx + 1}:`, 18, y + 3);
+                doc.setFont('courier', 'bold');
+                doc.setFontSize(12);
+                doc.setTextColor(15, 23, 42);
+                doc.text(k, 56, y + 3);
+                y += 16;
+            });
+
+            // Instruções
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.setTextColor(30, 41, 59);
+            doc.text('INSTRUÇÕES DE USO & SEGURANÇA:', 14, y + 8);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text('1. Esta licença desbloqueia o sistema GetLista Prospecta CNPJ Pro com todas as funções de mineração.', 14, y + 15);
+            doc.text('2. Caso abra o sistema em outro navegador, basta colar a sua chave na aba "Já Tenho Chave".', 14, y + 21);
+            doc.text('3. O sistema conecta automaticamente aos servidores de enriquecimento da Receita Federal.', 14, y + 27);
+            doc.text('4. Dúvidas, suporte técnico ou recuperação: edmaispinheiro@gmail.com', 14, y + 33);
+
+            // Rodapé
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text('GetLista Pro • www.edimarpcosta.github.io • Suporte: edmaispinheiro@gmail.com', 105, 285, { align: 'center' });
+
+            const safeName = (licenseData.email || 'licenca').replace(/[^a-zA-Z0-9]/g, '_');
+            doc.save(`GetLista_Licenca_${safeName}.pdf`);
+        }
+
+        function openModal(tab = 'buy') {
+            if (!modal) return;
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+            switchModalTab(tab);
+        }
+
+        async function closeModal(fromUserX = false) {
+            if (!modal) return;
+
+            if (fromUserX && latestPurchasedData) {
+                const wantsToActivateHere = confirm(
+                    "🎉 Sua compra foi concluída com sucesso!\n\n" +
+                    "Deseja ATIVAR e usar esta licença neste computador agora?\n\n" +
+                    "• Clique em OK para ativar e entrar no GetLista.\n" +
+                    "• Clique em CANCELAR se você comprou para outro computador/cliente."
+                );
+
+                if (wantsToActivateHere) {
+                    const primaryKey = Array.isArray(latestPurchasedData.keys) ? latestPurchasedData.keys[0] : latestPurchasedData.keys;
+                    await LicenseManager.validate(primaryKey, true);
+                    updateHeaderStatus(true);
+                }
+            }
+
+            modal.style.display = 'none';
+            modal.classList.add('hidden');
+        }
+
+        if (inappBtnOpenSystemNow) {
+            inappBtnOpenSystemNow.addEventListener('click', async () => {
+                if (latestPurchasedData) {
+                    const primaryKey = Array.isArray(latestPurchasedData.keys) ? latestPurchasedData.keys[0] : latestPurchasedData.keys;
+                    await LicenseManager.validate(primaryKey, true);
+                }
+                updateHeaderStatus(true);
+                modal.style.display = 'none';
+                modal.classList.add('hidden');
+            });
+        }
+
+        // 9. ATIVAÇÃO MANUAL DE CHAVE
+        if (inappBtnManualActivate) {
+            inappBtnManualActivate.addEventListener('click', async () => {
+                const key = (inappManualKeyInput ? inappManualKeyInput.value : '').trim();
+                if (!key || key.length < 10) {
+                    showManualFeedback('Digite uma chave válida no formato XXXX-XXXX-XXXX-XXXX.', false);
+                    return;
+                }
+
+                inappBtnManualActivate.disabled = true;
+                inappBtnManualActivate.textContent = 'Validando no servidor...';
+
+                const res = await LicenseManager.validate(key, true);
+
+                inappBtnManualActivate.disabled = false;
+                inappBtnManualActivate.textContent = '🔓 Validar e Desbloquear Acesso';
+
+                if (res && res.success === true) {
+                    showManualFeedback('✅ Licença ativada com sucesso!', true);
+                    updateHeaderStatus(true);
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        modal.classList.add('hidden');
+                    }, 1000);
+                } else {
+                    showManualFeedback(`❌ ${res.message || 'Chave inválida ou expirada.'}`, false);
+                }
+            });
+        }
+
+        function showManualFeedback(msg, ok) {
+            if (inappManualFeedback) {
+                inappManualFeedback.style.display = 'block';
+                inappManualFeedback.style.background = ok ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+                inappManualFeedback.style.color = ok ? '#34d399' : '#f87171';
+                inappManualFeedback.style.border = ok ? '1px solid #10b981' : '1px solid #ef4444';
+                inappManualFeedback.innerHTML = msg;
+            }
+        }
+
+        // 10. RECUPERAÇÃO POR E-MAIL
+        if (inappRecoverForm) {
+            inappRecoverForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = inappRecoverEmail ? inappRecoverEmail.value.trim() : '';
+                if (!email) return;
+
+                inappBtnSubmitRecover.disabled = true;
+                inappBtnSubmitRecover.textContent = 'Buscando licenças...';
+
+                try {
+                    const apiUrl = await LicenseManager.getApiUrl();
+                    const res = await fetch(`${apiUrl}?action=recover_license&email=${encodeURIComponent(email)}`, { method: 'GET', redirect: 'follow' });
+                    const data = await res.json();
+
+                    inappRecoverFeedback.style.display = 'block';
+                    if (data && data.success) {
+                        inappRecoverFeedback.style.background = 'rgba(16,185,129,0.2)';
+                        inappRecoverFeedback.style.color = '#34d399';
+                        inappRecoverFeedback.style.border = '1px solid #10b981';
+                        inappRecoverFeedback.innerHTML = `✅ ${data.message || 'Chaves reenviadas para o seu e-mail!'}`;
+                        inappRecoverForm.reset();
+                    } else {
+                        inappRecoverFeedback.style.background = 'rgba(239,68,68,0.2)';
+                        inappRecoverFeedback.style.color = '#f87171';
+                        inappRecoverFeedback.style.border = '1px solid #ef4444';
+                        inappRecoverFeedback.innerHTML = `❌ ${data.message || 'Nenhuma licença ativa encontrada.'}`;
+                    }
+                } catch (err) {
+                    inappRecoverFeedback.style.display = 'block';
+                    inappRecoverFeedback.style.background = 'rgba(239,68,68,0.2)';
+                    inappRecoverFeedback.style.color = '#f87171';
+                    inappRecoverFeedback.style.border = '1px solid #ef4444';
+                    inappRecoverFeedback.innerHTML = '❌ Erro ao conectar ao servidor.';
+                } finally {
+                    inappBtnSubmitRecover.disabled = false;
+                    inappBtnSubmitRecover.textContent = '📨 Reenviar Chaves por E-mail';
+                }
+            });
+        }
+
+        // 11. MODO DEV
+        if (inappDevLink && inappDevBox) {
+            inappDevLink.addEventListener('click', () => {
+                inappDevBox.style.display = inappDevBox.style.display === 'none' ? 'block' : 'none';
+                if (inappDevPwd) inappDevPwd.focus();
+            });
+        }
+
+        if (inappDevBtnUnlock && inappDevPwd) {
+            inappDevBtnUnlock.addEventListener('click', () => {
+                if (inappDevPwd.value.trim() === '1ktn130534') {
+                    if (inappDevCard) inappDevCard.style.display = 'block';
+                    inappDevCard.click();
+                    inappDevBox.style.display = 'none';
+                    alert('🎉 Modo Dev Desbloqueado!');
+                } else {
+                    alert('Senha incorreta.');
+                }
+            });
+        }
+
+        // 12. CONTROLE DO STATUS NO HEADER E INICIALIZAÇÃO
+        function updateHeaderStatus(isLicensed) {
+            if (licenseStatusIcon) licenseStatusIcon.textContent = isLicensed ? '🟢' : '🔒';
+            if (licenseStatusText) licenseStatusText.textContent = isLicensed ? 'Vitalício PRO' : 'Comprar / Ativar';
+            if (btnCloseModal) {
+                if (isLicensed) btnCloseModal.classList.remove('hidden');
+                else btnCloseModal.classList.add('hidden');
+            }
+        }
+
+        if (topLicenseBtn) {
+            topLicenseBtn.addEventListener('click', () => {
+                openModal('buy');
+            });
+        }
+
+        if (btnCloseModal) {
+            btnCloseModal.addEventListener('click', () => {
+                closeModal(true);
+            });
+        }
+
+        // Execução inicial: valida e abre modal se não licenciado
+        LicenseManager.validate().then(res => {
+            if (res && res.success === true) {
+                updateHeaderStatus(true);
+                modal.style.display = 'none';
+                modal.classList.add('hidden');
+            } else {
+                updateHeaderStatus(false);
+                openModal('buy');
+            }
+        });
+
     })();
     </script>
 </body>
