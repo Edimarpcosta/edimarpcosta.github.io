@@ -1026,9 +1026,15 @@ const MiningEngine = {
 
     // ========================= MOTOR DE EXTRAÇÃO =========================
     async startMining() {
-        const key = this.els.apiKeyInput?.value?.trim();
+        if (typeof window.ensureLicenseActive === 'function') {
+            const hasLicense = await window.ensureLicenseActive('iniciar a mineração de empresas');
+            if (!hasLicense) return;
+        }
+
+        const key = this.els.apiKeyInput?.value?.trim() || localStorage.getItem('casadosdados_api_key');
         if (!key) {
-            alert('API Key da Casa dos Dados é obrigatória!');
+            alert('Chave de acesso não identificada. Por favor, ative sua licença.');
+            if (typeof window.openLicenseModal === 'function') window.openLicenseModal('buy');
             return;
         }
 
@@ -1491,7 +1497,12 @@ const MiningEngine = {
     },
 
     // ========================= EXPORTAÇÃO DIRETA DA MINERAÇÃO (EXCEL / JSON) =========================
-    exportMined() {
+    async exportMined() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const hasLicense = await window.ensureLicenseActive('exportar dados minerados em Excel');
+            if (!hasLicense) return;
+        }
+
         if (this.state.leads.length === 0) {
             alert('Nenhum dado minerado para exportar.');
             return;
@@ -1583,7 +1594,12 @@ const MiningEngine = {
         this.log(`✅ Exportação Excel concluída: ${rows.length} CNPJs salvos em "${filename}" com aba Resumo e Payload!`, 'succ');
     },
 
-    exportMinedJson() {
+    async exportMinedJson() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const hasLicense = await window.ensureLicenseActive('exportar dados minerados em JSON');
+            if (!hasLicense) return;
+        }
+
         if (this.state.leads.length === 0) {
             alert('Nenhum dado minerado para exportar.');
             return;
@@ -1893,7 +1909,12 @@ const MiningEngine = {
     },
 
     // ========================= BRIDGE → FASE 2 =========================
-    transferToEnrichment() {
+    async transferToEnrichment() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const hasLicense = await window.ensureLicenseActive('transferir CNPJs para a Fase 2 (Enriquecimento)');
+            if (!hasLicense) return;
+        }
+
         if (this.state.leads.length === 0) {
             alert('Nenhum CNPJ minerado para transferir.');
             return;
@@ -2016,24 +2037,10 @@ const MiningEngine = {
             cnaeList: document.getElementById('mineCnaeList')
         };
 
-        // Restaurar API Key do localStorage
+        // Restaurar API Key do localStorage apenas se houver
         const savedKey = localStorage.getItem('casadosdados_api_key');
         if (savedKey && this.els.apiKeyInput) {
             this.els.apiKeyInput.value = savedKey;
-        } else if (this.els.apiKeyInput) {
-            fetch('chave_api_csa.txt')
-                .then(r => r.text())
-                .then(text => {
-                    const cleanKey = text.trim();
-                    if (cleanKey && cleanKey.length > 20) {
-                        this.els.apiKeyInput.value = cleanKey;
-                        localStorage.setItem('casadosdados_api_key', cleanKey);
-                        this.log('🔑 API Key carregada do arquivo local.', 'info');
-                    }
-                })
-                .catch(err => {
-                    console.warn('Erro ao carregar chave_api_csa.txt:', err);
-                });
         }
 
         // Inicializar chips

@@ -6,6 +6,11 @@
 const uiControllers = {
     // ===== CARREGAMENTO =====
     async loadFromCsv() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('carregar planilhas de CNPJs');
+            if (!ok) return;
+        }
+
         if (!utils.checkFileApiSupport()) return;
         const fileInput = elements.csvFile;
         if (!fileInput.files || fileInput.files.length === 0) return alert('Selecione um arquivo (.csv ou .xlsx).');
@@ -22,7 +27,12 @@ const uiControllers = {
         }
     },
 
-    loadFromText() {
+    async loadFromText() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('carregar lista de CNPJs');
+            if (!ok) return;
+        }
+
         const text = elements.cnpjListTextarea.value.trim();
         if (!text) return alert('Por favor, insira CNPJs.');
         const cnpjs = dataHandlers.processListText(text);
@@ -57,6 +67,11 @@ const uiControllers = {
 
     // ===== PROCESSAMENTO =====
     async startProcessing(forceDeepMode = false) {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('iniciar o enriquecimento de CNPJs');
+            if (!ok) return;
+        }
+
         if (state.isProcessing) return;
         if (state.cnpjList.length === 0) return alert('Carregue CNPJs primeiro.');
 
@@ -1629,7 +1644,12 @@ const blocklistController = {
     },
 
     // Carrega a blocklist a partir da textarea, salva no state e no localStorage
-    load() {
+    async load() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('carregar e aplicar a Blocklist');
+            if (!ok) return;
+        }
+
         const textarea = document.getElementById('blocklistTextarea');
         const raw = textarea?.value?.trim() || '';
         const lines = raw.split(/[\n\r,;|\t]+/).map(l => l.trim()).filter(l => l.length > 0);

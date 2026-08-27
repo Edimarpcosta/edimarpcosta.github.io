@@ -2607,6 +2607,13 @@
         async function closeModal(fromUserX = false) {
             if (!modal) return;
 
+            const isLicensed = await LicenseManager.checkActive();
+            if (!isLicensed) {
+                alert('🔒 O GetLista requer ativação para ser utilizado. Escolha um plano para começar ou ative sua chave!');
+                openModal('buy');
+                return;
+            }
+
             if (fromUserX && latestPurchasedData) {
                 const wantsToActivateHere = confirm(
                     "🎉 Sua compra foi concluída com sucesso!\n\n" +
@@ -2625,6 +2632,21 @@
             modal.style.display = 'none';
             modal.classList.add('hidden');
         }
+
+        // Exporta o verificador global para todos os módulos (MiningEngine, uiControllers, dataHandlers)
+        window.ensureLicenseActive = async function(actionName = '') {
+            const isOk = await LicenseManager.checkActive();
+            if (!isOk) {
+                openModal('buy');
+                alert('🔒 ACESSO BLOQUEADO!\n\nVocê precisa de uma licença ativa do GetLista para ' + (actionName || 'executar esta ação') + '.\n\nEscolha um plano ou ative sua chave para continuar.');
+                return false;
+            }
+            return true;
+        };
+
+        window.openLicenseModal = function(tab = 'buy') {
+            openModal(tab);
+        };
 
         if (inappBtnOpenSystemNow) {
             inappBtnOpenSystemNow.addEventListener('click', async () => {
@@ -2745,8 +2767,13 @@
             if (licenseStatusIcon) licenseStatusIcon.textContent = isLicensed ? '🟢' : '🔒';
             if (licenseStatusText) licenseStatusText.textContent = isLicensed ? 'Vitalício PRO' : 'Comprar / Ativar';
             if (btnCloseModal) {
-                if (isLicensed) btnCloseModal.classList.remove('hidden');
-                else btnCloseModal.classList.add('hidden');
+                if (isLicensed) {
+                    btnCloseModal.classList.remove('hidden');
+                    btnCloseModal.style.display = 'flex';
+                } else {
+                    btnCloseModal.classList.add('hidden');
+                    btnCloseModal.style.display = 'none';
+                }
             }
         }
 

@@ -348,7 +348,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 🗺️ EXPORTAR MAPOSCOPE (otimizado) ======
-    exportMaposcope() {
+    async exportMaposcope() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('exportar para Maposcope');
+            if (!ok) return;
+        }
+
         try {
             if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
@@ -415,7 +420,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 📊 EXPORTAR COMPLETO (PT-BR) ======
-    exportCompleto() {
+    async exportCompleto() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('exportar planilha completa');
+            if (!ok) return;
+        }
+
         try {
             if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
@@ -536,7 +546,12 @@ Object.assign(dataHandlers, {
         }
     },
 
-    exportCompletoJson() {
+    async exportCompletoJson() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('exportar JSON completo');
+            if (!ok) return;
+        }
+
         try {
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
 
@@ -957,7 +972,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 📥 BAIXAR LISTA RAW DE JÁ-ATENDIDOS (.xlsx simples) ======
-    downloadBlocklistRaw() {
+    async downloadBlocklistRaw() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('baixar a lista da Blocklist');
+            if (!ok) return;
+        }
+
         if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
         if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) {
             return alert('Blocklist vazia. Carregue os CNPJs já atendidos primeiro.');
@@ -976,6 +996,11 @@ Object.assign(dataHandlers, {
 
     // ====== 🔄 ENRIQUECER JÁ-ATENDIDOS (fila extra opcional após não-atendidos) ======
     async enrichAtendidos() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('enriquecer CNPJs da Blocklist');
+            if (!ok) return;
+        }
+
         if (!state.cnpjsJaAtendidos || state.cnpjsJaAtendidos.size === 0) {
             return alert('Blocklist vazia. Nada para enriquecer.');
         }
@@ -1074,7 +1099,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 📥 BAIXAR JÁ-ATENDIDOS ENRIQUECIDOS (.xlsx) ======
-    downloadAtendidosEnriquecidos() {
+    async downloadAtendidosEnriquecidos() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('baixar dados de empresas já atendidas');
+            if (!ok) return;
+        }
+
         if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
         if (!state.resultsJaAtendidos || state.resultsJaAtendidos.length === 0) {
             return alert('Nenhum dado enriquecido dos já-atendidos. Execute o enriquecimento primeiro.');
@@ -1089,7 +1119,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 📊 EXPORTAR COMPLETO COM COLUNA "ATENDE" (Sim/Não) ======
-    exportCompletoComAtende() {
+    async exportCompletoComAtende() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('exportar relatório completo com Blocklist');
+            if (!ok) return;
+        }
+
         try {
             if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
@@ -1168,45 +1203,38 @@ Object.assign(dataHandlers, {
         row['Possível Sócio da Lista'] = socioMatches.map(m => `CPF ${m.cpf_formatado} (${m.nome_socio})`).join(' | ');
 
         // Sócios (QSA)
-        if (result.qsa && result.qsa.length > 0) {
-            result.qsa.forEach((s, i) => {
-                row['Sócio ' + (i + 1) + ' - Nome'] = s.nome_socio || s.nome || '';
-                row['Sócio ' + (i + 1) + ' - CPF/CNPJ'] = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cnpj_cpf_socio || s.cpf_mascarado || '';
-                row['Sócio ' + (i + 1) + ' - Qualificação'] = s.qualificacao_socio || s.cargo || '';
-            });
-        }
+        const qsaList = Array.isArray(result.qsa) ? result.qsa : [];
+        row['Sócios (QSA)'] = qsaList.map(s => {
+            const cpf = s.cpf_cnpj_socio || s.cnpj_cpf_do_socio || s.cpf_socio || s.cpf || s.cpf_mascarado || '';
+            const cpfPart = cpf ? ` (CPF: ${cpf})` : '';
+            return `${s.nome_socio || s.nome || ''}${cpfPart} - ${s.qualificacao_socio || s.qualificacao || ''}`;
+        }).join(' | ');
 
         return row;
     },
 
-    // ====== 👤 MATCHING DE CPFS DA LISTA COM SÓCIOS (QSA) ======
-    _getCpfPartial(cpf11) {
-        if (!cpf11 || cpf11.length !== 11) return '';
-        return cpf11.substring(3, 9); // Dígitos 3 a 8 (6 caracteres do meio)
-    },
-
+    // ====== 🔍 MATCHING DE CPFS DA LISTA COM SÓCIOS (QSA) ======
     matchCpfsWithQsa() {
         if (!state.cpfsJaAtendidos || state.cpfsJaAtendidos.length === 0) return;
+
         state.cpfSocioMatches = [];
 
+        // Extrai os 6 dígitos centrais de cada CPF da lista (índices 3..8, 0-based)
         const cpfPartials = state.cpfsJaAtendidos.map(cpf => ({
             cpf,
-            partial: this._getCpfPartial(cpf)
-        })).filter(item => item.partial.length === 6);
+            partial: cpf.substring(3, 9)
+        }));
 
-        const allResults = [
+        // Varre todos os resultados já enriquecidos (não-atendidos + já-atendidos)
+        const allEnriched = [
             ...(state.results || []).filter(r => r && !r.error),
-            ...(state.resultsJaAtendidos || [])
+            ...(state.resultsJaAtendidos || []).filter(r => r && !r.error)
         ];
 
-        allResults.forEach(result => {
-            if (!result.qsa || !Array.isArray(result.qsa) || result.qsa.length === 0) return;
-            result.qsa.forEach(socio => {
-                const cpfRaw = socio.cpf_representante_legal
-                            || socio.cpf_socio
-                            || socio.qualificacao_socio_cpf
-                            || socio.doc_socio
-                            || '';
+        allEnriched.forEach(result => {
+            const qsa = Array.isArray(result.qsa) ? result.qsa : [];
+            qsa.forEach(socio => {
+                const cpfRaw = socio.cpf_cnpj_socio || socio.cnpj_cpf_do_socio || socio.cpf_socio || socio.cpf || socio.cpf_mascarado || '';
                 const cpfMasked = cpfRaw.replace(/[^0-9*]/g, '');
                 if (!cpfMasked) return;
 
@@ -1235,7 +1263,12 @@ Object.assign(dataHandlers, {
     },
 
     // ====== 📥 EXPORTAR RELATÓRIO DE POSSÍVEIS SÓCIOS (.xlsx) ======
-    exportCpfSocioReport() {
+    async exportCpfSocioReport() {
+        if (typeof window.ensureLicenseActive === 'function') {
+            const ok = await window.ensureLicenseActive('exportar relatório de Sócios (QSA)');
+            if (!ok) return;
+        }
+
         if (typeof XLSX === 'undefined') return alert('XLSX não disponível.');
         if (!state.cpfSocioMatches || state.cpfSocioMatches.length === 0) {
             return alert('Nenhum match de CPF × sócio encontrado.\nVerifique se há CPFs na blocklist e se o enriquecimento (Fase 2) foi executado.');
@@ -1260,4 +1293,3 @@ Object.assign(dataHandlers, {
         utils.updateStatus(`✅ Relatório de possíveis sócios exportado! ${rows.length} matches.`);
     }
 });
-
