@@ -1819,15 +1819,33 @@
                                 <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">CPF do Titular:</label>
                                 <input type="text" id="inapp-card-cpf" placeholder="000.000.000-00" maxlength="14" class="w-full p-2 rounded text-xs" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
                             </div>
-                            <div>
+                            <div style="position: relative;">
                                 <label style="display: block; font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">Parcelamento:</label>
-                                <select id="inapp-card-installments" class="w-full p-2 rounded text-xs" style="background: #1e293b; border: 1px solid rgba(255,255,255,0.15); color: #fff;">
-                                    <option value="1">1x de R$ 99,90 (Sem Juros)</option>
-                                    <option value="2">2x de R$ 49,95 (Sem Juros)</option>
-                                    <option value="3" selected>3x de R$ 33,30 (Sem Juros)</option>
-                                    <option value="6">6x (com juros Mercado Pago)</option>
-                                    <option value="12">12x (com juros Mercado Pago)</option>
+                                
+                                <select id="inapp-card-installments" style="display: none;">
+                                    <option value="1" selected>1x</option>
+                                    <option value="2">2x</option>
+                                    <option value="3">3x</option>
+                                    <option value="4">4x</option>
+                                    <option value="5">5x</option>
+                                    <option value="6">6x</option>
+                                    <option value="7">7x</option>
+                                    <option value="8">8x</option>
+                                    <option value="9">9x</option>
+                                    <option value="10">10x</option>
+                                    <option value="11">11x</option>
+                                    <option value="12">12x</option>
                                 </select>
+
+                                <!-- Trigger do Seletor Customizado -->
+                                <div id="inapp-custom-installments-trigger" style="background: #1e293b; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-weight: 700; color: #34d399; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                                    <span id="inapp-custom-installments-label" style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🟢 1x de R$ 99,90</span>
+                                    <span id="inapp-custom-installments-arrow" style="font-size: 8px; color: #94a3b8; margin-left: 4px;">▼</span>
+                                </div>
+
+                                <!-- Menu Suspenso Customizado com Cores Vivas -->
+                                <div id="inapp-custom-installments-list" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.85); z-index: 9999; padding: 5px;">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1978,6 +1996,37 @@
             'gamil.com': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmai.com': 'hotmail.com',
             'outlok.com': 'outlook.com', 'yaho.com': 'yahoo.com', 'yahoo.com.b': 'yahoo.com.br'
         };
+
+        const MP_INSTALLMENT_RATES = {
+            1: { rate: 1.000, hasInterest: false },
+            2: { rate: 1.000, hasInterest: false },
+            3: { rate: 1.000, hasInterest: false },
+            4: { rate: 1.100, hasInterest: true },
+            5: { rate: 1.125, hasInterest: true },
+            6: { rate: 1.150, hasInterest: true },
+            7: { rate: 1.170, hasInterest: true },
+            8: { rate: 1.190, hasInterest: true },
+            9: { rate: 1.210, hasInterest: true },
+            10: { rate: 1.230, hasInterest: true },
+            11: { rate: 1.240, hasInterest: true },
+            12: { rate: 1.250, hasInterest: true }
+        };
+
+        function getInstallmentCalc(total, n) {
+            const num = Math.min(12, Math.max(1, parseInt(n, 10) || 1));
+            const info = MP_INSTALLMENT_RATES[num] || { rate: 1.0, hasInterest: false };
+            const totalWithInterest = total * info.rate;
+            const installmentVal = totalWithInterest / num;
+            return {
+                n: num,
+                rate: info.rate,
+                totalWithInterest: totalWithInterest,
+                installmentVal: installmentVal,
+                hasInterest: info.hasInterest,
+                color: info.hasInterest ? '#f87171' : '#34d399',
+                tag: info.hasInterest ? 'com juros MP' : 'Sem Juros'
+            };
+        }
 
         let selectedPlan = 'vitalicio';
         let selectedQty = 1;
@@ -2265,20 +2314,21 @@
 
             if (inappSumInstallmentsHint && inappCardInstallments) {
                 if (selectedPayMethod === 'card') {
-                    const p1 = cardTotal;
-                    const p2 = cardTotal / 2;
                     const p3 = cardTotal / 3;
-
                     inappSumInstallmentsHint.style.display = 'block';
-                    inappSumInstallmentsHint.textContent = `Ou em até 3x de R$ ${p3.toFixed(2).replace('.', ',')} SEM JUROS`;
+                    inappSumInstallmentsHint.textContent = `Ou em até 3x de R$ ${p3.toFixed(2).replace('.', ',')} SEM JUROS (até 12x no cartão)`;
 
-                    inappCardInstallments.innerHTML = `
-                        <option value="1">1x de R$ ${p1.toFixed(2).replace('.', ',')} (Sem Juros)</option>
-                        <option value="2">2x de R$ ${p2.toFixed(2).replace('.', ',')} (Sem Juros)</option>
-                        <option value="3" selected>3x de R$ ${p3.toFixed(2).replace('.', ',')} (Sem Juros)</option>
-                        <option value="6">6x de R$ ${(cardTotal * 1.15 / 6).toFixed(2).replace('.', ',')} (com juros MP)</option>
-                        <option value="12">12x de R$ ${(cardTotal * 1.25 / 12).toFixed(2).replace('.', ',')} (com juros MP)</option>
-                    `;
+                    const savedInstallment = parseInt(inappCardInstallments.value || '1', 10);
+                    let optionsHtml = '';
+                    for (let i = 1; i <= 12; i++) {
+                        const inst = getInstallmentCalc(cardTotal, i);
+                        const isSelected = i === savedInstallment ? 'selected' : '';
+                        optionsHtml += `<option value="${i}" ${isSelected}>${i}x de R$ ${inst.installmentVal.toFixed(2).replace('.', ',')} (${inst.tag})</option>`;
+                    }
+                    inappCardInstallments.innerHTML = optionsHtml;
+                    inappCardInstallments.value = savedInstallment;
+
+                    renderCustomInstallments(cardTotal, savedInstallment);
                 } else {
                     inappSumInstallmentsHint.style.display = 'none';
                 }
@@ -2288,13 +2338,99 @@
                 if (selectedPayMethod === 'pix') {
                     inappBtnSubmit.textContent = `📱 Gerar QR Code PIX de R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
                 } else {
-                    const installments = inappCardInstallments ? inappCardInstallments.value : '3';
-                    const installmentVal = cardTotal / parseInt(installments || '1', 10);
-                    inappBtnSubmit.textContent = `💳 Pagar R$ ${cardTotal.toFixed(2).replace('.', ',')} no Cartão (${installments}x de R$ ${installmentVal.toFixed(2).replace('.', ',')})`;
+                    const selN = parseInt(inappCardInstallments ? (inappCardInstallments.value || '1') : '1', 10);
+                    const inst = getInstallmentCalc(cardTotal, selN);
+                    inappBtnSubmit.textContent = `💳 Pagar R$ ${cardTotal.toFixed(2).replace('.', ',')} no Cartão (${selN}x de R$ ${inst.installmentVal.toFixed(2).replace('.', ',')})`;
                 }
             }
 
             return { baseTotal, cardTotal, finalTotal };
+        }
+
+        function renderCustomInstallments(cardTotal, currentInstallment) {
+            const trigger = document.getElementById('inapp-custom-installments-trigger');
+            const label = document.getElementById('inapp-custom-installments-label');
+            const list = document.getElementById('inapp-custom-installments-list');
+            const select = document.getElementById('inapp-card-installments');
+            if (!list || !trigger || !label || !select) return;
+
+            const selN = parseInt(currentInstallment || '1', 10);
+            let itemsHtml = '';
+
+            for (let i = 1; i <= 12; i++) {
+                const inst = getInstallmentCalc(cardTotal, i);
+                const isSelected = i === selN;
+
+                if (i <= 3) {
+                    // VERDE (Sem Juros)
+                    itemsHtml += `
+                        <div class="inapp-inst-opt" data-val="${i}" style="padding: 7px 10px; margin-bottom: 3px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: ${isSelected ? 'rgba(52, 211, 153, 0.22)' : 'rgba(52, 211, 153, 0.08)'}; border: 1px solid ${isSelected ? '#34d399' : 'rgba(52, 211, 153, 0.2)'}; transition: all 0.15s;">
+                            <div style="font-size: 11px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 6px;">
+                                <span>🟢</span>
+                                <span>${i}x de R$ ${inst.installmentVal.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            <span style="font-size: 9px; font-weight: 800; color: #065f46; background: #34d399; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.3px;">SEM JUROS</span>
+                        </div>
+                    `;
+                } else {
+                    // VERMELHO CLARO (Com juros MP)
+                    itemsHtml += `
+                        <div class="inapp-inst-opt" data-val="${i}" style="padding: 7px 10px; margin-bottom: 3px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: ${isSelected ? 'rgba(248, 113, 113, 0.22)' : 'rgba(248, 113, 113, 0.08)'}; border: 1px solid ${isSelected ? '#f87171' : 'rgba(248, 113, 113, 0.2)'}; transition: all 0.15s;">
+                            <div style="font-size: 11px; font-weight: 600; color: #fca5a5; display: flex; align-items: center; gap: 6px;">
+                                <span>🔴</span>
+                                <span>${i}x de R$ ${inst.installmentVal.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            <span style="font-size: 9px; font-weight: 700; color: #fca5a5; background: rgba(248, 113, 113, 0.2); padding: 2px 6px; border-radius: 4px;">com juros</span>
+                        </div>
+                    `;
+                }
+            }
+
+            list.innerHTML = itemsHtml;
+
+            // Atualiza o Trigger fechado
+            const currentInst = getInstallmentCalc(cardTotal, selN);
+            if (selN <= 3) {
+                label.innerHTML = `🟢 ${selN}x de R$ ${currentInst.installmentVal.toFixed(2).replace('.', ',')} <span style="font-size: 9px; font-weight: 800; color: #34d399; background: rgba(52,211,153,0.15); padding: 1px 5px; border-radius: 3px; margin-left: 4px;">SEM JUROS</span>`;
+                trigger.style.color = '#34d399';
+                trigger.style.border = '1px solid rgba(52, 211, 153, 0.5)';
+            } else {
+                label.innerHTML = `🔴 ${selN}x de R$ ${currentInst.installmentVal.toFixed(2).replace('.', ',')} <span style="font-size: 9px; font-weight: 700; color: #fca5a5; background: rgba(248,113,113,0.15); padding: 1px 5px; border-radius: 3px; margin-left: 4px;">COM JUROS</span>`;
+                trigger.style.color = '#fca5a5';
+                trigger.style.border = '1px solid rgba(248, 113, 113, 0.5)';
+            }
+
+            // Click listener nos itens da lista
+            list.querySelectorAll('.inapp-inst-opt').forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const chosen = opt.dataset.val;
+                    select.value = chosen;
+                    list.style.display = 'none';
+                    recalcOrder();
+                });
+            });
+        }
+
+        const customTrigger = document.getElementById('inapp-custom-installments-trigger');
+        const customList = document.getElementById('inapp-custom-installments-list');
+        if (customTrigger && customList) {
+            customTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                customList.style.display = customList.style.display === 'block' ? 'none' : 'block';
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!customTrigger.contains(e.target) && !customList.contains(e.target)) {
+                    customList.style.display = 'none';
+                }
+            });
+        }
+
+        if (inappCardInstallments) {
+            inappCardInstallments.addEventListener('change', () => {
+                recalcOrder();
+            });
         }
 
         recalcOrder();
@@ -2353,7 +2489,7 @@
                     const exp = document.getElementById('inapp-card-exp').value.trim();
                     const cvv = document.getElementById('inapp-card-cvv').value.trim();
                     const cpf = (document.getElementById('inapp-card-cpf').value || '').replace(/\D/g, '');
-                    const installments = inappCardInstallments.value || '3';
+                    const installments = inappCardInstallments ? (inappCardInstallments.value || '1') : '1';
 
                     if (!rawCard || rawCard.length < 13 || !holder || !exp || !cvv) {
                         alert('Preencha os dados do cartão.');
