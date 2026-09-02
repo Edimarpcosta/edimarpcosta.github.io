@@ -3,90 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ameripan Rotas Mensal</title>
+  <title>Ameripan Rotas - Modo Rápido</title>
   
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-  
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
 
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
     .hidden { display: none !important; }
     
-    /* Cores Botões */
+    /* Botões */
     .btn-amber { background-color: #f59e0b !important; color: white !important; }
     .btn-blue { background-color: #2563eb !important; color: white !important; }
     .btn-green { background-color: #16a34a !important; color: white !important; }
 
-    /* Inputs */
+    /* Inputs e Checkboxes */
     .btn-check:checked + label { background-color: #2563eb; color: white; border-color: #2563eb; }
     .btn-check-sec:checked + label { background-color: #059669; color: white; border-color: #059669; }
     .btn-check-week:checked + label { background-color: #7c3aed; color: white; border-color: #7c3aed; }
 
     .input-editable { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.25rem; padding: 0.25rem 0.5rem; }
-    
-    /* Indicador de Campo Obrigatório (Adicionado via JS) */
     .required-mark::after { content: " *"; color: #ef4444; font-weight: bold; }
 
     [un-cloak] { display: none; }
+
+    /* Animações de Feedback */
+    @keyframes flashError { 0%, 100% { background-color: transparent; } 50% { background-color: #fee2e2; } }
+    @keyframes shakeInput { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+    
+    .flash-error { animation: flashError 0.6s ease-in-out; border-left-color: #ef4444 !important; }
+    .shake-input { animation: shakeInput 0.4s ease-in-out; border-color: #ef4444 !important; }
+    .card-found { border-left-color: #16a34a !important; background-color: #f0fdf4 !important; transition: background-color 0.5s; }
+
+    /* Badge manual e input manual */
+    .badge-manual { background-color: #f59e0b; color: white; font-size: 9px; padding: 1px 5px; border-radius: 99px; text-transform: uppercase; }
+    .input-manual { background-color: #fffbeb !important; border-color: #f59e0b !important; color: #92400e !important; }
+    
+    /* Aviso não encontrado */
+    .nao-encontrado-aviso { display: flex; align-items: center; gap: 4px; background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; padding: 4px 8px; font-size: 10px; color: #92400e; margin-top: 4px; }
   </style>
 </head>
 <body class="pb-24" un-cloak>
 
   <div id="loadingBar" class="bg-yellow-100 text-yellow-800 text-xs font-bold text-center p-1 border-b border-yellow-200">
-    Carregando regras e dados...
+    Carregando sistema...
   </div>
 
   <div class="bg-blue-800 text-white p-3 shadow-md sticky top-0 z-40">
-    <h1 class="text-base font-bold flex items-center gap-2"><i class="ph ph-path text-xl"></i> Ameripan Rotas</h1>
-    <div class="flex justify-between items-end"><p class="text-[10px] text-blue-200">Visitas para os Mêses</p><span id="contadorTopo" class="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span></div>
+    <div class="flex justify-between items-center">
+        <h1 class="text-base font-bold flex items-center gap-2"><i class="ph ph-lightning text-xl text-yellow-400"></i> Ameripan Rápido</h1>
+        <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1 bg-blue-900 px-2 py-1 rounded cursor-pointer border border-blue-700">
+                <input type="checkbox" id="travarVendedor" class="accent-orange-500 w-3 h-3">
+                <span class="text-[10px] uppercase font-bold text-blue-100">Fixar Vend.</span>
+            </label>
+        </div>
+    </div>
   </div>
 
   <div class="max-w-md mx-auto p-3">
     <form id="rotaForm" onsubmit="return false;">
       
-      <div class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-blue-500">
-        <div class="flex justify-between mb-1"><label class="text-xs font-bold text-gray-700" id="lbl_cod_vend">Vendedor</label></div>
+      <div id="cardVendedor" class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-blue-500 transition-all duration-300">
+        <div class="flex justify-between items-center mb-1">
+          <label class="text-xs font-bold text-gray-700" id="lbl_cod_vend">Vendedor</label>
+          <span id="badgeManualVendedor" class="badge-manual hidden">✏ Manual</span>
+        </div>
         <div class="flex gap-2 relative mb-1">
-          <div class="relative w-20">
-            <input type="number" id="codVendedor" class="w-full p-1.5 border rounded text-sm bg-gray-50 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Cód" oninput="buscarVendedorLocal()">
+          <div class="relative w-24">
+            <input type="number" id="codVendedor" class="w-full p-2 border rounded text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-800" placeholder="Cód" onchange="buscarVendedorLocal()">
           </div>
-          <input type="text" id="nomeVendedor" class="flex-1 p-1.5 border rounded text-sm bg-white text-gray-700 font-medium outline-none" placeholder="Nome" readonly>
+          <input type="text" id="nomeVendedor" class="flex-1 p-2 border rounded text-sm bg-white text-gray-700 font-medium outline-none focus:bg-blue-50" placeholder="Nome do Vendedor" readonly tabindex="-1">
         </div>
         <div class="flex items-center gap-2 bg-blue-50 p-1.5 rounded border border-blue-100">
            <span class="text-[10px] text-blue-600 font-bold uppercase">Equipe:</span>
-           <input type="text" id="equipeVendedor" class="bg-transparent text-xs font-semibold text-blue-800 w-full outline-none" placeholder="..." readonly>
+           <input type="text" id="equipeVendedor" class="bg-transparent text-xs font-semibold text-blue-800 w-full outline-none" placeholder="..." readonly tabindex="-1">
         </div>
         <div id="msgVendedor" class="text-[10px] mt-1 min-h-[1rem]"></div>
       </div>
 
-      <div class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-orange-500">
-        <label class="block text-xs font-bold text-gray-700 mb-1" id="lbl_cod_cliente">Cliente</label>
-        <div class="flex gap-2 relative">
-          <input type="number" id="codCliente" class="w-full p-2 border rounded bg-white focus:ring-1 focus:ring-orange-500 outline-none pl-8 text-base font-bold" placeholder="Cód Cliente..." oninput="buscarClienteLocal()">
-          <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-gray-400 text-lg"></i>
-          <button type="button" onclick="limparCliente()" class="bg-gray-200 text-gray-600 px-3 rounded hover:bg-gray-300"><i class="ph ph-eraser"></i></button>
+      <div id="cardCliente" class="bg-white p-3 rounded shadow-sm mb-3 border-l-4 border-orange-500 transition-all duration-300">
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-xs font-bold text-gray-700" id="lbl_cod_cliente">Cliente</label>
+          <span id="badgeManualCliente" class="badge-manual hidden">✏ Manual</span>
         </div>
-        <div id="msgCliente" class="text-[10px] mt-1 h-4 font-bold text-blue-600"></div>
+        <div class="flex gap-2 relative">
+          <input type="number" id="codCliente" class="w-full p-2 border rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-8 text-base font-bold" placeholder="Digite cód + Enter" onchange="buscarClienteLocal()">
+          <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-gray-400 text-lg"></i>
+          <button type="button" onclick="limparClienteTotal()" class="bg-gray-200 text-gray-600 px-3 rounded hover:bg-gray-300" tabindex="-1"><i class="ph ph-eraser"></i></button>
+        </div>
+        <div id="msgCliente" class="min-h-[1rem] mt-1"></div>
         
         <div class="mt-2 grid grid-cols-1 gap-1 bg-orange-50 p-2 rounded border border-orange-100">
-          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_razao">Razão Social</span><input type="text" id="razaoSocial" class="input-editable w-full font-bold text-gray-800 text-xs" placeholder="..."></div>
-          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_fantasia">Fantasia</span><input type="text" id="nomeFantasia" class="input-editable w-full text-gray-600 text-[10px]" placeholder="..."></div>
-          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_cidade">Cidade</span><input type="text" id="cidade" class="input-editable w-full text-gray-600 text-[10px]" placeholder="..."></div>
+          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_razao">Razão Social</span><input type="text" id="razaoSocial" class="input-editable w-full font-bold text-gray-800 text-xs focus:bg-white" placeholder="..."></div>
+          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_fantasia">Fantasia</span><input type="text" id="nomeFantasia" class="input-editable w-full text-gray-600 text-[10px] focus:bg-white" placeholder="..."></div>
+          <div><span class="text-[10px] text-gray-500 uppercase font-bold" id="lbl_cidade">Cidade</span><input type="text" id="cidade" class="input-editable w-full text-gray-600 text-[10px] focus:bg-white" placeholder="..."></div>
         </div>
       </div>
 
-      <div class="bg-white p-3 rounded shadow-sm mb-3">
+      <div class="bg-white p-3 rounded shadow-sm mb-3 border border-gray-200">
         
         <div class="mb-3">
             <div class="flex justify-between items-center mb-1">
-                <label class="text-xs font-bold text-gray-700 uppercase" id="lbl_ordem">Ordem Rota</label>
-                <input type="number" id="ordemManual" class="w-12 p-0.5 border rounded text-center text-xs font-bold text-blue-600" placeholder="#" oninput="sincronizarOrdem(this.value)">
+                <label class="text-xs font-bold text-gray-700 uppercase" id="lbl_ordem">Ordem</label>
+                <input type="number" id="ordemManual" class="w-12 p-0.5 border rounded text-center text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500" placeholder="#" onchange="sincronizarOrdem(this.value)">
             </div>
             <div class="grid grid-cols-10 gap-1">
-                <script>for(let i=1; i<=20; i++) document.write(`<input type="radio" name="ordemVisita" id="ordem_${i}" value="${i}" class="hidden btn-check" onclick="document.getElementById('ordemManual').value=this.value; salvarEstadoFormulario();"><label for="ordem_${i}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 text-gray-600 font-bold hover:bg-blue-50">${i}</label>`);</script>
+                <script>for(let i=1; i<=20; i++) document.write(`<input type="radio" name="ordemVisita" id="ordem_${i}" value="${i}" class="hidden btn-check" onclick="document.getElementById('ordemManual').value=this.value; salvarEstadoFormulario();"><label for="ordem_${i}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 text-gray-600 font-bold hover:bg-blue-50 transition-colors">${i}</label>`);</script>
             </div>
         </div>
 
@@ -97,12 +122,12 @@
             <div class="flex gap-1">
                 <div class="flex-1">
                     <input type="checkbox" id="sem_todas" value="Toda Semana" class="hidden btn-check-week" onchange="toggleSemana('todas')">
-                    <label for="sem_todas" class="block cursor-pointer text-center text-[10px] py-1.5 rounded border border-gray-200 font-bold">TODA SEMANA</label>
+                    <label for="sem_todas" class="block cursor-pointer text-center text-[10px] py-1.5 rounded border border-gray-200 font-bold transition-colors">TODA SEMANA</label>
                 </div>
                 <script>
                     const semanas = [{id:'s1', l:'S1'}, {id:'s2', l:'S2'}, {id:'s3', l:'S3'}, {id:'s4', l:'S4'}];
                     semanas.forEach(s => {
-                        document.write(`<div class="flex-1"><input type="checkbox" name="semanaEspecifica" id="sem_${s.id}" value="${s.l}" class="hidden btn-check-week" onchange="toggleSemana('${s.id}')"><label for="sem_${s.id}" class="block cursor-pointer text-center text-[10px] py-1.5 rounded border border-gray-200 font-bold">${s.l}</label></div>`);
+                        document.write(`<div class="flex-1"><input type="checkbox" name="semanaEspecifica" id="sem_${s.id}" value="${s.l}" class="hidden btn-check-week" onchange="toggleSemana('${s.id}')"><label for="sem_${s.id}" class="block cursor-pointer text-center text-[10px] py-1.5 rounded border border-gray-200 font-bold transition-colors">${s.l}</label></div>`);
                     });
                 </script>
             </div>
@@ -112,45 +137,56 @@
 
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase mb-1" id="lbl_dia_visita">Dia Visita (Princ.)</label>
+                <label class="block text-xs font-bold text-gray-700 uppercase mb-1" id="lbl_dia_visita">Dia Principal</label>
                 <div class="grid grid-cols-3 gap-1">
-                    <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="radio" name="diaPrincipal" id="dia_${d}" value="${d}" class="hidden btn-check" onclick="salvarEstadoFormulario()"><label for="dia_${d}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 font-semibold">${d}</label>`)); </script>
+                    <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="radio" name="diaPrincipal" id="dia_${d}" value="${d}" class="hidden btn-check" onclick="salvarEstadoFormulario()"><label for="dia_${d}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 font-semibold transition-colors">${d}</label>`)); </script>
                 </div>
             </div>
             <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase mb-1" id="lbl_outros_dias">Outros Dias</label>
                 <div class="grid grid-cols-3 gap-1">
-                    <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="checkbox" name="diasSecundarios" id="sec_${d}" value="${d}" class="hidden btn-check-sec" onclick="salvarEstadoFormulario()"><label for="sec_${d}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 text-gray-400 font-semibold">${d}</label>`)); </script>
+                    <script> ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => document.write(`<input type="checkbox" name="diasSecundarios" id="sec_${d}" value="${d}" class="hidden btn-check-sec" onclick="salvarEstadoFormulario()"><label for="sec_${d}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-gray-200 text-gray-400 font-semibold transition-colors">${d}</label>`)); </script>
                 </div>
             </div>
         </div>
       </div>
 
-      <div class="bg-white p-3 rounded shadow-sm mb-4">
+      <div class="bg-white p-3 rounded shadow-sm mb-4 border border-gray-200">
         <div class="grid grid-cols-1 gap-2">
           <div class="flex gap-2">
-             <div class="flex-1"><label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_comprador">Comprador</label><input type="text" id="comprador" class="w-full p-1.5 border rounded bg-gray-50 outline-none text-sm" oninput="salvarEstadoFormulario()"></div>
-             <div class="w-1/3"><label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_whatsapp">WhatsApp</label><input type="tel" id="whatsapp" class="w-full p-1.5 border rounded bg-gray-50 outline-none text-sm" placeholder="(00)..." maxlength="15" oninput="salvarEstadoFormulario()"></div>
+             <div class="flex-1">
+                 <label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_comprador">Comprador</label>
+                 <input type="text" id="comprador" class="w-full p-2 border rounded bg-gray-50 outline-none text-sm focus:ring-2 focus:ring-blue-500" onchange="salvarEstadoFormulario()">
+             </div>
+             <div class="w-2/5">
+                 <label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_whatsapp">WhatsApp</label>
+                 <input type="tel" id="whatsapp" class="w-full p-2 border rounded bg-gray-50 outline-none text-sm focus:ring-2 focus:ring-green-500" placeholder="(19) 9..." onblur="formatarWhatsAppSmart(this); salvarEstadoFormulario()">
+             </div>
           </div>
-          <div><label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_obs">Observações</label><textarea id="obs" rows="1" class="w-full p-1.5 border rounded bg-gray-50 outline-none text-xs" oninput="salvarEstadoFormulario()"></textarea></div>
+          <div>
+              <label class="text-[10px] font-bold text-gray-700 uppercase" id="lbl_obs">Observações (Enter Salva)</label>
+              <input type="text" id="obs" class="w-full p-2 border rounded bg-gray-50 outline-none text-sm focus:ring-2 focus:ring-amber-500" placeholder="Obs..." onkeydown="if(event.key === 'Enter') incluirNaLista()">
+          </div>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 mb-6">
-        <button type="button" onclick="incluirNaLista()" class="btn-amber font-bold py-3 rounded shadow flex flex-col items-center justify-center text-sm"><i class="ph ph-plus-circle text-xl"></i> INCLUIR</button>
-        <button type="button" onclick="salvarDireto()" class="btn-blue font-bold py-3 rounded shadow flex flex-col items-center justify-center text-sm"><i class="ph ph-floppy-disk text-xl"></i> GRAVAR ESTE</button>
+        <button type="button" onclick="incluirNaLista()" class="btn-amber font-bold py-3 rounded shadow flex flex-col items-center justify-center text-sm transition-transform active:scale-95"><i class="ph ph-plus-circle text-xl"></i> INCLUIR (Enter)</button>
+        <button type="button" onclick="salvarDireto()" class="btn-blue font-bold py-3 rounded shadow flex flex-col items-center justify-center text-sm transition-transform active:scale-95"><i class="ph ph-floppy-disk text-xl"></i> GRAVAR ESTE</button>
       </div>
     </form>
 
     <div id="areaLista" class="bg-white rounded shadow-sm border border-gray-200 mb-20 hidden">
-      <div class="bg-gray-100 p-2 border-b border-gray-200 flex justify-between items-center"><h3 class="font-bold text-xs text-gray-700">LISTA DE GRAVAÇÃO (MEMÓRIA)</h3><span id="contadorLista" class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span></div>
-      <div id="listaClientesContainer" class="divide-y divide-gray-100"></div>
+      <div class="bg-gray-100 p-2 border-b border-gray-200 flex justify-between items-center"><h3 class="font-bold text-xs text-gray-700">FILA DE ENVIO</h3><span id="contadorLista" class="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">0</span></div>
+      <div id="listaClientesContainer" class="divide-y divide-gray-100 max-h-60 overflow-y-auto"></div>
     </div>
   </div>
 
   <div id="barraSalvar" class="fixed bottom-0 left-0 w-full bg-white border-t p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hidden z-50">
     <div class="max-w-md mx-auto">
-      <button onclick="salvarLote()" class="w-full btn-green font-bold py-3 rounded shadow-lg flex justify-center items-center gap-2 text-base"><i class="ph ph-paper-plane-right text-xl"></i> ENVIAR TUDO (<span id="btnCount">0</span>)</button>
+      <button onclick="salvarLote()" class="w-full btn-green font-bold py-3 rounded shadow-lg flex justify-center items-center gap-2 text-base transition-transform active:scale-95">
+          <i class="ph ph-paper-plane-right text-xl"></i> ENVIAR TUDO (<span id="btnCount">0</span>)
+      </button>
     </div>
   </div>
 
@@ -158,33 +194,19 @@
 
   <script>
     // ============================================================
-    // 1. CONFIGURAÇÕES E MAPEAMENTO
+    // 1. CONFIGURAÇÕES
     // ============================================================
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyoOQUbcC4nKdR3qeh2u1q0Wn4eQUD3eJUrby2DG5Nx7xQh1jmH6FSTphqxslWPvktCfQ/exec'; 
     const SPREADSHEET_ID = '1JXdW-RDSrG4or8WzvLBV_PbopVvug9B9og7fSMGOWj0';
     const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
     
-    const ABA_VENDEDORES = 'VENDEDORES'; const RANGE_VENDEDORES = 'A2:C';
-    const ABA_CLIENTES = 'CLIENTES'; const RANGE_CLIENTES = 'A2:C';
-    const ABA_EXIGIDO = 'EXIGIDO'; const RANGE_EXIGIDO = 'A2:B'; // Nova aba de regras
-
-    // Mapa: Nome na Planilha "EXIGIDO" -> ID/Lógica no HTML
-    const mapaCampos = {
-        'COD VEND': { id: 'codVendedor', label: 'lbl_cod_vend', tipo: 'input' },
-        'COD CLIENTE': { id: 'codCliente', label: 'lbl_cod_cliente', tipo: 'input' },
-        'RAZAO SOCIAL': { id: 'razaoSocial', label: 'lbl_razao', tipo: 'input' },
-        'FANTASIA': { id: 'nomeFantasia', label: 'lbl_fantasia', tipo: 'input' },
-        'CIDADE': { id: 'cidade', label: 'lbl_cidade', tipo: 'input' },
-        'ORDEM ROTA': { id: 'ordemManual', label: 'lbl_ordem', tipo: 'ordem' }, // Logica especial
-        'FREQUENCIA': { label: 'lbl_frequencia', tipo: 'frequencia' }, // Logica especial
-        'DIA VISITA': { label: 'lbl_dia_visita', tipo: 'dia' }, // Logica especial
-        'OUTROS DIAS VISITA': { label: 'lbl_outros_dias', tipo: 'outros_dias' },
-        'NOME COMPRADOR': { id: 'comprador', label: 'lbl_comprador', tipo: 'input' },
-        'WHATSAPP': { id: 'whatsapp', label: 'lbl_whatsapp', tipo: 'input' },
-        'OBSERVAÇÕES': { id: 'obs', label: 'lbl_obs', tipo: 'input' }
-    };
-
-    let dbVendedores = []; let dbClientes = []; let listaDeRotas = []; let regrasObrigatoriedade = {};
+    // Configurações de Dados
+    let dbVendedores = []; 
+    let dbClientes = []; 
+    let listaDeRotas = []; 
+    let regrasObrigatoriedade = {};
+    let statusVendedor = 'vazio'; 
+    let statusCliente = 'vazio';
 
     // ============================================================
     // 2. INICIALIZAÇÃO
@@ -192,251 +214,461 @@
     window.onload = async function() {
         const s = localStorage.getItem('rotasTemp'); 
         if(s) { listaDeRotas = JSON.parse(s); renderizarLista(); }
+        
+        // Carrega estado do checkbox de travar vendedor
+        const trava = localStorage.getItem('travarVendedor');
+        if(trava === 'true') document.getElementById('travarVendedor').checked = true;
+
         restaurarEstadoFormulario();
-        await carregarBasesDeDados(); // Carrega dados E regras
+        await carregarBasesDeDados();
         restaurarVendedor();
     };
+
+    // Monitora o checkbox de travar vendedor
+    document.getElementById('travarVendedor').addEventListener('change', (e) => {
+        localStorage.setItem('travarVendedor', e.target.checked);
+    });
 
     async function carregarBasesDeDados() {
         const loadingBar = document.getElementById('loadingBar');
         try {
-            loadingBar.innerText = "Baixando regras e dados...";
-            // Baixa as 3 tabelas em paralelo
+            loadingBar.innerText = "Sincronizando dados...";
             const [resV, resC, resR] = await Promise.all([
-                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_VENDEDORES}!${RANGE_VENDEDORES}?key=${API_KEY}`),
-                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_CLIENTES}!${RANGE_CLIENTES}?key=${API_KEY}`),
-                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_EXIGIDO}!${RANGE_EXIGIDO}?key=${API_KEY}`)
+                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/VENDEDORES!A2:C?key=${API_KEY}`),
+                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CLIENTES!A2:D?key=${API_KEY}`),
+                fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/EXIGIDO!A2:B?key=${API_KEY}`)
             ]);
 
             const jV = await resV.json(); const jC = await resC.json(); const jR = await resR.json();
 
-            // Processa Vendedores e Clientes
-            if (jV.values) dbVendedores = jV.values.map(r => ({ codigo: String(r[0]).trim(), nome: r[1], equipe: r[2] }));
-            if (jC.values) dbClientes = jC.values.map(r => ({ codigo: String(r[0]).trim(), cidade: r[1], razao: r[2], fantasia: r[2] }));
+            if (jV.values) dbVendedores = jV.values.map(r => ({ codigo: String(r[0]).trim(), nome: r[1] || '', equipe: r[2] || '' }));
+            
+            // Tratamento robusto para clientes (coluna Fantasia opcional)
+            if (jC.values) dbClientes = jC.values.map(r => ({
+                codigo: String(r[0]).trim(),
+                cidade: r[1] || '',
+                razao: r[2] || '',
+                fantasia: r[3] || r[2] || '' 
+            }));
 
-            // PROCESSA REGRAS DE OBRIGATORIEDADE
-            regrasObrigatoriedade = {}; // Reseta
+            // Tratamento de regras
             if (jR.values) {
                 jR.values.forEach(row => {
-                    const nomeCampo = String(row[0]).trim().toUpperCase(); // Coluna A: Nome
-                    const flag = String(row[1] || '').trim(); // Coluna B: X ou letra
-                    if (flag.length > 0) {
-                        // Se tem qualquer coisa na coluna B, é obrigatório
-                        regrasObrigatoriedade[nomeCampo] = true;
-                    }
+                    const nome = String(row[0]).trim().toUpperCase();
+                    if(row[1]) regrasObrigatoriedade[nome] = true;
                 });
             }
-            aplicarAsteriscosVisuais();
+            aplicarAsteriscos();
 
             loadingBar.className = "bg-green-100 text-green-800 text-xs font-bold text-center p-1 border-b border-green-200";
-            loadingBar.innerText = `Sistema Pronto! Regras Carregadas.`; 
-            setTimeout(() => { loadingBar.style.display = 'none'; }, 1500);
+            loadingBar.innerText = `Pronto. ${dbVendedores.length} Vendedores / ${dbClientes.length} Clientes.`; 
+            setTimeout(() => { loadingBar.style.display = 'none'; }, 2500);
 
         } catch (e) { 
             console.error(e);
             loadingBar.className = "bg-red-100 text-red-800 text-xs font-bold text-center p-1"; 
-            loadingBar.innerText = "Erro ao carregar. Verifique conexão."; 
+            loadingBar.innerText = "Erro de conexão. Modo manual ativado."; 
         }
     }
 
-    function aplicarAsteriscosVisuais() {
-        // Remove marcas anteriores
-        document.querySelectorAll('.required-mark').forEach(e => e.classList.remove('required-mark'));
+    // ============================================================
+    // 3. LÓGICA DE BUSCA (AGORA COM ONCHANGE)
+    // ============================================================
+
+    function buscarVendedorLocal() {
+        const codInput = document.getElementById('codVendedor');
+        const cod = codInput.value.toString().trim();
+        const nomeInput = document.getElementById('nomeVendedor');
+        const equipeInput = document.getElementById('equipeVendedor');
+        const badge = document.getElementById('badgeManualVendedor');
+        const card = document.getElementById('cardVendedor');
+        const msg = document.getElementById('msgVendedor');
+
+        if (!cod) {
+            limparVendedorUI();
+            return;
+        }
+
+        const f = dbVendedores.find(v => v.codigo === cod);
+
+        if (f) {
+            // ENCONTRADO
+            nomeInput.value = f.nome;
+            equipeInput.value = f.equipe;
+            modoLeitura(nomeInput, equipeInput);
+            badge.classList.add('hidden');
+            msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Confirmado</span>';
+            localStorage.setItem('vendedorCodigo', cod);
+            statusVendedor = 'encontrado';
+            feedbackVisual(card, 'sucesso');
+            // Auto-focus no cliente
+            document.getElementById('codCliente').focus();
+
+        } else {
+            // NÃO ENCONTRADO -> MODO MANUAL
+            modoEdicao(nomeInput, equipeInput);
+            badge.classList.remove('hidden');
+            msg.innerHTML = '<span class="text-red-500 font-bold text-[10px]">Não encontrado - Digite o nome</span>';
+            statusVendedor = 'manual';
+            feedbackVisual(card, 'erro');
+            nomeInput.focus(); // Pede para digitar o nome
+        }
+    }
+
+    function buscarClienteLocal() {
+        const codInput = document.getElementById('codCliente');
+        const cod = codInput.value.toString().trim();
+        const msg = document.getElementById('msgCliente');
+        const badge = document.getElementById('badgeManualCliente');
+        const card = document.getElementById('cardCliente');
+
+        // Campos
+        const razao = document.getElementById('razaoSocial');
+        const fant = document.getElementById('nomeFantasia');
+        const cid = document.getElementById('cidade');
+
+        if (!cod) {
+            msg.innerHTML = '';
+            statusCliente = 'vazio';
+            return;
+        }
+
+        const f = dbClientes.find(c => c.codigo === cod);
+
+        if (f) {
+            fant.value = f.fantasia;
+            razao.value = f.razao;
+            cid.value = f.cidade;
+            badge.classList.add('hidden');
+            msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Cliente OK</span>';
+            statusCliente = 'encontrado';
+            feedbackVisual(card, 'sucesso');
+            
+            // UX: Pula direto para a Ordem se achou o cliente
+            document.getElementById('ordemManual').focus();
+
+        } else {
+            // Limpa dados antigos mas mantém o código
+            fant.value = ''; razao.value = ''; cid.value = '';
+            
+            badge.classList.remove('hidden');
+            msg.innerHTML = `<div class="nao-encontrado-aviso"><i class="ph ph-warning"></i> Novo ou não cadastrado. Preencha abaixo.</div>`;
+            statusCliente = 'manual';
+            feedbackVisual(card, 'erro');
+            razao.focus();
+        }
+    }
+
+    // ============================================================
+    // 4. FORMATAÇÃO INTELIGENTE WHATSAPP
+    // ============================================================
+    function formatarWhatsAppSmart(input) {
+        let v = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
         
-        // Aplica novas marcas baseado nas regras carregadas
-        for (const [nomePlanilha, config] of Object.entries(mapaCampos)) {
-            if (regrasObrigatoriedade[nomePlanilha]) {
-                const label = document.getElementById(config.label);
-                if (label) label.classList.add('required-mark');
+        if (v.length === 0) return;
+
+        // CORREÇÃO: "Corte Inteligente"
+        // Se tiver mais de 11 dígitos (seja 55, 54, ou qualquer prefixo), 
+        // pega apenas os últimos 11 dígitos (DDD + 9 Dígitos)
+        if (v.length > 11) {
+            v = v.slice(-11); 
+        }
+
+        // Formatação (XX) X XXXX-XXXX
+        let result = v;
+        if (v.length === 11) { // Celular BR (DDD + 9 dígitos)
+            result = `(${v.substring(0,2)}) ${v.substring(2,3)} ${v.substring(3,7)}-${v.substring(7)}`;
+        } else if (v.length === 10) { // Fixo ou Celular Antigo (DDD + 8 dígitos)
+            result = `(${v.substring(0,2)}) ${v.substring(2,6)}-${v.substring(6)}`;
+        }
+
+        input.value = result;
+    }
+
+    // ============================================================
+    // 5. FUNÇÕES AUXILIARES DE UI
+    // ============================================================
+    function feedbackVisual(element, tipo) {
+        element.classList.remove('flash-error', 'card-found');
+        void element.offsetWidth; // Trigger reflow
+        if(tipo === 'erro') element.classList.add('flash-error');
+        if(tipo === 'sucesso') element.classList.add('card-found');
+    }
+
+    function modoLeitura(...inputs) {
+        inputs.forEach(i => {
+            i.classList.remove('input-manual');
+            i.readOnly = true;
+            i.tabIndex = -1; // Pula no Tab
+        });
+    }
+
+    function modoEdicao(...inputs) {
+        inputs.forEach(i => {
+            i.classList.add('input-manual');
+            i.value = '';
+            i.readOnly = false;
+            i.tabIndex = 0;
+        });
+    }
+
+    function limparVendedorUI() {
+        document.getElementById('nomeVendedor').value = '';
+        document.getElementById('equipeVendedor').value = '';
+        document.getElementById('msgVendedor').innerHTML = '';
+        document.getElementById('badgeManualVendedor').classList.add('hidden');
+        document.getElementById('cardVendedor').classList.remove('card-found', 'flash-error');
+        statusVendedor = 'vazio';
+    }
+
+    function limparClienteTotal() {
+        document.getElementById('codCliente').value = '';
+        document.getElementById('razaoSocial').value = '';
+        document.getElementById('nomeFantasia').value = '';
+        document.getElementById('cidade').value = '';
+        document.getElementById('msgCliente').innerHTML = '';
+        document.getElementById('badgeManualCliente').classList.add('hidden');
+        document.getElementById('cardCliente').classList.remove('card-found', 'flash-error');
+        statusCliente = 'vazio';
+        document.getElementById('codCliente').focus();
+    }
+
+    function aplicarAsteriscos() {
+        // Mapeamento simples ID -> NomePlanilha
+        const map = {
+            'codVendedor': 'COD VEND', 'codCliente': 'COD CLIENTE', 
+            'razaoSocial': 'RAZAO SOCIAL', 'whatsapp': 'WHATSAPP'
+        };
+        for(const [id, field] of Object.entries(map)) {
+            if(regrasObrigatoriedade[field]) {
+                const lbl = document.getElementById('lbl_' + id.replace(/([A-Z])/g, '_$1').toLowerCase()); // Tenta achar label
+                if(lbl) lbl.classList.add('required-mark');
             }
         }
     }
 
     // ============================================================
-    // 3. VALIDAÇÃO DINÂMICA (A LÓGICA PEDIDA)
+    // 6. MANIPULAÇÃO DO FORMULÁRIO (INCLUIR/LIMPAR)
     // ============================================================
-    function validarCamposDinamicos() {
-        let erros = [];
+    function obterDados() {
+        // Validação simples
+        const nomeV = document.getElementById('nomeVendedor').value;
+        const razao = document.getElementById('razaoSocial').value;
+        
+        if(!nomeV) { alert('Vendedor obrigatório'); return null; }
+        if(!razao) { alert('Cliente obrigatório'); document.getElementById('codCliente').focus(); return null; }
 
-        for (const [nomePlanilha, isRequired] of Object.entries(regrasObrigatoriedade)) {
-            if (!isRequired) continue; // Se não tá marcado com X na planilha, pula
+        let ordem = document.getElementById('ordemManual').value;
+        if(!ordem) { const r = document.querySelector('input[name="ordemVisita"]:checked'); if(r) ordem = r.value; }
 
-            const config = mapaCampos[nomePlanilha];
-            if (!config) continue; // Se não mapeamos no HTML, pula
-
-            // Validação por Tipo
-            if (config.tipo === 'input') {
-                const el = document.getElementById(config.id);
-                if (!el || !el.value.trim()) erros.push(nomePlanilha);
-            
-            } else if (config.tipo === 'ordem') {
-                // Verifica input manual OU radio button
-                const manual = document.getElementById('ordemManual').value;
-                const radio = document.querySelector('input[name="ordemVisita"]:checked');
-                if (!manual && !radio) erros.push(nomePlanilha);
-
-            } else if (config.tipo === 'frequencia') {
-                const toda = document.getElementById('sem_todas').checked;
-                const part = document.querySelector('input[name="semanaEspecifica"]:checked');
-                if (!toda && !part) erros.push(nomePlanilha);
-
-            } else if (config.tipo === 'dia') {
-                if (!document.querySelector('input[name="diaPrincipal"]:checked')) erros.push(nomePlanilha);
-            
-            } else if (config.tipo === 'outros_dias') {
-                // Geralmente não é obrigatório, mas se for marcado na planilha:
-                if (!document.querySelector('input[name="diasSecundarios"]:checked')) erros.push(nomePlanilha);
-            }
+        let frequencia = document.getElementById('sem_todas').checked ? "Toda Semana" : [];
+        if(Array.isArray(frequencia)) {
+            document.querySelectorAll('input[name="semanaEspecifica"]:checked').forEach(c => frequencia.push(c.value));
+            if(frequencia.length === 0) frequencia = ""; // Vazio se nada marcado
         }
 
-        if (erros.length > 0) {
-            alert("Os seguintes campos são obrigatórios (marcados na planilha):\n\n- " + erros.join("\n- "));
-            return false;
+        const diasS = [];
+        document.querySelectorAll('input[name="diasSecundarios"]:checked').forEach(c => diasS.push(c.value));
+
+        return {
+            id: Date.now(),
+            codVendedor: document.getElementById('codVendedor').value || 'MANUAL',
+            nomeVendedor: nomeV,
+            equipeVendedor: document.getElementById('equipeVendedor').value,
+            codCliente: document.getElementById('codCliente').value || 'MANUAL',
+            nomeFantasia: document.getElementById('nomeFantasia').value || razao,
+            razaoSocial: razao,
+            cidade: document.getElementById('cidade').value,
+            ordemVisita: ordem,
+            semanas: frequencia,
+            diaPrincipal: document.querySelector('input[name="diaPrincipal"]:checked')?.value || '',
+            diasSecundarios: diasS,
+            comprador: document.getElementById('comprador').value,
+            whatsapp: document.getElementById('whatsapp').value,
+            obs: document.getElementById('obs').value
+        };
+    }
+
+    function incluirNaLista() {
+        const item = obterDados();
+        if(!item) return;
+
+        listaDeRotas.push(item);
+        salvarLocal();
+        renderizarLista();
+        
+        // UX Inteligente: Limpar
+        prepararProximoRegistro();
+    }
+
+    function prepararProximoRegistro() {
+        const manterVendedor = document.getElementById('travarVendedor').checked;
+
+        // Limpa Cliente e Dados da Rota
+        limparClienteTotal();
+        
+        // Limpa inputs de contato
+        document.getElementById('comprador').value = '';
+        document.getElementById('whatsapp').value = '';
+        document.getElementById('obs').value = '';
+        
+        // Mantém configurações de dia/semana? Geralmente sim, mas ordem deve limpar
+        document.getElementById('ordemManual').value = '';
+        document.querySelectorAll('input[name="ordemVisita"]').forEach(e => e.checked = false);
+
+        // Se NÃO travar vendedor, limpa vendedor também
+        if (!manterVendedor) {
+            limparVendedorUI();
+            document.getElementById('codVendedor').value = '';
+            document.getElementById('codVendedor').focus();
+        } else {
+            // Se travar, foca direto no cliente para o próximo
+            document.getElementById('codCliente').focus();
         }
-        return true;
+        
+        salvarEstadoFormulario(); // Atualiza cache
+    }
+
+    function renderizarLista() {
+        const c = document.getElementById('listaClientesContainer'); 
+        c.innerHTML = '';
+        const area = document.getElementById('areaLista'); 
+        const btn = document.getElementById('barraSalvar');
+        
+        if(listaDeRotas.length === 0) { 
+            area.classList.add('hidden'); 
+            btn.classList.add('hidden'); 
+            return; 
+        }
+        
+        area.classList.remove('hidden'); 
+        btn.classList.remove('hidden');
+        document.getElementById('contadorLista').innerText = listaDeRotas.length;
+        document.getElementById('btnCount').innerText = listaDeRotas.length;
+
+        // Renderiza inverso (mais novo em cima)
+        listaDeRotas.slice().reverse().forEach(item => {
+            const freqStr = Array.isArray(item.semanas) ? item.semanas.join(',') : item.semanas;
+            c.innerHTML += `
+            <div class="p-2 hover:bg-gray-50 transition-colors border-b border-gray-100 flex justify-between items-start animate-fade-in">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-xs text-blue-900">${item.codCliente}</span>
+                    <span class="font-bold text-xs text-gray-800">${item.nomeFantasia.substring(0,25)}</span>
+                  </div>
+                  <p class="text-[10px] text-gray-500 mt-0.5">
+                    ${item.cidade} • Dia: ${item.diaPrincipal} • Ord: ${item.ordemVisita}
+                  </p>
+                </div>
+                <button onclick="excluirItem(${item.id})" class="text-red-400 hover:text-red-600 p-1"><i class="ph ph-trash text-lg"></i></button>
+            </div>`;
+        });
+    }
+
+    function excluirItem(id) { 
+        listaDeRotas = listaDeRotas.filter(i => i.id !== id); 
+        salvarLocal(); 
+        renderizarLista(); 
     }
 
     // ============================================================
-    // 4. FUNÇÕES DE ENVIO (UPDATED COM VALIDAÇÃO)
+    // 7. PERSISTÊNCIA E BACKEND
     // ============================================================
-    function obterDadosDoFormulario() {
-      // CHAMA A VALIDAÇÃO DINÂMICA AQUI
-      if (!validarCamposDinamicos()) return null;
-
-      // (Resto da função igual, pois a validação já passou)
-      const codV = document.getElementById('codVendedor').value;
-      const nomeV = document.getElementById('nomeVendedor').value;
-      const equipeV = document.getElementById('equipeVendedor').value;
-      const codC = document.getElementById('codCliente').value;
-      const nomeC = document.getElementById('nomeFantasia').value;
-      
-      // Backup de segurança minimo (sempre deve ter vend/cliente)
-      if(!nomeV || !nomeC) { alert("Erro crítico: Identifique o cliente e vendedor."); return null; }
-      
-      let ordem = document.getElementById('ordemManual').value;
-      if(!ordem) { const r = document.querySelector('input[name="ordemVisita"]:checked'); if(r) ordem = r.value; }
-
-      const diaP = document.querySelector('input[name="diaPrincipal"]:checked');
-      const diaVal = diaP ? diaP.value : ''; // Pode ser vazio se não for obrigatório
-
-      let frequencia = "";
-      if (document.getElementById('sem_todas').checked) {
-          frequencia = "Toda Semana";
-      } else {
-          const sems = [];
-          document.querySelectorAll('input[name="semanaEspecifica"]:checked').forEach(c => sems.push(c.value));
-          if (sems.length > 0) frequencia = sems;
-      }
-
-      const diasS = [];
-      document.querySelectorAll('input[name="diasSecundarios"]:checked').forEach(c => diasS.push(c.value));
-
-      return {
-        id: Date.now(),
-        codVendedor: codV || 'MANUAL', nomeVendedor: nomeV, equipeVendedor: equipeV,
-        codCliente: codC || 'MANUAL', nomeFantasia: nomeC,
-        razaoSocial: document.getElementById('razaoSocial').value, cidade: document.getElementById('cidade').value,
-        ordemVisita: ordem, semanas: frequencia,
-        diaPrincipal: diaVal, diasSecundarios: diasS,
-        comprador: document.getElementById('comprador').value, whatsapp: document.getElementById('whatsapp').value, obs: document.getElementById('obs').value
-      };
+    function salvarLocal() { localStorage.setItem('rotasTemp', JSON.stringify(listaDeRotas)); }
+    
+    function restaurarVendedor() {
+        const cod = localStorage.getItem('vendedorCodigo');
+        if (cod) { document.getElementById('codVendedor').value = cod; buscarVendedorLocal(); }
     }
 
-    // ============================================================
-    // RESTO DAS FUNÇÕES (Mantidas para funcionamento)
-    // ============================================================
+    // Funções de estado do form (Radio/Checkbox)
     function toggleSemana(tipo) {
         const chkTodas = document.getElementById('sem_todas');
         const chkEspecificas = document.querySelectorAll('input[name="semanaEspecifica"]');
-        if (tipo === 'todas') { if (chkTodas.checked) chkEspecificas.forEach(c => c.checked = false); } 
-        else { let alguma = false; chkEspecificas.forEach(c => { if(c.checked) alguma = true; }); if (alguma) chkTodas.checked = false; }
+        if (tipo === 'todas') { 
+            if (chkTodas.checked) chkEspecificas.forEach(c => c.checked = false); 
+        } else { 
+            let alguma = false; chkEspecificas.forEach(c => { if(c.checked) alguma = true; }); 
+            if (alguma) chkTodas.checked = false; 
+        }
         salvarEstadoFormulario();
     }
-    function salvarEstadoFormulario() {
-        const estado = {
-            ordemManual: document.getElementById('ordemManual').value,
-            comprador: document.getElementById('comprador').value, whatsapp: document.getElementById('whatsapp').value, obs: document.getElementById('obs').value,
-            semanaTodas: document.getElementById('sem_todas').checked,
-            semanasEsp: Array.from(document.querySelectorAll('input[name="semanaEspecifica"]:checked')).map(c => c.id),
-            diaPrincipal: document.querySelector('input[name="diaPrincipal"]:checked')?.value || null,
-            diasSec: Array.from(document.querySelectorAll('input[name="diasSecundarios"]:checked')).map(c => c.id)
-        };
-        localStorage.setItem('formEstadoTemp', JSON.stringify(estado));
-    }
-    function restaurarEstadoFormulario() {
-        const s = localStorage.getItem('formEstadoTemp'); if (!s) return; const e = JSON.parse(s);
-        if(e.ordemManual) { document.getElementById('ordemManual').value = e.ordemManual; sincronizarOrdem(e.ordemManual); }
-        document.getElementById('comprador').value = e.comprador||''; document.getElementById('whatsapp').value = e.whatsapp||''; document.getElementById('obs').value = e.obs||'';
-        if (e.semanaTodas) document.getElementById('sem_todas').checked = true;
-        if (e.semanasEsp) e.semanasEsp.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
-        if (e.diaPrincipal) { const r = document.querySelector(`input[name="diaPrincipal"][value="${e.diaPrincipal}"]`); if(r) r.checked = true; }
-        if (e.diasSec) e.diasSec.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
-    }
+
     function sincronizarOrdem(v) { 
         const r = document.querySelector(`input[name="ordemVisita"][value="${v}"]`); 
         if(r) r.checked = true; else document.querySelectorAll('input[name="ordemVisita"]').forEach(el => el.checked = false);
         salvarEstadoFormulario(); 
     }
-    function restaurarVendedor() { const cod = localStorage.getItem('vendedorCodigo'); if (cod) { document.getElementById('codVendedor').value = cod; buscarVendedorLocal(); } }
-    function buscarVendedorLocal() {
-        const cod = document.getElementById('codVendedor').value.toString().trim(); const msg = document.getElementById('msgVendedor');
-        if (!cod) { msg.innerHTML = ''; document.getElementById('nomeVendedor').value=''; localStorage.removeItem('vendedorCodigo'); return; }
-        const f = dbVendedores.find(v => v.codigo === cod);
-        if (f) { document.getElementById('nomeVendedor').value = f.nome; document.getElementById('equipeVendedor').value = f.equipe; msg.innerHTML = '<span class="text-green-600 font-bold">✓ OK</span>'; localStorage.setItem('vendedorCodigo', cod); } 
-        else { document.getElementById('nomeVendedor').value = ''; msg.innerHTML = '<span class="text-red-500 text-[10px]">Não achou</span>'; }
+
+    function salvarEstadoFormulario() {
+        // Salva apenas configurações de Rota/Contato, não os códigos principais que mudam sempre
+        const estado = {
+            semanaTodas: document.getElementById('sem_todas').checked,
+            semanasEsp: Array.from(document.querySelectorAll('input[name="semanaEspecifica"]:checked')).map(c => c.id),
+            diaPrincipal: document.querySelector('input[name="diaPrincipal"]:checked')?.value || null,
+            diasSec: Array.from(document.querySelectorAll('input[name="diasSecundarios"]:checked')).map(c => c.id),
+            // Opcional: Salvar whatsapp/comprador se quiser persistir entre refreshs acidentais
+            obsTemp: document.getElementById('obs').value
+        };
+        localStorage.setItem('formEstadoTemp', JSON.stringify(estado));
     }
-    function buscarClienteLocal() {
-        const cod = document.getElementById('codCliente').value.toString().trim(); const msg = document.getElementById('msgCliente');
-        if (!cod) { msg.innerHTML = ''; return; }
-        const f = dbClientes.find(c => c.codigo === cod);
-        if (f) { document.getElementById('nomeFantasia').value = f.fantasia; document.getElementById('razaoSocial').value = f.razao; document.getElementById('cidade').value = f.cidade; msg.innerHTML = '<span class="text-green-600 font-bold">✓ OK</span>'; } 
-        else { msg.innerHTML = '<span class="text-red-500 font-bold">Novo?</span>'; }
+
+    function restaurarEstadoFormulario() {
+        const s = localStorage.getItem('formEstadoTemp'); if (!s) return; 
+        const e = JSON.parse(s);
+        
+        if (e.semanaTodas) document.getElementById('sem_todas').checked = true;
+        if (e.semanasEsp) e.semanasEsp.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
+        if (e.diaPrincipal) { const r = document.querySelector(`input[name="diaPrincipal"][value="${e.diaPrincipal}"]`); if(r) r.checked = true; }
+        if (e.diasSec) e.diasSec.forEach(id => { let el=document.getElementById(id); if(el) el.checked=true; });
+        if (e.obsTemp) document.getElementById('obs').value = e.obsTemp;
     }
+
+    // Envio para o Google Apps Script
     async function chamarBackendScript(payload) {
-      try { const r = await fetch(GAS_API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) }); return await r.json(); } 
-      catch (error) { return { erro: "Falha conexão." }; }
+        try {
+            const r = await fetch(GAS_API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+            return await r.json();
+        } catch (error) { return { erro: "Falha na conexão." }; }
     }
+
     async function salvarLote() {
-      if(listaDeRotas.length === 0) return;
-      mostrarModal('loading', 'Enviando...');
-      const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: listaDeRotas });
-      if(res.sucesso) { listaDeRotas=[]; salvarLocal(); renderizarLista(); mostrarModal('sucesso', res.mensagem); } else mostrarModal('erro', res.erro);
+        if(listaDeRotas.length === 0) return;
+        mostrarModal('loading', 'Enviando dados...');
+        const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: listaDeRotas });
+        if(res.sucesso) { 
+            listaDeRotas=[]; salvarLocal(); renderizarLista(); 
+            mostrarModal('sucesso', res.mensagem); 
+        } else { mostrarModal('erro', res.erro); }
     }
+    
+    // Função Salvar Direto (botão Gravar Este)
     async function salvarDireto() {
-      const btn = document.querySelector("button[onclick='salvarDireto()']"); if(btn.disabled) return;
-      const item = obterDadosDoFormulario(); if(!item) return; // Validação já ocorre aqui dentro
-      btn.disabled = true; mostrarModal('loading', 'Salvando...');
-      try { const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: [item] }); if(res.sucesso) { limparFormulario(); mostrarModal('sucesso', res.mensagem); } else mostrarModal('erro', res.erro); } finally { btn.disabled = false; }
+        const item = obterDados();
+        if(!item) return;
+        mostrarModal('loading', 'Salvando...');
+        const res = await chamarBackendScript({ acao: 'SALVAR_LOTE', lista: [item] });
+        if(res.sucesso) { 
+            mostrarModal('sucesso', res.mensagem);
+            prepararProximoRegistro(); // Limpa form conforme regras
+        } else { mostrarModal('erro', res.erro); }
     }
-    function incluirNaLista() { const item = obterDadosDoFormulario(); if(item) { listaDeRotas.push(item); salvarLocal(); renderizarLista(); limparFormulario(); } }
-    function renderizarLista() {
-       const c = document.getElementById('listaClientesContainer'); c.innerHTML = '';
-       const area = document.getElementById('areaLista'); const btn = document.getElementById('barraSalvar');
-       if(listaDeRotas.length===0) { area.classList.add('hidden'); btn.classList.add('hidden'); return; }
-       area.classList.remove('hidden'); btn.classList.remove('hidden');
-       document.getElementById('contadorLista').innerText = listaDeRotas.length;
-       document.getElementById('btnCount').innerText = listaDeRotas.length;
-       listaDeRotas.slice().reverse().forEach(item => {
-         const freqDisplay = Array.isArray(item.semanas) ? item.semanas.join(',') : item.semanas;
-         c.innerHTML += `<div class="p-2 hover:bg-gray-50 transition-colors border-b border-gray-100"><div class="flex justify-between items-start"><div><p class="font-bold text-xs text-gray-800">${item.nomeFantasia}</p><p class="text-[10px] text-gray-500">${item.cidade} • Ord: ${item.ordemVisita} • ${freqDisplay}</p></div><button onclick="excluirItem(${item.id})" class="text-red-400 hover:text-red-600"><i class="ph ph-trash text-lg"></i></button></div></div>`;
-       });
-    }
-    function excluirItem(id) { if(confirm('Remover?')) { listaDeRotas = listaDeRotas.filter(i => i.id !== id); salvarLocal(); renderizarLista(); } }
-    function salvarLocal() { localStorage.setItem('rotasTemp', JSON.stringify(listaDeRotas)); }
-    function limparFormulario() {
-      document.getElementById('codCliente').value=''; document.getElementById('nomeFantasia').value=''; document.getElementById('razaoSocial').value=''; document.getElementById('cidade').value='';
-      localStorage.removeItem('formEstadoTemp'); 
-      document.getElementById('comprador').value=''; document.getElementById('whatsapp').value=''; document.getElementById('obs').value=''; document.getElementById('ordemManual').value='';
-      document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(e => e.checked = false);
-      document.getElementById('msgCliente').innerHTML = ''; document.getElementById('codCliente').focus();
-    }
-    function limparCliente() { limparFormulario(); }
+
     function mostrarModal(tipo, msg) {
-      const o = document.getElementById('overlay'); const c = document.getElementById('modalContent'); o.classList.remove('hidden');
-      if(tipo==='loading') c.innerHTML = `<div class="loader"></div><h3 class="font-bold mt-2 text-sm text-gray-700">${msg}</h3>`;
-      else c.innerHTML = `<h3 class="font-bold text-base mb-2 text-gray-800">${tipo==='sucesso'?'Sucesso!':'Erro'}</h3><p class="mb-3 text-xs text-gray-600">${msg}</p><button onclick="document.getElementById('overlay').classList.add('hidden')" class="bg-gray-200 px-4 py-1.5 rounded text-sm font-bold">Fechar</button>`;
+        const o = document.getElementById('overlay'); const c = document.getElementById('modalContent'); o.classList.remove('hidden');
+        if(tipo==='loading') {
+            c.innerHTML = `<div style="border:3px solid #e5e7eb; border-top-color:#2563eb; border-radius:50%; width:32px; height:32px; animation:spin 0.8s linear infinite; margin:0 auto;"></div><h3 class="font-bold mt-2 text-sm text-gray-700">${msg}</h3>`;
+        } else {
+            const cor = tipo==='sucesso' ? '#16a34a' : '#dc2626';
+            const icon = tipo==='sucesso' ? 'ph-check-circle' : 'ph-x-circle';
+            c.innerHTML = `<i class="ph ${icon}" style="font-size:2.5rem; color:${cor};"></i><h3 class="font-bold text-base mb-2 text-gray-800" style="color:${cor}">${tipo==='sucesso'?'Sucesso!':'Erro'}</h3><p class="mb-3 text-xs text-gray-600">${msg}</p><button onclick="document.getElementById('overlay').classList.add('hidden')" class="bg-gray-200 px-4 py-1.5 rounded text-sm font-bold">Fechar</button>`;
+        }
     }
-    document.getElementById('whatsapp').addEventListener('input', function (e) { let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/); e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : ''); });
+
+    // CSS para Spinner
+    const spinStyle = document.createElement('style');
+    spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } } .animate-fade-in { animation: fadeIn 0.3s ease-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }';
+    document.head.appendChild(spinStyle);
   </script>
 </body>
 </html>
