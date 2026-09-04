@@ -104,6 +104,11 @@
         <span>A Mapear</span>
         <span id="badgeNaoMapeadosCount" class="hidden text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950">0</span>
       </button>
+      <button onclick="mudarAba('movimentacao')" id="tabBtnMovimentacao" class="flex-1 py-2.5 text-center flex items-center justify-center gap-1.5 transition hover:text-white">
+        <i class="ph ph-arrows-left-right text-base"></i>
+        <span>Ocorrências</span>
+        <span id="badgeMovimentacaoCount" class="hidden text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-500 text-white">0</span>
+      </button>
     </nav>
   </header>
 
@@ -465,6 +470,113 @@
       </div>
     </section>
 
+    <!-- ========================================================= -->
+    <!-- ABA 4: OCORRÊNCIAS DE CARTEIRA (INATIVAR / TRANSFERIR)    -->
+    <!-- ========================================================= -->
+    <section id="abaMovimentacao" class="hidden space-y-4">
+      
+      <!-- Cabeçalho Informativo -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-2.5 mb-1">
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+            <i class="ph ph-buildings"></i>
+          </div>
+          <div>
+            <h2 class="font-bold text-sm text-slate-800">Ocorrências de Carteira</h2>
+            <p class="text-[11px] text-slate-500">Defina clientes que fecharam/faliram ou solicite transferência de vendedores.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card do Formulário de Movimentação em Lote -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3.5">
+        <!-- Tipo de Movimento (Radio Buttons) -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Movimentação</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-3 flex items-start gap-2.5 hover:bg-slate-50 transition has-[:checked]:border-red-500 has-[:checked]:bg-red-50/50 has-[:checked]:text-red-950">
+              <input type="radio" name="tipoMovimentacao" value="INATIVAR" checked onchange="alternarTipoMovimentacao('INATIVAR')" class="mt-0.5 text-red-600 focus:ring-red-500">
+              <div>
+                <span class="block text-xs font-bold text-slate-800 has-[:checked]:text-red-900">Inativar Cliente</span>
+                <span class="block text-[10px] text-slate-500">Fechou as portas, faliu ou encerrou atividades.</span>
+              </div>
+            </label>
+
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-3 flex items-start gap-2.5 hover:bg-slate-50 transition has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/50 has-[:checked]:text-blue-950">
+              <input type="radio" name="tipoMovimentacao" value="TRANSFERIR" onchange="alternarTipoMovimentacao('TRANSFERIR')" class="mt-0.5 text-blue-600 focus:ring-blue-500">
+              <div>
+                <span class="block text-xs font-bold text-slate-800 has-[:checked]:text-blue-900">Transferir Cliente</span>
+                <span class="block text-[10px] text-slate-500">Remanejar para outro vendedor da empresa.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Seletor de Vendedor Destino (Aparece apenas quando TRANSFERIR estiver selecionado) -->
+        <div id="boxDestinoVendedor" class="hidden space-y-1.5 p-3 rounded-xl bg-blue-50/70 border border-blue-200">
+          <label class="block text-[11px] font-bold text-blue-900 uppercase">Vendedor de Destino (Novo Responsável)</label>
+          <select id="selectVendedorDestino" onchange="processarEntradaMovimentacaoLote()" class="w-full p-2 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Selecione o vendedor de destino...</option>
+          </select>
+          <span class="text-[10px] text-blue-700 block">O vendedor atual (doador) será identificado automaticamente pelo cadastro do cliente.</span>
+        </div>
+
+        <!-- Entrada de Texto em Lote com Linhas -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-[11px] font-bold text-slate-600 uppercase">
+              Lista de Clientes e Motivos (1 por linha)
+            </label>
+            <button type="button" onclick="limparInputMovimentacao()" class="text-[10px] text-slate-400 hover:text-red-500 transition">Limpar texto</button>
+          </div>
+          <textarea id="inputMovimentacaoLote" rows="5" oninput="processarEntradaMovimentacaoLote()" placeholder="Cole ou digite a lista no formato CÓDIGO / MOTIVO, por exemplo:&#10;1234 / mudou de ramo&#10;4321 / encerrou atividades(faliu)&#10;4828 / transferir para fulano" class="w-full p-3 border border-slate-200 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 resize-y leading-relaxed bg-slate-50/40 focus:bg-white"></textarea>
+          <div class="text-[10px] text-slate-400 mt-1 flex justify-between items-center">
+            <span>Aceita separadores: barra (/), hífen (-), vírgula ou ponto-e-vírgula.</span>
+            <span id="contadorLinhasDigitadas" class="font-bold text-slate-600">0 linha(s)</span>
+          </div>
+        </div>
+
+        <!-- Pré-Visualização e Tabela de Conferência -->
+        <div id="containerPreviewMovimentacao" class="hidden space-y-2.5 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="ph ph-list-magnifying-glass text-indigo-600 text-sm"></i>
+              <span>Pré-visualização da Solicitação</span>
+            </div>
+            <span id="badgeTotalValidos" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">0 identificados</span>
+          </div>
+
+          <div id="tabelaPreviewMovimentacao" class="space-y-2 max-h-64 overflow-y-auto pr-1 divide-y divide-slate-100">
+            <!-- Injetado via JS -->
+          </div>
+
+          <!-- Botão de Envio para o Gerente -->
+          <button type="button" id="btnEnviarSolicitacaoMov" onclick="enviarSolicitacaoMovimentacao()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+            <i class="ph ph-paper-plane-right text-base"></i>
+            <span id="btnEnviarSolicitacaoMovText">Enviar Solicitação para o Gerente</span>
+          </button>
+          <p class="text-[10px] text-center text-slate-400">Esta solicitação será enviada para a tela de gestão para aprovação do gerente.</p>
+        </div>
+      </div>
+
+      <!-- Minhas Solicitações Recentes -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="ph ph-clock-counter-clockwise text-indigo-600 text-sm"></i>
+            <span>Minhas Solicitações Recentes</span>
+          </h3>
+          <button onclick="recarregarDadosOperacionais()" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-1">
+            <i class="ph ph-arrows-clockwise"></i> Atualizar
+          </button>
+        </div>
+        <div id="listaMinhasSolicitacoes" class="space-y-2">
+          <div class="p-3 text-center text-slate-400 text-xs italic">Nenhuma solicitação registrada recentemente.</div>
+        </div>
+      </div>
+
+    </section>
+
   </main>
 
   <!-- Barra Fixa de Envio de Lote -->
@@ -584,6 +696,8 @@
     let regrasObrigatoriedade = {};
     let statusCliente = 'vazio';
     let atualizacaoConfirmadaPeloVendedor = false;
+    let dbMinhasSolicitacoes = [];
+    let listaClientesMovimentacaoProcessada = [];
     // Contingência e cache local de clientes de outros vendedores (evita delay de rede)
     const SEED_OUTROS_CLIENTES = ["52662", "53644", "14576", "15943", "27309", "52647", "52648", "52652", "52657", "52658", "52659", "52660", "52661", "52663", "52664", "52668", "52669", "52671", "52672", "52674", "52675", "52677", "52696", "52698", "52702", "52706", "52708", "52709", "52710", "52711", "52712", "52714", "52747", "52752", "52755", "52759", "52760", "52761", "52762", "52766", "52773", "52774", "52777", "52779", "52789", "52791", "52792", "52794", "52809", "52819", "52823", "52826", "52827", "52828", "52831", "52852", "52858", "52870", "52871", "52873", "52948", "52952", "52977", "52983", "52996", "52998", "53000", "53003", "53033", "53042", "53069", "53081", "53084", "53085", "53086", "53087", "53088", "53093", "53098", "53099", "53100", "53102", "53103", "53104", "53106", "53107", "53108", "53110", "53112", "53114", "53116", "53119", "53120", "53123", "53127", "53128", "53130", "53136", "53140", "53141", "53142", "53148", "53149", "53150", "53151", "53156", "53159", "53164", "53165", "53174", "53177", "53182", "53185", "53186", "53188", "53190", "53197", "53204", "53206", "53208", "53214", "53222", "53240", "53243", "53245", "53272", "53275", "53300", "53313", "53324", "53329", "53339", "53342", "53354", "53369", "53377", "53383", "53415", "53425", "53430", "53434", "53436", "53441", "53443", "53461", "53479", "53481", "53489", "53497", "53498", "53499", "53509", "53510", "53513", "53517", "53519", "53524", "53537", "53549", "53577", "53580", "53587", "53592", "53596", "53598", "53600", "53613", "53614", "53618", "53619", "53622", "53623", "53624", "53625", "53627", "53630", "53634", "53637", "53645", "53653", "53661", "53665", "53668", "53675", "53682", "53687", "53688", "53689", "53690", "53694", "53711", "53716", "53717", "53719", "53725", "53726", "53742", "53746", "53750", "53769", "53779", "53781", "53792", "53797", "53798", "53805", "53818", "53832", "53864", "53863"];
     let dbCodigosOutrosClientes = new Set(SEED_OUTROS_CLIENTES);
@@ -946,17 +1060,22 @@
       const secRota = document.getElementById('abaMinhaRota');
       const secLancar = document.getElementById('abaLancarVisita');
       const secNaoMapeados = document.getElementById('abaNaoMapeados');
+      const secMovimentacao = document.getElementById('abaMovimentacao');
+
       const btnRota = document.getElementById('tabBtnRota');
       const btnLancar = document.getElementById('tabBtnLancar');
       const btnNaoMapeados = document.getElementById('tabBtnNaoMapeados');
+      const btnMovimentacao = document.getElementById('tabBtnMovimentacao');
 
       secRota.classList.add('hidden');
       secLancar.classList.add('hidden');
       if (secNaoMapeados) secNaoMapeados.classList.add('hidden');
+      if (secMovimentacao) secMovimentacao.classList.add('hidden');
 
       btnRota.classList.remove('tab-active');
       btnLancar.classList.remove('tab-active');
       if (btnNaoMapeados) btnNaoMapeados.classList.remove('tab-active');
+      if (btnMovimentacao) btnMovimentacao.classList.remove('tab-active');
 
       if (aba === 'minha-rota') {
         secRota.classList.remove('hidden');
@@ -966,6 +1085,11 @@
         if (secNaoMapeados) secNaoMapeados.classList.remove('hidden');
         if (btnNaoMapeados) btnNaoMapeados.classList.add('tab-active');
         renderizarNaoMapeados();
+      } else if (aba === 'movimentacao') {
+        if (secMovimentacao) secMovimentacao.classList.remove('hidden');
+        if (btnMovimentacao) btnMovimentacao.classList.add('tab-active');
+        popularSelectVendedoresDestino();
+        renderizarMinhasSolicitacoes();
       } else {
         secLancar.classList.remove('hidden');
         btnLancar.classList.add('tab-active');
@@ -1027,6 +1151,11 @@
             res.entregas.forEach(e => {
               dbEntregas[normalizarTexto(e.cidade)] = e.dias;
             });
+          }
+
+          if (res.minhasSolicitacoes) {
+            dbMinhasSolicitacoes = res.minhasSolicitacoes;
+            renderizarMinhasSolicitacoes();
           }
 
           atualizarContadoresCarteira();
@@ -1658,6 +1787,358 @@
       setTimeout(() => {
         document.getElementById('ordemManual')?.focus();
       }, 100);
+    }
+
+    // ============================================================
+    // 6.X. OCORRÊNCIAS DE CARTEIRA (INATIVAÇÃO / TRANSFERÊNCIA EM LOTE)
+    // ============================================================
+    let tipoMovimentacaoSelecionado = 'INATIVAR';
+
+    function alternarTipoMovimentacao(tipo) {
+      tipoMovimentacaoSelecionado = tipo;
+      const boxDestino = document.getElementById('boxDestinoVendedor');
+      const btnTxt = document.getElementById('btnEnviarSolicitacaoMovText');
+      
+      if (tipo === 'TRANSFERIR') {
+        if (boxDestino) boxDestino.classList.remove('hidden');
+        if (btnTxt) btnTxt.textContent = 'Enviar Solicitação de Transferência';
+      } else {
+        if (boxDestino) boxDestino.classList.add('hidden');
+        if (btnTxt) btnTxt.textContent = 'Enviar Solicitação de Inativação';
+      }
+      processarEntradaMovimentacaoLote();
+    }
+
+    function popularSelectVendedoresDestino() {
+      const select = document.getElementById('selectVendedorDestino');
+      if (!select) return;
+      
+      const valorAtual = select.value;
+      select.innerHTML = '<option value="">Selecione o vendedor de destino...</option>';
+
+      const codLogado = usuarioLogado ? String(usuarioLogado.cod || '').trim() : '';
+      const nomeLogado = usuarioLogado ? normalizarTexto(usuarioLogado.nome || '') : '';
+
+      (dbVendedores || []).forEach(v => {
+        const cod = String(v.cod || '').trim();
+        const nome = String(v.nome || '').trim();
+        const equipe = String(v.equipe || '').trim();
+        const status = normalizarTexto(v.status || 'ATIVO');
+
+        if (status === 'INATIVO') return;
+        // Não transferir para si mesmo
+        if (cod && cod === codLogado) return;
+        if (nome && normalizarTexto(nome) === nomeLogado) return;
+
+        const opt = document.createElement('option');
+        opt.value = cod || nome;
+        opt.dataset.cod = cod;
+        opt.dataset.nome = nome;
+        opt.dataset.equipe = equipe;
+        opt.textContent = `${cod ? cod + ' - ' : ''}${nome} (${equipe || 'Geral'})`;
+        select.appendChild(opt);
+      });
+
+      if (valorAtual) select.value = valorAtual;
+    }
+
+    function limparInputMovimentacao() {
+      const inp = document.getElementById('inputMovimentacaoLote');
+      if (inp) inp.value = '';
+      listaClientesMovimentacaoProcessada = [];
+      const cont = document.getElementById('containerPreviewMovimentacao');
+      if (cont) cont.classList.add('hidden');
+      const contLinhas = document.getElementById('contadorLinhasDigitadas');
+      if (contLinhas) contLinhas.textContent = '0 linha(s)';
+      const badgeTotal = document.getElementById('badgeTotalValidos');
+      if (badgeTotal) badgeTotal.textContent = '0 identificados';
+    }
+
+    function processarEntradaMovimentacaoLote() {
+      const textarea = document.getElementById('inputMovimentacaoLote');
+      const containerPreview = document.getElementById('containerPreviewMovimentacao');
+      const tabelaPreview = document.getElementById('tabelaPreviewMovimentacao');
+      const contadorLinhas = document.getElementById('contadorLinhasDigitadas');
+      const badgeTotalValidos = document.getElementById('badgeTotalValidos');
+      const btnEnviar = document.getElementById('btnEnviarSolicitacaoMov');
+      const selDestino = document.getElementById('selectVendedorDestino');
+
+      if (!textarea || !containerPreview || !tabelaPreview) return;
+
+      const texto = textarea.value || '';
+      const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      
+      if (contadorLinhas) contadorLinhas.textContent = `${linhas.length} linha(s)`;
+
+      if (linhas.length === 0) {
+        containerPreview.classList.add('hidden');
+        listaClientesMovimentacaoProcessada = [];
+        return;
+      }
+
+      containerPreview.classList.remove('hidden');
+
+      // Vendedor destino selecionado
+      let vendDest = null;
+      if (tipoMovimentacaoSelecionado === 'TRANSFERIR' && selDestino && selDestino.selectedIndex > 0) {
+        const opt = selDestino.options[selDestino.selectedIndex];
+        vendDest = {
+          cod: opt.dataset.cod || opt.value,
+          nome: opt.dataset.nome || opt.textContent,
+          equipe: opt.dataset.equipe || ''
+        };
+      }
+
+      // Constrói mapa local de clientes para cruzamento rápido
+      const mapaClientes = new Map();
+      (dbClientes || []).forEach(c => {
+        const cod = String(c.codigo || c.codCliente || '').trim();
+        if (cod) mapaClientes.set(cod, c);
+      });
+
+      const itensProcessados = [];
+      let totalValidos = 0;
+
+      linhas.forEach((linha, idx) => {
+        // Suporta separadores: '/', '-', ';', ',', '\t'
+        let codigo = '';
+        let motivo = '';
+
+        const matchDelim = linha.match(/^([0-9a-zA-Z._-]+)\s*[\/\-;,\t]\s*(.*)$/);
+        if (matchDelim) {
+          codigo = matchDelim[1].trim();
+          motivo = matchDelim[2].trim();
+        } else {
+          const partes = linha.split(/\s+/);
+          codigo = partes[0].trim();
+          motivo = partes.slice(1).join(' ').trim();
+        }
+
+        if (!motivo) {
+          motivo = tipoMovimentacaoSelecionado === 'INATIVAR' 
+            ? 'Encerrou atividades / faliu' 
+            : 'Remanejamento de carteira';
+        }
+
+        // Localiza cliente na carteira local
+        const clienteLocal = mapaClientes.get(codigo);
+        const razao = clienteLocal ? (clienteLocal.razao || clienteLocal.fantasia) : 'Localizará no servidor';
+        const fantasia = clienteLocal ? (clienteLocal.fantasia || '') : '';
+        const cidade = clienteLocal ? (clienteLocal.cidade || '') : '';
+        const vendedorDoador = clienteLocal ? (clienteLocal.vendedor || usuarioLogado?.nome || '') : (usuarioLogado?.nome || '');
+
+        const ehValido = codigo.length > 0;
+        if (ehValido) totalValidos++;
+
+        itensProcessados.push({
+          idx,
+          codigo,
+          motivo,
+          razao,
+          fantasia,
+          cidade,
+          vendedorDoador,
+          encontradoLocal: !!clienteLocal
+        });
+      });
+
+      listaClientesMovimentacaoProcessada = itensProcessados;
+      if (badgeTotalValidos) {
+        badgeTotalValidos.textContent = `${totalValidos} cliente(s)`;
+      }
+
+      // Renderiza itens no preview
+      tabelaPreview.innerHTML = itensProcessados.map(item => {
+        const isTransfer = tipoMovimentacaoSelecionado === 'TRANSFERIR';
+        const statusBadge = item.encontradoLocal
+          ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Na sua carteira</span>`
+          : `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Base geral</span>`;
+
+        return `
+          <div class="py-2 flex items-start justify-between gap-2 text-xs">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">#${escapeHtml(item.codigo)}</span>
+                <span class="font-semibold text-slate-700 truncate">${escapeHtml(item.fantasia || item.razao)}</span>
+                ${item.cidade ? `<span class="text-[10px] text-slate-400">• ${escapeHtml(item.cidade)}</span>` : ''}
+                ${statusBadge}
+              </div>
+              <div class="mt-1 text-[11px] text-slate-600 flex items-center gap-1.5">
+                <span class="font-bold text-slate-500">Motivo:</span>
+                <span class="italic text-slate-700">${escapeHtml(item.motivo)}</span>
+              </div>
+              ${isTransfer && vendDest ? `
+                <div class="mt-0.5 text-[10px] text-blue-700 flex items-center gap-1">
+                  <i class="ph ph-arrow-right font-bold"></i>
+                  <span>Transferir para: <strong>${escapeHtml(vendDest.nome)}</strong> (${escapeHtml(vendDest.equipe || 'Geral')})</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Validação do botão de envio
+      if (btnEnviar) {
+        const podeEnviar = totalValidos > 0 && (tipoMovimentacaoSelecionado !== 'TRANSFERIR' || !!vendDest);
+        btnEnviar.disabled = !podeEnviar;
+        if (podeEnviar) {
+          btnEnviar.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+          btnEnviar.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+      }
+    }
+
+    async function enviarSolicitacaoMovimentacao() {
+      if (!usuarioLogado) {
+        alert('Sessão expirada. Efetue login novamente.');
+        return;
+      }
+
+      if (listaClientesMovimentacaoProcessada.length === 0) {
+        alert('Nenhum cliente para enviar. Cole ao menos uma linha no formato: CÓDIGO / MOTIVO');
+        return;
+      }
+
+      let destinoVendedor = null;
+      if (tipoMovimentacaoSelecionado === 'TRANSFERIR') {
+        const selDestino = document.getElementById('selectVendedorDestino');
+        if (!selDestino || selDestino.selectedIndex <= 0) {
+          alert('Selecione o vendedor de destino para onde os clientes serão transferidos.');
+          selDestino?.focus();
+          return;
+        }
+        const opt = selDestino.options[selDestino.selectedIndex];
+        destinoVendedor = {
+          cod: opt.dataset.cod || opt.value,
+          nome: opt.dataset.nome || opt.textContent,
+          equipe: opt.dataset.equipe || ''
+        };
+      }
+
+      const confirmMsg = tipoMovimentacaoSelecionado === 'INATIVAR'
+        ? `Confirma o envio da solicitação de INATIVAÇÃO para ${listaClientesMovimentacaoProcessada.length} cliente(s)?\n\nEssa solicitação será enviada para aprovação do gerente na tela de gestão.`
+        : `Confirma o envio da solicitação de TRANSFERÊNCIA de ${listaClientesMovimentacaoProcessada.length} cliente(s) para o vendedor ${destinoVendedor.nome}?\n\nEssa solicitação será enviada para aprovação do gerente na tela de gestão.`;
+
+      if (!confirm(confirmMsg)) return;
+
+      exibirAlerta('Aguarde...', 'Enviando solicitação para o gerente...', null, 'carregando');
+
+      try {
+        const payload = {
+          acao: 'SOLICITAR_MOVIMENTACAO_LOTE',
+          tipo: tipoMovimentacaoSelecionado,
+          solicitante: {
+            cod: usuarioLogado.cod,
+            nome: usuarioLogado.nome,
+            equipe: usuarioLogado.equipe
+          },
+          destinoVendedor: destinoVendedor,
+          listaClientes: listaClientesMovimentacaoProcessada.map(c => ({
+            codigo: c.codigo,
+            motivo: c.motivo,
+            razao: c.razao,
+            fantasia: c.fantasia,
+            cidade: c.cidade
+          }))
+        };
+
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+
+        const json = await res.json();
+        if (json && json.sucesso) {
+          exibirAlerta('Solicitação Enviada!', json.mensagem || 'Solicitação registrada com sucesso! Ela aguarda aprovação do gerente na tela de gestão.', null, 'sucesso');
+          limparInputMovimentacao();
+          await carregarBasesOperacionais();
+        } else {
+          throw new Error(json.erro || 'Falha ao registrar solicitação.');
+        }
+      } catch (err) {
+        console.error(err);
+        exibirAlerta('Erro ao Enviar', err.message || err.toString(), null, 'erro');
+      }
+    }
+
+    function renderizarMinhasSolicitacoes() {
+      const container = document.getElementById('listaMinhasSolicitacoes');
+      const badgeCount = document.getElementById('badgeMovimentacaoCount');
+      if (!container) return;
+
+      const solicitacoes = dbMinhasSolicitacoes || [];
+      const pendentes = solicitacoes.filter(s => String(s.status || '').toUpperCase() === 'PENDENTE');
+
+      if (badgeCount) {
+        if (pendentes.length > 0) {
+          badgeCount.textContent = pendentes.length;
+          badgeCount.classList.remove('hidden');
+        } else {
+          badgeCount.classList.add('hidden');
+        }
+      }
+
+      if (solicitacoes.length === 0) {
+        container.innerHTML = `<div class="p-3 text-center text-slate-400 text-xs italic">Nenhuma solicitação registrada recentemente.</div>`;
+        return;
+      }
+
+      container.innerHTML = solicitacoes.map(sol => {
+        const st = String(sol.status || 'PENDENTE').toUpperCase();
+        let badgeCor = 'bg-amber-100 text-amber-800 border-amber-200';
+        let badgeIcon = 'ph-clock';
+        let badgeLabel = 'Aguardando Gerente';
+
+        if (st === 'APROVADO') {
+          badgeCor = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+          badgeIcon = 'ph-check-circle';
+          badgeLabel = 'Aprovado pelo Gerente';
+        } else if (st === 'RECUSADO') {
+          badgeCor = 'bg-red-100 text-red-800 border-red-200';
+          badgeIcon = 'ph-x-circle';
+          badgeLabel = 'Recusado';
+        }
+
+        const isTransfer = String(sol.tipo || '').toUpperCase() === 'TRANSFERIR';
+        const tipoLabel = isTransfer ? 'Transferência' : 'Inativação';
+        const tipoCor = isTransfer ? 'text-blue-700 bg-blue-50 border-blue-200' : 'text-red-700 bg-red-50 border-red-200';
+
+        const dataSolStr = sol.dataSolicitacao ? new Date(sol.dataSolicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+
+        return `
+          <div class="p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition shadow-2xs space-y-2">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${tipoCor}">${tipoLabel}</span>
+                <span class="text-[11px] font-bold text-slate-700">${sol.qtdClientes || 0} cliente(s)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${badgeCor}">
+                <i class="ph ${badgeIcon}"></i> ${badgeLabel}
+              </span>
+            </div>
+
+            <div class="text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Enviado em: <strong>${dataSolStr}</strong></span>
+              ${isTransfer && sol.destinoNome ? `<span class="text-blue-700">Destino: <strong>${escapeHtml(sol.destinoNome)}</strong></span>` : ''}
+            </div>
+
+            ${sol.obsDecisao ? `
+              <div class="p-2 rounded-lg bg-amber-50/80 border border-amber-200 text-[10px] text-amber-900">
+                <strong>Obs da Gerência (${escapeHtml(sol.decididoPor || 'Gerente')}):</strong> ${escapeHtml(sol.obsDecisao)}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function recarregarDadosOperacionais() {
+      exibirAlerta('Aguarde...', 'Atualizando dados da carteira e solicitações...', null, 'carregando');
+      await carregarBasesOperacionais();
+      document.getElementById('overlay')?.classList.add('hidden');
     }
 
     // ============================================================
