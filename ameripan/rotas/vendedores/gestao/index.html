@@ -145,6 +145,7 @@
             <li><a href="javascript:void(0)" onclick="switchView('rota')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-map-trifold text-lg"></i> Rota do Vendedor</a></li>
             <li><a href="javascript:void(0)" onclick="switchView('remanejamento')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-arrows-split text-lg"></i> Remanejamento em Lote</a></li>
             <li><a href="javascript:void(0)" onclick="switchView('vendedores')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-user-switch text-lg"></i> Vendedores & Órfãos</a></li>
+            <li><a href="javascript:void(0)" onclick="switchView('solicitacoes')" id="nav-solicitacoes" class="menu-item flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><span class="flex items-center gap-3"><i class="ph ph-shield-check text-lg"></i> Solicitações & Inativações</span><span id="badge-solicitacoes-pendentes" class="hidden px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded-full">0</span></a></li>
 
             <li><a href="javascript:void(0)" onclick="switchView('deliveries')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-truck text-lg"></i> Consulta Entregas</a></li>
             <li><a href="javascript:void(0)" onclick="switchView('calendar')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-calendar text-lg"></i> Calendário (Mês)</a></li>
@@ -769,6 +770,246 @@
             </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- VIEW: SOLICITAÇÕES, INATIVAÇÕES & TRANSFERÊNCIAS          -->
+        <!-- ========================================================= -->
+        <div id="view-solicitacoes" class="view-section p-6 space-y-6 overflow-y-auto">
+            <!-- Cabeçalho da View -->
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <i class="ph ph-shield-check text-blue-600"></i> Solicitações, Inativações & Remanejamentos
+                    </h2>
+                    <p class="text-sm text-slate-500">Aprove solicitações de inativação/transferência enviadas pelos vendedores ou execute alterações em lote diretamente.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="carregarDados()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2 shadow-xs cursor-pointer">
+                        <i class="ph ph-arrows-clockwise text-sm"></i>
+                        <span>Atualizar Fila</span>
+                    </button>
+                    <button onclick="carregarHistoricoMovimentacoes(true)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2 border border-slate-200 cursor-pointer">
+                        <i class="ph ph-clock-counter-clockwise text-sm"></i>
+                        <span>Carregar Histórico</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPIs Rápidos -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl flex-shrink-0">
+                        <i class="ph ph-clock"></i>
+                    </div>
+                    <div>
+                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Aguardando Gerente</div>
+                        <div class="text-xl font-bold text-slate-800" id="kpi-solicitacoes-pendentes">0</div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center text-xl flex-shrink-0">
+                        <i class="ph ph-user-minus"></i>
+                    </div>
+                    <div>
+                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clientes Inativados</div>
+                        <div class="text-xl font-bold text-slate-800" id="kpi-total-inativos">0</div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl flex-shrink-0">
+                        <i class="ph ph-arrows-left-right"></i>
+                    </div>
+                    <div>
+                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clientes Transferidos</div>
+                        <div class="text-xl font-bold text-slate-800" id="kpi-total-transferidos">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1. FILA DE SOLICITAÇÕES PENDENTES (Aprovação / Recusa pelo Gerente) -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-amber-50/70 border-b border-amber-200/60 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center text-base shadow-xs">
+                            <i class="ph ph-shield-warning"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">Fila de Aprovação de Solicitações dos Vendedores</h3>
+                            <p class="text-[11px] text-slate-500">Ao aprovar, o sistema exclui de CLIENTES e ROTAS (se inativação) ou altera o vendedor (se transferência).</p>
+                        </div>
+                    </div>
+                    <span id="badge-contador-pendentes" class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        0 pendente(s)
+                    </span>
+                </div>
+
+                <div id="container-solicitacoes-pendentes" class="p-4 space-y-3 divide-y divide-slate-100">
+                    <div class="p-8 text-center text-slate-400 text-xs italic">
+                        Nenhuma solicitação pendente de aprovação no momento.
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. EXECUÇÃO DIRETA PELO GERENTE (Sem Aprovação Prévia) -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-blue-50/60 border-b border-blue-100 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
+                            <i class="ph ph-lightning"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">Execução Direta pelo Gerente (Ação Imediata)</h3>
+                            <p class="text-[11px] text-slate-500">Inative clientes ou transfira para outro vendedor em lote. Aplica imediatamente sem fila de espera.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-4">
+                    <!-- Tipo de Movimentação (Radio Buttons) -->
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Selecione o Tipo de Movimento</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label class="cursor-pointer border border-slate-200 rounded-xl p-3.5 flex items-start gap-3 hover:bg-slate-50 transition has-[:checked]:border-red-500 has-[:checked]:bg-red-50/60">
+                                <input type="radio" name="tipoMovimentoGestor" value="INATIVAR" checked onchange="alternarTipoMovimentoGestor('INATIVAR')" class="mt-0.5 text-red-600 focus:ring-red-500">
+                                <div>
+                                    <span class="block text-xs font-bold text-slate-800 has-[:checked]:text-red-900">Inativar Clientes (Fechou, Faliu, Encerrou)</span>
+                                    <span class="block text-[11px] text-slate-500 mt-0.5">Exclui da base ativa de CLIENTES e ROTAS, arquivando com data e motivo em CLIENTES_INATIVOS.</span>
+                                </div>
+                            </label>
+
+                            <label class="cursor-pointer border border-slate-200 rounded-xl p-3.5 flex items-start gap-3 hover:bg-slate-50 transition has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/60">
+                                <input type="radio" name="tipoMovimentoGestor" value="TRANSFERIR" onchange="alternarTipoMovimentoGestor('TRANSFERIR')" class="mt-0.5 text-blue-600 focus:ring-blue-500">
+                                <div>
+                                    <span class="block text-xs font-bold text-slate-800 has-[:checked]:text-blue-900">Transferir Clientes para Outro Vendedor</span>
+                                    <span class="block text-[11px] text-slate-500 mt-0.5">Atualiza o vendedor/equipe nas abas CLIENTES e ROTAS, registrando histórico em CLIENTES_TRANSFERIDOS.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Seletor de Vendedor Destino (Aparece se TRANSFERIR) -->
+                    <div id="box-gestor-destino" class="hidden p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 space-y-1.5">
+                        <label class="block text-xs font-bold text-blue-900 uppercase">Vendedor de Destino (Novo Responsável)</label>
+                        <select id="select-gestor-destino" onchange="processarEntradaGestorLote()" class="w-full p-2.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Selecione o vendedor de destino...</option>
+                        </select>
+                        <span class="text-[11px] text-blue-700 block">O vendedor atual de cada cliente será identificado automaticamente pelo cadastro.</span>
+                    </div>
+
+                    <!-- Entrada de Lote (Textarea) -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-bold text-slate-700 uppercase">
+                                Lista de Clientes e Motivos (1 cliente por linha)
+                            </label>
+                            <button type="button" onclick="limparInputGestorLote()" class="text-[11px] text-slate-400 hover:text-red-600 font-bold transition">Limpar texto</button>
+                        </div>
+                        <textarea id="input-gestor-lote" rows="5" oninput="processarEntradaGestorLote()" placeholder="Cole ou digite a lista no formato CÓDIGO / MOTIVO, por exemplo:&#10;1234 / mudou de ramo&#10;4321 / encerrou atividades(faliu)&#10;4324 / transferiu para vendedor x" class="w-full p-3.5 border border-slate-200 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 resize-y leading-relaxed bg-slate-50/40 focus:bg-white"></textarea>
+                        <div class="text-[11px] text-slate-400 mt-1 flex justify-between items-center">
+                            <span>Formatos aceitos: <code>1234/motivo</code>, <code>1234 - motivo</code>, <code>1234;motivo</code> ou apenas o código.</span>
+                            <span id="contador-linhas-gestor" class="font-bold text-slate-600">0 linha(s)</span>
+                        </div>
+                    </div>
+
+                    <!-- Pré-Visualização da Ação Direta -->
+                    <div id="container-preview-gestor" class="hidden space-y-3 pt-3 border-t border-slate-100">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <i class="ph ph-magnifying-glass text-blue-600 text-base"></i>
+                                <span>Conferência Prévia dos Clientes Identificados</span>
+                            </div>
+                            <span id="badge-total-gestor-validos" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                0 localizado(s)
+                            </span>
+                        </div>
+
+                        <div id="tabela-preview-gestor" class="space-y-2 max-h-64 overflow-y-auto pr-1 divide-y divide-slate-100"></div>
+
+                        <button type="button" id="btn-executar-gestor-direto" onclick="executarMovimentacaoDiretaGestor()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="ph ph-check-circle text-base"></i>
+                            <span id="btn-executar-gestor-text">Executar Imediatamente na Base de Dados</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. HISTÓRICO DE CLIENTES INATIVOS E TRANSFERIDOS -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <i class="ph ph-archive text-purple-600 text-lg"></i>
+                            Histórico de Inativos e Transferidos
+                        </h3>
+                        <p class="text-[11px] text-slate-500">Consulte os registros permanentes das abas CLIENTES_INATIVOS e CLIENTES_TRANSFERIDOS.</p>
+                    </div>
+
+                    <!-- Abas de Alternância do Histórico -->
+                    <div class="flex items-center bg-slate-200/70 p-1 rounded-xl gap-1">
+                        <button id="btn-tab-hist-inativos" onclick="alternarAbaHistorico('inativos')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-800 shadow-xs transition">
+                            Inativos (<span id="count-hist-inativos">0</span>)
+                        </button>
+                        <button id="btn-tab-hist-transferidos" onclick="alternarAbaHistorico('transferidos')" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-800 transition">
+                            Transferidos (<span id="count-hist-transferidos">0</span>)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="relative flex-1 min-w-[240px]">
+                            <input type="text" id="busca-historico" oninput="filtrarHistoricoTabela()" placeholder="Buscar por código, cliente, cidade, vendedor..." class="w-full p-2.5 pl-9 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                        </div>
+                    </div>
+
+                    <!-- Tabela Inativos -->
+                    <div id="wrapper-hist-inativos" class="overflow-x-auto max-h-[400px]">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-100 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3">Data</th>
+                                    <th class="p-3">Cód.</th>
+                                    <th class="p-3">Razão / Fantasia</th>
+                                    <th class="p-3">Cidade</th>
+                                    <th class="p-3">Ex-Vendedor</th>
+                                    <th class="p-3">Motivo</th>
+                                    <th class="p-3">Solicitado</th>
+                                    <th class="p-3">Aprovado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-inativos-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="8" class="p-6 text-center text-slate-400 italic">Clique em "Carregar Histórico" para visualizar os registros arquivados.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tabela Transferidos -->
+                    <div id="wrapper-hist-transferidos" class="hidden overflow-x-auto max-h-[400px]">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-100 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3">Data</th>
+                                    <th class="p-3">Cód.</th>
+                                    <th class="p-3">Razão / Fantasia</th>
+                                    <th class="p-3">Cidade</th>
+                                    <th class="p-3">Vendedor Doador</th>
+                                    <th class="p-3">Vendedor Destino</th>
+                                    <th class="p-3">Motivo</th>
+                                    <th class="p-3">Solicitado</th>
+                                    <th class="p-3">Aprovado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-transferidos-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="9" class="p-6 text-center text-slate-400 italic">Clique em "Carregar Histórico" para visualizar os registros arquivados.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="view-deliveries" class="view-section p-6">
             <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
                 <div>
@@ -993,6 +1234,14 @@
     let rawClientes = [];
     let rawSemAtendimento = [];
     let rawDispositivos = [];
+    let rawSolicitacoesPendentes = [];
+    let rawUltimasSolicitacoes = [];
+    let rawHistoricoInativos = [];
+    let rawHistoricoTransferidos = [];
+    let historicoCarregado = false;
+    let tipoMovimentoGestorSelecionado = 'INATIVAR';
+    let listaClientesGestorProcessada = [];
+    let abaHistoricoAtiva = 'inativos';
     let remanFiltroState = { busca: '', vendedor: '' };
     let remanSelecionados = new Set();
     let remanCidSelecionados = new Set();
@@ -1082,6 +1331,9 @@
                 rawClientes = dadosGas.clientes || [];
                 rawSemAtendimento = dadosGas.semAtendimento || [];
                 rawDispositivos = dadosGas.dispositivos || [];
+                rawSolicitacoesPendentes = dadosGas.solicitacoesPendentes || [];
+                rawUltimasSolicitacoes = dadosGas.ultimasSolicitacoes || [];
+                atualizarBadgeSolicitacoes();
 
                 rawEntregas = {};
                 cityDisplayMap = {};
@@ -1335,6 +1587,7 @@
         else if (v === 'rota') renderRota();
         else if (v === 'remanejamento') renderRemanejamento();
         else if (v === 'vendedores') renderVendedoresOrfaos();
+        else if (v === 'solicitacoes') renderSolicitacoes();
         else if (v === 'calendar') renderCalendar();
         else if (v === 'team') renderTeamLoad();
         else if (v === 'reports') renderReports();
@@ -4657,6 +4910,537 @@
         }
     }
 
+    // ============================================================
+    // 5.X) SOLICITAÇÕES, INATIVAÇÕES & TRANSFERÊNCIAS (GESTOR)
+    // ============================================================
+    function atualizarBadgeSolicitacoes() {
+        const totalPend = (rawSolicitacoesPendentes || []).length;
+        const badgeNav = document.getElementById('badge-solicitacoes-pendentes');
+        const badgeCont = document.getElementById('badge-contador-pendentes');
+        const kpiPend = document.getElementById('kpi-solicitacoes-pendentes');
+
+        if (badgeNav) {
+            badgeNav.textContent = totalPend;
+            if (totalPend > 0) badgeNav.classList.remove('hidden');
+            else badgeNav.classList.add('hidden');
+        }
+        if (badgeCont) {
+            badgeCont.textContent = `${totalPend} pendente(s)`;
+        }
+        if (kpiPend) {
+            kpiPend.textContent = totalPend;
+        }
+    }
+
+    function renderSolicitacoes() {
+        atualizarBadgeSolicitacoes();
+        popularSelectGestorDestino();
+
+        const container = document.getElementById('container-solicitacoes-pendentes');
+        if (!container) return;
+
+        if (!rawSolicitacoesPendentes || rawSolicitacoesPendentes.length === 0) {
+            container.innerHTML = `
+                <div class="p-8 text-center text-slate-400 text-xs italic">
+                    <i class="ph ph-check-circle text-2xl text-emerald-500 mb-2 block"></i>
+                    Nenhuma solicitação pendente de aprovação no momento.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = rawSolicitacoesPendentes.map(sol => {
+            const isTransfer = String(sol.tipo || '').toUpperCase() === 'TRANSFERIR';
+            const tipoBadge = isTransfer
+                ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Transferência</span>`
+                : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">Inativação</span>`;
+
+            const dataStr = sol.dataSolicitacao ? new Date(sol.dataSolicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+
+            const clientes = Array.isArray(sol.clientes) ? sol.clientes : [];
+
+            return `
+                <div class="py-3 px-3 rounded-xl bg-slate-50/50 hover:bg-white border border-slate-200/70 transition space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            ${tipoBadge}
+                            <span class="text-xs font-bold text-slate-800">${escapeHtml(sol.solicitanteNome)}</span>
+                            <span class="text-[11px] text-slate-500">(${escapeHtml(sol.solicitanteEquipe || 'Geral')})</span>
+                            <span class="text-[10px] text-slate-400">• ${dataStr}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${sol.qtdClientes || clientes.length} cliente(s)</span>
+                        </div>
+
+                        <!-- Botões de Ação do Gerente -->
+                        <div class="flex items-center gap-2">
+                            <button onclick="decidirSolicitacao('${escapeHtml(sol.id)}', 'APROVAR')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                                <i class="ph ph-check-circle"></i> Aprovar Movimentação
+                            </button>
+                            <button onclick="decidirSolicitacao('${escapeHtml(sol.id)}', 'RECUSAR')" class="px-3 py-1.5 rounded-lg bg-white hover:bg-red-50 active:scale-98 text-red-600 border border-red-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer">
+                                <i class="ph ph-x-circle"></i> Recusar
+                            </button>
+                        </div>
+                    </div>
+
+                    ${isTransfer && sol.destinoNome ? `
+                        <div class="text-[11px] text-blue-800 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1.5">
+                            <i class="ph ph-arrow-right font-bold"></i>
+                            <span>Vendedor Destino: <strong>${escapeHtml(sol.destinoNome)}</strong> (${escapeHtml(sol.destinoEquipe || 'Geral')})</span>
+                        </div>
+                    ` : ''}
+
+                    <!-- Lista de Clientes da Solicitação -->
+                    <div class="mt-2 bg-white rounded-lg border border-slate-200 overflow-hidden">
+                        <div class="p-2 bg-slate-100/70 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase flex justify-between">
+                            <span>Clientes envolvidos na solicitação</span>
+                            <span>${clientes.length} item(ns)</span>
+                        </div>
+                        <div class="divide-y divide-slate-100 max-h-48 overflow-y-auto text-xs">
+                            ${clientes.map(c => `
+                                <div class="p-2 flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="font-mono font-bold text-slate-800 text-[11px] bg-slate-100 px-1 rounded">#${escapeHtml(c.codigo)}</span>
+                                        <span class="font-semibold text-slate-700 truncate">${escapeHtml(c.fantasia || c.razao)}</span>
+                                        ${c.cidade ? `<span class="text-[10px] text-slate-400">• ${escapeHtml(c.cidade)}</span>` : ''}
+                                    </div>
+                                    <div class="text-[11px] text-slate-600 italic">
+                                        <span class="font-bold text-slate-500 not-italic">Motivo:</span> ${escapeHtml(c.motivo)}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function decidirSolicitacao(idSolicitacao, decisao) {
+        if (!idSolicitacao) return;
+
+        let obsDecisao = '';
+        if (decisao === 'APROVAR') {
+            const conf = confirm(
+                `Confirma a APROVAÇÃO desta solicitação?\n\n` +
+                `Ao aprovar, o sistema irá aplicar a exclusão ou transferência imediatamente nas bases ativas (CLIENTES e ROTAS) e arquivar no histórico.`
+            );
+            if (!conf) return;
+        } else {
+            const justificativa = prompt(
+                `Informe uma justificativa para a RECUSA desta solicitação (será exibida para o vendedor):`,
+                'Não autorizado pela gerência'
+            );
+            if (justificativa === null) return;
+            obsDecisao = justificativa.trim() || 'Recusado pelo gerente';
+        }
+
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'DECIDIR_SOLICITACAO_MOVIMENTACAO',
+                idSolicitacao: idSolicitacao,
+                decisao: decisao,
+                decididoPor: 'GERENTE',
+                obsDecisao: obsDecisao
+            });
+
+            if (res && res.sucesso) {
+                alert(res.mensagem || `Solicitação ${decisao === 'APROVAR' ? 'aprovada' : 'recusada'} com sucesso!`);
+                await carregarDados();
+                renderSolicitacoes();
+                if (decisao === 'APROVAR') {
+                    carregarHistoricoMovimentacoes(true);
+                }
+            } else {
+                alert('Erro: ' + (res.erro || 'Falha ao processar solicitação.'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro de comunicação com o servidor: ' + (e.message || e.toString()));
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    function popularSelectGestorDestino() {
+        const select = document.getElementById('select-gestor-destino');
+        if (!select) return;
+
+        const valAtual = select.value;
+        select.innerHTML = '<option value="">Selecione o vendedor de destino...</option>';
+
+        (rawVendedores || []).forEach(v => {
+            const cod = String(v.cod || '').trim();
+            const nome = String(v.nome || '').trim();
+            const equipe = String(v.equipe || '').trim();
+            const status = normalizarTexto(v.status || 'ATIVO');
+
+            if (status === 'INATIVO') return;
+
+            const opt = document.createElement('option');
+            opt.value = nome;
+            opt.dataset.cod = cod;
+            opt.dataset.nome = nome;
+            opt.dataset.equipe = equipe;
+            opt.textContent = `${cod ? cod + ' - ' : ''}${nome} (${equipe || 'Geral'})`;
+            select.appendChild(opt);
+        });
+
+        if (valAtual) select.value = valAtual;
+    }
+
+    function alternarTipoMovimentoGestor(tipo) {
+        tipoMovimentoGestorSelecionado = tipo;
+        const boxDestino = document.getElementById('box-gestor-destino');
+        const btnTxt = document.getElementById('btn-executar-gestor-text');
+
+        if (tipo === 'TRANSFERIR') {
+            if (boxDestino) boxDestino.classList.remove('hidden');
+            if (btnTxt) btnTxt.textContent = 'Executar Transferência Imediatamente';
+        } else {
+            if (boxDestino) boxDestino.classList.add('hidden');
+            if (btnTxt) btnTxt.textContent = 'Executar Inativação Imediatamente';
+        }
+        processarEntradaGestorLote();
+    }
+
+    function limparInputGestorLote() {
+        const inp = document.getElementById('input-gestor-lote');
+        if (inp) inp.value = '';
+        listaClientesGestorProcessada = [];
+        const cont = document.getElementById('container-preview-gestor');
+        if (cont) cont.classList.add('hidden');
+        const contLinhas = document.getElementById('contador-linhas-gestor');
+        if (contLinhas) contLinhas.textContent = '0 linha(s)';
+        const badgeVal = document.getElementById('badge-total-gestor-validos');
+        if (badgeVal) badgeVal.textContent = '0 localizado(s)';
+    }
+
+    function processarEntradaGestorLote() {
+        const textarea = document.getElementById('input-gestor-lote');
+        const containerPreview = document.getElementById('container-preview-gestor');
+        const tabelaPreview = document.getElementById('tabela-preview-gestor');
+        const contadorLinhas = document.getElementById('contador-linhas-gestor');
+        const badgeTotalValidos = document.getElementById('badge-total-gestor-validos');
+        const btnExecutar = document.getElementById('btn-executar-gestor-direto');
+        const selDestino = document.getElementById('select-gestor-destino');
+
+        if (!textarea || !containerPreview || !tabelaPreview) return;
+
+        const texto = textarea.value || '';
+        const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+        if (contadorLinhas) contadorLinhas.textContent = `${linhas.length} linha(s)`;
+
+        if (linhas.length === 0) {
+            containerPreview.classList.add('hidden');
+            listaClientesGestorProcessada = [];
+            return;
+        }
+
+        containerPreview.classList.remove('hidden');
+
+        // Vendedor destino
+        let vendDest = null;
+        if (tipoMovimentoGestorSelecionado === 'TRANSFERIR' && selDestino && selDestino.selectedIndex > 0) {
+            const opt = selDestino.options[selDestino.selectedIndex];
+            vendDest = {
+                cod: opt.dataset.cod || opt.value,
+                nome: opt.dataset.nome || opt.value,
+                equipe: opt.dataset.equipe || ''
+            };
+        }
+
+        // Mapa de clientes
+        const mapaClientes = new Map();
+        (rawClientes || []).forEach(c => {
+            const cod = String(c.codigo || c.codCliente || '').trim();
+            if (cod) mapaClientes.set(cod, c);
+        });
+
+        const itens = [];
+        let totalValidos = 0;
+
+        linhas.forEach(linha => {
+            let codigo = '';
+            let motivo = '';
+
+            const matchDelim = linha.match(/^([0-9a-zA-Z._-]+)\s*[\/\-;,\t]\s*(.*)$/);
+            if (matchDelim) {
+                codigo = matchDelim[1].trim();
+                motivo = matchDelim[2].trim();
+            } else {
+                const partes = linha.split(/\s+/);
+                codigo = partes[0].trim();
+                motivo = partes.slice(1).join(' ').trim();
+            }
+
+            if (!motivo) {
+                motivo = tipoMovimentoGestorSelecionado === 'INATIVAR' 
+                    ? 'Fechou / faliu / encerrou atividades' 
+                    : 'Remanejamento de carteira';
+            }
+
+            const cData = mapaClientes.get(codigo);
+            const razao = cData ? (cData.razao || cData.fantasia) : 'Localizará na planilha';
+            const fantasia = cData ? (cData.fantasia || '') : '';
+            const cidade = cData ? (cData.cidade || '') : '';
+            const vendedorDoador = cData ? (cData.vendedor || '') : '';
+
+            if (codigo) totalValidos++;
+
+            itens.push({
+                codigo,
+                motivo,
+                razao,
+                fantasia,
+                cidade,
+                vendedorDoador,
+                encontrado: !!cData
+            });
+        });
+
+        listaClientesGestorProcessada = itens;
+        if (badgeTotalValidos) {
+            badgeTotalValidos.textContent = `${totalValidos} cliente(s)`;
+        }
+
+        tabelaPreview.innerHTML = itens.map(item => {
+            const statusBadge = item.encontrado
+                ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Localizado</span>`
+                : `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Não listado em CLIENTES</span>`;
+
+            return `
+                <div class="py-2 flex items-start justify-between gap-2 text-xs">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">#${escapeHtml(item.codigo)}</span>
+                            <span class="font-semibold text-slate-700 truncate">${escapeHtml(item.fantasia || item.razao)}</span>
+                            ${item.cidade ? `<span class="text-[10px] text-slate-400">• ${escapeHtml(item.cidade)}</span>` : ''}
+                            ${item.vendedorDoador ? `<span class="text-[10px] text-slate-500">• Vend: <strong>${escapeHtml(item.vendedorDoador)}</strong></span>` : ''}
+                            ${statusBadge}
+                        </div>
+                        <div class="mt-1 text-[11px] text-slate-600">
+                            <span class="font-bold text-slate-500">Motivo:</span> <em>${escapeHtml(item.motivo)}</em>
+                        </div>
+                        ${tipoMovimentoGestorSelecionado === 'TRANSFERIR' && vendDest ? `
+                            <div class="mt-0.5 text-[10px] text-blue-700 flex items-center gap-1">
+                                <i class="ph ph-arrow-right font-bold"></i>
+                                <span>Transferir para: <strong>${escapeHtml(vendDest.nome)}</strong> (${escapeHtml(vendDest.equipe || 'Geral')})</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (btnExecutar) {
+            const podeExecutar = totalValidos > 0 && (tipoMovimentoGestorSelecionado !== 'TRANSFERIR' || !!vendDest);
+            btnExecutar.disabled = !podeExecutar;
+            if (podeExecutar) {
+                btnExecutar.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnExecutar.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+    }
+
+    async function executarMovimentacaoDiretaGestor() {
+        if (listaClientesGestorProcessada.length === 0) {
+            alert('Nenhum cliente para processar. Insira a lista no formato: CÓDIGO / MOTIVO');
+            return;
+        }
+
+        let destinoVendedor = null;
+        if (tipoMovimentoGestorSelecionado === 'TRANSFERIR') {
+            const selDest = document.getElementById('select-gestor-destino');
+            if (!selDest || selDest.selectedIndex <= 0) {
+                alert('Selecione o vendedor de destino para onde os clientes serão transferidos.');
+                selDest?.focus();
+                return;
+            }
+            const opt = selDest.options[selDest.selectedIndex];
+            destinoVendedor = {
+                cod: opt.dataset.cod || opt.value,
+                nome: opt.dataset.nome || opt.value,
+                equipe: opt.dataset.equipe || ''
+            };
+        }
+
+        const msgAviso = tipoMovimentoGestorSelecionado === 'INATIVAR'
+            ? `ATENÇÃO: Deseja realmente INATIVAR ${listaClientesGestorProcessada.length} cliente(s)?\n\nEles serão EXCLUÍDOS permanentemente das abas CLIENTES e ROTAS, e arquivados na aba CLIENTES_INATIVOS.`
+            : `Deseja realmente TRANSFERIR ${listaClientesGestorProcessada.length} cliente(s) para o vendedor ${destinoVendedor.nome} (${destinoVendedor.equipe})?\n\nAs abas CLIENTES e ROTAS serão atualizadas imediatamente.`;
+
+        if (!confirm(msgAviso)) return;
+
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'EXECUTAR_MOVIMENTACAO_DIRETA_GESTOR',
+                tipo: tipoMovimentoGestorSelecionado,
+                gestorNome: 'GERENTE',
+                destinoVendedor: destinoVendedor,
+                listaClientes: listaClientesGestorProcessada.map(c => ({
+                    codigo: c.codigo,
+                    motivo: c.motivo,
+                    razao: c.razao,
+                    fantasia: c.fantasia,
+                    cidade: c.cidade
+                }))
+            });
+
+            if (res && res.sucesso) {
+                alert(`Sucesso! ${res.mensagem || 'Movimentação em lote executada.'}`);
+                limparInputGestorLote();
+                await carregarDados();
+                renderSolicitacoes();
+                carregarHistoricoMovimentacoes(true);
+            } else {
+                alert('Erro: ' + (res.erro || 'Falha ao executar movimentação.'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro de comunicação com o servidor: ' + (err.message || err.toString()));
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    async function carregarHistoricoMovimentacoes(forcar = false) {
+        if (historicoCarregado && !forcar) {
+            renderTabelasHistorico();
+            return;
+        }
+
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'OBTER_HISTORICO_MOVIMENTACOES'
+            });
+
+            if (res && res.sucesso) {
+                rawHistoricoInativos = res.inativos || [];
+                rawHistoricoTransferidos = res.transferidos || [];
+                historicoCarregado = true;
+
+                const countInat = document.getElementById('count-hist-inativos');
+                const countTrans = document.getElementById('count-hist-transferidos');
+                const kpiInat = document.getElementById('kpi-total-inativos');
+                const kpiTrans = document.getElementById('kpi-total-transferidos');
+
+                if (countInat) countInat.textContent = rawHistoricoInativos.length;
+                if (countTrans) countTrans.textContent = rawHistoricoTransferidos.length;
+                if (kpiInat) kpiInat.textContent = rawHistoricoInativos.length;
+                if (kpiTrans) kpiTrans.textContent = rawHistoricoTransferidos.length;
+
+                renderTabelasHistorico();
+            } else {
+                alert('Falha ao carregar histórico: ' + (res.erro || 'Erro desconhecido'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao consultar histórico de movimentações.');
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    function alternarAbaHistorico(aba) {
+        abaHistoricoAtiva = aba;
+        const wInat = document.getElementById('wrapper-hist-inativos');
+        const wTrans = document.getElementById('wrapper-hist-transferidos');
+        const btnInat = document.getElementById('btn-tab-hist-inativos');
+        const btnTrans = document.getElementById('btn-tab-hist-transferidos');
+
+        if (aba === 'inativos') {
+            if (wInat) wInat.classList.remove('hidden');
+            if (wTrans) wTrans.classList.add('hidden');
+            if (btnInat) {
+                btnInat.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-800 shadow-xs transition';
+            }
+            if (btnTrans) {
+                btnTrans.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-800 transition';
+            }
+        } else {
+            if (wInat) wInat.classList.add('hidden');
+            if (wTrans) wTrans.classList.remove('hidden');
+            if (btnInat) {
+                btnInat.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-800 transition';
+            }
+            if (btnTrans) {
+                btnTrans.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-800 shadow-xs transition';
+            }
+        }
+    }
+
+    function renderTabelasHistorico() {
+        const q = (document.getElementById('busca-historico')?.value || '').trim().toLowerCase();
+        const tbodyInat = document.getElementById('table-inativos-body');
+        const tbodyTrans = document.getElementById('table-transferidos-body');
+
+        // 1. Inativos
+        if (tbodyInat) {
+            const filtradosInat = rawHistoricoInativos.filter(item => {
+                if (!q) return true;
+                const txt = `${item.codigo} ${item.razao} ${item.fantasia} ${item.cidade} ${item.vendedorAnterior} ${item.motivo}`.toLowerCase();
+                return txt.includes(q);
+            });
+
+            if (filtradosInat.length === 0) {
+                tbodyInat.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400 italic">Nenhum cliente inativo localizado.</td></tr>`;
+            } else {
+                tbodyInat.innerHTML = filtradosInat.slice(0, 150).map(r => {
+                    const dataStr = r.dataInativacao ? new Date(r.dataInativacao).toLocaleDateString('pt-BR') : '-';
+                    return `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-3 font-mono text-[11px]">${dataStr}</td>
+                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(r.codigo)}</td>
+                            <td class="p-3 font-semibold text-slate-700">${escapeHtml(r.fantasia || r.razao)}</td>
+                            <td class="p-3">${escapeHtml(r.cidade)}</td>
+                            <td class="p-3">${escapeHtml(r.vendedorAnterior)}</td>
+                            <td class="p-3 italic text-slate-500">${escapeHtml(r.motivo)}</td>
+                            <td class="p-3 text-[11px]">${escapeHtml(r.solicitadoPor || '-')}</td>
+                            <td class="p-3 text-[11px] font-bold text-slate-700">${escapeHtml(r.aprovadoPor || '-')}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        // 2. Transferidos
+        if (tbodyTrans) {
+            const filtradosTrans = rawHistoricoTransferidos.filter(item => {
+                if (!q) return true;
+                const txt = `${item.codigo} ${item.razao} ${item.cidade} ${item.vendedorDoador} ${item.vendedorDestino} ${item.motivo}`.toLowerCase();
+                return txt.includes(q);
+            });
+
+            if (filtradosTrans.length === 0) {
+                tbodyTrans.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400 italic">Nenhum registro de transferência localizado.</td></tr>`;
+            } else {
+                tbodyTrans.innerHTML = filtradosTrans.slice(0, 150).map(r => {
+                    const dataStr = r.dataTransferencia ? new Date(r.dataTransferencia).toLocaleDateString('pt-BR') : '-';
+                    return `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-3 font-mono text-[11px]">${dataStr}</td>
+                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(r.codigo)}</td>
+                            <td class="p-3 font-semibold text-slate-700">${escapeHtml(r.razao)}</td>
+                            <td class="p-3">${escapeHtml(r.cidade)}</td>
+                            <td class="p-3 text-slate-600">${escapeHtml(r.vendedorDoador)}</td>
+                            <td class="p-3 font-bold text-blue-700">${escapeHtml(r.vendedorDestino)}</td>
+                            <td class="p-3 italic text-slate-500">${escapeHtml(r.motivo)}</td>
+                            <td class="p-3 text-[11px]">${escapeHtml(r.solicitadoPor || '-')}</td>
+                            <td class="p-3 text-[11px] font-bold text-slate-700">${escapeHtml(r.aprovadoPor || '-')}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+    }
+
+    function filtrarHistoricoTabela() {
+        renderTabelasHistorico();
+    }
+
   </script>
 
   <!-- Modal: Login do Gerente (Bloqueante Seguro) -->
@@ -4902,6 +5686,5 @@
     </div>
   </div>
 
-    
 </body>
 </html>
