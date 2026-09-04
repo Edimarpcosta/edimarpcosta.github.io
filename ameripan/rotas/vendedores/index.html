@@ -1579,7 +1579,7 @@
 
       // Renderiza os Cards dos Clientes
       container.innerHTML = paradasAtuaisDia.map((r, idx) => {
-        const ord = r.ordem || (idx + 1);
+        const ord = (r.ordem !== undefined && r.ordem !== null && r.ordem !== '') ? r.ordem : (idx + 1);
         const nomeCli = r.fantasia || r.razao || 'Cliente Sem Nome';
         const cid = r.cidade || 'Cidade não informada';
         const comprador = r.comprador || '';
@@ -1614,17 +1614,28 @@
           </div>
         ` : '';
 
+        const isWhats99 = String(ord) === '99';
+        const badgeOrdemHtml = isWhats99 ? `
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-700 font-bold flex flex-col items-center justify-center text-[10px] flex-shrink-0 shadow-2xs" title="Ordem 99: Atendimento por WhatsApp / Ver depois">
+            <span class="font-extrabold leading-none">99</span>
+            <i class="ph ph-whatsapp-logo text-[11px] text-emerald-600 -mt-0.5"></i>
+          </div>
+        ` : `
+          <div class="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
+            ${ord}
+          </div>
+        `;
+
         return `
-          <div id="card_rota_${r.codCliente}" class="card-rota-item bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition-colors flex items-center justify-between gap-2.5 relative">
+          <div id="card_rota_${r.codCliente}" class="card-rota-item bg-white p-3 rounded-xl shadow-sm border ${isWhats99 ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200'} hover:border-blue-300 transition-colors flex items-center justify-between gap-2.5 relative">
             <div class="flex items-start gap-2.5 flex-1 min-w-0">
-              <div class="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                ${ord}
-              </div>
+              ${badgeOrdemHtml}
 
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">#${r.codCliente}</span>
                   <h3 class="text-xs font-bold text-slate-800 truncate">${escapeHtml(nomeCli)}</h3>
+                  ${isWhats99 ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1" title="Atendimento por WhatsApp / Ver depois"><i class="ph ph-whatsapp-logo text-emerald-600"></i> WhatsApp (99)</span>` : ''}
                 </div>
 
                 <div class="text-[11px] text-slate-500 mt-1 space-y-0.5">
@@ -1903,7 +1914,10 @@
       document.querySelectorAll('.dot-origem-cliente').forEach(d => d.classList.remove('conectado'));
       document.querySelectorAll('.slot-alvo-ordem').forEach(s => s.classList.remove('conectado'));
       document.querySelectorAll('.dot-alvo-ordem').forEach(d => d.classList.remove('conectado'));
-      document.querySelectorAll('[id^="tag_nova_ordem_"]').forEach(t => t.classList.add('hidden'));
+      document.querySelectorAll('[id^="tag_nova_ordem_"]').forEach(t => {
+        t.className = 'hidden text-[10px] font-extrabold text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded-md mt-1 shadow-2xs';
+        t.innerHTML = '';
+      });
 
       // Desenha cada par conectado
       for (const [codCli, novaOrdem] of mapaConexoesOrdem.entries()) {
@@ -1919,6 +1933,7 @@
 
           if (tagNovaOrdem) {
             tagNovaOrdem.textContent = `→ #${novaOrdem}`;
+            tagNovaOrdem.className = 'text-[10px] font-extrabold text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded-md mt-1 shadow-2xs';
             tagNovaOrdem.classList.remove('hidden');
           }
 
@@ -1961,6 +1976,21 @@
           svg.appendChild(grupo);
         }
       }
+
+      // Regra estrita solicitada: para os clientes que ficarem sem conectar a linha, recebem ordem 99 (atendimento WhatsApp / ver depois)
+      if (mapaConexoesOrdem.size > 0) {
+        paradasAtuaisDia.forEach(r => {
+          const codStr = String(r.codCliente).trim();
+          if (!mapaConexoesOrdem.has(codStr)) {
+            const tagNovaOrdem = document.getElementById(`tag_nova_ordem_${codStr}`);
+            if (tagNovaOrdem) {
+              tagNovaOrdem.innerHTML = `→ #99 <i class="ph ph-whatsapp-logo text-[11px] text-emerald-600 ml-0.5"></i>`;
+              tagNovaOrdem.className = 'text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded-md mt-1 shadow-2xs flex items-center justify-center';
+              tagNovaOrdem.classList.remove('hidden');
+            }
+          }
+        });
+      }
     }
 
     function atualizarEstadoBarraReordem() {
@@ -1978,12 +2008,19 @@
 
       const totalConectados = mapaConexoesOrdem.size;
       const totalParadas = paradasAtuaisDia.length;
+      const totalNaoConectados = Math.max(0, totalParadas - totalConectados);
 
       if (totalConectados > 0) {
         barra.classList.remove('hidden');
         if (badgeQtd) badgeQtd.textContent = totalConectados;
         if (badgeDia) badgeDia.textContent = dia;
-        if (subStatus) subStatus.textContent = `${totalConectados} de ${totalParadas} paradas conectadas`;
+        if (subStatus) {
+          if (totalNaoConectados > 0) {
+            subStatus.innerHTML = `${totalConectados} de ${totalParadas} paradas conectadas • <span class="text-emerald-300 font-semibold">${totalNaoConectados} sem linha vão para #99 (Whats)</span>`;
+          } else {
+            subStatus.textContent = `${totalConectados} de ${totalParadas} paradas conectadas`;
+          }
+        }
       } else {
         barra.classList.add('hidden');
       }
@@ -2008,16 +2045,19 @@
 
       try {
         // Prepara lista de todas as paradas do dia com as novas ordens
-        // Para as que foram conectadas, aplica a ordem nova.
-        // Para as não conectadas explicitamente, preserva a ordem ou ajusta para garantir ausência de duplicidade.
+        // Para as que foram conectadas, aplica a ordem nova (1, 2, 3...).
+        // Para as não conectadas (sem linha ligada), atribui ordem 99 (atendimento por WhatsApp / ver depois).
         const listaAtualizada = [];
 
         paradasAtuaisDia.forEach(r => {
           const codStr = String(r.codCliente).trim();
-          let ordemFinal = r.ordem;
+          let ordemFinal;
 
           if (mapaConexoesOrdem.has(codStr)) {
             ordemFinal = mapaConexoesOrdem.get(codStr);
+          } else {
+            // Regra estrita: clientes que ficarem sem conectar a linha recebem ordem 99
+            ordemFinal = 99;
           }
 
           listaAtualizada.push({
@@ -2044,16 +2084,28 @@
         });
 
         if (res.sucesso) {
-          // Atualiza em memória local
+          // Atualiza em memória local imediatamente tanto as paradas ativas quanto a base dbRotasVendedor
+          paradasAtuaisDia.forEach(r => {
+            const codStr = String(r.codCliente).trim();
+            if (mapaConexoesOrdem.has(codStr)) {
+              r.ordem = mapaConexoesOrdem.get(codStr);
+            } else {
+              r.ordem = 99;
+            }
+          });
+
           listaAtualizada.forEach(item => {
-            const rotLocal = dbRotasVendedor.find(r => String(r.codCliente).trim() === String(item.codCliente).trim() && (r.diaPrinc === item.diaPrincipal));
+            const codItem = String(item.codCliente).trim();
+            const rotLocal = dbRotasVendedor.find(r => String(r.codCliente).trim() === codItem);
             if (rotLocal) {
               rotLocal.ordem = item.ordemVisita;
             }
           });
 
           mapaConexoesOrdem.clear();
-          exibirModalAlerta('sucesso', `Nova ordem atribuída e salva com sucesso para ${dia}!`, 'Todas as paradas foram reordenadas sequencialmente na sua planilha.');
+          const total99 = listaAtualizada.filter(i => String(i.ordemVisita) === '99').length;
+          const msgWhats = total99 > 0 ? ` (${total99} cliente(s) sem linha marcados como #99 WhatsApp)` : '';
+          exibirModalAlerta('sucesso', `Nova ordem atribuída e salva com sucesso para ${dia}!`, `Todas as paradas foram reordenadas sequencialmente na sua planilha${msgWhats}.`);
           renderizarRotaDoDia();
         } else {
           alert('Erro ao salvar nova ordem: ' + (res.erro || 'Falha no servidor.'));
@@ -3335,13 +3387,7 @@
           }))
         };
 
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-
-        const json = await res.json();
+        const json = await chamarBackendScript(payload);
         if (json && json.sucesso) {
           exibirAlerta('Solicitação Enviada!', json.mensagem || 'Solicitação registrada com sucesso! Ela aguarda aprovação do gerente na tela de gestão.', null, 'sucesso');
           limparInputMovimentacao();
@@ -4264,6 +4310,16 @@
           </div>
         `;
       }
+    }
+
+    function exibirModalAlerta(tipo, msg, instrucao = '') {
+      mostrarModal(tipo, msg, instrucao);
+    }
+
+    function exibirAlerta(titulo, msg, instrucao = '', tipo = 'sucesso') {
+      const tipoNormalizado = (tipo === 'carregando' || tipo === 'loading') ? 'loading' : (tipo === 'erro' ? 'erro' : (tipo === 'aviso' ? 'aviso' : 'sucesso'));
+      const textoFinal = titulo ? (msg ? `${titulo}\n${msg}` : titulo) : msg;
+      mostrarModal(tipoNormalizado, textoFinal, instrucao || '');
     }
 
     function feedbackVisual(element, tipo) {
