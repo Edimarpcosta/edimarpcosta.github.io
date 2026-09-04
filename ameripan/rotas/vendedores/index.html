@@ -269,6 +269,28 @@
           <span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full border border-green-200">Ativo</span>
         </div>
 
+        <!-- Banner de Modo Atualização (quando cliente já possui rota cadastrada) -->
+        <div id="bannerModoAtualizacao" class="hidden mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-blue-950 shadow-xs animate-fade-in">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <i class="ph ph-arrows-clockwise text-lg"></i>
+            </div>
+            <div>
+              <div class="font-bold flex items-center gap-1.5">
+                <span>Modo de Atualização de Rota</span>
+                <span id="bannerAtualizacaoBadgeDia" class="px-1.5 py-0.2 bg-blue-200 text-blue-800 rounded font-mono text-[10px]">QUI</span>
+              </div>
+              <div class="text-[11px] text-blue-800 mt-0.5" id="bannerAtualizacaoDesc">
+                Este cliente já possui rota cadastrada. Altere os campos e grave para atualizar.
+              </div>
+            </div>
+          </div>
+          <button type="button" onclick="irParaProximoCliente()" class="shrink-0 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+            <i class="ph ph-arrow-right text-sm"></i>
+            <span>Ir para o Próximo</span>
+          </button>
+        </div>
+
         <!-- Card Cliente -->
         <div id="cardCliente" class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 border-l-4 border-orange-500 transition-all duration-200">
           <div class="flex justify-between items-center mb-1">
@@ -561,6 +583,7 @@
     let listaDeRotas = [];
     let regrasObrigatoriedade = {};
     let statusCliente = 'vazio';
+    let atualizacaoConfirmadaPeloVendedor = false;
     // Contingência e cache local de clientes de outros vendedores (evita delay de rede)
     const SEED_OUTROS_CLIENTES = ["52662", "53644", "14576", "15943", "27309", "52647", "52648", "52652", "52657", "52658", "52659", "52660", "52661", "52663", "52664", "52668", "52669", "52671", "52672", "52674", "52675", "52677", "52696", "52698", "52702", "52706", "52708", "52709", "52710", "52711", "52712", "52714", "52747", "52752", "52755", "52759", "52760", "52761", "52762", "52766", "52773", "52774", "52777", "52779", "52789", "52791", "52792", "52794", "52809", "52819", "52823", "52826", "52827", "52828", "52831", "52852", "52858", "52870", "52871", "52873", "52948", "52952", "52977", "52983", "52996", "52998", "53000", "53003", "53033", "53042", "53069", "53081", "53084", "53085", "53086", "53087", "53088", "53093", "53098", "53099", "53100", "53102", "53103", "53104", "53106", "53107", "53108", "53110", "53112", "53114", "53116", "53119", "53120", "53123", "53127", "53128", "53130", "53136", "53140", "53141", "53142", "53148", "53149", "53150", "53151", "53156", "53159", "53164", "53165", "53174", "53177", "53182", "53185", "53186", "53188", "53190", "53197", "53204", "53206", "53208", "53214", "53222", "53240", "53243", "53245", "53272", "53275", "53300", "53313", "53324", "53329", "53339", "53342", "53354", "53369", "53377", "53383", "53415", "53425", "53430", "53434", "53436", "53441", "53443", "53461", "53479", "53481", "53489", "53497", "53498", "53499", "53509", "53510", "53513", "53517", "53519", "53524", "53537", "53549", "53577", "53580", "53587", "53592", "53596", "53598", "53600", "53613", "53614", "53618", "53619", "53622", "53623", "53624", "53625", "53627", "53630", "53634", "53637", "53645", "53653", "53661", "53665", "53668", "53675", "53682", "53687", "53688", "53689", "53690", "53694", "53711", "53716", "53717", "53719", "53725", "53726", "53742", "53746", "53750", "53769", "53779", "53781", "53792", "53797", "53798", "53805", "53818", "53832", "53864", "53863"];
     let dbCodigosOutrosClientes = new Set(SEED_OUTROS_CLIENTES);
@@ -805,6 +828,7 @@
       usuarioLogado = null;
       dbRotasVendedor = [];
       dbClientes = [];
+      dbCodigosOutrosClientes = new Set(SEED_OUTROS_CLIENTES);
 
       document.getElementById('loginSenha').value = '';
       document.getElementById('loginMsgErro').textContent = motivo || '';
@@ -971,9 +995,23 @@
 
         if (res.sucesso) {
           if (res.vendedores) dbVendedores = res.vendedores;
-          if (res.clientes) dbClientes = res.clientes;
+          if (res.clientes) {
+            dbClientes = res.clientes;
+            // Remove imediatamente os clientes do próprio vendedor de qualquer lista de bloqueio
+            dbClientes.forEach(c => {
+              const cod = String(c.codigo || c.codCliente || '').trim();
+              if (cod) dbCodigosOutrosClientes.delete(cod);
+            });
+          }
           if (res.codigosOutrosClientes && Array.isArray(res.codigosOutrosClientes)) {
-            res.codigosOutrosClientes.forEach(c => dbCodigosOutrosClientes.add(String(c).trim()));
+            const codigosProprios = new Set((dbClientes || []).map(c => String(c.codigo || c.codCliente || '').trim()));
+            dbCodigosOutrosClientes = new Set();
+            res.codigosOutrosClientes.forEach(c => {
+              const codStr = String(c).trim();
+              if (codStr && !codigosProprios.has(codStr)) {
+                dbCodigosOutrosClientes.add(codStr);
+              }
+            });
             try {
               localStorage.setItem('ameripan_outros_clientes_cache', JSON.stringify(Array.from(dbCodigosOutrosClientes)));
             } catch(e) {}
@@ -1134,15 +1172,11 @@
       }).join('');
     }
 
-    function carregarVisitaNoFormulario(codCliente) {
-      const rota = dbRotasVendedor.find(r => String(r.codCliente) === String(codCliente));
+    function carregarDadosRotaNoFormulario(rota) {
       if (!rota) return;
-
-      mudarAba('lancar-visita');
-
-      document.getElementById('codCliente').value = rota.codCliente;
+      document.getElementById('codCliente').value = rota.codCliente || '';
       document.getElementById('razaoSocial').value = rota.razao || '';
-      document.getElementById('nomeFantasia').value = rota.fantasia || '';
+      document.getElementById('nomeFantasia').value = rota.fantasia || rota.razao || '';
       document.getElementById('cidade').value = rota.cidade || '';
       document.getElementById('ordemManual').value = rota.ordem || '';
       sincronizarOrdem(rota.ordem || '');
@@ -1155,8 +1189,9 @@
 
       // Frequência
       if (rota.freq) {
-        if (rota.freq.includes('TODA')) {
-          document.getElementById('sem_todas').checked = true;
+        if (rota.freq.toUpperCase().includes('TODA')) {
+          const chkTodas = document.getElementById('sem_todas');
+          if (chkTodas) chkTodas.checked = true;
           toggleSemana('todas');
         } else {
           ['s1','s2','s3','s4','s5'].forEach(s => {
@@ -1166,11 +1201,31 @@
         }
       }
 
-      document.getElementById('comprador').value = rota.comprador || '';
-      document.getElementById('whatsapp').value = rota.whatsapp || '';
-      document.getElementById('obs').value = rota.obs || '';
+      // Dias Secundários
+      if (rota.diasSecundarios) {
+        const arrSec = Array.isArray(rota.diasSecundarios) ? rota.diasSecundarios : String(rota.diasSecundarios).split(/[\s,]+/);
+        document.querySelectorAll('input[name="diasSecundarios"]').forEach(chk => {
+          chk.checked = arrSec.some(d => d && d.toUpperCase() === chk.value.toUpperCase());
+        });
+      }
 
+      document.getElementById('comprador').value = rota.comprador || '';
+      if (rota.whatsapp) {
+        document.getElementById('whatsapp').value = formatarTelefoneBrasil(rota.whatsapp);
+      }
+      document.getElementById('obs').value = rota.obs || '';
+      document.getElementById('badgeManualCliente').classList.add('hidden');
       salvarEstadoFormulario();
+    }
+
+    function carregarVisitaNoFormulario(codCliente) {
+      const rota = dbRotasVendedor.find(r => String(r.codCliente) === String(codCliente));
+      if (!rota) return;
+
+      mudarAba('lancar-visita');
+      carregarDadosRotaNoFormulario(rota);
+      aplicarModoAtualizacaoCliente(rota, false);
+      atualizacaoConfirmadaPeloVendedor = true;
     }
 
     // ============================================================
@@ -1562,11 +1617,14 @@
         return;
       }
 
+      const cod = String(cli.codigo || codCliente).trim();
+      dbCodigosOutrosClientes.delete(cod); // Garante que nunca é bloqueado como cliente de outro vendedor
+
       mudarAba('lancar-visita');
 
-      document.getElementById('codCliente').value = cli.codigo;
+      document.getElementById('codCliente').value = cod;
       document.getElementById('razaoSocial').value = cli.razao || '';
-      document.getElementById('nomeFantasia').value = cli.fantasia || '';
+      document.getElementById('nomeFantasia').value = cli.fantasia || cli.razao || '';
       document.getElementById('cidade').value = cli.cidade || '';
 
       buscarClienteLocal(true);
@@ -1782,8 +1840,16 @@
         return;
       }
 
-      // 1. REGRA: Cliente de outra região / vendedor (não puxa nem mostra quem é)
-      if (dbCodigosOutrosClientes.has(cod)) {
+      // Prioridade 1: Verifica se o cliente pertence à carteira deste vendedor (dbClientes)
+      const clienteProprio = (dbClientes || []).find(c => String(c.codigo || c.codCliente || '').trim() === cod);
+      if (clienteProprio) {
+        // Se pertence ao vendedor, NUNCA é bloqueado como de outra região
+        dbCodigosOutrosClientes.delete(cod);
+      }
+
+      // Prioridade 2: Bloqueio estrito de clientes cadastrados que pertencem a outra região / vendedor
+      // (Só bloqueia se NÃO for cliente próprio do vendedor)
+      if (!clienteProprio && dbCodigosOutrosClientes.has(cod)) {
         fant.value = ''; razao.value = ''; cid.value = '';
         badge.classList.add('hidden');
         msg.innerHTML = '<span class="text-red-600 font-bold text-[11px] flex items-center gap-1"><i class="ph ph-prohibit text-sm"></i> Cliente já cadastrado, mas não pertence a sua região.</span>';
@@ -1792,60 +1858,48 @@
         return;
       }
 
-      // 2. REGRA: Cliente já gravado na rota do próprio vendedor (impede duplicidade)
+      // Prioridade 3: Cliente já gravado na rota do próprio vendedor (impede duplicidade)
       const rotaExistente = dbRotasVendedor.find(r => String(r.codCliente).trim() === cod);
       const filaExistente = listaDeRotas.find(r => String(r.codCliente).trim() === cod);
       const rExist = rotaExistente || filaExistente;
 
       if (rExist) {
-        fant.value = rExist.fantasia || rExist.razao || '';
-        razao.value = rExist.razao || '';
-        cid.value = rExist.cidade || '';
-        document.getElementById('ordemManual').value = rExist.ordem || '';
-        sincronizarOrdem(rExist.ordem || '');
+        if (!silencioso && !atualizacaoConfirmadaPeloVendedor) {
+          fant.value = rExist.fantasia || rExist.razao || '';
+          razao.value = rExist.razao || '';
+          cid.value = rExist.cidade || '';
 
-        if (rExist.diaPrinc) {
-          const diaRadio = document.querySelector(`input[name="diaPrincipal"][value="${rExist.diaPrinc}"]`);
-          if (diaRadio) diaRadio.checked = true;
+          abrirModalClienteJaGravado(
+            rExist,
+            () => {
+              atualizacaoConfirmadaPeloVendedor = true;
+              aplicarModoAtualizacaoCliente(rExist, veioDoEnter);
+            },
+            () => {
+              irParaProximoCliente();
+            }
+          );
+        } else {
+          aplicarModoAtualizacaoCliente(rExist, veioDoEnter);
         }
-
-        if (rExist.freq) {
-          if (rExist.freq.toUpperCase().includes('TODA')) {
-            document.getElementById('sem_todas').checked = true;
-            toggleSemana('todas');
-          } else {
-            ['s1','s2','s3','s4','s5'].forEach(s => {
-              const chk = document.getElementById(`sem_${s}`);
-              if (chk) chk.checked = rExist.freq.toUpperCase().includes(s.toUpperCase());
-            });
-          }
-        }
-
-        document.getElementById('comprador').value = rExist.comprador || '';
-        if (rExist.whatsapp) {
-          document.getElementById('whatsapp').value = formatarTelefoneBrasil(rExist.whatsapp);
-        }
-        document.getElementById('obs').value = rExist.obs || '';
-
-        badge.classList.add('hidden');
-        msg.innerHTML = `
-          <div class="mt-1 flex items-center justify-between bg-blue-50 border border-blue-200 p-2 rounded-lg text-blue-900 text-[11px]">
-            <span class="font-bold flex items-center gap-1"><i class="ph ph-check-circle text-blue-600"></i> Cliente já gravado na rota (${rExist.diaPrinc || 'Visita'}).</span>
-            <span class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold">Modo Atualização</span>
-          </div>
-        `;
-        statusCliente = 'ja_gravado';
-        feedbackVisual(card, 'sucesso');
-        if (veioDoEnter) document.getElementById('ordemManual').focus();
         return;
       }
 
-      const f = dbClientes.find(c => String(c.codigo).trim() === cod);
+      // Cliente não possui rota ainda: esconde banner de atualização se estava aberto
+      const bannerAtualizacao = document.getElementById('bannerModoAtualizacao');
+      if (bannerAtualizacao) {
+        bannerAtualizacao.classList.add('hidden');
+        bannerAtualizacao.classList.remove('flex');
+      }
+      atualizacaoConfirmadaPeloVendedor = false;
+
+      // Prioridade 4: Cliente da carteira do vendedor sem rota (ex: vindo de 'A Mapear' ou busca por código)
+      const f = clienteProprio || dbClientes.find(c => String(c.codigo || c.codCliente || '').trim() === cod);
 
       if (f) {
-        fant.value = f.fantasia || f.razao;
-        razao.value = f.razao;
-        cid.value = f.cidade;
+        fant.value = f.fantasia || f.razao || '';
+        razao.value = f.razao || '';
+        cid.value = f.cidade || '';
         badge.classList.add('hidden');
         msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Cliente localizado na base</span>';
         statusCliente = 'encontrado';
@@ -1861,6 +1915,64 @@
       }
     }
 
+    function aplicarModoAtualizacaoCliente(rExist, veioDoEnter = false) {
+      if (!rExist) return;
+      carregarDadosRotaNoFormulario(rExist);
+
+      const card = document.getElementById('cardCliente');
+      statusCliente = 'ja_gravado';
+      feedbackVisual(card, 'sucesso');
+
+      // Exibe banner destacado de modo atualização no topo do formulário
+      const banner = document.getElementById('bannerModoAtualizacao');
+      if (banner) {
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+        const badgeDia = document.getElementById('bannerAtualizacaoBadgeDia');
+        if (badgeDia) badgeDia.innerText = rExist.diaPrinc || 'VISITA';
+        const desc = document.getElementById('bannerAtualizacaoDesc');
+        if (desc) {
+          desc.innerHTML = `Cadastrado para <strong>${escapeHtml(rExist.diaPrinc || 'dia não definido')}</strong> (${rExist.ordem ? 'Ordem ' + escapeHtml(rExist.ordem) : 'Sem ordem'}). Altere os campos e grave para atualizar.`;
+        }
+      }
+
+      const msg = document.getElementById('msgCliente');
+      if (msg) {
+        msg.innerHTML = `
+          <div class="mt-1 flex items-center justify-between bg-blue-50 border border-blue-200 p-2 rounded-lg text-blue-900 text-[11px]">
+            <span class="font-bold flex items-center gap-1"><i class="ph ph-check-circle text-blue-600"></i> Cliente já gravado na rota (${escapeHtml(rExist.diaPrinc || 'Visita')}).</span>
+            <span class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold">Modo Atualização</span>
+          </div>
+        `;
+      }
+
+      if (veioDoEnter) {
+        const inpOrdem = document.getElementById('ordemManual');
+        if (inpOrdem) inpOrdem.focus();
+      }
+    }
+
+    function irParaProximoCliente() {
+      const o = document.getElementById('overlay');
+      if (o) o.classList.add('hidden');
+
+      limparCamposAposInclusao();
+
+      const banner = document.getElementById('bannerModoAtualizacao');
+      if (banner) {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }
+
+      const codInp = document.getElementById('codCliente');
+      if (codInp) {
+        codInp.value = '';
+        setTimeout(() => codInp.focus(), 60);
+      }
+
+      mostrarToastFeedback('Formulário pronto para o próximo cliente.', 'sucesso');
+    }
+
     function limparClienteTotal() {
       document.getElementById('codCliente').value = '';
       document.getElementById('razaoSocial').value = '';
@@ -1869,7 +1981,15 @@
       document.getElementById('msgCliente').innerHTML = '';
       document.getElementById('badgeManualCliente').classList.add('hidden');
       document.getElementById('cardCliente').classList.remove('card-found', 'flash-error');
+
+      const banner = document.getElementById('bannerModoAtualizacao');
+      if (banner) {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }
+
       statusCliente = 'vazio';
+      atualizacaoConfirmadaPeloVendedor = false;
       document.getElementById('codCliente').focus();
     }
 
@@ -1954,7 +2074,8 @@
       const razao = document.getElementById('razaoSocial').value.trim();
       const codCli = document.getElementById('codCliente').value.trim();
 
-      if (statusCliente === 'bloqueado_regiao' || dbCodigosOutrosClientes.has(codCli)) {
+      const clienteProprio = (dbClientes || []).find(c => String(c.codigo || c.codCliente || '').trim() === codCli);
+      if (!clienteProprio && (statusCliente === 'bloqueado_regiao' || dbCodigosOutrosClientes.has(codCli))) {
         mostrarModal('erro', 'Cliente já cadastrado, mas não pertence a sua região.');
         return null;
       }
@@ -2003,13 +2124,16 @@
       const item = obterDadosFormulario();
       if (!item) return;
 
-      if (statusCliente === 'ja_gravado' && !forcarAtualizacao) {
+      if (statusCliente === 'ja_gravado' && !forcarAtualizacao && !atualizacaoConfirmadaPeloVendedor) {
+        const codCli = document.getElementById('codCliente').value.trim();
+        const rExist = dbRotasVendedor.find(r => String(r.codCliente).trim() === codCli) || listaDeRotas.find(r => String(r.codCliente).trim() === codCli);
         abrirModalClienteJaGravado(
-          () => incluirNaLista(true),
+          rExist,
           () => {
-            limparCamposAposInclusao();
-            document.getElementById('codCliente').focus();
-          }
+            atualizacaoConfirmadaPeloVendedor = true;
+            incluirNaLista(true);
+          },
+          () => irParaProximoCliente()
         );
         return;
       }
@@ -2149,30 +2273,60 @@
       }
     }
 
-    function abrirModalClienteJaGravado(onAtualizar, onProximo) {
+    function abrirModalClienteJaGravado(rExist, onAtualizar, onProximo) {
       const o = document.getElementById('overlay');
       const c = document.getElementById('modalContent');
+      if (!o || !c) return;
       o.classList.remove('hidden');
 
-      const cod = document.getElementById('codCliente').value.trim();
-      const nome = document.getElementById('nomeFantasia').value.trim() || document.getElementById('razaoSocial').value.trim();
+      const cod = (rExist && rExist.codCliente) ? rExist.codCliente : document.getElementById('codCliente').value.trim();
+      const nome = (rExist && (rExist.fantasia || rExist.razao)) ? (rExist.fantasia || rExist.razao) : (document.getElementById('nomeFantasia').value.trim() || document.getElementById('razaoSocial').value.trim() || 'Cliente');
+      const cidade = (rExist && rExist.cidade) ? rExist.cidade : (document.getElementById('cidade').value.trim() || '');
+      const dia = (rExist && rExist.diaPrinc) ? rExist.diaPrinc : 'Visita';
+      const ordem = (rExist && rExist.ordem) ? `Ordem ${rExist.ordem}` : 'Sem ordem definida';
+      const freq = (rExist && rExist.freq) ? rExist.freq : 'Toda Semana';
 
       c.innerHTML = `
         <div class="flex flex-col items-center text-center">
-          <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
-            <i class="ph ph-info text-2xl"></i>
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center mb-2.5 shadow-md shadow-blue-500/20 text-2xl">
+            <i class="ph ph-map-pin-line"></i>
           </div>
-          <h3 class="font-bold text-base text-slate-800">Cliente Já Gravado na Rota</h3>
-          <p class="text-xs text-slate-600 mt-1 mb-4 leading-relaxed">
-            O cliente <strong class="text-slate-800 font-mono">#${cod}</strong> (${escapeHtml(nome)}) já possui visita cadastrada na sua rota.<br>
-            O que você deseja fazer?
+          
+          <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full mb-1.5">
+            Cliente Já Cadastrado na sua Rota
+          </span>
+
+          <h3 class="font-extrabold text-base text-slate-800 leading-snug">
+            #${cod} • ${escapeHtml(nome)}
+          </h3>
+          ${cidade ? `<p class="text-xs text-slate-500 font-medium mt-0.5 mb-3"><i class="ph ph-map-pin text-orange-500"></i> ${escapeHtml(cidade)}</p>` : '<div class="mb-2"></div>'}
+
+          <!-- Card com agendamento atual -->
+          <div class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-left mb-3.5 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between text-slate-600">
+              <span class="text-[11px] font-bold uppercase text-slate-500">Dia de Visita Atual:</span>
+              <span class="font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs">${escapeHtml(dia)}</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-600">
+              <span class="text-[11px] font-bold uppercase text-slate-500">Ordem na Rota:</span>
+              <span class="font-bold text-slate-800">${escapeHtml(ordem)}</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-600">
+              <span class="text-[11px] font-bold uppercase text-slate-500">Frequência:</span>
+              <span class="font-medium text-slate-700">${escapeHtml(freq)}</span>
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-600 mb-4 font-medium leading-relaxed">
+            Deseja <strong>atualizar</strong> este cadastro ou ir para o <strong>próximo cliente</strong>?
           </p>
+
           <div class="space-y-2 w-full">
-            <button id="btnModalAtualizar" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow">
+            <button type="button" id="btnModalAtualizar" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-98 cursor-pointer">
               <i class="ph ph-arrows-clockwise text-base"></i>
               <span>Atualizar Dados deste Cliente</span>
             </button>
-            <button id="btnModalProximo" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+            <button type="button" id="btnModalProximo" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-slate-200 active:scale-98 cursor-pointer">
               <i class="ph ph-arrow-right text-base"></i>
               <span>Ir para o Próximo Cliente</span>
             </button>
@@ -2182,11 +2336,11 @@
 
       document.getElementById('btnModalAtualizar').onclick = () => {
         o.classList.add('hidden');
-        onAtualizar();
+        if (onAtualizar) onAtualizar();
       };
       document.getElementById('btnModalProximo').onclick = () => {
         o.classList.add('hidden');
-        onProximo();
+        if (onProximo) onProximo();
       };
     }
 
@@ -2194,13 +2348,16 @@
       const item = obterDadosFormulario();
       if (!item) return;
 
-      if (statusCliente === 'ja_gravado' && !forcarAtualizacao) {
+      if (statusCliente === 'ja_gravado' && !forcarAtualizacao && !atualizacaoConfirmadaPeloVendedor) {
+        const codCli = document.getElementById('codCliente').value.trim();
+        const rExist = dbRotasVendedor.find(r => String(r.codCliente).trim() === codCli) || listaDeRotas.find(r => String(r.codCliente).trim() === codCli);
         abrirModalClienteJaGravado(
-          () => salvarDireto(true),
+          rExist,
           () => {
-            limparCamposAposInclusao();
-            document.getElementById('codCliente').focus();
-          }
+            atualizacaoConfirmadaPeloVendedor = true;
+            salvarDireto(true);
+          },
+          () => irParaProximoCliente()
         );
         return;
       }
