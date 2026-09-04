@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ameripan - Gestão de Canhotos e Entregas</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- SheetJS para exportação em Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ameripan: {
+              navy: '#12264f',
+              blue: '#1e3a8a',
+              accent: '#f59e0b',
+              light: '#f8fafc',
+              dark: '#0f172a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      body { background: white !important; font-size: 11pt; }
+      .shadow-md, .shadow-lg, .shadow-sm { box-shadow: none !important; }
+    }
+    .badge-pendente { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .badge-recebido { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-atraso { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="bg-ameripan-navy text-white shadow-lg no-print sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Logo & Titulo -->
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="navegarPara('lancar')">
+          <div class="w-10 h-10 rounded-lg bg-ameripan-accent text-slate-950 font-black flex items-center justify-center text-xl shadow">
+            <i class="fa-solid fa-receipt"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-extrabold text-lg tracking-wide uppercase text-white">AMERIPAN</span>
+              <span class="text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-500/40">Canhotos PRO</span>
+            </div>
+            <p class="text-xs text-slate-300">Controle de Comprovantes de Entrega</p>
+          </div>
+        </div>
+
+        <!-- Menu de Navegação Superior (Desktop & Mobile) -->
+        <nav class="flex items-center space-x-1 sm:space-x-2">
+          <button id="btn-nav-lancar" onclick="navegarPara('lancar')" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition bg-blue-800 text-white flex items-center space-x-1.5">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span class="hidden sm:inline">Lançar Canhoto</span>
+            <span class="sm:hidden">Lançar</span>
+          </button>
+          
+          <button id="btn-nav-consulta" onclick="navegarPara('consulta')" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span class="hidden sm:inline">Consultar Pedido</span>
+            <span class="sm:hidden">Consultar</span>
+          </button>
+
+          <button id="btn-nav-financeiro" onclick="solicitarAcessoFinanceiro()" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5 border border-slate-700">
+            <i class="fa-solid fa-sack-dollar text-emerald-400"></i>
+            <span>Financeiro</span>
+          </button>
+
+          <button onclick="abrirConfiguracoes()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition" title="Configurações & API">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER DE STATUS DA CONEXÃO COM O BACKEND -->
+  <div id="banner-conexao" class="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-1.5 text-xs text-center flex items-center justify-center space-x-2 no-print hidden">
+    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+    <span id="texto-banner-conexao">Modo Demonstração local ativo. Configure a URL do Google Apps Script nas configurações para sincronizar na nuvem.</span>
+    <button onclick="abrirConfiguracoes()" class="underline font-bold text-amber-800 hover:text-amber-950 ml-1">Configurar Agora</button>
+  </div>
+
+  <!-- ================= CONTEÚDO PRINCIPAL ================= -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 1: LANÇAR CANHOTO (VENDEDORES & MOTORISTAS) -->
+    <!-- ========================================================================= -->
+    <section id="view-lancar" class="max-w-2xl mx-auto">
+      <div class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        
+        <!-- Cabeçalho do Card -->
+        <div class="bg-gradient-to-r from-ameripan-navy to-ameripan-blue text-white px-6 py-5">
+          <h1 class="text-xl sm:text-2xl font-bold flex items-center space-x-2">
+            <i class="fa-solid fa-file-invoice-dollar text-amber-400"></i>
+            <span>Registrar Canhoto Entregue</span>
+          </h1>
+          <p class="text-sm text-blue-100 mt-1">Envie a foto do canhoto assinado no ato da entrega para o Financeiro acompanhar.</p>
+        </div>
+
+        <form id="form-canhoto" onsubmit="enviarCanhoto(event)" class="p-6 space-y-6">
+          
+          <!-- Seleção de Perfil: Vendedor vs Motorista -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Quem está registrando?</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none" id="label-role-vendedor">
+                <input type="radio" name="tipo_responsavel" value="VENDEDOR" checked class="sr-only" onchange="alternarTipoResponsavel('VENDEDOR')">
+                <div class="text-center">
+                  <i class="fa-solid fa-user-tie text-2xl text-blue-700 mb-1"></i>
+                  <div class="font-bold text-sm text-slate-800">Sou Vendedor</div>
+                  <div class="text-[11px] text-slate-500">Exige Cód. ou Nome</div>
+                </div>
+              </label>
+
+              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none" id="label-role-motorista">
+                <input type="radio" name="tipo_responsavel" value="MOTORISTA" class="sr-only" onchange="alternarTipoResponsavel('MOTORISTA')">
+                <div class="text-center">
+                  <i class="fa-solid fa-truck text-2xl text-slate-500 mb-1" id="icon-motorista"></i>
+                  <div class="font-bold text-sm text-slate-800">Sou Motorista</div>
+                  <div class="text-[11px] text-slate-500">Não exige código</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Campos Específicos para Vendedor -->
+          <div id="bloco-vendedor" class="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700 uppercase">Código do Vendedor (Ameripan)</label>
+                <span class="text-[11px] text-blue-700 font-semibold cursor-pointer hover:underline" onclick="abrirModalBuscaVendedor()">
+                  <i class="fa-solid fa-list mr-1"></i>Ver Lista de Vendedores
+                </span>
+              </div>
+              <div class="relative">
+                <input type="number" id="input-cod-vendedor" placeholder="Ex: 165" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-bold text-slate-800 text-base" oninput="buscarVendedorPorCodigo(this.value)">
+                <div id="spinner-vendedor" class="absolute right-3 top-3 hidden text-blue-600">
+                  <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card de Confirmação do Vendedor Encontrado -->
+            <div id="card-vendedor-encontrado" class="hidden bg-emerald-50 border border-emerald-300 rounded-lg p-3 flex items-center justify-between">
+              <div>
+                <div class="text-xs text-emerald-800 font-semibold uppercase">Vendedor Identificado</div>
+                <div id="nome-vendedor-display" class="font-extrabold text-slate-900 text-sm">--</div>
+                <div id="equipe-vendedor-display" class="text-xs text-emerald-700">--</div>
+              </div>
+              <i class="fa-solid fa-circle-check text-emerald-600 text-2xl"></i>
+            </div>
+
+            <!-- Alerta: Vendedor Não Localizado (Com opção de auto-cadastro) -->
+            <div id="alerta-vendedor-nao-encontrado" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-3.5 space-y-3">
+              <div class="flex items-start space-x-2">
+                <i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg mt-0.5"></i>
+                <div>
+                  <div class="text-xs font-bold text-amber-900">Código não localizado no cadastro</div>
+                  <p class="text-xs text-amber-800">Preencha seu nome completo e WhatsApp abaixo para registrar o canhoto e atualizar seu cadastro.</p>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Nome Completo</label>
+                  <input type="text" id="input-vend-nome-novo" placeholder="Seu Nome Completo" class="w-full px-3 py-1.5 rounded border border-slate-300 text-xs uppercase">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Equipe Ameripan</label>
+                  <select id="select-vend-equipe-novo" class="w-full px-3 py-1.5 rounded border border-slate-300 text-xs">
+                    <option value="EQUIPE SORVETERIA">EQUIPE SORVETERIA</option>
+                    <option value="EQUIPE PANIFICAÇÃO">EQUIPE PANIFICAÇÃO</option>
+                    <option value="EQUIPE TELEPAN">EQUIPE TELEPAN</option>
+                    <option value="EQUIPE RICCO">EQUIPE RICCO</option>
+                    <option value="EQUIPE SANDRO">EQUIPE SANDRO</option>
+                    <option value="EQUIPE 4 - VALDIR">EQUIPE 4 - VALDIR</option>
+                    <option value="OUTRA">OUTRA</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp do Vendedor</label>
+              <input type="tel" id="input-vend-telefone" placeholder="Ex: 19 99999-9999" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
+              <p class="text-[11px] text-slate-500 mt-1">Utilizado pelo Financeiro caso haja pendência física do documento.</p>
+            </div>
+          </div>
+
+          <!-- Campos Específicos para Motorista -->
+          <div id="bloco-motorista" class="hidden space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome Completo do Motorista / Transportador <span class="text-rose-600">*</span></label>
+              <input type="text" id="input-motorista-nome" placeholder="Ex: Roberto da Silva (Rota 02)" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm uppercase">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp do Motorista <span class="text-rose-600">*</span></label>
+              <input type="tel" id="input-motorista-telefone" placeholder="Ex: 19 98888-7777" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
+            </div>
+          </div>
+
+          <!-- Dados do Pedido -->
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Número do Pedido / NF-e <span class="text-rose-600">*</span></label>
+                <div class="relative">
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-bold">#</div>
+                  <input type="text" id="input-numero-pedido" required placeholder="Ex: 48920" class="w-full pl-8 pr-4 py-3 rounded-lg border-2 border-slate-300 focus:border-blue-600 focus:ring-0 text-lg font-black text-slate-900 tracking-wider">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome do Cliente / Razão Social</label>
+                <input type="text" id="input-nome-cliente" placeholder="Ex: Sorveteria Gelato & Cia" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm uppercase">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Previsão para entregar o papel físico (Opcional)</label>
+              <input type="text" id="input-previsao-entrega" placeholder="Ex: Entrego na Ameripan nesta sexta à tarde" class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
+            </div>
+          </div>
+
+          <!-- FOTO DO CANHOTO (Compressão inteligente no cliente) -->
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Foto do Canhoto Assinado / Carimbado <span class="text-rose-600">*</span></label>
+            
+            <div class="mt-1 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-4 text-center transition bg-slate-50/50">
+              
+              <!-- Container de Preview quando selecionado -->
+              <div id="foto-preview-container" class="hidden mb-3">
+                <div class="relative inline-block border-2 border-emerald-500 rounded-xl overflow-hidden shadow">
+                  <img id="img-preview" src="#" alt="Canhoto preview" class="max-h-60 max-w-full rounded-lg object-contain mx-auto bg-black/5" />
+                  <button type="button" onclick="removerFoto()" class="absolute top-2 right-2 bg-rose-600 text-white rounded-full p-2 shadow-lg hover:bg-rose-700 transition" title="Remover Foto">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
+                <div id="foto-info-text" class="text-xs text-emerald-700 font-semibold mt-2">Imagem pronta e otimizada para envio!</div>
+              </div>
+
+              <!-- Botões de Ação de Câmera e Upload -->
+              <div id="foto-upload-actions" class="space-y-3">
+                <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xl">
+                  <i class="fa-solid fa-camera"></i>
+                </div>
+                <div class="text-sm font-semibold text-slate-700">Fotografe o canhoto de forma nítida com assinatura e data</div>
+                <div class="flex flex-wrap justify-center gap-3">
+                  <!-- Captura de câmera nativa de celular -->
+                  <label class="inline-flex items-center px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold rounded-xl cursor-pointer shadow transition active:scale-95">
+                    <i class="fa-solid fa-camera mr-2"></i> Tirar Foto Agora
+                    <input type="file" id="input-foto-camera" accept="image/*" capture="environment" class="hidden" onchange="processarFoto(this)">
+                  </label>
+                  <!-- Escolher arquivo / galeria -->
+                  <label class="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-bold rounded-xl cursor-pointer shadow-sm transition active:scale-95">
+                    <i class="fa-solid fa-images mr-2 text-slate-500"></i> Galeria de Fotos
+                    <input type="file" id="input-foto-galeria" accept="image/*" class="hidden" onchange="processarFoto(this)">
+                  </label>
+                </div>
+                <div class="text-[11px] text-slate-400">A imagem é compactada automaticamente para gastar poucos dados da internet.</div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Botão Submeter Form -->
+          <div class="pt-2">
+            <button type="submit" id="btn-submit-canhoto" class="w-full py-4 bg-ameripan-blue hover:bg-blue-900 active:scale-[0.99] text-white font-black text-base rounded-xl shadow-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+              <span>REGISTRAR CANHOTO PENDENTE</span>
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 2: CONSULTAR STATUS POR PEDIDO -->
+    <!-- ========================================================================= -->
+    <section id="view-consulta" class="hidden max-w-3xl mx-auto space-y-6">
+      <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-slate-900 flex items-center space-x-2 mb-2">
+          <i class="fa-solid fa-magnifying-glass text-blue-600"></i>
+          <span>Consultar Status do Canhoto</span>
+        </h2>
+        <p class="text-sm text-slate-600 mb-4">Digite o número do pedido ou o código do vendedor para verificar se o papel já foi recebido no Financeiro da Ameripan.</p>
+        
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <input type="text" id="input-busca-pedido" placeholder="Digite o número do pedido (Ex: 45892)" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-bold text-slate-800" onkeydown="if(event.key==='Enter') executarConsultaPedido()">
+          </div>
+          <button onclick="executarConsultaPedido()" class="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl transition flex items-center space-x-2">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span class="hidden sm:inline">Buscar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Container dos Resultados da Busca -->
+      <div id="container-resultados-consulta" class="space-y-4">
+        <!-- Preenchido via JavaScript -->
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 3: PAINEL DO FINANCEIRO (GESTÃO, BAIXAS, WHATSAPP & RELATÓRIOS) -->
+    <!-- ========================================================================= -->
+    <section id="view-financeiro" class="hidden space-y-6">
+      
+      <!-- Top Bar do Financeiro -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="p-2 bg-emerald-100 text-emerald-800 rounded-lg"><i class="fa-solid fa-building-columns"></i></span>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900">Painel do Setor Financeiro</h2>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Conferência física de canhotos, baixa no sistema, cobrança via WhatsApp e relatórios fiscais.</p>
+        </div>
+
+        <!-- Botões de Ação Rápida -->
+        <div class="flex flex-wrap items-center gap-2 no-print">
+          <button onclick="sincronizarDadosComBackend(true)" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition flex items-center space-x-1.5" title="Recarregar Dados">
+            <i class="fa-solid fa-rotate text-blue-600"></i>
+            <span>Atualizar</span>
+          </button>
+          
+          <button onclick="exportarExcelCanhotos()" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5" title="Exportar Planilha Excel">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Exportar Excel</span>
+          </button>
+
+          <button onclick="window.print()" class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5" title="Imprimir Relatório">
+            <i class="fa-solid fa-print"></i>
+            <span>Imprimir / PDF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI METRIC CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-500 uppercase">Total Registrado</span>
+            <span class="text-blue-600 bg-blue-50 p-2 rounded-lg text-sm"><i class="fa-solid fa-receipt"></i></span>
+          </div>
+          <div id="kpi-total" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">0</div>
+          <div class="text-[11px] text-slate-400 mt-1">Canhotos lançados</div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-amber-200 shadow-sm bg-amber-50/20">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-700 uppercase">Pendentes Físicos</span>
+            <span class="text-amber-600 bg-amber-100 p-2 rounded-lg text-sm"><i class="fa-solid fa-clock"></i></span>
+          </div>
+          <div id="kpi-pendentes" class="text-2xl sm:text-3xl font-black text-amber-700 mt-2">0</div>
+          <div class="text-[11px] text-amber-600 mt-1">Aguardando papel em mãos</div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-rose-200 shadow-sm bg-rose-50/20">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-rose-700 uppercase">Em Atraso (&gt;3 dias)</span>
+            <span class="text-rose-600 bg-rose-100 p-2 rounded-lg text-sm"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          </div>
+          <div id="kpi-atrasados" class="text-2xl sm:text-3xl font-black text-rose-700 mt-2">0</div>
+          <div class="text-[11px] text-rose-600 mt-1">Exigem cobrança imediata</div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm bg-emerald-50/20">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-700 uppercase">Recebidos / Baixados</span>
+            <span class="text-emerald-600 bg-emerald-100 p-2 rounded-lg text-sm"><i class="fa-solid fa-check-double"></i></span>
+          </div>
+          <div id="kpi-recebidos" class="text-2xl sm:text-3xl font-black text-emerald-700 mt-2">0</div>
+          <div class="text-[11px] text-emerald-600 mt-1">Conferidos fisicamente</div>
+        </div>
+      </div>
+
+      <!-- FILTROS & BARRA DE BUSCA -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          
+          <!-- Busca textual -->
+          <div class="sm:col-span-6 relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </div>
+            <input type="text" id="filtro-busca-texto" placeholder="Buscar por Pedido, Vendedor, Motorista ou Cliente..." class="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none" oninput="filtrarTabelaCanhotos()">
+          </div>
+
+          <!-- Filtro de Status -->
+          <div class="sm:col-span-3">
+            <select id="filtro-status" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none" onchange="filtrarTabelaCanhotos()">
+              <option value="TODOS">Todos os Status</option>
+              <option value="PENDENTE" selected>Apenas Pendentes (Aberto)</option>
+              <option value="RECEBIDO">Apenas Recebidos (Baixados)</option>
+            </select>
+          </div>
+
+          <!-- Filtro de Alerta de Dias -->
+          <div class="sm:col-span-3">
+            <select id="filtro-dias" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none" onchange="filtrarTabelaCanhotos()">
+              <option value="TODOS">Qualquer prazo</option>
+              <option value="ATRASO_3">Mais de 3 dias com vendedor</option>
+              <option value="ATRASO_7">Mais de 7 dias (Urgente)</option>
+            </select>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TABELA INTERATIVA DE CANHOTOS -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">Pedido / Cliente</th>
+                <th class="py-3 px-4">Responsável (Vendedor / Motorista)</th>
+                <th class="py-3 px-4">Data Registro / Idade</th>
+                <th class="py-3 px-3 text-center">Foto</th>
+                <th class="py-3 px-4">Previsão & Retorno</th>
+                <th class="py-3 px-4 text-center no-print">Ações Financeiro</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-canhotos-body" class="divide-y divide-slate-100">
+              <!-- Renderizado via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Feedback quando vazio -->
+        <div id="tabela-vazia-feedback" class="py-12 text-center text-slate-400 hidden">
+          <i class="fa-solid fa-clipboard-check text-4xl mb-2 text-slate-300"></i>
+          <p class="font-medium text-slate-600">Nenhum canhoto encontrado com os filtros selecionados.</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 4: GESTÃO DE VENDEDORES & CONFIGURAÇÕES -->
+    <!-- ========================================================================= -->
+    <section id="view-configuracoes" class="hidden max-w-4xl mx-auto space-y-6">
+      
+      <!-- Card Conexão Google Apps Script -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+            <i class="fa-solid fa-plug text-blue-600"></i>
+            <span>Conexão Google Apps Script (Web App)</span>
+          </h2>
+          <span id="badge-api-status" class="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800">Não configurado</span>
+        </div>
+        
+        <p class="text-xs text-slate-600">
+          Cole a URL gerada na publicação do seu script (Google Apps Script) como "Aplicativo da Web". Isso salva os dados e as fotos direto no seu Google Drive e Sheets.
+        </p>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">URL da API (Exec Google Apps Script)</label>
+          <input type="url" id="config-api-url" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-mono">
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button onclick="salvarConfigApi()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition">
+            Salvar URL e Testar Conexão
+          </button>
+          <button onclick="limparConfigApi()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition">
+            Usar Modo Demonstração (Local)
+          </button>
+        </div>
+      </div>
+
+      <!-- Card Senha do Setor Financeiro -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+        <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+          <i class="fa-solid fa-lock text-slate-700"></i>
+          <span>Segurança & Senha do Painel Financeiro</span>
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Senha de Acesso ao Financeiro</label>
+            <input type="password" id="config-senha-financeiro" value="ameripan123" class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
+          </div>
+          <div class="flex items-end">
+            <button onclick="salvarSenhaFinanceiro()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg transition">
+              Atualizar Senha
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gestor de Telefones dos Vendedores Ameripan -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+              <i class="fa-solid fa-address-book text-emerald-600"></i>
+              <span>Cadastro & WhatsApps dos Vendedores Ameripan</span>
+            </h2>
+            <p class="text-xs text-slate-500">Mantenha os telefones atualizados para envio automático das mensagens de cobrança.</p>
+          </div>
+          <button onclick="abrirModalNovoVendedor()" class="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition flex items-center space-x-1">
+            <i class="fa-solid fa-plus"></i>
+            <span>Novo Vendedor</span>
+          </button>
+        </div>
+
+        <div class="relative">
+          <input type="text" id="busca-lista-vendedores" placeholder="Pesquisar vendedor por nome, equipe ou código..." class="w-full pl-4 pr-4 py-2 border border-slate-300 rounded-lg text-xs" oninput="renderizarTabelaVendedoresConfig()">
+        </div>
+
+        <div class="max-h-96 overflow-y-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 text-slate-700 font-bold sticky top-0">
+              <tr>
+                <th class="p-2.5">Cód</th>
+                <th class="p-2.5">Nome</th>
+                <th class="p-2.5">Equipe</th>
+                <th class="p-2.5">Telefone WhatsApp</th>
+                <th class="p-2.5 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-config-vendedores" class="divide-y divide-slate-100">
+              <!-- Renderizado via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: PREVIEW DE FOTO AMPLIADA -->
+  <!-- ========================================================================= -->
+  <div id="modal-foto" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-3xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between px-4 py-3 bg-slate-800 text-white">
+        <div class="text-sm font-bold flex items-center space-x-2">
+          <i class="fa-solid fa-image text-amber-400"></i>
+          <span id="modal-foto-titulo">Comprovante do Pedido</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <a id="modal-foto-link-download" href="#" target="_blank" download class="text-xs bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded font-bold transition">
+            <i class="fa-solid fa-download mr-1"></i> Baixar
+          </a>
+          <button onclick="fecharModalFoto()" class="text-slate-400 hover:text-white text-lg px-2">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-4 flex items-center justify-center bg-black/90 min-h-[300px] max-h-[80vh]">
+        <img id="modal-foto-img" src="#" alt="Canhoto em alta resolução" class="max-h-[75vh] max-w-full object-contain rounded" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: COBRANÇA WHATSAPP AUTOMÁTICA -->
+  <!-- ========================================================================= -->
+  <div id="modal-whatsapp" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      <div class="px-6 py-4 bg-emerald-700 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-brands fa-whatsapp text-2xl text-emerald-300"></i>
+          <div>
+            <h3 class="font-bold text-base">Cobrança de Canhoto Físico</h3>
+            <p class="text-xs text-emerald-100">Disparo via WhatsApp com mensagem inteligente</p>
+          </div>
+        </div>
+        <button onclick="fecharModalWhatsApp()" class="text-emerald-200 hover:text-white text-xl">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs sm:text-sm">
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-2 gap-2 text-xs">
+          <div><strong class="text-slate-500">Destinatário:</strong> <span id="wpp-modal-nome" class="font-bold text-slate-800">--</span></div>
+          <div><strong class="text-slate-500">Telefone:</strong> <span id="wpp-modal-tel" class="font-bold text-slate-800">--</span></div>
+          <div><strong class="text-slate-500">Pedido:</strong> <span id="wpp-modal-pedido" class="font-black text-blue-800">--</span></div>
+          <div><strong class="text-slate-500">Idade Pendência:</strong> <span id="wpp-modal-dias" class="font-bold text-rose-700">--</span></div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Mensagem Formatada</label>
+          <textarea id="wpp-modal-texto" rows="6" class="w-full p-3 border border-slate-300 rounded-lg text-xs leading-relaxed text-slate-800 focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Registrar Previsão de Entrega no Sistema</label>
+          <input type="text" id="wpp-modal-previsao-input" placeholder="Ex: Informou que entrega na sexta-feira dia 05" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button onclick="fecharModalWhatsApp()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-bold text-xs">Cancelar</button>
+          <button onclick="dispararWhatsAppComGravacao()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition flex items-center space-x-2 shadow">
+            <i class="fa-brands fa-whatsapp text-base"></i>
+            <span>Abrir WhatsApp & Salvar Nota</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: CONFIRMAÇÃO DE BAIXA FÍSICA -->
+  <!-- ========================================================================= -->
+  <div id="modal-baixa" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      <div class="px-6 py-4 bg-ameripan-navy text-white flex items-center justify-between">
+        <h3 class="font-bold text-base flex items-center space-x-2">
+          <i class="fa-solid fa-stamp text-amber-400"></i>
+          <span>Confirmar Baixa Física</span>
+        </h3>
+        <button onclick="fecharModalBaixa()" class="text-slate-300 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4 text-xs sm:text-sm">
+        <p class="text-slate-700">
+          Você confirma que o canhoto de papel referente ao Pedido <strong id="modal-baixa-pedido" class="text-blue-800 text-base">--</strong> foi conferido e entregue fisicamente no Financeiro da Ameripan?
+        </p>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome do Operador do Financeiro</label>
+          <input type="text" id="modal-baixa-operador" placeholder="Seu Nome (Ex: Amanda Financeiro)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button onclick="fecharModalBaixa()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-bold text-xs">Cancelar</button>
+          <button onclick="confirmarBaixaEfetiva()" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg transition flex items-center space-x-2 shadow">
+            <i class="fa-solid fa-check"></i>
+            <span>Dar Baixa Definitiva</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: LISTAGEM DE VENDEDORES (SELEÇÃO RÁPIDA) -->
+  <!-- ========================================================================= -->
+  <div id="modal-lista-vendedores" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      <div class="px-5 py-3.5 bg-blue-900 text-white flex items-center justify-between">
+        <h3 class="font-bold text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-users"></i>
+          <span>Selecione seu Nome na Lista</span>
+        </h3>
+        <button onclick="fecharModalBuscaVendedor()" class="text-slate-300 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-3">
+        <input type="text" id="input-filtro-modal-vendedor" placeholder="Filtrar por nome ou código..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs" oninput="filtrarListaModalVendedores()">
+        <div id="container-vendedores-lista-modal" class="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
+          <!-- Gerado via JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: CADASTRAR NOVO VENDEDOR -->
+  <!-- ========================================================================= -->
+  <div id="modal-novo-vendedor" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      <div class="px-5 py-3.5 bg-ameripan-blue text-white flex items-center justify-between">
+        <h3 class="font-bold text-sm">Cadastrar Novo Vendedor Ameripan</h3>
+        <button onclick="fecharModalNovoVendedor()" class="text-slate-300 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="salvarNovoVendedorAvulso(event)" class="p-5 space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 uppercase mb-1">Código</label>
+          <input type="number" id="modal-novo-vend-cod" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase mb-1">Nome Completo</label>
+          <input type="text" id="modal-novo-vend-nome" required class="w-full px-3 py-2 border border-slate-300 rounded-lg uppercase">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase mb-1">Equipe</label>
+          <input type="text" id="modal-novo-vend-equipe" value="EQUIPE SORVETERIA" class="w-full px-3 py-2 border border-slate-300 rounded-lg uppercase">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp (DDD + Número)</label>
+          <input type="tel" id="modal-novo-vend-tel" placeholder="19999999999" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button type="button" onclick="fecharModalNovoVendedor()" class="px-3 py-2 border rounded-lg">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-blue-700 text-white font-bold rounded-lg">Salvar Vendedor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500 no-print mt-auto">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>Ameripan Distribuidora © 2026 - Piracicaba / Região</div>
+      <div class="text-[11px] text-slate-400">Desenvolvido com foco em velocidade operacional para Vendas e Financeiro</div>
+    </div>
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- SCRIPT LOGIC JAVASCRIPT -->
+  <!-- ========================================================================= -->
+  <script>
+    /* BASE INICIAL DOS 44 VENDEDORES DA AMERIPAN (EMBEDDED CACHE) */
+    const VENDEDORES_PADRAO = [{"cod": "161", "nome": "DEBORA CRISTINA MEIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "268", "nome": "ELLEN GABRIELE RODRIGUES DOS SANTOS", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "234", "nome": "EVELYN BRAZ DA SILVA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "170", "nome": "JORDANIA MAIRA DE SOUSA SILVA MARTINE", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "272", "nome": "KETLYN SANTOS BRAGA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "235", "nome": "MARIA CLARA MARTELOSSI FERREIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "267", "nome": "MARIA FERNANDA DE SOUZA FAUSTINO", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "195", "nome": "MARLEI TERUEL BIAGIONI RIBEIRO GAMA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "254", "nome": "MATEUS HENRIQUE DE JESUS ALVES", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "184", "nome": "MAYSA LOPES DA COSTA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "96", "nome": "NATALINA GOMES BALBINO DE LIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "273", "nome": "PRISCILA CERQUEIRA MACHADO", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "171", "nome": "VITORIA ALONSO SABADIN", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "103", "nome": "IVERALDO EDSON PEROTTO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "33", "nome": "JULIO MARCOS DA SILVA COSTA", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "2", "nome": "MARCIO ROBERTO TENORIO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "34", "nome": "SIDNEI DOS SANTOS", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "261", "nome": "DANIEL RODRIGUES DE MELLO", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "257", "nome": "DARIO LUCIANO RAMAZZA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "269", "nome": "ITAMAR JOSE TOLEDO DA SILVA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "263", "nome": "THATYANE FRATASSI FERREIRA DOS SANTOS", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "165", "nome": "EDIMAR PINHEIRO COSTA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "48", "nome": "EMANUEL RUFINO DA SILVA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "86", "nome": "JORDANO SALOMAO VELICO", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "237", "nome": "MARCELO JOSE DE CARVALHO", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "193", "nome": "MARCELO SANTANA NOVAES", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "233", "nome": "MAURICIO EXEL FERREIRA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "31", "nome": "FLAVIO EVANDRO MATOS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "137", "nome": "GIOVANI DUARTE MARTINS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "89", "nome": "LUCAS DE PAULA OSORIO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "256", "nome": "MARCOS DANIEL MORO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "9", "nome": "PABLO VICTOR MORELATO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "21", "nome": "ROBINSON TARCISIO PEREIRA", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "250", "nome": "TATIANA MARY DE ALMEIDA SANTOS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "218", "nome": "ANA PAULA DE SOUSA VAZ", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "258", "nome": "BRYAN DE SOUZA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "138", "nome": "CRISTIANA BARBOSA SILVA BETTU", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "271", "nome": "CRISTIANO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "262", "nome": "IGOR TEDY RAMOS", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "245", "nome": "JOICE MEDEIROS NASCIMENTO", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "253", "nome": "KLEISON DOS SANTOS", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "226", "nome": "MARCIA BUENO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "215", "nome": "MARILIA GABRIELA BARBORATI", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "143", "nome": "THIAGO HENRIQUE MARANHO", "equipe": "EQUIPE SANDRO", "telefone": ""}];
+
+    /* ESTADO DA APLICAÇÃO */
+    let vendedores = [];
+    let canhotos = [];
+    let fotoBase64Atual = "";
+    let itemSelecionadoParaWhatsApp = null;
+    let itemSelecionadoParaBaixa = null;
+
+    // Configurações salvas no LocalStorage
+    const STORAGE_KEY_API = "ameripan_canhotos_api_url";
+    const STORAGE_KEY_SENHA_FIN = "ameripan_senha_financeiro";
+    const STORAGE_KEY_VEND = "ameripan_vendedores_cache";
+    const STORAGE_KEY_CANHOT_LOCAL = "ameripan_canhotos_local";
+
+    /* INICIALIZAÇÃO */
+    document.addEventListener("DOMContentLoaded", () => {
+      carregarConfiguracoesLocais();
+      inicializarVendedores();
+      carregarCanhotosLocais();
+      verificarConexaoBackend();
+      filtrarTabelaCanhotos();
+    });
+
+    /* CARREGA CONFIGURAÇÕES DO LOCALSTORAGE */
+    function carregarConfiguracoesLocais() {
+      const urlSalva = localStorage.getItem(STORAGE_KEY_API) || "";
+      document.getElementById("config-api-url").value = urlSalva;
+      
+      const senhaSalva = localStorage.getItem(STORAGE_KEY_SENHA_FIN) || "ameripan123";
+      document.getElementById("config-senha-financeiro").value = senhaSalva;
+    }
+
+    function getApiUrl() {
+      return localStorage.getItem(STORAGE_KEY_API) || "";
+    }
+
+    function inicializarVendedores() {
+      const cacheVend = localStorage.getItem(STORAGE_KEY_VEND);
+      if (cacheVend) {
+        try {
+          vendedores = JSON.parse(cacheVend);
+        } catch(e) {
+          vendedores = VENDEDORES_PADRAO;
+        }
+      } else {
+        vendedores = VENDEDORES_PADRAO;
+        salvarCacheVendedores();
+      }
+      renderizarTabelaVendedoresConfig();
+    }
+
+    function salvarCacheVendedores() {
+      localStorage.setItem(STORAGE_KEY_VEND, JSON.stringify(vendedores));
+    }
+
+    function carregarCanhotosLocais() {
+      const salvo = localStorage.getItem(STORAGE_KEY_CANHOT_LOCAL);
+      if (salvo) {
+        try {
+          canhotos = JSON.parse(salvo);
+        } catch(e) {
+          canhotos = getCanhotosExemplo();
+        }
+      } else {
+        canhotos = getCanhotosExemplo();
+        salvarCanhotosLocalmente();
+      }
+    }
+
+    function salvarCanhotosLocalmente() {
+      localStorage.setItem(STORAGE_KEY_CANHOT_LOCAL, JSON.stringify(canhotos));
+    }
+
+    function getCanhotosExemplo() {
+      return [
+        {
+          id: "CNH-260828-4589",
+          data_registro: "2026-08-28 14:30",
+          num_pedido: "45892",
+          tipo_responsavel: "VENDEDOR",
+          cod_vendedor: "165",
+          nome_responsavel: "EDIMAR PINHEIRO COSTA",
+          telefone: "19999999999",
+          cliente: "SORVETES GELODOCE",
+          status: "PENDENTE",
+          dias_pendente: calcularDiasDiferenca("2026-08-28"),
+          data_baixa: "",
+          responsavel_baixa: "",
+          previsao_entrega: "Retorno na rota de sexta",
+          obs_cobranca: "Aguardando envio",
+          url_foto: "https://images.unsplash.com/photo-1554415707-9e4901f417e4?w=800&auto=format&fit=crop&q=60"
+        },
+        {
+          id: "CNH-260830-1015",
+          data_registro: "2026-08-30 10:15",
+          num_pedido: "45910",
+          tipo_responsavel: "MOTORISTA",
+          cod_vendedor: "",
+          nome_responsavel: "CARLOS SILVA (MOTORISTA)",
+          telefone: "19988887777",
+          cliente: "PANIFICADORA ESTRELA",
+          status: "RECEBIDO",
+          dias_pendente: 0,
+          data_baixa: "2026-09-01 16:00",
+          responsavel_baixa: "MARIA FINANCEIRO",
+          previsao_entrega: "01/09/2026",
+          obs_cobranca: "Entregue no malote",
+          url_foto: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=60"
+        },
+        {
+          id: "CNH-260902-0940",
+          data_registro: "2026-09-02 09:40",
+          num_pedido: "46005",
+          tipo_responsavel: "VENDEDOR",
+          cod_vendedor: "48",
+          nome_responsavel: "EMANUEL RUFINO DA SILVA",
+          telefone: "19977776666",
+          cliente: "AÇAÍ TROPICAL",
+          status: "PENDENTE",
+          dias_pendente: calcularDiasDiferenca("2026-09-02"),
+          data_baixa: "",
+          responsavel_baixa: "",
+          previsao_entrega: "",
+          obs_cobranca: "",
+          url_foto: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&auto=format&fit=crop&q=60"
+        }
+      ];
+    }
+
+    function calcularDiasDiferenca(dataStr) {
+      if (!dataStr) return 0;
+      const dataReg = new Date(dataStr.replace(" ", "T"));
+      if (isNaN(dataReg)) return 0;
+      const hoje = new Date();
+      const diffTime = Math.abs(hoje - dataReg);
+      return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    /* CONTROLE DE ABAS / NAVEGAÇÃO */
+    function navegarPara(viewId) {
+      const views = ["lancar", "consulta", "financeiro", "configuracoes"];
+      views.forEach(v => {
+        const sec = document.getElementById("view-" + v);
+        if (sec) sec.classList.add("hidden");
+      });
+
+      const navBtns = ["lancar", "consulta", "financeiro"];
+      navBtns.forEach(b => {
+        const btn = document.getElementById("btn-nav-" + b);
+        if (btn) {
+          btn.classList.remove("bg-blue-800", "text-white");
+          btn.classList.add("text-slate-200");
+        }
+      });
+
+      const target = document.getElementById("view-" + viewId);
+      if (target) target.classList.remove("hidden");
+
+      const activeBtn = document.getElementById("btn-nav-" + viewId);
+      if (activeBtn) {
+        activeBtn.classList.add("bg-blue-800", "text-white");
+        activeBtn.classList.remove("text-slate-200");
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (viewId === "financeiro") {
+        filtrarTabelaCanhotos();
+      }
+    }
+
+    function abrirConfiguracoes() {
+      navegarPara("configuracoes");
+    }
+
+    /* CONTROLE DE SENHA DO FINANCEIRO */
+    function solicitarAcessoFinanceiro() {
+      const senhaCorreta = localStorage.getItem(STORAGE_KEY_SENHA_FIN) || "ameripan123";
+      
+      // Se já logou nesta sessão, permite direto
+      if (sessionStorage.getItem("ameripan_financeiro_logado") === "true") {
+        navegarPara("financeiro");
+        return;
+      }
+
+      const input = prompt("🔐 Digite a senha de acesso ao Painel do Financeiro Ameripan:");
+      if (input === null) return; // cancelou
+
+      if (input.trim() === senhaCorreta.trim()) {
+        sessionStorage.setItem("ameripan_financeiro_logado", "true");
+        navegarPara("financeiro");
+      } else {
+        alert("❌ Senha incorreta! Acesso restrito ao Setor Financeiro.");
+      }
+    }
+
+    /* ALTERNAR TIPO: VENDEDOR VS MOTORISTA */
+    function alternarTipoResponsavel(tipo) {
+      const labelVend = document.getElementById("label-role-vendedor");
+      const labelMot = document.getElementById("label-role-motorista");
+      const blocoVend = document.getElementById("bloco-vendedor");
+      const blocoMot = document.getElementById("bloco-motorista");
+
+      if (tipo === "VENDEDOR") {
+        labelVend.classList.add("border-blue-700", "bg-blue-50/50");
+        labelVend.classList.remove("border-slate-200");
+        labelMot.classList.remove("border-blue-700", "bg-blue-50/50");
+        labelMot.classList.add("border-slate-200");
+        
+        blocoVend.classList.remove("hidden");
+        blocoMot.classList.add("hidden");
+      } else {
+        labelMot.classList.add("border-blue-700", "bg-blue-50/50");
+        labelMot.classList.remove("border-slate-200");
+        labelVend.classList.remove("border-blue-700", "bg-blue-50/50");
+        labelVend.classList.add("border-slate-200");
+
+        blocoMot.classList.remove("hidden");
+        blocoVend.classList.add("hidden");
+      }
+    }
+
+    /* BUSCA VENDEDOR PELO CÓDIGO (AUTOCOMPLETE OU AVISO DE NÃO CADASTRADO) */
+    function buscarVendedorPorCodigo(codInput) {
+      const codLimpo = String(codInput).trim();
+      const cardEncontrado = document.getElementById("card-vendedor-encontrado");
+      const alertaNaoEncontrado = document.getElementById("alerta-vendedor-nao-encontrado");
+      const telInput = document.getElementById("input-vend-telefone");
+
+      if (!codLimpo) {
+        cardEncontrado.classList.add("hidden");
+        alertaNaoEncontrado.classList.add("hidden");
+        return;
+      }
+
+      const vend = vendedores.find(v => String(v.cod).trim() === codLimpo);
+
+      if (vend) {
+        cardEncontrado.classList.remove("hidden");
+        alertaNaoEncontrado.classList.add("hidden");
+        document.getElementById("nome-vendedor-display").textContent = vend.nome;
+        document.getElementById("equipe-vendedor-display").textContent = vend.equipe;
+        
+        if (vend.telefone && !telInput.value) {
+          telInput.value = vend.telefone;
+        }
+      } else {
+        cardEncontrado.classList.add("hidden");
+        alertaNaoEncontrado.classList.remove("hidden");
+      }
+    }
+
+    /* PROCESSAMENTO DA FOTO COM COMPRESSÃO INTELIGENTE NO CLIENTE */
+    function processarFoto(inputElem) {
+      if (!inputElem.files || !inputElem.files[0]) return;
+      
+      const file = inputElem.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const imgTemp = new Image();
+        imgTemp.onload = function() {
+          // Redimensionamento Inteligente (Max 1280px para não estourar payload do Apps Script)
+          const MAX_WIDTH = 1280;
+          const MAX_HEIGHT = 1280;
+          let width = imgTemp.width;
+          let height = imgTemp.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(imgTemp, 0, 0, width, height);
+
+          // Compressão em JPEG 0.75 (alta nitidez para canhotos, tamanho ~150KB)
+          fotoBase64Atual = canvas.toDataURL("image/jpeg", 0.75);
+
+          // Atualiza UI
+          document.getElementById("img-preview").src = fotoBase64Atual;
+          document.getElementById("foto-preview-container").classList.remove("hidden");
+          document.getElementById("foto-upload-actions").classList.add("hidden");
+        };
+        imgTemp.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removerFoto() {
+      fotoBase64Atual = "";
+      document.getElementById("img-preview").src = "#";
+      document.getElementById("foto-preview-container").classList.add("hidden");
+      document.getElementById("foto-upload-actions").classList.remove("hidden");
+      document.getElementById("input-foto-camera").value = "";
+      document.getElementById("input-foto-galeria").value = "";
+    }
+
+    /* ENVIAR CANHOTO (POST PARA GOOGLE APPS SCRIPT / LOCAL) */
+    async function enviarCanhoto(event) {
+      event.preventDefault();
+
+      const tipoResponsavel = document.querySelector('input[name="tipo_responsavel"]:checked').value;
+      const numPedido = document.getElementById("input-numero-pedido").value.trim();
+      const nomeCliente = document.getElementById("input-nome-cliente").value.trim();
+      const previsao = document.getElementById("input-previsao-entrega").value.trim();
+      const btnSubmit = document.getElementById("btn-submit-canhoto");
+
+      if (!numPedido) {
+        alert("Por favor, preencha o número do pedido!");
+        return;
+      }
+
+      if (!fotoBase64Atual) {
+        alert("Atenção: É obrigatório fotografar ou anexar o canhoto assinado!");
+        return;
+      }
+
+      let codVendedor = "";
+      let nomeResponsavel = "";
+      let telefone = "";
+
+      if (tipoResponsavel === "VENDEDOR") {
+        codVendedor = document.getElementById("input-cod-vendedor").value.trim();
+        const vend = vendedores.find(v => String(v.cod).trim() === codVendedor);
+
+        if (vend) {
+          nomeResponsavel = vend.nome;
+        } else {
+          // Vendedor novo que preencheu manualmente
+          const nomeNovo = document.getElementById("input-vend-nome-novo").value.trim();
+          if (!nomeNovo) {
+            alert("Como o código não foi encontrado, por favor digite seu Nome Completo!");
+            return;
+          }
+          nomeResponsavel = nomeNovo.toUpperCase();
+          const equipeNova = document.getElementById("select-vend-equipe-novo").value;
+          
+          // Adiciona à lista de vendedores local
+          vendedores.push({ cod: codVendedor || String(Date.now()).slice(-4), nome: nomeResponsavel, equipe: equipeNova, telefone: document.getElementById("input-vend-telefone").value });
+          salvarCacheVendedores();
+        }
+        telefone = document.getElementById("input-vend-telefone").value.trim();
+      } else {
+        nomeResponsavel = document.getElementById("input-motorista-nome").value.trim();
+        telefone = document.getElementById("input-motorista-telefone").value.trim();
+
+        if (!nomeResponsavel) {
+          alert("Por favor, informe o Nome Completo do Motorista!");
+          return;
+        }
+      }
+
+      // Payload estruturado
+      const novoCanhoto = {
+        action: "salvarCanhoto",
+        num_pedido: numPedido,
+        tipo_responsavel: tipoResponsavel,
+        cod_vendedor: codVendedor,
+        nome_responsavel: nomeResponsavel,
+        telefone: telefone,
+        cliente: nomeCliente,
+        previsao_entrega: previsao,
+        obs_cobranca: "",
+        foto_base64: fotoBase64Atual
+      };
+
+      // Feedback visual de carregamento
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Enviando canhoto e foto...';
+
+      const apiUrl = getApiUrl();
+
+      if (apiUrl && apiUrl.startsWith("http")) {
+        try {
+          const res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(novoCanhoto)
+          });
+          const json = await res.json();
+          
+          if (json.success) {
+            alert("✅ Canhoto registrado com sucesso no Financeiro da Ameripan!");
+            // Adiciona localmente também
+            novoCanhoto.id = json.data.id;
+            novoCanhoto.data_registro = json.data.data_registro;
+            novoCanhoto.status = "PENDENTE";
+            novoCanhoto.dias_pendente = 0;
+            novoCanhoto.url_foto = json.data.url_foto || fotoBase64Atual;
+            canhotos.unshift(novoCanhoto);
+            salvarCanhotosLocalmente();
+          } else {
+            alert("Erro ao salvar no servidor: " + (json.error || "Tente novamente."));
+          }
+        } catch (err) {
+          console.error("Erro na API, salvando localmente:", err);
+          salvarRegistroCanhotoLocalmente(novoCanhoto);
+          alert("⚠️ Sem conexão direta com o Google Sheets, o canhoto foi salvo com segurança na memória local do seu dispositivo!");
+        }
+      } else {
+        // Salva modo local
+        salvarRegistroCanhotoLocalmente(novoCanhoto);
+        alert("✅ Canhoto registrado com sucesso no sistema local!");
+      }
+
+      // Limpar formulário
+      document.getElementById("form-canhoto").reset();
+      removerFoto();
+      alternarTipoResponsavel("VENDEDOR");
+      document.getElementById("card-vendedor-encontrado").classList.add("hidden");
+      document.getElementById("alerta-vendedor-nao-encontrado").classList.add("hidden");
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-lg"></i><span>REGISTRAR CANHOTO PENDENTE</span>';
+    }
+
+    function salvarRegistroCanhotoLocalmente(data) {
+      const idUnico = "CNH-" + new Date().toISOString().slice(2, 10).replace(/-/g, "") + "-" + Math.floor(1000 + Math.random() * 9000);
+      const agora = new Date().toISOString().slice(0, 16).replace("T", " ");
+      
+      const item = {
+        id: idUnico,
+        data_registro: agora,
+        num_pedido: data.num_pedido,
+        tipo_responsavel: data.tipo_responsavel,
+        cod_vendedor: data.cod_vendedor,
+        nome_responsavel: data.nome_responsavel,
+        telefone: data.telefone,
+        cliente: data.cliente,
+        status: "PENDENTE",
+        dias_pendente: 0,
+        data_baixa: "",
+        responsavel_baixa: "",
+        previsao_entrega: data.previsao_entrega,
+        obs_cobranca: "",
+        url_foto: data.foto_base64
+      };
+      
+      canhotos.unshift(item);
+      salvarCanhotosLocalmente();
+    }
+
+    /* CONSULTAR STATUS POR PEDIDO */
+    function executarConsultaPedido() {
+      const termo = document.getElementById("input-busca-pedido").value.trim().toLowerCase();
+      const container = document.getElementById("container-resultados-consulta");
+      container.innerHTML = "";
+
+      if (!termo) {
+        alert("Digite um número de pedido ou código para consultar!");
+        return;
+      }
+
+      const resultados = canhotos.filter(c => 
+        String(c.num_pedido).toLowerCase().includes(termo) || 
+        String(c.cod_vendedor).toLowerCase().includes(termo) ||
+        String(c.nome_responsavel).toLowerCase().includes(termo)
+      );
+
+      if (resultados.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-xl p-8 text-center border border-slate-200">
+            <i class="fa-solid fa-file-circle-question text-4xl text-slate-300 mb-2"></i>
+            <h4 class="font-bold text-slate-700">Nenhum canhoto encontrado com o termo "${termo}"</h4>
+            <p class="text-xs text-slate-500 mt-1">Verifique o número digitado ou faça o lançamento do canhoto se ainda não foi registrado.</p>
+          </div>
+        `;
+        return;
+      }
+
+      resultados.forEach(item => {
+        const isRecebido = item.status === "RECEBIDO";
+        const card = document.createElement("div");
+        card.className = "bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4";
+        
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+            <div>
+              <div class="text-xs font-bold text-slate-400">PEDIDO AMERIPAN</div>
+              <div class="text-2xl font-black text-blue-900">#${item.num_pedido}</div>
+              ${item.cliente ? `<div class="text-xs font-bold text-slate-600">${item.cliente}</div>` : ''}
+            </div>
+            <div>
+              ${isRecebido 
+                ? '<span class="px-3 py-1 rounded-full text-xs font-bold badge-recebido"><i class="fa-solid fa-circle-check mr-1"></i>RECEBIDO NO FINANCEIRO</span>'
+                : '<span class="px-3 py-1 rounded-full text-xs font-bold badge-pendente"><i class="fa-solid fa-clock mr-1"></i>PENDENTE DE ENTREGA FÍSICA</span>'
+              }
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <strong class="text-slate-500 block">Responsável pelo Envio:</strong>
+              <span class="font-bold text-slate-800">${item.nome_responsavel}</span> 
+              <span class="text-[10px] text-slate-400">(${item.tipo_responsavel}${item.cod_vendedor ? ' - Cód ' + item.cod_vendedor : ''})</span>
+            </div>
+            <div>
+              <strong class="text-slate-500 block">Data de Registro:</strong>
+              <span class="text-slate-700 font-medium">${item.data_registro}</span>
+            </div>
+            ${isRecebido ? `
+              <div class="sm:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <div class="font-bold text-emerald-900 text-xs"><i class="fa-solid fa-stamp mr-1"></i>Baixa Física Realizada!</div>
+                <div class="text-emerald-800 text-[11px] mt-0.5">Recebido por: <strong>${item.responsavel_baixa || 'Financeiro'}</strong> em ${item.data_baixa || '--'}</div>
+              </div>
+            ` : `
+              <div class="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div class="font-bold text-amber-900 text-xs"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Aguardando entrega física do papel</div>
+                <div class="text-amber-800 text-[11px] mt-0.5">O canhoto de papel ainda não chegou fisicamente nas mãos do Financeiro Ameripan. Dias em posse: <strong>${item.dias_pendente} dia(s)</strong>.</div>
+              </div>
+            `}
+          </div>
+
+          ${item.url_foto ? `
+            <div class="pt-2">
+              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition flex items-center space-x-1.5 border border-slate-300">
+                <i class="fa-solid fa-image text-blue-600"></i>
+                <span>Ver Foto do Canhoto</span>
+              </button>
+            </div>
+          ` : ''}
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    /* RENDERIZAÇÃO DA TABELA DO FINANCEIRO & FILTROS */
+    function filtrarTabelaCanhotos() {
+      const buscaTexto = document.getElementById("filtro-busca-texto").value.trim().toLowerCase();
+      const filtroStatus = document.getElementById("filtro-status").value;
+      const filtroDias = document.getElementById("filtro-dias").value;
+
+      let filtrados = canhotos.filter(item => {
+        // Filtro texto
+        if (buscaTexto) {
+          const match = String(item.num_pedido).toLowerCase().includes(buscaTexto) ||
+                        String(item.nome_responsavel).toLowerCase().includes(buscaTexto) ||
+                        String(item.cod_vendedor).toLowerCase().includes(buscaTexto) ||
+                        String(item.cliente || "").toLowerCase().includes(buscaTexto);
+          if (!match) return false;
+        }
+
+        // Filtro status
+        if (filtroStatus !== "TODOS" && item.status !== filtroStatus) {
+          return false;
+        }
+
+        // Filtro dias em atraso
+        if (filtroDias === "ATRASO_3" && (item.status === "RECEBIDO" || item.dias_pendente <= 3)) {
+          return false;
+        }
+        if (filtroDias === "ATRASO_7" && (item.status === "RECEBIDO" || item.dias_pendente <= 7)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      renderizarTabelaCanhotos(filtrados);
+      atualizarKpis();
+    }
+
+    function renderizarTabelaCanhotos(lista) {
+      const tbody = document.getElementById("tabela-canhotos-body");
+      const vazioFeedback = document.getElementById("tabela-vazia-feedback");
+      tbody.innerHTML = "";
+
+      if (lista.length === 0) {
+        vazioFeedback.classList.remove("hidden");
+        return;
+      }
+      vazioFeedback.classList.add("hidden");
+
+      lista.forEach(item => {
+        const isRecebido = item.status === "RECEBIDO";
+        const isAtrasado = !isRecebido && item.dias_pendente >= 3;
+        
+        const tr = document.createElement("tr");
+        tr.className = `hover:bg-slate-50 transition border-b border-slate-100 ${isAtrasado ? 'bg-rose-50/20' : ''}`;
+
+        tr.innerHTML = `
+          <td class="py-3 px-4">
+            ${isRecebido 
+              ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-recebido"><i class="fa-solid fa-check mr-1"></i>RECEBIDO</span>'
+              : (isAtrasado 
+                  ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-atraso"><i class="fa-solid fa-triangle-exclamation mr-1"></i>PENDENTE (${item.dias_pendente}d)</span>`
+                  : `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-pendente"><i class="fa-solid fa-clock mr-1"></i>PENDENTE</span>`
+                )
+            }
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="font-extrabold text-blue-900 text-sm">#${item.num_pedido}</div>
+            <div class="text-[11px] text-slate-500 font-medium truncate max-w-[140px]">${item.cliente || 'Sem cliente especificado'}</div>
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="font-bold text-slate-800">${item.nome_responsavel}</div>
+            <div class="text-[10px] text-slate-500 flex items-center space-x-1">
+              <span class="px-1.5 py-0.2 bg-slate-200 rounded font-semibold text-slate-700">${item.tipo_responsavel}</span>
+              ${item.cod_vendedor ? `<span>Cód: <strong>${item.cod_vendedor}</strong></span>` : ''}
+            </div>
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="text-xs text-slate-700">${item.data_registro}</div>
+            ${!isRecebido 
+              ? `<div class="text-[11px] font-bold ${item.dias_pendente >= 3 ? 'text-rose-600' : 'text-amber-600'}">Há ${item.dias_pendente} dia(s) com ele</div>`
+              : `<div class="text-[11px] text-emerald-700">Baixado: ${item.data_baixa || '--'}</div>`
+            }
+          </td>
+
+          <td class="py-3 px-3 text-center">
+            ${item.url_foto ? `
+              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="p-1.5 rounded-lg hover:bg-slate-200 transition text-blue-600" title="Ver foto">
+                <i class="fa-solid fa-image text-lg"></i>
+              </button>
+            ` : '<span class="text-slate-300 text-xs">Sem foto</span>'}
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="text-xs text-slate-800 font-medium">${item.previsao_entrega || '<span class="text-slate-400 italic">Sem previsão</span>'}</div>
+            ${item.obs_cobranca ? `<div class="text-[11px] text-blue-700 mt-0.5"><i class="fa-solid fa-comment-dots mr-1"></i>${item.obs_cobranca}</div>` : ''}
+          </td>
+
+          <td class="py-3 px-4 text-center no-print">
+            <div class="flex items-center justify-center space-x-1.5">
+              ${!isRecebido ? `
+                <button onclick="abrirModalBaixa('${item.id}', '${item.num_pedido}')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-sm" title="Dar Baixa Física">
+                  <i class="fa-solid fa-stamp"></i>
+                  <span class="hidden lg:inline">Dar Baixa</span>
+                </button>
+                <button onclick="prepararCobrancaWhatsApp('${item.id}')" class="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg text-xs font-bold transition flex items-center space-x-1 border border-emerald-300" title="Cobrar por WhatsApp">
+                  <i class="fa-brands fa-whatsapp text-sm text-emerald-600"></i>
+                  <span class="hidden lg:inline">Cobrar</span>
+                </button>
+              ` : `
+                <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                  <i class="fa-solid fa-circle-check mr-1"></i>Concluído
+                </span>
+              `}
+            </div>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function atualizarKpis() {
+      const total = canhotos.length;
+      const pendentes = canhotos.filter(c => c.status === "PENDENTE").length;
+      const atrasados = canhotos.filter(c => c.status === "PENDENTE" && c.dias_pendente >= 3).length;
+      const recebidos = canhotos.filter(c => c.status === "RECEBIDO").length;
+
+      document.getElementById("kpi-total").textContent = total;
+      document.getElementById("kpi-pendentes").textContent = pendentes;
+      document.getElementById("kpi-atrasados").textContent = atrasados;
+      document.getElementById("kpi-recebidos").textContent = recebidos;
+    }
+
+    /* MODAL DE BAIXA FÍSICA */
+    function abrirModalBaixa(id, pedido) {
+      itemSelecionadoParaBaixa = canhotos.find(c => c.id === id);
+      document.getElementById("modal-baixa-pedido").textContent = "#" + pedido;
+      document.getElementById("modal-baixa-operador").value = sessionStorage.getItem("ultimo_operador_financeiro") || "Amanda Financeiro";
+      document.getElementById("modal-baixa").classList.remove("hidden");
+    }
+
+    function fecharModalBaixa() {
+      document.getElementById("modal-baixa").classList.add("hidden");
+      itemSelecionadoParaBaixa = null;
+    }
+
+    async function confirmarBaixaEfetiva() {
+      if (!itemSelecionadoParaBaixa) return;
+      const operador = document.getElementById("modal-baixa-operador").value.trim() || "Financeiro Ameripan";
+      sessionStorage.setItem("ultimo_operador_financeiro", operador);
+
+      const apiUrl = getApiUrl();
+      const agora = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+      if (apiUrl && apiUrl.startsWith("http")) {
+        try {
+          const res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "darBaixa",
+              id: itemSelecionadoParaBaixa.id,
+              responsavel_baixa: operador
+            })
+          });
+          const json = await res.json();
+          if (!json.success) {
+            console.warn("Aviso na API:", json.error);
+          }
+        } catch (e) {
+          console.error("Erro ao enviar baixa para API:", e);
+        }
+      }
+
+      // Atualiza estado local
+      itemSelecionadoParaBaixa.status = "RECEBIDO";
+      itemSelecionadoParaBaixa.data_baixa = agora;
+      itemSelecionadoParaBaixa.responsavel_baixa = operador;
+      itemSelecionadoParaBaixa.dias_pendente = 0;
+      salvarCanhotosLocalmente();
+
+      fecharModalBaixa();
+      filtrarTabelaCanhotos();
+      alert("✅ Baixa registrada com sucesso! Documento físico conferido.");
+    }
+
+    /* MODAL & MENSAGEM AUTOMÁTICA DE WHATSAPP */
+    function prepararCobrancaWhatsApp(id) {
+      const item = canhotos.find(c => c.id === id);
+      if (!item) return;
+      itemSelecionadoParaWhatsApp = item;
+
+      // Localiza o telefone do vendedor se estiver sem
+      let tel = item.telefone || "";
+      if (!tel && item.tipo_responsavel === "VENDEDOR" && item.cod_vendedor) {
+        const v = vendedores.find(x => String(x.cod).trim() === String(item.cod_vendedor).trim());
+        if (v && v.telefone) tel = v.telefone;
+      }
+
+      document.getElementById("wpp-modal-nome").textContent = item.nome_responsavel;
+      document.getElementById("wpp-modal-tel").textContent = tel || "(Telefone não cadastrado)";
+      document.getElementById("wpp-modal-pedido").textContent = "#" + item.num_pedido;
+      document.getElementById("wpp-modal-dias").textContent = item.dias_pendente + " dia(s) em posse";
+      document.getElementById("wpp-modal-previsao-input").value = item.previsao_entrega || "";
+
+      // Monta mensagem automática profissional com formatação Ameripan
+      const msgPadrao = `Olá ${item.nome_responsavel}, tudo bem?
+
+Aqui é do Setor Financeiro da *Ameripan Distribuidora*.
+
+Consta em nosso sistema que o canhoto físico do *Pedido #${item.num_pedido}* (registrado em ${item.data_registro}, há ${item.dias_pendente} dias) ainda não nos foi entregue fisicamente.
+
+Precisamos do papel em mãos para a conciliação fiscal e fechamento contábil. Qual é a sua previsão para nos entregar esse canhoto aqui no financeiro?
+
+Ficamos no aguardo. Muito obrigado!`;
+      document.getElementById("wpp-modal-texto").value = msgPadrao;
+
+      document.getElementById("modal-whatsapp").classList.remove("hidden");
+    }
+
+    function fecharModalWhatsApp() {
+      document.getElementById("modal-whatsapp").classList.add("hidden");
+      itemSelecionadoParaWhatsApp = null;
+    }
+
+    async function dispararWhatsAppComGravacao() {
+      if (!itemSelecionadoParaWhatsApp) return;
+
+      const texto = document.getElementById("wpp-modal-texto").value.trim();
+      const novaPrevisao = document.getElementById("wpp-modal-previsao-input").value.trim();
+      let tel = itemSelecionadoParaWhatsApp.telefone || "";
+
+      if (!tel && itemSelecionadoParaWhatsApp.cod_vendedor) {
+        const v = vendedores.find(x => String(x.cod).trim() === String(itemSelecionadoParaWhatsApp.cod_vendedor).trim());
+        if (v && v.telefone) tel = v.telefone;
+      }
+
+      // Atualiza previsão e histórico
+      itemSelecionadoParaWhatsApp.previsao_entrega = novaPrevisao;
+      itemSelecionadoParaWhatsApp.obs_cobranca = "Cobrado via WhatsApp em " + new Date().toLocaleDateString("pt-BR");
+      salvarCanhotosLocalmente();
+
+      // Grava no backend se conectado
+      const apiUrl = getApiUrl();
+      if (apiUrl && apiUrl.startsWith("http")) {
+        fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "salvarObservacao",
+            id: itemSelecionadoParaWhatsApp.id,
+            previsao_entrega: novaPrevisao,
+            obs_cobranca: itemSelecionadoParaWhatsApp.obs_cobranca
+          })
+        }).catch(e => console.error(e));
+      }
+
+      // Sanitiza telefone (remove não-dígitos)
+      const telNumeros = tel.replace(/[^0-9]/g, "");
+      let telFinal = telNumeros;
+      if (telFinal.length === 10 || telFinal.length === 11) {
+        telFinal = "55" + telFinal;
+      }
+
+      const encodedMsg = encodeURIComponent(texto);
+      let urlWhatsApp = "";
+
+      if (telFinal && telFinal.length >= 12) {
+        urlWhatsApp = `https://api.whatsapp.com/send?phone=${telFinal}&text=${encodedMsg}`;
+      } else {
+        // Abre sem número específico se não tiver telefone cadastrado
+        alert("Atenção: Vendedor/Motorista sem número cadastrado. O WhatsApp será aberto para você selecionar o contato.");
+        urlWhatsApp = `https://api.whatsapp.com/send?text=${encodedMsg}`;
+      }
+
+      window.open(urlWhatsApp, "_blank");
+      fecharModalWhatsApp();
+      filtrarTabelaCanhotos();
+    }
+
+    /* MODAL DE FOTO */
+    function abrirModalFoto(url, titulo) {
+      document.getElementById("modal-foto-img").src = url;
+      document.getElementById("modal-foto-titulo").textContent = titulo || "Visualização do Canhoto";
+      document.getElementById("modal-foto-link-download").href = url;
+      document.getElementById("modal-foto").classList.remove("hidden");
+    }
+
+    function fecharModalFoto() {
+      document.getElementById("modal-foto").classList.add("hidden");
+      document.getElementById("modal-foto-img").src = "#";
+    }
+
+    /* MODAL DE BUSCA RÁPIDA DE VENDEDOR */
+    function abrirModalBuscaVendedor() {
+      document.getElementById("input-filtro-modal-vendedor").value = "";
+      filtrarListaModalVendedores();
+      document.getElementById("modal-lista-vendedores").classList.remove("hidden");
+    }
+
+    function fecharModalBuscaVendedor() {
+      document.getElementById("modal-lista-vendedores").classList.add("hidden");
+    }
+
+    function filtrarListaModalVendedores() {
+      const filtro = document.getElementById("input-filtro-modal-vendedor").value.toLowerCase();
+      const container = document.getElementById("container-vendedores-lista-modal");
+      container.innerHTML = "";
+
+      const filtrados = vendedores.filter(v => 
+        String(v.cod).includes(filtro) || 
+        v.nome.toLowerCase().includes(filtro) ||
+        v.equipe.toLowerCase().includes(filtro)
+      );
+
+      filtrados.forEach(v => {
+        const item = document.createElement("div");
+        item.className = "p-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition";
+        item.onclick = () => {
+          document.getElementById("input-cod-vendedor").value = v.cod;
+          buscarVendedorPorCodigo(v.cod);
+          fecharModalBuscaVendedor();
+        };
+        item.innerHTML = `
+          <div>
+            <div class="font-bold text-slate-800">${v.nome}</div>
+            <div class="text-[11px] text-slate-500">${v.equipe} ${v.telefone ? '• Tel: ' + v.telefone : ''}</div>
+          </div>
+          <span class="px-2 py-1 bg-blue-100 text-blue-800 font-black rounded text-xs">Cód ${v.cod}</span>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    /* EXPORTAÇÃO EXCEL (.XLSX) VIA SHEETJS */
+    function exportarExcelCanhotos() {
+      if (canhotos.length === 0) {
+        alert("Não há dados para exportar!");
+        return;
+      }
+
+      const dadosPlanilha = canhotos.map(item => ({
+        "ID_CANHOTO": item.id,
+        "DATA_REGISTRO": item.data_registro,
+        "NUM_PEDIDO": item.num_pedido,
+        "TIPO": item.tipo_responsavel,
+        "COD_VENDEDOR": item.cod_vendedor || "",
+        "NOME_RESPONSAVEL": item.nome_responsavel,
+        "TELEFONE": item.telefone || "",
+        "CLIENTE": item.cliente || "",
+        "STATUS": item.status,
+        "DIAS_PENDENTE": item.dias_pendente,
+        "DATA_BAIXA": item.data_baixa || "",
+        "RESPONSAVEL_BAIXA": item.responsavel_baixa || "",
+        "PREVISAO_ENTREGA": item.previsao_entrega || "",
+        "OBSERVACOES_COBRANCA": item.obs_cobranca || "",
+        "LINK_FOTO": item.url_foto || ""
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dadosPlanilha);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "CANHOTOS_AMERIPAN");
+
+      const dataHoje = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Relatorio_Canhotos_Ameripan_${dataHoje}.xlsx`);
+    }
+
+    /* GESTÃO DE VENDEDORES NA ABA DE CONFIGURAÇÕES */
+    function renderizarTabelaVendedoresConfig() {
+      const tbody = document.getElementById("tbody-config-vendedores");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      const termo = (document.getElementById("busca-lista-vendedores") ? document.getElementById("busca-lista-vendedores").value : "").toLowerCase();
+
+      const filtrados = vendedores.filter(v => 
+        String(v.cod).includes(termo) || 
+        v.nome.toLowerCase().includes(termo) || 
+        v.equipe.toLowerCase().includes(termo)
+      );
+
+      filtrados.forEach((v, index) => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50 border-b border-slate-100";
+        tr.innerHTML = `
+          <td class="p-2.5 font-bold text-blue-900">${v.cod}</td>
+          <td class="p-2.5 font-semibold text-slate-800">${v.nome}</td>
+          <td class="p-2.5 text-slate-500">${v.equipe}</td>
+          <td class="p-2.5">
+            <input type="tel" value="${v.telefone || ''}" placeholder="Ex: 19999999999" class="px-2 py-1 border border-slate-300 rounded text-xs w-36 font-mono" onchange="atualizarTelefoneVendedorLocal('${v.cod}', this.value)">
+          </td>
+          <td class="p-2.5 text-center">
+            <button onclick="dispararWppDireto('${v.telefone}', '${v.nome}')" class="text-emerald-600 hover:text-emerald-800 p-1" title="Testar WhatsApp">
+              <i class="fa-brands fa-whatsapp text-base"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function atualizarTelefoneVendedorLocal(cod, novoTel) {
+      const v = vendedores.find(x => String(x.cod).trim() === String(cod).trim());
+      if (v) {
+        v.telefone = novoTel.trim();
+        salvarCacheVendedores();
+      }
+    }
+
+    function dispararWppDireto(tel, nome) {
+      if (!tel) {
+        alert("Preencha o telefone deste vendedor primeiro!");
+        return;
+      }
+      const num = tel.replace(/[^0-9]/g, "");
+      window.open(`https://api.whatsapp.com/send?phone=55${num}&text=Olá%20${encodeURIComponent(nome)}!`, "_blank");
+    }
+
+    function abrirModalNovoVendedor() {
+      document.getElementById("modal-novo-vendedor").classList.remove("hidden");
+    }
+
+    function fecharModalNovoVendedor() {
+      document.getElementById("modal-novo-vendedor").classList.add("hidden");
+    }
+
+    function salvarNovoVendedorAvulso(e) {
+      e.preventDefault();
+      const cod = document.getElementById("modal-novo-vend-cod").value.trim();
+      const nome = document.getElementById("modal-novo-vend-nome").value.trim().toUpperCase();
+      const equipe = document.getElementById("modal-novo-vend-equipe").value.trim().toUpperCase();
+      const tel = document.getElementById("modal-novo-vend-tel").value.trim();
+
+      if (vendedores.some(v => String(v.cod) === cod)) {
+        alert("Já existe um vendedor com esse código!");
+        return;
+      }
+
+      const novo = { cod, nome, equipe, telefone: tel };
+      vendedores.push(novo);
+      salvarCacheVendedores();
+
+      // Se conectado ao backend, envia
+      const apiUrl = getApiUrl();
+      if (apiUrl && apiUrl.startsWith("http")) {
+        fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "cadastrarVendedor",
+            cod: cod,
+            nome: nome,
+            equipe: equipe,
+            telefone: tel
+          })
+        }).catch(err => console.error(err));
+      }
+
+      fecharModalNovoVendedor();
+      renderizarTabelaVendedoresConfig();
+      alert("✅ Vendedor adicionado com sucesso!");
+    }
+
+    /* CONFIGURAÇÕES DE API & SINCRONIZAÇÃO */
+    function salvarConfigApi() {
+      const url = document.getElementById("config-api-url").value.trim();
+      if (!url) {
+        alert("Por favor, cole a URL gerada na publicação do Google Apps Script!");
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_API, url);
+      verificarConexaoBackend(true);
+    }
+
+    function limparConfigApi() {
+      localStorage.removeItem(STORAGE_KEY_API);
+      document.getElementById("config-api-url").value = "";
+      verificarConexaoBackend();
+      alert("Modo demonstração local ativado com sucesso!");
+    }
+
+    function salvarSenhaFinanceiro() {
+      const novaSenha = document.getElementById("config-senha-financeiro").value.trim();
+      if (!novaSenha) {
+        alert("A senha não pode ser vazia!");
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_SENHA_FIN, novaSenha);
+      alert("✅ Senha do Painel Financeiro atualizada com sucesso!");
+    }
+
+    async function verificarConexaoBackend(notificar = false) {
+      const url = getApiUrl();
+      const banner = document.getElementById("banner-conexao");
+      const badge = document.getElementById("badge-api-status");
+
+      if (!url || !url.startsWith("http")) {
+        banner.classList.remove("hidden");
+        badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800";
+        badge.textContent = "Modo Demonstração (Local)";
+        return;
+      }
+
+      badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-800";
+      badge.textContent = "Testando conexão...";
+
+      try {
+        const res = await fetch(url + "?action=ping");
+        const json = await res.json();
+        if (json.success) {
+          banner.classList.add("hidden");
+          badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800";
+          badge.textContent = "● Conectado ao Google Sheets";
+          if (notificar) alert("✅ Conexão estabelecida com sucesso com o Google Apps Script!");
+          sincronizarDadosComBackend(false);
+        } else {
+          throw new Error("Resposta inválida da API");
+        }
+      } catch (err) {
+        console.warn("Falha no ping da API:", err);
+        banner.classList.remove("hidden");
+        document.getElementById("texto-banner-conexao").textContent = "Aviso: Não foi possível sincronizar com o Google Apps Script. Verifique permissões de implantação.";
+        badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-800";
+        badge.textContent = "Erro de Conexão";
+        if (notificar) alert("❌ Não foi possível conectar ao Google Apps Script. Verifique se publicou com permissão 'Qualquer pessoa'.");
+      }
+    }
+
+    async function sincronizarDadosComBackend(exibirAlerta = true) {
+      const url = getApiUrl();
+      if (!url || !url.startsWith("http")) return;
+
+      try {
+        // 1. Busca Canhotos
+        const resCanh = await fetch(url + "?action=getCanhotos");
+        const jsonCanh = await resCanh.json();
+        if (jsonCanh.success && Array.isArray(jsonCanh.data) && jsonCanh.data.length > 0) {
+          canhotos = jsonCanh.data;
+          salvarCanhotosLocalmente();
+          filtrarTabelaCanhotos();
+        }
+
+        // 2. Busca Vendedores
+        const resVend = await fetch(url + "?action=getVendedores");
+        const jsonVend = await resVend.json();
+        if (jsonVend.success && Array.isArray(jsonVend.data) && jsonVend.data.length > 0) {
+          vendedores = jsonVend.data;
+          salvarCacheVendedores();
+          renderizarTabelaVendedoresConfig();
+        }
+
+        if (exibirAlerta) alert("✅ Dados sincronizados com o Google Sheets em tempo real!");
+      } catch (e) {
+        console.error("Erro na sincronização:", e);
+        if (exibirAlerta) alert("⚠️ Houve um problema ao sincronizar. Usando cache local.");
+      }
+    }
+
+    /* MÁSCARA / FORMATADOR DE TELEFONE */
+    function formatarTelefone(input) {
+      let v = input.value.replace(/\D/g, "");
+      if (v.length > 11) v = v.substring(0, 11);
+      if (v.length > 10) {
+        input.value = `(${v.substring(0,2)}) ${v.substring(2,7)}-${v.substring(7)}`;
+      } else if (v.length > 6) {
+        input.value = `(${v.substring(0,2)}) ${v.substring(2,6)}-${v.substring(6)}`;
+      } else if (v.length > 2) {
+        input.value = `(${v.substring(0,2)}) ${v.substring(2)}`;
+      } else {
+        input.value = v;
+      }
+    }
+  </script>
+</body>
+</html>
