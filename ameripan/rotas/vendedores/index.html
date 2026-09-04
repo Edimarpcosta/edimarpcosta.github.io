@@ -97,6 +97,12 @@
       <button onclick="mudarAba('minha-rota')" id="tabBtnRota" class="flex-1 py-2.5 text-center flex items-center justify-center gap-1.5 transition hover:text-white">
         <i class="ph ph-compass text-base"></i>
         <span>Minha Rota</span>
+        <span id="badgeRotaCount" class="hidden text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-blue-600 text-white">0</span>
+      </button>
+      <button onclick="mudarAba('nao-mapeados')" id="tabBtnNaoMapeados" class="flex-1 py-2.5 text-center flex items-center justify-center gap-1.5 transition hover:text-white">
+        <i class="ph ph-map-pin-line text-base"></i>
+        <span>A Mapear</span>
+        <span id="badgeNaoMapeadosCount" class="hidden text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950">0</span>
       </button>
     </nav>
   </header>
@@ -108,6 +114,20 @@
     <!-- ABA 1: VISUALIZADOR OPERACIONAL DA ROTA DO DIA / SEMANA   -->
     <!-- ========================================================= -->
     <section id="abaMinhaRota" class="hidden space-y-3">
+
+      <!-- Banner informativo se houver clientes a mapear -->
+      <div id="bannerNaoMapeadosMinhaRota" class="hidden p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl items-center justify-between gap-2 shadow-2xs">
+        <div class="flex items-center gap-2 text-xs text-amber-900">
+          <i class="ph ph-warning-circle text-lg text-amber-600 flex-shrink-0"></i>
+          <div>
+            <span class="font-bold"><span id="bannerQtdNaoMapeados">0</span> cliente(s) a mapear</span>
+            <p class="text-[11px] text-amber-700">Defina os dias de atendimento organizados por cidade.</p>
+          </div>
+        </div>
+        <button type="button" onclick="mudarAba('nao-mapeados')" class="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition flex-shrink-0 flex items-center gap-1 shadow-2xs">
+          <span>Ver Cidades</span> <i class="ph ph-arrow-right"></i>
+        </button>
+      </div>
       
       <!-- Painel de Filtro Operacional do Dia e Semana -->
       <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-3">
@@ -116,7 +136,10 @@
             <span>Dia da Semana</span>
             <span class="text-blue-600 font-bold" id="diaAtualLabel">Hoje</span>
           </div>
-          <div class="grid grid-cols-6 gap-1">
+          <div class="grid grid-cols-7 gap-1">
+            <input type="radio" name="filtroRotaDia" id="rd_TODOS" value="TODOS" class="hidden btn-check" onchange="renderizarRotaDoDia()">
+            <label for="rd_TODOS" class="cursor-pointer text-center text-[11px] py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition font-bold" title="Ver todos os clientes cadastrados na rota">TODOS</label>
+
             <input type="radio" name="filtroRotaDia" id="rd_SEG" value="SEG" class="hidden btn-check" onchange="renderizarRotaDoDia()">
             <label for="rd_SEG" class="cursor-pointer text-center text-xs py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition">SEG</label>
 
@@ -176,6 +199,56 @@
     </section>
 
     <!-- ========================================================= -->
+    <!-- ABA 3: CLIENTES A MAPEAR POR CIDADE (LOGÍSTICA & ROTAS)   -->
+    <!-- ========================================================= -->
+    <section id="abaNaoMapeados" class="hidden space-y-3">
+
+      <!-- Header informativo da visão -->
+      <div class="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-base">
+              <i class="ph ph-map-pin"></i>
+            </div>
+            <div>
+              <h2 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Clientes a Mapear por Cidade</h2>
+              <p class="text-[11px] text-slate-500">Confronte dias de entrega e visitas atuais para decidir quando atender.</p>
+            </div>
+          </div>
+          <button onclick="recarregarDadosOperacionais()" class="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1 font-medium transition" title="Atualizar dados">
+            <i class="ph ph-arrows-clockwise text-sm"></i> Atualizar
+          </button>
+        </div>
+
+        <!-- Resumo / Estatísticas rápidas -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div class="bg-amber-50/70 border border-amber-100 rounded-lg p-2 flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-amber-900">Pendentes de Rota:</span>
+            <span id="kpiNaoMapeadosTotal" class="font-bold text-amber-700 text-sm">0</span>
+          </div>
+          <div class="bg-blue-50/70 border border-blue-100 rounded-lg p-2 flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-blue-900">Cidades com Pendência:</span>
+            <span id="kpiNaoMapeadosCidades" class="font-bold text-blue-700 text-sm">0</span>
+          </div>
+        </div>
+
+        <!-- Barra de Busca Rápida -->
+        <div class="relative pt-1">
+          <input type="text" id="filtroNaoMapeadosBusca" placeholder="Buscar cliente, código ou cidade..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 pl-8 pr-7 text-xs outline-none focus:ring-2 focus:ring-amber-500" oninput="renderizarNaoMapeados()">
+          <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-slate-400 text-xs"></i>
+          <button type="button" onclick="limparBuscaNaoMapeados()" id="btnLimparBuscaNaoMapeados" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+            <i class="ph ph-x-circle text-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista de Cidades com Clientes a Mapear -->
+      <div id="listaCidadesNaoMapeadas" class="space-y-3">
+        <!-- Injetado dinamicamente via JS -->
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
     <!-- ABA 2: FORMULÁRIO RÁPIDO DE LANÇAMENTO / VISITA          -->
     <!-- ========================================================= -->
     <section id="abaLancarVisita" class="space-y-3">
@@ -205,9 +278,13 @@
 
           <div class="flex gap-2 relative">
             <div class="relative flex-1">
-              <input type="number" id="codCliente" class="w-full p-2 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-8 text-base font-bold text-slate-800" placeholder="Digite o cód. + Enter" oninput="buscarClienteLocal()" onchange="buscarClienteLocal()">
+              <input type="number" id="codCliente" class="w-full p-2 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-8 text-base font-bold text-slate-800" placeholder="Cód. do cliente + Enter" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); buscarClienteLocal(true); }" onblur="if(this.value.trim().length > 0 && statusCliente === 'vazio'){ buscarClienteLocal(false); }">
               <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-slate-400 text-lg"></i>
             </div>
+            <button type="button" onclick="buscarClienteLocal(true)" class="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg font-bold text-xs flex items-center gap-1 shadow-sm transition" title="Buscar cliente por código">
+              <i class="ph ph-magnifying-glass text-base"></i>
+              <span>Buscar</span>
+            </button>
             <button type="button" onclick="limparClienteTotal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 rounded-lg border border-slate-200 transition" title="Limpar campos do cliente">
               <i class="ph ph-eraser text-lg"></i>
             </button>
@@ -216,9 +293,16 @@
           <div id="msgCliente" class="min-h-[1.2rem] mt-1 text-xs"></div>
           
           <div class="mt-2 space-y-1.5 bg-orange-50/50 p-2.5 rounded-lg border border-orange-100">
-            <div>
-              <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_razao">Razão Social</span>
-              <input type="text" id="razaoSocial" class="input-editable w-full font-bold text-slate-800 text-xs focus:bg-white" placeholder="Razão social do cliente...">
+            <div class="relative">
+              <div class="flex justify-between items-center mb-0.5">
+                <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_razao">Razão Social / Pesquisa por Nome</span>
+                <span class="text-[9px] text-slate-400 italic">Pesquisa rápida por nome</span>
+              </div>
+              <div class="relative">
+                <input type="text" id="razaoSocial" class="input-editable w-full font-bold text-slate-800 text-xs focus:bg-white pr-7" placeholder="Digite o nome, razão social ou fantasia..." autocomplete="off" oninput="pesquisarClientesPorNome(this.value)" onfocus="pesquisarClientesPorNome(this.value)" onkeydown="navegarSugestoesClientes(event)">
+                <i class="ph ph-magnifying-glass absolute right-2.5 top-2.5 text-slate-400 text-sm pointer-events-none"></i>
+              </div>
+              <div id="dropdownBuscaRazao" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs"></div>
             </div>
             <div>
               <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_fantasia">Nome Fantasia</span>
@@ -837,19 +921,29 @@
     function mudarAba(aba) {
       const secRota = document.getElementById('abaMinhaRota');
       const secLancar = document.getElementById('abaLancarVisita');
+      const secNaoMapeados = document.getElementById('abaNaoMapeados');
       const btnRota = document.getElementById('tabBtnRota');
       const btnLancar = document.getElementById('tabBtnLancar');
+      const btnNaoMapeados = document.getElementById('tabBtnNaoMapeados');
+
+      secRota.classList.add('hidden');
+      secLancar.classList.add('hidden');
+      if (secNaoMapeados) secNaoMapeados.classList.add('hidden');
+
+      btnRota.classList.remove('tab-active');
+      btnLancar.classList.remove('tab-active');
+      if (btnNaoMapeados) btnNaoMapeados.classList.remove('tab-active');
 
       if (aba === 'minha-rota') {
         secRota.classList.remove('hidden');
-        secLancar.classList.add('hidden');
         btnRota.classList.add('tab-active');
-        btnLancar.classList.remove('tab-active');
         renderizarRotaDoDia();
+      } else if (aba === 'nao-mapeados') {
+        if (secNaoMapeados) secNaoMapeados.classList.remove('hidden');
+        if (btnNaoMapeados) btnNaoMapeados.classList.add('tab-active');
+        renderizarNaoMapeados();
       } else {
-        secRota.classList.add('hidden');
         secLancar.classList.remove('hidden');
-        btnRota.classList.remove('tab-active');
         btnLancar.classList.add('tab-active');
         setTimeout(() => {
           document.getElementById('codCliente')?.focus();
@@ -897,7 +991,9 @@
             });
           }
 
+          atualizarContadoresCarteira();
           renderizarRotaDoDia();
+          renderizarNaoMapeados();
         }
       } catch (err) {
         console.error('Erro ao sincronizar bases:', err);
@@ -933,7 +1029,7 @@
       // Filtra visitas deste dia e semana
       const paradas = dbRotasVendedor.filter(r => {
         // Dia principal ou secundário
-        const diaMatch = (r.diaPrinc === dia) || (r.diasSec && r.diasSec.includes(dia));
+        const diaMatch = (dia === 'TODOS') || (r.diaPrinc === dia) || (r.diasSec && r.diasSec.includes(dia));
         if (!diaMatch) return false;
 
         // Frequência de semana
@@ -969,7 +1065,7 @@
         container.innerHTML = `
           <div class="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 space-y-2">
             <i class="ph ph-calendar-x text-3xl text-slate-300"></i>
-            <div class="font-bold text-xs text-slate-600">Nenhuma parada programada para ${dia}</div>
+            <div class="font-bold text-xs text-slate-600">Nenhuma parada programada ${dia === 'TODOS' ? 'na sua carteira' : 'para ' + dia}</div>
             <p class="text-[11px]">Alterne a semana ou lance novas visitas na aba ao lado.</p>
           </div>
         `;
@@ -1078,9 +1174,598 @@
     }
 
     // ============================================================
-    // 7. FORMULÁRIO DE LANÇAMENTO E FILA DE ENVIO
+    // 6.X DIAGNÓSTICO E GESTÃO DE CLIENTES NÃO MAPEADOS POR CIDADE
     // ============================================================
-    function buscarClienteLocal() {
+    function obterDiagnosticoCarteiraVendedor() {
+      const mapaRotas = new Map();
+      (dbRotasVendedor || []).forEach(r => {
+        const cod = String(r.codCliente || '').trim();
+        if (cod) {
+          if (!mapaRotas.has(cod)) mapaRotas.set(cod, []);
+          mapaRotas.get(cod).push(r);
+        }
+      });
+
+      const cidadesMap = new Map();
+
+      // 1. Processa todos os clientes da carteira do vendedor (aba CLIENTES)
+      (dbClientes || []).forEach(c => {
+        const cod = String(c.codigo || c.codCliente || '').trim();
+        if (!cod) return;
+        const cid = (c.cidade || 'SEM CIDADE').trim().toUpperCase();
+
+        if (!cidadesMap.has(cid)) {
+          const diasEnt = dbEntregas[normalizarTexto(cid)] || 'Não informado';
+          cidadesMap.set(cid, {
+            cidade: cid,
+            diasEntrega: diasEnt,
+            naoMapeados: [],
+            mapeados: [],
+            diasVisitasSet: new Set()
+          });
+        }
+
+        const cidObj = cidadesMap.get(cid);
+        const rotasCli = mapaRotas.get(cod);
+
+        if (rotasCli && rotasCli.length > 0) {
+          rotasCli.forEach(r => {
+            cidObj.mapeados.push({
+              codigo: cod,
+              razao: c.razao || r.razao || '',
+              fantasia: c.fantasia || r.fantasia || '',
+              cidade: cid,
+              diaPrinc: r.diaPrinc || '',
+              diasSec: r.diasSec || '',
+              freq: r.freq || '',
+              ordem: r.ordem || '',
+              comprador: r.comprador || ''
+            });
+            if (r.diaPrinc) cidObj.diasVisitasSet.add(r.diaPrinc.toUpperCase());
+          });
+        } else {
+          cidObj.naoMapeados.push({
+            codigo: cod,
+            razao: c.razao || '',
+            fantasia: c.fantasia || '',
+            cidade: cid
+          });
+        }
+      });
+
+      // 2. Garante inclusão de clientes de rotas que porventura não constem em dbClientes
+      (dbRotasVendedor || []).forEach(r => {
+        const cid = (r.cidade || 'SEM CIDADE').trim().toUpperCase();
+        if (!cidadesMap.has(cid)) {
+          const diasEnt = dbEntregas[normalizarTexto(cid)] || 'Não informado';
+          cidadesMap.set(cid, {
+            cidade: cid,
+            diasEntrega: diasEnt,
+            naoMapeados: [],
+            mapeados: [],
+            diasVisitasSet: new Set()
+          });
+        }
+        const cidObj = cidadesMap.get(cid);
+        const cod = String(r.codCliente || '').trim();
+        const jaInserido = cidObj.mapeados.some(m => m.codigo === cod);
+        if (!jaInserido) {
+          cidObj.mapeados.push({
+            codigo: cod,
+            razao: r.razao || '',
+            fantasia: r.fantasia || '',
+            cidade: cid,
+            diaPrinc: r.diaPrinc || '',
+            diasSec: r.diasSec || '',
+            freq: r.freq || '',
+            ordem: r.ordem || '',
+            comprador: r.comprador || ''
+          });
+        }
+        if (r.diaPrinc) cidObj.diasVisitasSet.add(r.diaPrinc.toUpperCase());
+      });
+
+      const cidadesArray = Array.from(cidadesMap.values());
+
+      let totalNaoMapeados = 0;
+      let totalCidadesComPendencias = 0;
+
+      cidadesArray.forEach(c => {
+        totalNaoMapeados += c.naoMapeados.length;
+        if (c.naoMapeados.length > 0) totalCidadesComPendencias++;
+      });
+
+      // Ordenação: primeiro cidades com clientes a mapear (mais pendências primeiro), depois alfabético
+      cidadesArray.sort((a, b) => {
+        if (a.naoMapeados.length > 0 && b.naoMapeados.length === 0) return -1;
+        if (a.naoMapeados.length === 0 && b.naoMapeados.length > 0) return 1;
+        if (a.naoMapeados.length !== b.naoMapeados.length) {
+          return b.naoMapeados.length - a.naoMapeados.length;
+        }
+        return a.cidade.localeCompare(b.cidade, 'pt-BR');
+      });
+
+      return {
+        totalNaoMapeados,
+        totalCidadesComPendencias,
+        cidades: cidadesArray
+      };
+    }
+
+    function atualizarContadoresCarteira() {
+      const diag = obterDiagnosticoCarteiraVendedor();
+      const badgeNaoMap = document.getElementById('badgeNaoMapeadosCount');
+      const badgeRota = document.getElementById('badgeRotaCount');
+      const bannerNaoMap = document.getElementById('bannerNaoMapeadosMinhaRota');
+      const bannerQtd = document.getElementById('bannerQtdNaoMapeados');
+      const kpiTotal = document.getElementById('kpiNaoMapeadosTotal');
+      const kpiCidades = document.getElementById('kpiNaoMapeadosCidades');
+
+      if (badgeNaoMap) {
+        if (diag.totalNaoMapeados > 0) {
+          badgeNaoMap.innerText = diag.totalNaoMapeados;
+          badgeNaoMap.classList.remove('hidden');
+        } else {
+          badgeNaoMap.classList.add('hidden');
+        }
+      }
+
+      if (badgeRota) {
+        if (dbRotasVendedor.length > 0) {
+          badgeRota.innerText = dbRotasVendedor.length;
+          badgeRota.classList.remove('hidden');
+        } else {
+          badgeRota.classList.add('hidden');
+        }
+      }
+
+      if (bannerNaoMap && bannerQtd) {
+        if (diag.totalNaoMapeados > 0) {
+          bannerQtd.innerText = diag.totalNaoMapeados;
+          bannerNaoMap.classList.remove('hidden');
+          bannerNaoMap.classList.add('flex');
+        } else {
+          bannerNaoMap.classList.add('hidden');
+          bannerNaoMap.classList.remove('flex');
+        }
+      }
+
+      if (kpiTotal) kpiTotal.innerText = diag.totalNaoMapeados;
+      if (kpiCidades) kpiCidades.innerText = diag.totalCidadesComPendencias;
+    }
+
+    function renderizarNaoMapeados() {
+      const container = document.getElementById('listaCidadesNaoMapeadas');
+      if (!container) return;
+
+      const buscaInput = document.getElementById('filtroNaoMapeadosBusca');
+      const busca = normalizarTexto(buscaInput ? buscaInput.value : '');
+      const btnLimpar = document.getElementById('btnLimparBuscaNaoMapeados');
+      if (btnLimpar) {
+        if (busca) btnLimpar.classList.remove('hidden');
+        else btnLimpar.classList.add('hidden');
+      }
+
+      const diag = obterDiagnosticoCarteiraVendedor();
+      atualizarContadoresCarteira();
+
+      if (!usuarioLogado) {
+        container.innerHTML = '<div class="p-8 text-center text-slate-400 text-xs font-semibold">Faça login para visualizar sua carteira.</div>';
+        return;
+      }
+
+      if (diag.totalNaoMapeados === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-8 rounded-xl border border-slate-200 text-center space-y-2.5">
+            <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-2xl">
+              <i class="ph ph-check-circle"></i>
+            </div>
+            <div class="font-bold text-sm text-slate-800">Tudo em dia!</div>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">Todos os clientes pertencentes à sua carteira já possuem dias de atendimento agendados na rota.</p>
+            <button onclick="mudarAba('minha-rota')" class="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 mx-auto shadow-sm">
+              <i class="ph ph-compass"></i> Ver Minha Rota
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      // Filtra as cidades
+      let cidadesFiltradas = diag.cidades.filter(c => {
+        if (busca) {
+          const cidMatch = normalizarTexto(c.cidade).includes(busca);
+          const cliMatch = c.naoMapeados.some(cli => 
+            normalizarTexto(cli.codigo).includes(busca) || 
+            normalizarTexto(cli.razao).includes(busca) || 
+            normalizarTexto(cli.fantasia).includes(busca)
+          );
+          const mapMatch = c.mapeados.some(m => 
+            normalizarTexto(m.codigo).includes(busca) || 
+            normalizarTexto(m.razao).includes(busca) || 
+            normalizarTexto(m.fantasia).includes(busca)
+          );
+          return cidMatch || cliMatch || mapMatch;
+        }
+        return c.naoMapeados.length > 0;
+      });
+
+      if (cidadesFiltradas.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-400 space-y-1.5">
+            <i class="ph ph-magnifying-glass text-2xl text-slate-300"></i>
+            <div class="font-bold text-xs text-slate-600">Nenhum cliente ou cidade encontrada para "${escapeHtml(busca)}"</div>
+            <p class="text-[11px]">Tente pesquisar por outro nome, código ou cidade.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = cidadesFiltradas.map((c, idx) => {
+        const cidId = 'cid_' + idx + '_' + normalizarTexto(c.cidade).replace(/[^a-z0-9]/g, '_');
+        const diasEnt = c.diasEntrega || 'Não informado';
+        const visitasArr = Array.from(c.diasVisitasSet);
+        const diasVisitasTxt = visitasArr.length > 0 ? visitasArr.join(', ') : 'Nenhuma visita nesta cidade';
+        const diaSugerido = visitasArr.length > 0 ? visitasArr[0] : '';
+
+        return `
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:border-amber-300 transition-colors">
+            <!-- Cabeçalho da Cidade -->
+            <div class="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-col gap-2">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm">
+                    <i class="ph ph-buildings"></i>
+                  </div>
+                  <h3 class="font-bold text-sm text-slate-800 tracking-tight">${escapeHtml(c.cidade)}</h3>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  ${c.naoMapeados.length > 0 ? `
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      ${c.naoMapeados.length} a mapear
+                    </span>
+                  ` : ''}
+                  <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                    ${c.mapeados.length} na rota
+                  </span>
+                </div>
+              </div>
+
+              <!-- Linha de Inteligência Logística da Cidade -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <!-- Dia de Entrega -->
+                <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200/80 shadow-2xs">
+                  <div class="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center text-xs flex-shrink-0">
+                    <i class="ph ph-truck"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <span class="text-[10px] text-slate-400 block uppercase font-bold leading-tight">Entrega Ameripan</span>
+                    <span class="font-bold text-slate-800 text-[11px] truncate block">${escapeHtml(diasEnt)}</span>
+                  </div>
+                </div>
+
+                <!-- Suas Visitas na Cidade -->
+                <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200/80 shadow-2xs">
+                  <div class="w-6 h-6 rounded-md ${visitasArr.length > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'} flex items-center justify-center text-xs flex-shrink-0">
+                    <i class="ph ph-calendar"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <span class="text-[10px] text-slate-400 block uppercase font-bold leading-tight">Suas Visitas na Cidade</span>
+                    <span class="font-bold ${visitasArr.length > 0 ? 'text-emerald-700' : 'text-slate-400 italic'} text-[11px] truncate block">
+                      ${visitasArr.length > 0 ? escapeHtml(diasVisitasTxt) + ' (' + c.mapeados.length + ' cliente' + (c.mapeados.length > 1 ? 's' : '') + ')' : 'Nenhum agendamento'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lista de Clientes Não Mapeados desta Cidade -->
+            ${c.naoMapeados.length > 0 ? `
+              <div class="p-3 space-y-2">
+                <div class="text-[10px] font-bold text-amber-900 uppercase tracking-wider flex items-center justify-between">
+                  <span class="flex items-center gap-1">
+                    <i class="ph ph-warning-circle text-amber-600"></i>
+                    Clientes sem dia de visita (${c.naoMapeados.length})
+                  </span>
+                  ${diaSugerido ? `<span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Sugestão: ${escapeHtml(diaSugerido)}</span>` : ''}
+                </div>
+
+                <div class="space-y-2">
+                  ${c.naoMapeados.map(cli => {
+                    const nomeCli = cli.fantasia || cli.razao || 'Cliente Sem Nome';
+                    const razaoSec = cli.fantasia && cli.fantasia !== cli.razao ? cli.razao : '';
+                    return `
+                      <div class="p-2.5 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-50/80 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="font-mono text-[10px] bg-amber-200/80 text-amber-950 px-1.5 py-0.5 rounded font-bold">#${escapeHtml(cli.codigo)}</span>
+                            <span class="font-bold text-xs text-slate-800 truncate">${escapeHtml(nomeCli)}</span>
+                          </div>
+                          ${razaoSec ? `<div class="text-[11px] text-slate-500 truncate pl-0.5">${escapeHtml(razaoSec)}</div>` : ''}
+                          <div class="text-[11px] text-slate-600 flex items-center gap-1 mt-1 flex-wrap">
+                            <span class="text-amber-800 font-medium">🚚 Ent: <strong>${escapeHtml(diasEnt)}</strong></span>
+                            ${diaSugerido ? `<span class="text-emerald-700 font-bold">• Atenda na <strong>${escapeHtml(diaSugerido)}</strong></span>` : ''}
+                          </div>
+                        </div>
+
+                        <button onclick="iniciarMapeamentoCliente('${escapeHtml(cli.codigo)}', '${escapeHtml(diaSugerido)}')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center justify-center gap-1.5 flex-shrink-0 self-end sm:self-center">
+                          <i class="ph ph-plus-circle text-sm"></i>
+                          <span>Mapear Visita</span>
+                        </button>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Clientes Já Mapeados (Acordeão Colapsável) -->
+            ${c.mapeados.length > 0 ? `
+              <div class="border-t border-slate-100 bg-slate-50/70 p-2.5">
+                <button type="button" onclick="toggleAcordeaoCidadeMapeados('${cidId}')" class="w-full flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 px-1 py-0.5 transition">
+                  <span class="flex items-center gap-1.5">
+                    <i class="ph ph-caret-down text-sm transition-transform" id="icon_${cidId}"></i>
+                    <span>Ver ${c.mapeados.length} cliente(s) já atendidos nesta cidade</span>
+                  </span>
+                  <span class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">${escapeHtml(diasVisitasTxt)}</span>
+                </button>
+
+                <div id="corpo_${cidId}" class="hidden mt-2 pt-2 border-t border-slate-200 divide-y divide-slate-100 text-xs">
+                  ${c.mapeados.map(m => `
+                    <div class="py-2 flex items-center justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-mono text-[10px] text-slate-400">#${escapeHtml(m.codigo)}</span>
+                          <span class="font-semibold text-slate-700 truncate">${escapeHtml(m.fantasia || m.razao)}</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1.5 flex-shrink-0 text-[10px]">
+                        <span class="bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">Visita: ${escapeHtml(m.diaPrinc || '-')}</span>
+                        <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">Ordem: ${escapeHtml(m.ordem || '-')}</span>
+                        <button onclick="carregarVisitaNoFormulario('${escapeHtml(m.codigo)}')" class="text-blue-600 hover:text-blue-800 font-bold underline px-1">Editar</button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleAcordeaoCidadeMapeados(cidId) {
+      const corpo = document.getElementById(`corpo_${cidId}`);
+      const icon = document.getElementById(`icon_${cidId}`);
+      if (!corpo) return;
+      if (corpo.classList.contains('hidden')) {
+        corpo.classList.remove('hidden');
+        if (icon) icon.classList.add('rotate-180');
+      } else {
+        corpo.classList.add('hidden');
+        if (icon) icon.classList.remove('rotate-180');
+      }
+    }
+
+    function limparBuscaNaoMapeados() {
+      const inp = document.getElementById('filtroNaoMapeadosBusca');
+      if (inp) inp.value = '';
+      const btn = document.getElementById('btnLimparBuscaNaoMapeados');
+      if (btn) btn.classList.add('hidden');
+      renderizarNaoMapeados();
+    }
+
+    function iniciarMapeamentoCliente(codCliente, diaSugerido) {
+      const cli = (dbClientes || []).find(c => String(c.codigo || c.codCliente).trim() === String(codCliente).trim());
+      if (!cli) {
+        alert("Cliente não localizado na base do vendedor.");
+        return;
+      }
+
+      mudarAba('lancar-visita');
+
+      document.getElementById('codCliente').value = cli.codigo;
+      document.getElementById('razaoSocial').value = cli.razao || '';
+      document.getElementById('nomeFantasia').value = cli.fantasia || '';
+      document.getElementById('cidade').value = cli.cidade || '';
+
+      buscarClienteLocal(true);
+
+      // Aplica sugestão de dia de visita inteligente
+      if (diaSugerido) {
+        const diaRadio = document.querySelector(`input[name="diaPrincipal"][value="${diaSugerido}"]`);
+        if (diaRadio) {
+          diaRadio.checked = true;
+          try {
+            diaRadio.dispatchEvent(new Event('change'));
+          } catch(e) {}
+        }
+      }
+
+      // Dica visual no formulário
+      const msg = document.getElementById('codClienteMsg');
+      if (msg) {
+        const ent = dbEntregas[normalizarTexto(cli.cidade)] || 'Não informado';
+        msg.innerHTML = `
+          <div class="mt-1 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[11px] flex items-center justify-between gap-2">
+            <div>
+              <span class="font-bold">Mapeando cliente de ${escapeHtml(cli.cidade)}</span>
+              <div class="text-[10px] text-amber-700">🚚 Entrega: <strong>${escapeHtml(ent)}</strong> ${diaSugerido ? '• Sugerido: <strong>' + escapeHtml(diaSugerido) + '</strong> (dia das outras visitas na cidade)' : ''}</div>
+            </div>
+            <span class="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded font-bold flex-shrink-0">Novo Mapeamento</span>
+          </div>
+        `;
+      }
+
+      setTimeout(() => {
+        document.getElementById('ordemManual')?.focus();
+      }, 100);
+    }
+
+    // ============================================================
+    // 7. PESQUISA POR NOME & AUTOCOMPLETE DE CLIENTES
+    // ============================================================
+    function escapeHtml(s) {
+      return (s || '').toString()
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    let sugestaoAtivaIndex = -1;
+    let listaSugestoesAtuais = [];
+
+    function pesquisarClientesPorNome(termo) {
+      const dropdown = document.getElementById('dropdownBuscaRazao');
+      if (!dropdown) return;
+
+      const query = normalizarTexto(termo || '');
+      if (query.length < 2) {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+        sugestaoAtivaIndex = -1;
+        listaSugestoesAtuais = [];
+        return;
+      }
+
+      // Unir clientes da base do vendedor e da rota
+      const mapaClientes = new Map();
+
+      (dbClientes || []).forEach(c => {
+        const cod = String(c.codigo || c.codCliente || '').trim();
+        if (cod) {
+          mapaClientes.set(cod, {
+            codigo: cod,
+            razao: c.razao || '',
+            fantasia: c.fantasia || '',
+            cidade: c.cidade || '',
+            origem: 'base'
+          });
+        }
+      });
+
+      (dbRotasVendedor || []).forEach(r => {
+        const cod = String(r.codCliente || '').trim();
+        if (cod) {
+          const ex = mapaClientes.get(cod);
+          if (ex) {
+            ex.naRota = true;
+            ex.diaPrinc = r.diaPrinc;
+          } else {
+            mapaClientes.set(cod, {
+              codigo: cod,
+              razao: r.razao || '',
+              fantasia: r.fantasia || '',
+              cidade: r.cidade || '',
+              origem: 'rota',
+              naRota: true,
+              diaPrinc: r.diaPrinc
+            });
+          }
+        }
+      });
+
+      const todos = Array.from(mapaClientes.values());
+      const resultados = todos.filter(c => {
+        const codN = normalizarTexto(c.codigo);
+        const razN = normalizarTexto(c.razao);
+        const fanN = normalizarTexto(c.fantasia);
+        const cidN = normalizarTexto(c.cidade);
+        return codN.includes(query) || razN.includes(query) || fanN.includes(query) || cidN.includes(query);
+      }).slice(0, 30);
+
+      listaSugestoesAtuais = resultados;
+      sugestaoAtivaIndex = -1;
+
+      if (resultados.length === 0) {
+        dropdown.innerHTML = '<div class="p-3 text-slate-400 text-center italic text-xs">Nenhum cliente encontrado na sua base com esse termo.</div>';
+        dropdown.classList.remove('hidden');
+        return;
+      }
+
+      dropdown.innerHTML = resultados.map((cli, idx) => {
+        const nomePrincipal = cli.razao || cli.fantasia || 'Sem Nome';
+        const nomeSecundario = cli.fantasia && cli.fantasia !== cli.razao ? cli.fantasia : '';
+        const badgeRota = cli.naRota 
+          ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Rota: ${cli.diaPrinc || 'Sim'}</span>`
+          : `<span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">Cód: ${cli.codigo}</span>`;
+
+        return `
+          <div class="p-2.5 hover:bg-orange-50/80 cursor-pointer flex items-center justify-between gap-2 transition item-sugestao-cliente" data-idx="${idx}" onmousedown="selecionarClienteSugerido(${idx})">
+            <div class="min-w-0 flex-1">
+              <div class="font-bold text-slate-800 truncate">${escapeHtml(nomePrincipal)}</div>
+              ${nomeSecundario ? `<div class="text-[11px] text-slate-500 truncate">${escapeHtml(nomeSecundario)}</div>` : ''}
+              <div class="text-[10px] text-slate-400 truncate"><i class="ph ph-map-pin"></i> ${escapeHtml(cli.cidade || 'Sem Cidade')}</div>
+            </div>
+            <div class="text-right flex-shrink-0">
+              ${badgeRota}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      dropdown.classList.remove('hidden');
+    }
+
+    function navegarSugestoesClientes(e) {
+      const dropdown = document.getElementById('dropdownBuscaRazao');
+      if (!dropdown || dropdown.classList.contains('hidden') || listaSugestoesAtuais.length === 0) return;
+
+      const items = dropdown.querySelectorAll('.item-sugestao-cliente');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        sugestaoAtivaIndex = (sugestaoAtivaIndex + 1) % items.length;
+        atualizarDestaqueSugestao(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        sugestaoAtivaIndex = (sugestaoAtivaIndex - 1 + items.length) % items.length;
+        atualizarDestaqueSugestao(items);
+      } else if (e.key === 'Enter' && sugestaoAtivaIndex >= 0) {
+        e.preventDefault();
+        selecionarClienteSugerido(sugestaoAtivaIndex);
+      } else if (e.key === 'Escape') {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    function atualizarDestaqueSugestao(items) {
+      items.forEach((it, i) => {
+        if (i === sugestaoAtivaIndex) {
+          it.classList.add('bg-orange-100');
+          it.scrollIntoView({ block: 'nearest' });
+        } else {
+          it.classList.remove('bg-orange-100');
+        }
+      });
+    }
+
+    function selecionarClienteSugerido(idx) {
+      const cli = listaSugestoesAtuais[idx];
+      if (!cli) return;
+
+      const dropdown = document.getElementById('dropdownBuscaRazao');
+      if (dropdown) dropdown.classList.add('hidden');
+
+      document.getElementById('codCliente').value = cli.codigo;
+      document.getElementById('razaoSocial').value = cli.razao;
+      document.getElementById('nomeFantasia').value = cli.fantasia || '';
+      document.getElementById('cidade').value = cli.cidade || '';
+
+      buscarClienteLocal(true);
+    }
+
+    document.addEventListener('click', (e) => {
+      const dd = document.getElementById('dropdownBuscaRazao');
+      const inp = document.getElementById('razaoSocial');
+      if (dd && !dd.contains(e.target) && e.target !== inp) {
+        dd.classList.add('hidden');
+      }
+    });
+
+    // ============================================================
+    // 8. FORMULÁRIO DE LANÇAMENTO E FILA DE ENVIO
+    // ============================================================
+    function buscarClienteLocal(veioDoEnter = false) {
       const codInput = document.getElementById('codCliente');
       const cod = codInput.value.toString().trim();
       const msg = document.getElementById('msgCliente');
@@ -1151,6 +1836,7 @@
         `;
         statusCliente = 'ja_gravado';
         feedbackVisual(card, 'sucesso');
+        if (veioDoEnter) document.getElementById('ordemManual').focus();
         return;
       }
 
@@ -1164,14 +1850,14 @@
         msg.innerHTML = '<span class="text-green-600 font-bold text-[11px]">✓ Cliente localizado na base</span>';
         statusCliente = 'encontrado';
         feedbackVisual(card, 'sucesso');
-        document.getElementById('ordemManual').focus();
+        if (veioDoEnter) document.getElementById('ordemManual').focus();
       } else {
         fant.value = ''; razao.value = ''; cid.value = '';
         badge.classList.remove('hidden');
         msg.innerHTML = '<span class="text-amber-600 font-bold text-[11px]">⚠ Não cadastrado. Preencha manualmente abaixo.</span>';
         statusCliente = 'manual';
         feedbackVisual(card, 'erro');
-        razao.focus();
+        if (veioDoEnter) razao.focus();
       }
     }
 
