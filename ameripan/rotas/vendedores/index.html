@@ -52,6 +52,115 @@
     .badge-manual { background-color: #f59e0b; color: white; font-size: 10px; padding: 2px 6px; border-radius: 99px; text-transform: uppercase; font-weight: 700; }
     .input-manual { background-color: #fffbeb !important; border-color: #f59e0b !important; color: #92400e !important; }
 
+    /* Estilos para Conectores de Reordenação Visual da Rota */
+    .dot-origem-cliente {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      border: 3.5px solid #ef4444;
+      background-color: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: grab;
+      touch-action: none;
+      transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+      position: relative;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .dot-origem-cliente:hover, .dot-origem-cliente.active-drag, .dot-origem-cliente.pulsando {
+      transform: scale(1.3);
+      border-color: #dc2626;
+      background-color: #fee2e2;
+    }
+    .dot-origem-cliente.pulsando {
+      animation: pulseRed 1.2s infinite;
+    }
+    .dot-origem-cliente.conectado {
+      background-color: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+    }
+    .dot-origem-cliente.conectado::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #ffffff;
+    }
+
+    .slot-alvo-ordem {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .dot-alvo-ordem {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      border: 3.5px solid #ef4444;
+      background-color: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: grab;
+      touch-action: none;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .dot-alvo-ordem:hover, .dot-alvo-ordem.active-drag, .dot-alvo-ordem.pulsando {
+      transform: scale(1.3);
+      border-color: #dc2626;
+      background-color: #fee2e2;
+    }
+    .dot-alvo-ordem.pulsando {
+      animation: pulseRed 1.2s infinite;
+    }
+    .dot-alvo-ordem.conectado {
+      background-color: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+    }
+    .dot-alvo-ordem.conectado::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #ffffff;
+    }
+
+    .badge-alvo-ordem {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background-color: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #334155;
+      font-weight: 800;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .slot-alvo-ordem.conectado .badge-alvo-ordem {
+      background-color: #fee2e2;
+      border-color: #f87171;
+      color: #b91c1c;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+    }
+
+    @keyframes pulseRed {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    }
+
     /* Política Estrita de DLP: Bloqueio Total de Impressão */
     @media print {
       body { display: none !important; }
@@ -197,9 +306,47 @@
         </button>
       </div>
 
-      <!-- Lista de Cards da Rota Ordenados -->
-      <div id="listaCardsRota" class="space-y-2.5">
-        <!-- Injetado dinamicamente via JS -->
+      <!-- Wrapper da Rota com Suporte a Reordenação Lateral e SVG -->
+      <div id="wrapperRotaReordenacao" class="relative">
+        <!-- SVG para traçado de linhas conectores interativas -->
+        <svg id="svgConexoesOrdem" class="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible"></svg>
+
+        <div class="flex items-start gap-2 sm:gap-3">
+          <!-- Coluna dos Cards de Clientes -->
+          <div id="listaCardsRota" class="flex-1 min-w-0 space-y-2.5">
+            <!-- Injetado dinamicamente via JS -->
+          </div>
+
+          <!-- Coluna Lateral de Números Alvo (Visível apenas quando dia !== 'TODOS') -->
+          <div id="colunaNumerosOrdem" class="hidden w-14 shrink-0 space-y-2.5 pt-0.5">
+            <!-- Injetado dinamicamente via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra Flutuante de Confirmação de Nova Ordem -->
+      <div id="barraAtribuirNovaOrdem" class="hidden sticky bottom-4 z-30 bg-slate-900/95 backdrop-blur text-white p-3 rounded-2xl shadow-2xl border border-slate-700 animate-fade-in flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+            <span id="badgeQtdConexoes">0</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-white flex items-center gap-1">
+              <span>Reordenar Rota</span>
+              <span id="badgeDiaReordem" class="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-amber-400 font-mono">SEG</span>
+            </div>
+            <div class="text-[10px] text-slate-300 truncate" id="subStatusReordem">0 de 0 paradas conectadas</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="limparTodasConexoesOrdem()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition border border-slate-700" title="Limpar todas as linhas conectadas">
+            Limpar
+          </button>
+          <button type="button" id="btnConfirmarReordem" onclick="atribuirNovaOrdemSalvar()" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1 shadow-md active:scale-95">
+            <i class="ph ph-check-circle text-sm"></i>
+            <span>Atribuir Nova Ordem</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -254,219 +401,356 @@
     </section>
 
     <!-- ========================================================= -->
+    <!-- ========================================================= -->
     <!-- ABA 2: FORMULÁRIO RÁPIDO DE LANÇAMENTO / VISITA          -->
     <!-- ========================================================= -->
     <section id="abaLancarVisita" class="space-y-3">
       
-      <form id="rotaForm" onsubmit="return false;">
-        
-        <!-- Identificação do Vendedor (Travado no usuário autenticado) -->
-        <div class="bg-slate-100 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-              <i class="ph ph-user"></i>
+      <!-- Seletor de Sub-Abas: Individual vs Roteirizar por Cidades -->
+      <div class="bg-slate-200/80 p-1 rounded-xl flex gap-1 text-xs font-bold text-slate-600 shadow-inner">
+        <button type="button" id="subTabLancarIndividual" onclick="alternarSubAbaLancar('individual')" class="flex-1 py-2 px-3 rounded-lg bg-white text-blue-700 shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
+          <i class="ph ph-user"></i>
+          <span>1 a 1 (Individual)</span>
+        </button>
+        <button type="button" id="subTabLancarCidades" onclick="alternarSubAbaLancar('cidades')" class="flex-1 py-2 px-3 rounded-lg text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5 transition cursor-pointer">
+          <i class="ph ph-buildings"></i>
+          <span>Roteirizar por Cidades (Passo a Passo)</span>
+        </button>
+      </div>
+
+      <!-- SUB-ABA 1: LANÇAMENTO INDIVIDUAL (1 a 1) -->
+      <div id="conteudoLancarIndividual" class="space-y-3">
+        <form id="rotaForm" onsubmit="return false;">
+          
+          <!-- Identificação do Vendedor (Travado no usuário autenticado) -->
+          <div class="bg-slate-100 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                <i class="ph ph-user"></i>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-800" id="formNomeVendDisplay">Carregando...</div>
+                <div class="text-[10px] text-slate-500">Cód: <span id="formCodVendDisplay" class="font-bold text-blue-700">—</span> • Equipe: <span id="formEquipeVendDisplay" class="font-bold text-blue-700">—</span></div>
+              </div>
             </div>
-            <div>
-              <div class="text-xs font-bold text-slate-800" id="formNomeVendDisplay">Carregando...</div>
-              <div class="text-[10px] text-slate-500">Cód: <span id="formCodVendDisplay" class="font-bold text-blue-700">—</span> • Equipe: <span id="formEquipeVendDisplay" class="font-bold text-blue-700">—</span></div>
+            <span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full border border-green-200">Ativo</span>
+          </div>
+
+          <!-- Banner de Modo Atualização (quando cliente já possui rota cadastrada) -->
+          <div id="bannerModoAtualizacao" class="hidden mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-blue-950 shadow-xs animate-fade-in">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <i class="ph ph-arrows-clockwise text-lg"></i>
+              </div>
+              <div>
+                <div class="font-bold flex items-center gap-1.5">
+                  <span>Modo de Atualização de Rota</span>
+                  <span id="bannerAtualizacaoBadgeDia" class="px-1.5 py-0.2 bg-blue-200 text-blue-800 rounded font-mono text-[10px]">QUI</span>
+                </div>
+                <div class="text-[11px] text-blue-800 mt-0.5" id="bannerAtualizacaoDesc">
+                  Este cliente já possui rota cadastrada. Altere os campos e grave para atualizar.
+                </div>
+              </div>
+            </div>
+            <button type="button" onclick="irParaProximoCliente()" class="shrink-0 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+              <i class="ph ph-arrow-right text-sm"></i>
+              <span>Ir para o Próximo</span>
+            </button>
+          </div>
+
+          <!-- Card Cliente -->
+          <div id="cardCliente" class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 border-l-4 border-orange-500 transition-all duration-200">
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-bold text-slate-700 uppercase" id="lbl_cod_cliente">Cliente</label>
+              <span id="badgeManualCliente" class="badge-manual hidden">✏ Manual</span>
+            </div>
+
+            <div class="flex gap-2 relative">
+              <div class="relative flex-1">
+                <input type="number" id="codCliente" class="w-full p-2 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-8 text-base font-bold text-slate-800" placeholder="Cód. do cliente + Enter" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); buscarClienteLocal(true); }" onblur="if(this.value.trim().length > 0 && statusCliente === 'vazio'){ buscarClienteLocal(false); }">
+                <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-slate-400 text-lg"></i>
+              </div>
+              <button type="button" onclick="buscarClienteLocal(true)" class="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg font-bold text-xs flex items-center gap-1 shadow-sm transition" title="Buscar cliente por código">
+                <i class="ph ph-magnifying-glass text-base"></i>
+                <span>Buscar</span>
+              </button>
+              <button type="button" onclick="limparClienteTotal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 rounded-lg border border-slate-200 transition" title="Limpar campos do cliente">
+                <i class="ph ph-eraser text-lg"></i>
+              </button>
+            </div>
+
+            <div id="msgCliente" class="min-h-[1.2rem] mt-1 text-xs"></div>
+            
+            <div class="mt-2 space-y-1.5 bg-orange-50/50 p-2.5 rounded-lg border border-orange-100">
+              <div class="relative">
+                <div class="flex justify-between items-center mb-0.5">
+                  <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_razao">Razão Social / Pesquisa por Nome</span>
+                  <span class="text-[9px] text-slate-400 italic">Pesquisa rápida por nome</span>
+                </div>
+                <div class="relative">
+                  <input type="text" id="razaoSocial" class="input-editable w-full font-bold text-slate-800 text-xs focus:bg-white pr-7" placeholder="Digite o nome, razão social ou fantasia..." autocomplete="off" oninput="pesquisarClientesPorNome(this.value)" onfocus="pesquisarClientesPorNome(this.value)" onkeydown="navegarSugestoesClientes(event)">
+                  <i class="ph ph-magnifying-glass absolute right-2.5 top-2.5 text-slate-400 text-sm pointer-events-none"></i>
+                </div>
+                <div id="dropdownBuscaRazao" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs"></div>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_fantasia">Nome Fantasia</span>
+                <input type="text" id="nomeFantasia" class="input-editable w-full text-slate-600 text-xs focus:bg-white" placeholder="Nome fantasia...">
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_cidade">Cidade</span>
+                <input type="text" id="cidade" class="input-editable w-full text-slate-600 text-xs focus:bg-white" placeholder="Cidade...">
+              </div>
             </div>
           </div>
-          <span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full border border-green-200">Ativo</span>
+
+          <!-- Parâmetros da Rota -->
+          <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            
+            <!-- Ordem de Visita -->
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <label class="text-xs font-bold text-slate-700 uppercase" id="lbl_ordem">Ordem de Visita</label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-400">Nº Manual:</span>
+                  <input type="number" id="ordemManual" class="w-14 p-1 border border-slate-300 rounded text-center text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="#" onchange="sincronizarOrdem(this.value)">
+                </div>
+              </div>
+              <div class="grid grid-cols-10 gap-1">
+                <script>
+                  for(let i=1; i<=20; i++) {
+                    document.write(`
+                      <input type="radio" name="ordemVisita" id="ordem_${i}" value="${i}" class="hidden btn-check" onclick="document.getElementById('ordemManual').value=this.value; salvarEstadoFormulario();">
+                      <label for="ordem_${i}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-slate-200 text-slate-600 font-bold hover:bg-blue-50 transition-colors">${i}</label>
+                    `);
+                  }
+                </script>
+              </div>
+            </div>
+
+            <hr class="border-slate-100">
+
+            <!-- Frequência -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5" id="lbl_frequencia">Frequência</label>
+              <div class="flex gap-1.5">
+                <div class="flex-1">
+                  <input type="checkbox" id="sem_todas" value="Toda Semana" class="hidden btn-check-week" onchange="toggleSemana('todas')">
+                  <label for="sem_todas" class="block cursor-pointer text-center text-[11px] py-1.5 rounded-lg border border-slate-200 font-bold transition-colors">TODA SEMANA</label>
+                </div>
+                <script>
+                  const semanas = [{id:'s1', l:'S1'}, {id:'s2', l:'S2'}, {id:'s3', l:'S3'}, {id:'s4', l:'S4'}, {id:'s5', l:'S5'}];
+                  semanas.forEach(s => {
+                    document.write(`
+                      <div class="flex-1">
+                        <input type="checkbox" name="semanaEspecifica" id="sem_${s.id}" value="${s.l}" class="hidden btn-check-week" onchange="toggleSemana('${s.id}')">
+                        <label for="sem_${s.id}" class="block cursor-pointer text-center text-[11px] py-1.5 rounded-lg border border-slate-200 font-bold transition-colors">${s.l}</label>
+                      </div>
+                    `);
+                  });
+                </script>
+              </div>
+            </div>
+
+            <hr class="border-slate-100">
+
+            <!-- Dias da Visita (Principal e Secundários) -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5" id="lbl_dia_visita">Dia Principal</label>
+                <div class="grid grid-cols-3 gap-1">
+                  <script>
+                    ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => {
+                      document.write(`
+                        <input type="radio" name="diaPrincipal" id="dia_${d}" value="${d}" class="hidden btn-check" onclick="salvarEstadoFormulario()">
+                        <label for="dia_${d}" class="cursor-pointer text-center text-[10px] py-1.5 rounded border border-slate-200 font-semibold transition-colors">${d}</label>
+                      `);
+                    });
+                  </script>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1.5" id="lbl_outros_dias">Outros Dias</label>
+                <div class="grid grid-cols-3 gap-1">
+                  <script>
+                    ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => {
+                      document.write(`
+                        <input type="checkbox" name="diasSecundarios" id="sec_${d}" value="${d}" class="hidden btn-check-sec" onclick="salvarEstadoFormulario()">
+                        <label for="sec_${d}" class="cursor-pointer text-center text-[10px] py-1.5 rounded border border-slate-200 text-slate-400 font-semibold transition-colors">${d}</label>
+                      `);
+                    });
+                  </script>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Contato e Observações -->
+          <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2.5">
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_comprador">Nome Comprador</label>
+                <input type="text" id="comprador" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="Nome do contato..." onchange="salvarEstadoFormulario()">
+              </div>
+              <div class="w-2/5">
+                <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_whatsapp">WhatsApp</label>
+                <input type="tel" id="whatsapp" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-green-500 font-medium" placeholder="(19) 9 9999-9999" oninput="formatarWhatsAppSmart(this); salvarEstadoFormulario()" onpaste="setTimeout(() => formatarWhatsAppSmart(this), 0)" onblur="formatarWhatsAppSmart(this); salvarEstadoFormulario()">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_obs">Observações</label>
+              <input type="text" id="obs" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-amber-500" placeholder="Ex: Recebe após as 14h..." onkeydown="if(event.key === 'Enter') incluirNaLista()">
+            </div>
+          </div>
+
+          <!-- Ações de Gravação -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button type="button" id="btnIncluirFila" onclick="incluirNaLista()" class="btn-amber font-bold py-3 px-4 rounded-xl shadow flex items-center justify-center gap-2 text-xs transition active:scale-98">
+              <i class="ph ph-plus-circle text-lg"></i>
+              <span>INCLUIR NA FILA</span>
+            </button>
+            <button type="button" id="btnGravarEste" onclick="salvarDireto()" class="btn-blue font-bold py-3 px-4 rounded-xl shadow flex items-center justify-center gap-2 text-xs transition active:scale-98">
+              <i class="ph ph-floppy-disk text-lg"></i>
+              <span>GRAVAR ESTE</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Fila de Envio em Lote -->
+        <div id="areaLista" class="bg-white rounded-xl shadow-sm border border-slate-200 hidden overflow-hidden">
+          <div class="bg-slate-50 p-2.5 border-b border-slate-200 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs text-slate-700 uppercase">Fila de Envio</span>
+              <span id="contadorLista" class="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+            </div>
+            <button onclick="limparTodaFila()" class="text-[11px] text-red-500 hover:text-red-700 font-medium">Limpar fila</button>
+          </div>
+          <div id="listaClientesContainer" class="divide-y divide-slate-100 max-h-60 overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <!-- SUB-ABA 2: ROTEIRIZAR POR CIDADES (PASSO A PASSO) -->
+      <div id="conteudoLancarCidades" class="hidden space-y-3">
+        <!-- Indicador de Passos (Wizard Stepper) -->
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div id="stepBadgeRoteirizacao" class="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">1</div>
+              <div>
+                <span class="text-xs font-bold text-slate-800" id="stepTituloRoteirizacao">Passo 1: Dia, Cidades e Ordem</span>
+                <p class="text-[10px] text-slate-500" id="stepSubRoteirizacao">Defina o dia da visita, marque as cidades e digite a ordem dos clientes</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <span id="wizardStepIndicator" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Passo 1 de 2</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Banner de Modo Atualização (quando cliente já possui rota cadastrada) -->
-        <div id="bannerModoAtualizacao" class="hidden mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-blue-950 shadow-xs animate-fade-in">
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <i class="ph ph-arrows-clockwise text-lg"></i>
+        <!-- PASSO 1: Seleção de Dia, Cidades e Ordem das Visitas -->
+        <div id="painelPasso1Cidades" class="space-y-3">
+          <!-- 1.1 Escolha do Dia da Visita -->
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">1. Selecione o Dia da Visita</label>
+            <div class="grid grid-cols-6 gap-1">
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_SEG" value="SEG" class="hidden btn-check" checked onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_SEG" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">SEG</label>
+
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_TER" value="TER" class="hidden btn-check" onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_TER" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">TER</label>
+
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_QUA" value="QUA" class="hidden btn-check" onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_QUA" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">QUA</label>
+
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_QUI" value="QUI" class="hidden btn-check" onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_QUI" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">QUI</label>
+
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_SEX" value="SEX" class="hidden btn-check" onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_SEX" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">SEX</label>
+
+              <input type="radio" name="diaRoteirizacaoCidades" id="rd_wiz_SAB" value="SAB" class="hidden btn-check" onchange="aoMudarDiaRoteirizacaoCidades()">
+              <label for="rd_wiz_SAB" class="cursor-pointer text-center text-xs py-2 rounded-lg border border-slate-200 font-bold transition">SAB</label>
             </div>
+          </div>
+
+          <!-- 1.2 Escolha da(s) Cidade(s) -->
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">2. Selecione as Cidades Pertencentes a Você</label>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="marcarTodasCidadesRoteirizacao(true)" class="text-[10px] text-blue-600 hover:text-blue-800 font-bold">Todas</button>
+                <span class="text-slate-300">•</span>
+                <button type="button" onclick="marcarTodasCidadesRoteirizacao(false)" class="text-[10px] text-slate-500 hover:text-slate-700 font-semibold">Limpar</button>
+              </div>
+            </div>
+            <div id="containerListaCidadesRoteirizacao" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+              <!-- Gerado dinamicamente via JS -->
+            </div>
+          </div>
+
+          <!-- 1.3 Listagem de Clientes por Cidade com Campo de Ordem -->
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">3. Atribua a Ordem de Visita aos Clientes</label>
+                <p class="text-[10px] text-slate-400">Digite a ordem (1, 2, 3...) apenas nos clientes que for atender neste dia.</p>
+              </div>
+              <span id="badgeContadorClientesOrdem" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                0 com ordem
+              </span>
+            </div>
+
+            <div id="containerClientesCidadesRoteirizacao" class="space-y-3 pt-1">
+              <div class="p-6 text-center text-slate-400 text-xs">
+                Selecione pelo menos uma cidade acima para listar os clientes.
+              </div>
+            </div>
+          </div>
+
+          <!-- Rodapé do Passo 1 -->
+          <div class="pt-1">
+            <button type="button" id="btnAvancarPasso2" onclick="avancarParaPasso2Roteirizacao()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs transition active:scale-98">
+              <span>Avançar para o Passo 2: Informações de Atendimento</span>
+              <i class="ph ph-arrow-right text-base"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- PASSO 2: Verificação e Complementação de Dados do Cliente -->
+        <div id="painelPasso2Cidades" class="hidden space-y-3">
+          <!-- Resumo de Clientes na Rota -->
+          <div class="bg-blue-50/70 border border-blue-200 p-3 rounded-xl flex items-center justify-between text-xs text-blue-950">
             <div>
               <div class="font-bold flex items-center gap-1.5">
-                <span>Modo de Atualização de Rota</span>
-                <span id="bannerAtualizacaoBadgeDia" class="px-1.5 py-0.2 bg-blue-200 text-blue-800 rounded font-mono text-[10px]">QUI</span>
+                <span>Clientes Selecionados para a Rota</span>
+                <span id="badgeDiaPasso2" class="px-1.5 py-0.2 bg-blue-200 text-blue-800 rounded font-mono text-[10px] font-bold">SEG</span>
               </div>
-              <div class="text-[11px] text-blue-800 mt-0.5" id="bannerAtualizacaoDesc">
-                Este cliente já possui rota cadastrada. Altere os campos e grave para atualizar.
-              </div>
+              <p class="text-[11px] text-blue-800 mt-0.5" id="subPasso2Resumo">Confira os dados de contato antes de finalizar a gravação.</p>
             </div>
-          </div>
-          <button type="button" onclick="irParaProximoCliente()" class="shrink-0 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
-            <i class="ph ph-arrow-right text-sm"></i>
-            <span>Ir para o Próximo</span>
-          </button>
-        </div>
-
-        <!-- Card Cliente -->
-        <div id="cardCliente" class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 border-l-4 border-orange-500 transition-all duration-200">
-          <div class="flex justify-between items-center mb-1">
-            <label class="block text-xs font-bold text-slate-700 uppercase" id="lbl_cod_cliente">Cliente</label>
-            <span id="badgeManualCliente" class="badge-manual hidden">✏ Manual</span>
+            <span id="badgeTotalClientesPasso2" class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-2xs">0 paradas</span>
           </div>
 
-          <div class="flex gap-2 relative">
-            <div class="relative flex-1">
-              <input type="number" id="codCliente" class="w-full p-2 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 outline-none pl-8 text-base font-bold text-slate-800" placeholder="Cód. do cliente + Enter" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); buscarClienteLocal(true); }" onblur="if(this.value.trim().length > 0 && statusCliente === 'vazio'){ buscarClienteLocal(false); }">
-              <i class="ph ph-magnifying-glass absolute left-2.5 top-3 text-slate-400 text-lg"></i>
-            </div>
-            <button type="button" onclick="buscarClienteLocal(true)" class="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg font-bold text-xs flex items-center gap-1 shadow-sm transition" title="Buscar cliente por código">
-              <i class="ph ph-magnifying-glass text-base"></i>
-              <span>Buscar</span>
+          <!-- Lista de Validação de Clientes do Passo 2 -->
+          <div id="listaValidacaoClientesPasso2" class="space-y-2.5">
+            <!-- Gerado dinamicamente: dados completos pulam direto, dados pendentes abrem campos -->
+          </div>
+
+          <!-- Ações do Passo 2 -->
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <button type="button" onclick="voltarParaPasso1Roteirizacao()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 text-xs transition active:scale-98 cursor-pointer">
+              <i class="ph ph-arrow-left text-base"></i>
+              <span>Voltar ao Passo 1</span>
             </button>
-            <button type="button" onclick="limparClienteTotal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 rounded-lg border border-slate-200 transition" title="Limpar campos do cliente">
-              <i class="ph ph-eraser text-lg"></i>
+
+            <button type="button" id="btnSalvarRoteirizacaoFinal" onclick="finalizarESalvarRoteirizacaoCidades()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-1.5 text-xs transition active:scale-98 cursor-pointer">
+              <i class="ph ph-check-circle text-base"></i>
+              <span>Finalizar e Salvar Rota</span>
             </button>
           </div>
-
-          <div id="msgCliente" class="min-h-[1.2rem] mt-1 text-xs"></div>
-          
-          <div class="mt-2 space-y-1.5 bg-orange-50/50 p-2.5 rounded-lg border border-orange-100">
-            <div class="relative">
-              <div class="flex justify-between items-center mb-0.5">
-                <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_razao">Razão Social / Pesquisa por Nome</span>
-                <span class="text-[9px] text-slate-400 italic">Pesquisa rápida por nome</span>
-              </div>
-              <div class="relative">
-                <input type="text" id="razaoSocial" class="input-editable w-full font-bold text-slate-800 text-xs focus:bg-white pr-7" placeholder="Digite o nome, razão social ou fantasia..." autocomplete="off" oninput="pesquisarClientesPorNome(this.value)" onfocus="pesquisarClientesPorNome(this.value)" onkeydown="navegarSugestoesClientes(event)">
-                <i class="ph ph-magnifying-glass absolute right-2.5 top-2.5 text-slate-400 text-sm pointer-events-none"></i>
-              </div>
-              <div id="dropdownBuscaRazao" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs"></div>
-            </div>
-            <div>
-              <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_fantasia">Nome Fantasia</span>
-              <input type="text" id="nomeFantasia" class="input-editable w-full text-slate-600 text-xs focus:bg-white" placeholder="Nome fantasia...">
-            </div>
-            <div>
-              <span class="text-[10px] text-slate-500 uppercase font-bold" id="lbl_cidade">Cidade</span>
-              <input type="text" id="cidade" class="input-editable w-full text-slate-600 text-xs focus:bg-white" placeholder="Cidade...">
-            </div>
-          </div>
         </div>
-
-        <!-- Parâmetros da Rota -->
-        <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-3">
-          
-          <!-- Ordem de Visita -->
-          <div>
-            <div class="flex justify-between items-center mb-1.5">
-              <label class="text-xs font-bold text-slate-700 uppercase" id="lbl_ordem">Ordem de Visita</label>
-              <div class="flex items-center gap-1.5">
-                <span class="text-[10px] text-slate-400">Nº Manual:</span>
-                <input type="number" id="ordemManual" class="w-14 p-1 border border-slate-300 rounded text-center text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="#" onchange="sincronizarOrdem(this.value)">
-              </div>
-            </div>
-            <div class="grid grid-cols-10 gap-1">
-              <script>
-                for(let i=1; i<=20; i++) {
-                  document.write(`
-                    <input type="radio" name="ordemVisita" id="ordem_${i}" value="${i}" class="hidden btn-check" onclick="document.getElementById('ordemManual').value=this.value; salvarEstadoFormulario();">
-                    <label for="ordem_${i}" class="cursor-pointer text-center text-[10px] py-1 rounded border border-slate-200 text-slate-600 font-bold hover:bg-blue-50 transition-colors">${i}</label>
-                  `);
-                }
-              </script>
-            </div>
-          </div>
-
-          <hr class="border-slate-100">
-
-          <!-- Frequência -->
-          <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5" id="lbl_frequencia">Frequência</label>
-            <div class="flex gap-1.5">
-              <div class="flex-1">
-                <input type="checkbox" id="sem_todas" value="Toda Semana" class="hidden btn-check-week" onchange="toggleSemana('todas')">
-                <label for="sem_todas" class="block cursor-pointer text-center text-[11px] py-1.5 rounded-lg border border-slate-200 font-bold transition-colors">TODA SEMANA</label>
-              </div>
-              <script>
-                const semanas = [{id:'s1', l:'S1'}, {id:'s2', l:'S2'}, {id:'s3', l:'S3'}, {id:'s4', l:'S4'}, {id:'s5', l:'S5'}];
-                semanas.forEach(s => {
-                  document.write(`
-                    <div class="flex-1">
-                      <input type="checkbox" name="semanaEspecifica" id="sem_${s.id}" value="${s.l}" class="hidden btn-check-week" onchange="toggleSemana('${s.id}')">
-                      <label for="sem_${s.id}" class="block cursor-pointer text-center text-[11px] py-1.5 rounded-lg border border-slate-200 font-bold transition-colors">${s.l}</label>
-                    </div>
-                  `);
-                });
-              </script>
-            </div>
-          </div>
-
-          <hr class="border-slate-100">
-
-          <!-- Dias da Visita (Principal e Secundários) -->
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5" id="lbl_dia_visita">Dia Principal</label>
-              <div class="grid grid-cols-3 gap-1">
-                <script>
-                  ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => {
-                    document.write(`
-                      <input type="radio" name="diaPrincipal" id="dia_${d}" value="${d}" class="hidden btn-check" onclick="salvarEstadoFormulario()">
-                      <label for="dia_${d}" class="cursor-pointer text-center text-[10px] py-1.5 rounded border border-slate-200 font-semibold transition-colors">${d}</label>
-                    `);
-                  });
-                </script>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1.5" id="lbl_outros_dias">Outros Dias</label>
-              <div class="grid grid-cols-3 gap-1">
-                <script>
-                  ['SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => {
-                    document.write(`
-                      <input type="checkbox" name="diasSecundarios" id="sec_${d}" value="${d}" class="hidden btn-check-sec" onclick="salvarEstadoFormulario()">
-                      <label for="sec_${d}" class="cursor-pointer text-center text-[10px] py-1.5 rounded border border-slate-200 text-slate-400 font-semibold transition-colors">${d}</label>
-                    `);
-                  });
-                </script>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Contato e Observações -->
-        <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2.5">
-          <div class="flex gap-2">
-            <div class="flex-1">
-              <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_comprador">Nome Comprador</label>
-              <input type="text" id="comprador" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="Nome do contato..." onchange="salvarEstadoFormulario()">
-            </div>
-            <div class="w-2/5">
-              <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_whatsapp">WhatsApp</label>
-              <input type="tel" id="whatsapp" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-green-500 font-medium" placeholder="(19) 9 9999-9999" oninput="formatarWhatsAppSmart(this); salvarEstadoFormulario()" onpaste="setTimeout(() => formatarWhatsAppSmart(this), 0)" onblur="formatarWhatsAppSmart(this); salvarEstadoFormulario()">
-            </div>
-          </div>
-
-          <div>
-            <label class="text-[10px] font-bold text-slate-600 uppercase mb-1 block" id="lbl_obs">Observações</label>
-            <input type="text" id="obs" class="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 outline-none text-xs focus:bg-white focus:ring-2 focus:ring-amber-500" placeholder="Ex: Recebe após as 14h..." onkeydown="if(event.key === 'Enter') incluirNaLista()">
-          </div>
-        </div>
-
-        <!-- Ações de Gravação -->
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <button type="button" id="btnIncluirFila" onclick="incluirNaLista()" class="btn-amber font-bold py-3 px-4 rounded-xl shadow flex items-center justify-center gap-2 text-xs transition active:scale-98">
-            <i class="ph ph-plus-circle text-lg"></i>
-            <span>INCLUIR NA FILA</span>
-          </button>
-          <button type="button" id="btnGravarEste" onclick="salvarDireto()" class="btn-blue font-bold py-3 px-4 rounded-xl shadow flex items-center justify-center gap-2 text-xs transition active:scale-98">
-            <i class="ph ph-floppy-disk text-lg"></i>
-            <span>GRAVAR ESTE</span>
-          </button>
-        </div>
-      </form>
-
-      <!-- Fila de Envio em Lote -->
-      <div id="areaLista" class="bg-white rounded-xl shadow-sm border border-slate-200 hidden overflow-hidden">
-        <div class="bg-slate-50 p-2.5 border-b border-slate-200 flex justify-between items-center">
-          <div class="flex items-center gap-2">
-            <span class="font-bold text-xs text-slate-700 uppercase">Fila de Envio</span>
-            <span id="contadorLista" class="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
-          </div>
-          <button onclick="limparTodaFila()" class="text-[11px] text-red-500 hover:text-red-700 font-medium">Limpar fila</button>
-        </div>
-        <div id="listaClientesContainer" class="divide-y divide-slate-100 max-h-60 overflow-y-auto"></div>
       </div>
     </section>
 
@@ -1181,8 +1465,24 @@
       return sel ? sel.value : 'SEG';
     }
 
+    // ============================================================
+    // 6. VISUALIZADOR DA ROTA DO DIA (Cards Ordenados + Reordenação com Linhas SVG)
+    // ============================================================
+    let mapaConexoesOrdem = new Map(); // codCliente -> novaOrdem (1..N)
+    let paradasAtuaisDia = [];
+    let selecaoPendenteDot = null; // { tipo: 'CLIENTE'|'ALVO', id: string, el: HTMLElement }
+    let estadoArrastoConexao = null; // para drag com pointer capture
+
+    function getDiaSelecionado() {
+      const sel = document.querySelector('input[name="filtroRotaDia"]:checked');
+      return sel ? sel.value : 'SEG';
+    }
+
     function renderizarRotaDoDia() {
       const container = document.getElementById('listaCardsRota');
+      const colunaNumeros = document.getElementById('colunaNumerosOrdem');
+      const svgLinhas = document.getElementById('svgConexoesOrdem');
+      const barraReordem = document.getElementById('barraAtribuirNovaOrdem');
       const contador = document.getElementById('contadorParadasRota');
       const dia = getDiaSelecionado();
       const semana = document.getElementById('filtroRotaSemana').value;
@@ -1190,11 +1490,14 @@
 
       if (!usuarioLogado) {
         container.innerHTML = '<div class="p-8 text-center text-slate-400 text-xs font-semibold">Faça login para visualizar sua rota.</div>';
+        if (colunaNumeros) colunaNumeros.classList.add('hidden');
+        if (svgLinhas) svgLinhas.innerHTML = '';
+        if (barraReordem) barraReordem.classList.add('hidden');
         return;
       }
 
       // Filtra visitas deste dia e semana
-      const paradas = dbRotasVendedor.filter(r => {
+      paradasAtuaisDia = dbRotasVendedor.filter(r => {
         // Dia principal ou secundário
         const diaMatch = (dia === 'TODOS') || (r.diaPrinc === dia) || (r.diasSec && r.diasSec.includes(dia));
         if (!diaMatch) return false;
@@ -1220,15 +1523,23 @@
       });
 
       // Ordena rigorosamente pela Ordem da Rota
-      paradas.sort((a, b) => {
+      paradasAtuaisDia.sort((a, b) => {
         const ordA = parseInt(a.ordem, 10) || 999;
         const ordB = parseInt(b.ordem, 10) || 999;
         return ordA - ordB;
       });
 
-      contador.textContent = paradas.length;
+      contador.textContent = paradasAtuaisDia.length;
 
-      if (paradas.length === 0) {
+      // Limpa conexões que não pertencem mais aos clientes visíveis
+      const codigosVisiveis = new Set(paradasAtuaisDia.map(p => String(p.codCliente)));
+      for (const [codCli] of mapaConexoesOrdem.entries()) {
+        if (!codigosVisiveis.has(codCli)) {
+          mapaConexoesOrdem.delete(codCli);
+        }
+      }
+
+      if (paradasAtuaisDia.length === 0) {
         container.innerHTML = `
           <div class="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 space-y-2">
             <i class="ph ph-calendar-x text-3xl text-slate-300"></i>
@@ -1236,10 +1547,38 @@
             <p class="text-[11px]">Alterne a semana ou lance novas visitas na aba ao lado.</p>
           </div>
         `;
+        if (colunaNumeros) colunaNumeros.classList.add('hidden');
+        if (svgLinhas) svgLinhas.innerHTML = '';
+        if (barraReordem) barraReordem.classList.add('hidden');
         return;
       }
 
-      container.innerHTML = paradas.map((r, idx) => {
+      // Regra estrita do usuário: A coluna lateral de números SÓ APARECE quando um dia específico estiver selecionado (NÃO VALE PARA "TODOS")
+      const permiteReordenacaoVisual = (dia !== 'TODOS');
+
+      if (colunaNumeros) {
+        if (permiteReordenacaoVisual) {
+          colunaNumeros.classList.remove('hidden');
+          // Gera os slots numéricos 1..N
+          colunaNumeros.innerHTML = paradasAtuaisDia.map((_, idx) => {
+            const numAlvo = idx + 1;
+            return `
+              <div class="slot-alvo-ordem" id="slot_alvo_${numAlvo}" data-ordem="${numAlvo}">
+                <div class="dot-alvo-ordem" data-alvo-ordem="${numAlvo}" id="dot_alvo_${numAlvo}" title="Arraste ou clique para ligar a um cliente"></div>
+                <div class="badge-alvo-ordem" id="badge_alvo_${numAlvo}">${numAlvo}</div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          colunaNumeros.classList.add('hidden');
+          colunaNumeros.innerHTML = '';
+          if (svgLinhas) svgLinhas.innerHTML = '';
+          if (barraReordem) barraReordem.classList.add('hidden');
+        }
+      }
+
+      // Renderiza os Cards dos Clientes
+      container.innerHTML = paradasAtuaisDia.map((r, idx) => {
         const ord = r.ordem || (idx + 1);
         const nomeCli = r.fantasia || r.razao || 'Cliente Sem Nome';
         const cid = r.cidade || 'Cidade não informada';
@@ -1250,13 +1589,13 @@
 
         // Botões de contato
         const whatsBtn = whatsLimpo ? `
-          <a href="https://wa.me/${whatsLimpo}" target="_blank" rel="noopener" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95">
+          <a href="https://wa.me/${whatsLimpo}" target="_blank" rel="noopener" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95">
             <i class="ph ph-whatsapp-logo text-base"></i>
             <span>Whats</span>
           </a>
         ` : `
-          <button disabled class="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-not-allowed">
-            <i class="ph ph-whatsapp-logo text-base"></i>
+          <button disabled class="bg-slate-100 text-slate-400 px-2 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-not-allowed">
+            <i class="ph ph-whatsapp-logo text-sm"></i>
             <span>Sem Tel</span>
           </button>
         `;
@@ -1267,38 +1606,990 @@
           </a>
         ` : '';
 
+        // Se reordenação permitida, renderiza o nó conector na lateral direita do card
+        const noConectorHtml = permiteReordenacaoVisual ? `
+          <div class="flex flex-col items-center justify-center pl-1.5 pr-0.5 shrink-0 select-none">
+            <div class="dot-origem-cliente" data-cod-cliente="${r.codCliente}" id="dot_cli_${r.codCliente}" title="Arraste ou clique para ligar a um número de ordem"></div>
+            <span id="tag_nova_ordem_${r.codCliente}" class="hidden text-[10px] font-extrabold text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded-md mt-1 shadow-2xs">#</span>
+          </div>
+        ` : '';
+
         return `
-          <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition-colors flex items-start gap-3">
-            <div class="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold flex items-center justify-center text-sm flex-shrink-0">
-              ${ord}
-            </div>
-
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">#${r.codCliente}</span>
-                <h3 class="text-xs font-bold text-slate-800 truncate">${escapeHtml(nomeCli)}</h3>
+          <div id="card_rota_${r.codCliente}" class="card-rota-item bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition-colors flex items-center justify-between gap-2.5 relative">
+            <div class="flex items-start gap-2.5 flex-1 min-w-0">
+              <div class="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
+                ${ord}
               </div>
 
-              <div class="text-[11px] text-slate-500 mt-1 space-y-0.5">
-                <div class="truncate"><i class="ph ph-map-pin text-slate-400"></i> ${escapeHtml(cid)} <span class="text-slate-400">• Ent: ${escapeHtml(diasEntrega)}</span></div>
-                ${comprador ? `<div class="truncate"><i class="ph ph-user text-slate-400"></i> Comprador: <strong class="text-slate-700">${escapeHtml(comprador)}</strong></div>` : ''}
-                ${r.obs ? `<div class="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] inline-block font-medium mt-1">Obs: ${escapeHtml(r.obs)}</div>` : ''}
-              </div>
-
-              <div class="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
-                <div class="flex items-center gap-1.5">
-                  ${whatsBtn}
-                  ${ligarBtn}
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">#${r.codCliente}</span>
+                  <h3 class="text-xs font-bold text-slate-800 truncate">${escapeHtml(nomeCli)}</h3>
                 </div>
-                <button onclick="carregarVisitaNoFormulario('${r.codCliente}')" class="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1">
-                  <i class="ph ph-pencil-simple"></i>
-                  <span>Editar</span>
-                </button>
+
+                <div class="text-[11px] text-slate-500 mt-1 space-y-0.5">
+                  <div class="truncate"><i class="ph ph-map-pin text-slate-400"></i> ${escapeHtml(cid)} <span class="text-slate-400">• Ent: ${escapeHtml(diasEntrega)}</span></div>
+                  ${comprador ? `<div class="truncate"><i class="ph ph-user text-slate-400"></i> Comprador: <strong class="text-slate-700">${escapeHtml(comprador)}</strong></div>` : ''}
+                  ${r.obs ? `<div class="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] inline-block font-medium mt-1">Obs: ${escapeHtml(r.obs)}</div>` : ''}
+                </div>
+
+                <div class="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
+                  <div class="flex items-center gap-1.5">
+                    ${whatsBtn}
+                    ${ligarBtn}
+                  </div>
+                  <button onclick="carregarVisitaNoFormulario('${r.codCliente}')" class="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1">
+                    <i class="ph ph-pencil-simple"></i>
+                    <span>Editar</span>
+                  </button>
+                </div>
               </div>
             </div>
+
+            ${noConectorHtml}
           </div>
         `;
       }).join('');
+
+      if (permiteReordenacaoVisual) {
+        // Alinha alturas dos slots laterais com os cards para estética perfeita
+        setTimeout(() => {
+          alinharSlotsComCards();
+          configurarEventosConexaoInterativa();
+          atualizarPosicoesLinhasSVG();
+          atualizarEstadoBarraReordem();
+        }, 50);
+      }
+    }
+
+    function alinharSlotsComCards() {
+      const cards = document.querySelectorAll('.card-rota-item');
+      cards.forEach((card, idx) => {
+        const slot = document.getElementById(`slot_alvo_${idx + 1}`);
+        if (slot) {
+          slot.style.minHeight = `${card.offsetHeight}px`;
+        }
+      });
+    }
+
+    // ============================================================
+    // 6.1 INTERAÇÃO DE REORDENAÇÃO (ARRASITAR LINHA + CLIQUE DUPLO)
+    // ============================================================
+    function configurarEventosConexaoInterativa() {
+      const wrapper = document.getElementById('wrapperRotaReordenacao');
+      if (!wrapper) return;
+
+      // Eventos para nós dos clientes
+      document.querySelectorAll('.dot-origem-cliente').forEach(dot => {
+        dot.onpointerdown = (e) => iniciarArrastoConexao(e, 'CLIENTE', dot.dataset.codCliente, dot);
+      });
+
+      // Eventos para nós de destino numérico
+      document.querySelectorAll('.dot-alvo-ordem').forEach(dot => {
+        dot.onpointerdown = (e) => iniciarArrastoConexao(e, 'ALVO', dot.dataset.alvoOrdem, dot);
+      });
+    }
+
+    function iniciarArrastoConexao(e, tipo, id, el) {
+      e.preventDefault();
+      const wrapper = document.getElementById('wrapperRotaReordenacao');
+      const svg = document.getElementById('svgConexoesOrdem');
+      if (!wrapper || !svg) return;
+
+      el.setPointerCapture(e.pointerId);
+
+      const pOrigem = getPosicaoCentroDot(el, wrapper);
+
+      estadoArrastoConexao = {
+        ativo: true,
+        pointerId: e.pointerId,
+        tipoOrigem: tipo,
+        idOrigem: id,
+        elOrigem: el,
+        startX: e.clientX,
+        startY: e.clientY,
+        pOrigem: pOrigem,
+        moveu: false
+      };
+
+      el.classList.add('active-drag');
+
+      // Cria linha SVG temporária tracejada
+      let linhaTemp = document.getElementById('linhaTempArrasto');
+      if (!linhaTemp) {
+        linhaTemp = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        linhaTemp.id = 'linhaTempArrasto';
+        linhaTemp.setAttribute('stroke', '#ef4444');
+        linhaTemp.setAttribute('stroke-width', '3');
+        linhaTemp.setAttribute('stroke-dasharray', '5,4');
+        linhaTemp.setAttribute('stroke-linecap', 'round');
+        svg.appendChild(linhaTemp);
+      }
+      linhaTemp.setAttribute('x1', pOrigem.x);
+      linhaTemp.setAttribute('y1', pOrigem.y);
+      linhaTemp.setAttribute('x2', pOrigem.x);
+      linhaTemp.setAttribute('y2', pOrigem.y);
+
+      el.onpointermove = (ev) => moverArrastoConexao(ev);
+      el.onpointerup = (ev) => finalizarArrastoConexao(ev);
+      el.onpointercancel = (ev) => cancelarArrastoConexao(ev);
+    }
+
+    function moverArrastoConexao(e) {
+      if (!estadoArrastoConexao || !estadoArrastoConexao.ativo) return;
+      const dist = Math.hypot(e.clientX - estadoArrastoConexao.startX, e.clientY - estadoArrastoConexao.startY);
+      if (dist > 5) {
+        estadoArrastoConexao.moveu = true;
+      }
+
+      const wrapper = document.getElementById('wrapperRotaReordenacao');
+      const rectWrapper = wrapper.getBoundingClientRect();
+      const curX = e.clientX - rectWrapper.left;
+      const curY = e.clientY - rectWrapper.top;
+
+      const linhaTemp = document.getElementById('linhaTempArrasto');
+      if (linhaTemp) {
+        linhaTemp.setAttribute('x2', curX);
+        linhaTemp.setAttribute('y2', curY);
+      }
+    }
+
+    function finalizarArrastoConexao(e) {
+      if (!estadoArrastoConexao) return;
+      const { elOrigem, tipoOrigem, idOrigem, moveu, pointerId } = estadoArrastoConexao;
+
+      try {
+        elOrigem.releasePointerCapture(pointerId);
+      } catch (err) {}
+
+      elOrigem.classList.remove('active-drag');
+      elOrigem.onpointermove = null;
+      elOrigem.onpointerup = null;
+      elOrigem.onpointercancel = null;
+
+      // Remove a linha temporária
+      const linhaTemp = document.getElementById('linhaTempArrasto');
+      if (linhaTemp) linhaTemp.remove();
+
+      if (!moveu) {
+        // Foi um CLIQUE ou TOQUE curto! Usa interação Click-to-Pair
+        tratarCliqueDot(tipoOrigem, idOrigem, elOrigem);
+        estadoArrastoConexao = null;
+        return;
+      }
+
+      // Foi um ARRASTO! Descobre sobre qual elemento o ponteiro foi solto
+      const elDestino = document.elementFromPoint(e.clientX, e.clientY);
+      if (elDestino) {
+        if (tipoOrigem === 'CLIENTE') {
+          // Procurando alvo numérico (dot-alvo-ordem ou slot-alvo-ordem ou badge-alvo-ordem)
+          const alvoDot = elDestino.closest('.dot-alvo-ordem') || elDestino.closest('.slot-alvo-ordem')?.querySelector('.dot-alvo-ordem');
+          if (alvoDot) {
+            conectarPar(idOrigem, alvoDot.dataset.alvoOrdem);
+          }
+        } else {
+          // Começou no alvo numérico -> procurando cliente
+          const cliDot = elDestino.closest('.dot-origem-cliente') || elDestino.closest('.card-rota-item')?.querySelector('.dot-origem-cliente');
+          if (cliDot) {
+            conectarPar(cliDot.dataset.codCliente, idOrigem);
+          }
+        }
+      }
+
+      estadoArrastoConexao = null;
+    }
+
+    function cancelarArrastoConexao(e) {
+      if (!estadoArrastoConexao) return;
+      const { elOrigem, pointerId } = estadoArrastoConexao;
+      try { elOrigem.releasePointerCapture(pointerId); } catch(err) {}
+      elOrigem.classList.remove('active-drag');
+      const linhaTemp = document.getElementById('linhaTempArrasto');
+      if (linhaTemp) linhaTemp.remove();
+      estadoArrastoConexao = null;
+    }
+
+    function tratarCliqueDot(tipo, id, el) {
+      // Se não havia seleção pendente, seleciona este
+      if (!selecaoPendenteDot) {
+        selecaoPendenteDot = { tipo, id, el };
+        el.classList.add('pulsando');
+        return;
+      }
+
+      // Se clicou no mesmo elemento, desmarca
+      if (selecaoPendenteDot.el === el) {
+        el.classList.remove('pulsando');
+        selecaoPendenteDot = null;
+        return;
+      }
+
+      // Se clicou em outro do mesmo tipo, transfere a seleção
+      if (selecaoPendenteDot.tipo === tipo) {
+        selecaoPendenteDot.el.classList.remove('pulsando');
+        selecaoPendenteDot = { tipo, id, el };
+        el.classList.add('pulsando');
+        return;
+      }
+
+      // Clicou em tipos opostos: CONECTA!
+      selecaoPendenteDot.el.classList.remove('pulsando');
+      if (selecaoPendenteDot.tipo === 'CLIENTE') {
+        conectarPar(selecaoPendenteDot.id, id);
+      } else {
+        conectarPar(id, selecaoPendenteDot.id);
+      }
+      selecaoPendenteDot = null;
+    }
+
+    function conectarPar(codCliente, novaOrdem) {
+      const codStr = String(codCliente).trim();
+      const numOrdem = parseInt(novaOrdem, 10);
+      if (!codStr || isNaN(numOrdem)) return;
+
+      // Se esse número de ordem já estava atribuído a outro cliente, desassocia o anterior
+      for (const [cli, ord] of mapaConexoesOrdem.entries()) {
+        if (ord === numOrdem && cli !== codStr) {
+          mapaConexoesOrdem.delete(cli);
+        }
+      }
+
+      // Conecta este cliente à nova ordem
+      mapaConexoesOrdem.set(codStr, numOrdem);
+
+      atualizarPosicoesLinhasSVG();
+      atualizarEstadoBarraReordem();
+    }
+
+    function desconectarCliente(codCliente) {
+      const codStr = String(codCliente).trim();
+      mapaConexoesOrdem.delete(codStr);
+      atualizarPosicoesLinhasSVG();
+      atualizarEstadoBarraReordem();
+    }
+
+    function limparTodasConexoesOrdem() {
+      mapaConexoesOrdem.clear();
+      atualizarPosicoesLinhasSVG();
+      atualizarEstadoBarraReordem();
+    }
+
+    function getPosicaoCentroDot(el, relativeTo) {
+      const rectRel = relativeTo.getBoundingClientRect();
+      const rectEl = el.getBoundingClientRect();
+      return {
+        x: rectEl.left + rectEl.width / 2 - rectRel.left,
+        y: rectEl.top + rectEl.height / 2 - rectRel.top
+      };
+    }
+
+    function atualizarPosicoesLinhasSVG() {
+      const wrapper = document.getElementById('wrapperRotaReordenacao');
+      const svg = document.getElementById('svgConexoesOrdem');
+      if (!wrapper || !svg) return;
+
+      const dia = getDiaSelecionado();
+      if (dia === 'TODOS') {
+        svg.innerHTML = '';
+        return;
+      }
+
+      // Limpa todas as linhas desenhadas (preservando linha temporária se houver)
+      const linhasTemp = document.getElementById('linhaTempArrasto');
+      svg.innerHTML = '';
+      if (linhasTemp) svg.appendChild(linhasTemp);
+
+      // Reseta classes visuais de todos os nós
+      document.querySelectorAll('.dot-origem-cliente').forEach(d => d.classList.remove('conectado'));
+      document.querySelectorAll('.slot-alvo-ordem').forEach(s => s.classList.remove('conectado'));
+      document.querySelectorAll('.dot-alvo-ordem').forEach(d => d.classList.remove('conectado'));
+      document.querySelectorAll('[id^="tag_nova_ordem_"]').forEach(t => t.classList.add('hidden'));
+
+      // Desenha cada par conectado
+      for (const [codCli, novaOrdem] of mapaConexoesOrdem.entries()) {
+        const dotCli = document.getElementById(`dot_cli_${codCli}`);
+        const dotAlvo = document.getElementById(`dot_alvo_${novaOrdem}`);
+        const slotAlvo = document.getElementById(`slot_alvo_${novaOrdem}`);
+        const tagNovaOrdem = document.getElementById(`tag_nova_ordem_${codCli}`);
+
+        if (dotCli && dotAlvo) {
+          dotCli.classList.add('conectado');
+          dotAlvo.classList.add('conectado');
+          if (slotAlvo) slotAlvo.classList.add('conectado');
+
+          if (tagNovaOrdem) {
+            tagNovaOrdem.textContent = `→ #${novaOrdem}`;
+            tagNovaOrdem.classList.remove('hidden');
+          }
+
+          const p1 = getPosicaoCentroDot(dotCli, wrapper);
+          const p2 = getPosicaoCentroDot(dotAlvo, wrapper);
+
+          // Grupo SVG interativo
+          const grupo = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          grupo.setAttribute('class', 'grupo-conexao-ativa');
+          grupo.style.cursor = 'pointer';
+          grupo.setAttribute('title', `Clique para desconectar da ordem ${novaOrdem}`);
+          grupo.onclick = () => desconectarCliente(codCli);
+
+          // Linha com efeito visual limpo e nítido
+          const linha = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          linha.setAttribute('x1', p1.x);
+          linha.setAttribute('y1', p1.y);
+          linha.setAttribute('x2', p2.x);
+          linha.setAttribute('y2', p2.y);
+          linha.setAttribute('stroke', '#ef4444');
+          linha.setAttribute('stroke-width', '3');
+          linha.setAttribute('stroke-linecap', 'round');
+
+          // Círculos nos pontos de ancoragem para combinar perfeitamente com a ilustração
+          const c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c1.setAttribute('cx', p1.x);
+          c1.setAttribute('cy', p1.y);
+          c1.setAttribute('r', '4');
+          c1.setAttribute('fill', '#ef4444');
+
+          const c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c2.setAttribute('cx', p2.x);
+          c2.setAttribute('cy', p2.y);
+          c2.setAttribute('r', '4');
+          c2.setAttribute('fill', '#ef4444');
+
+          grupo.appendChild(linha);
+          grupo.appendChild(c1);
+          grupo.appendChild(c2);
+          svg.appendChild(grupo);
+        }
+      }
+    }
+
+    function atualizarEstadoBarraReordem() {
+      const barra = document.getElementById('barraAtribuirNovaOrdem');
+      const badgeQtd = document.getElementById('badgeQtdConexoes');
+      const subStatus = document.getElementById('subStatusReordem');
+      const badgeDia = document.getElementById('badgeDiaReordem');
+      if (!barra) return;
+
+      const dia = getDiaSelecionado();
+      if (dia === 'TODOS') {
+        barra.classList.add('hidden');
+        return;
+      }
+
+      const totalConectados = mapaConexoesOrdem.size;
+      const totalParadas = paradasAtuaisDia.length;
+
+      if (totalConectados > 0) {
+        barra.classList.remove('hidden');
+        if (badgeQtd) badgeQtd.textContent = totalConectados;
+        if (badgeDia) badgeDia.textContent = dia;
+        if (subStatus) subStatus.textContent = `${totalConectados} de ${totalParadas} paradas conectadas`;
+      } else {
+        barra.classList.add('hidden');
+      }
+    }
+
+    async function atribuirNovaOrdemSalvar() {
+      if (mapaConexoesOrdem.size === 0) {
+        alert('Nenhuma nova ordem foi conectada.');
+        return;
+      }
+
+      if (!usuarioLogado) {
+        alert('Faça login para salvar a rota.');
+        return;
+      }
+
+      const dia = getDiaSelecionado();
+      const btn = document.getElementById('btnConfirmarReordem');
+      const htmlOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white;"></div> <span>Salvando...</span>`;
+
+      try {
+        // Prepara lista de todas as paradas do dia com as novas ordens
+        // Para as que foram conectadas, aplica a ordem nova.
+        // Para as não conectadas explicitamente, preserva a ordem ou ajusta para garantir ausência de duplicidade.
+        const listaAtualizada = [];
+
+        paradasAtuaisDia.forEach(r => {
+          const codStr = String(r.codCliente).trim();
+          let ordemFinal = r.ordem;
+
+          if (mapaConexoesOrdem.has(codStr)) {
+            ordemFinal = mapaConexoesOrdem.get(codStr);
+          }
+
+          listaAtualizada.push({
+            codVendedor: usuarioLogado.cod,
+            nomeVendedor: usuarioLogado.nome,
+            equipeVendedor: usuarioLogado.equipe,
+            codCliente: r.codCliente,
+            razaoSocial: r.razao,
+            nomeFantasia: r.fantasia,
+            cidade: r.cidade,
+            ordemVisita: ordemFinal,
+            diaPrincipal: r.diaPrinc || dia,
+            diasSecundarios: r.diasSec || '',
+            semanas: r.freq || 'Toda Semana',
+            comprador: r.comprador || '',
+            whatsapp: r.whatsapp || '',
+            obs: r.obs || ''
+          });
+        });
+
+        const res = await chamarBackendScript({
+          acao: 'SALVAR_LOTE',
+          lista: listaAtualizada
+        });
+
+        if (res.sucesso) {
+          // Atualiza em memória local
+          listaAtualizada.forEach(item => {
+            const rotLocal = dbRotasVendedor.find(r => String(r.codCliente).trim() === String(item.codCliente).trim() && (r.diaPrinc === item.diaPrincipal));
+            if (rotLocal) {
+              rotLocal.ordem = item.ordemVisita;
+            }
+          });
+
+          mapaConexoesOrdem.clear();
+          exibirModalAlerta('sucesso', `Nova ordem atribuída e salva com sucesso para ${dia}!`, 'Todas as paradas foram reordenadas sequencialmente na sua planilha.');
+          renderizarRotaDoDia();
+        } else {
+          alert('Erro ao salvar nova ordem: ' + (res.erro || 'Falha no servidor.'));
+        }
+      } catch (err) {
+        console.error('Erro ao atribuir nova ordem:', err);
+        alert('Erro ao gravar nova ordem. Verifique sua conexão.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = htmlOriginal;
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      atualizarPosicoesLinhasSVG();
+      alinharSlotsComCards();
+    });
+
+    // ============================================================
+    // 6.2 ASSISTENTE DE ROTEIRIZAÇÃO POR CIDADES EM 2 PASSOS
+    // ============================================================
+    let modoLancarAtual = 'individual'; // 'individual' | 'cidades'
+    let clientesPasso1Selecionados = []; // clientes com ordem atribuída
+
+    function alternarSubAbaLancar(modo) {
+      modoLancarAtual = modo;
+      const btnIndiv = document.getElementById('subTabLancarIndividual');
+      const btnCid = document.getElementById('subTabLancarCidades');
+      const contIndiv = document.getElementById('conteudoLancarIndividual');
+      const contCid = document.getElementById('conteudoLancarCidades');
+
+      if (modo === 'cidades') {
+        btnCid.classList.add('bg-white', 'text-blue-700', 'shadow-xs');
+        btnCid.classList.remove('text-slate-600');
+        btnIndiv.classList.remove('bg-white', 'text-blue-700', 'shadow-xs');
+        btnIndiv.classList.add('text-slate-600');
+
+        contIndiv.classList.add('hidden');
+        contCid.classList.remove('hidden');
+
+        iniciarAssistenteRoteirizacaoCidades();
+      } else {
+        btnIndiv.classList.add('bg-white', 'text-blue-700', 'shadow-xs');
+        btnIndiv.classList.remove('text-slate-600');
+        btnCid.classList.remove('bg-white', 'text-blue-700', 'shadow-xs');
+        btnCid.classList.add('text-slate-600');
+
+        contCid.classList.add('hidden');
+        contIndiv.classList.remove('hidden');
+      }
+    }
+
+    function getDiaRoteirizacaoCidades() {
+      const sel = document.querySelector('input[name="diaRoteirizacaoCidades"]:checked');
+      return sel ? sel.value : 'SEG';
+    }
+
+    function aoMudarDiaRoteirizacaoCidades() {
+      renderizarCidadesPasso1();
+      renderizarClientesPasso1();
+    }
+
+    function iniciarAssistenteRoteirizacaoCidades() {
+      // Volta para o Passo 1
+      document.getElementById('painelPasso1Cidades').classList.remove('hidden');
+      document.getElementById('painelPasso2Cidades').classList.add('hidden');
+      document.getElementById('stepBadgeRoteirizacao').textContent = '1';
+      document.getElementById('stepTituloRoteirizacao').textContent = 'Passo 1: Dia, Cidades e Ordem';
+      document.getElementById('stepSubRoteirizacao').textContent = 'Defina o dia da visita, marque as cidades e digite a ordem dos clientes';
+      document.getElementById('wizardStepIndicator').textContent = 'Passo 1 de 2';
+
+      renderizarCidadesPasso1();
+      renderizarClientesPasso1();
+    }
+
+    function renderizarCidadesPasso1() {
+      const container = document.getElementById('containerListaCidadesRoteirizacao');
+      if (!container) return;
+
+      const diaVisita = getDiaRoteirizacaoCidades();
+
+      // Agrupa cidades únicas da carteira deste vendedor (dbClientes)
+      const mapaCidades = {};
+      (dbClientes || []).forEach(c => {
+        const cid = (c.cidade || 'SEM CIDADE').trim();
+        if (!mapaCidades[cid]) {
+          mapaCidades[cid] = { total: 0, mapeados: 0 };
+        }
+        mapaCidades[cid].total++;
+        if (c.mapeado) mapaCidades[cid].mapeados++;
+      });
+
+      const listaCidades = Object.keys(mapaCidades).sort((a, b) => a.localeCompare(b));
+
+      if (listaCidades.length === 0) {
+        container.innerHTML = '<div class="text-xs text-slate-400 p-3 col-span-2 text-center">Nenhum cliente cadastrado na sua carteira.</div>';
+        return;
+      }
+
+      // Preserva seleção anterior se houver
+      const selecionadasAnteriormente = new Set(
+        Array.from(document.querySelectorAll('.chk-cidade-passo1:checked')).map(cb => cb.value)
+      );
+
+      container.innerHTML = listaCidades.map(cid => {
+        const info = mapaCidades[cid];
+        const entregas = dbEntregas[normalizarTexto(cid)] || 'N/D';
+        const coincideEntrega = entregas.toUpperCase().includes(diaVisita);
+        const estaChecked = selecionadasAnteriormente.has(cid);
+
+        return `
+          <label class="cursor-pointer border border-slate-200 rounded-xl p-2 flex items-start gap-2 hover:bg-slate-50 transition has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/40 text-xs">
+            <input type="checkbox" class="chk-cidade-passo1 mt-0.5 text-blue-600 rounded focus:ring-blue-500" value="${escapeHtml(cid)}" ${estaChecked ? 'checked' : ''} onchange="renderizarClientesPasso1()">
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-slate-800 flex items-center justify-between gap-1">
+                <span class="truncate">${escapeHtml(cid)}</span>
+                <span class="text-[10px] text-slate-400 shrink-0 font-medium">${info.total} cli</span>
+              </div>
+              <div class="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                <span>Ent: <strong>${escapeHtml(entregas)}</strong></span>
+                ${coincideEntrega ? '<span class="bg-green-100 text-green-700 font-bold px-1 rounded text-[9px]">Coincide</span>' : ''}
+              </div>
+            </div>
+          </label>
+        `;
+      }).join('');
+    }
+
+    function marcarTodasCidadesRoteirizacao(marcar) {
+      document.querySelectorAll('.chk-cidade-passo1').forEach(cb => {
+        cb.checked = marcar;
+      });
+      renderizarClientesPasso1();
+    }
+
+    function renderizarClientesPasso1() {
+      const container = document.getElementById('containerClientesCidadesRoteirizacao');
+      if (!container) return;
+
+      const diaVisita = getDiaRoteirizacaoCidades();
+      const cidadesSel = Array.from(document.querySelectorAll('.chk-cidade-passo1:checked')).map(cb => cb.value);
+
+      if (cidadesSel.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+            <i class="ph ph-buildings text-2xl text-slate-300 block mb-1"></i>
+            Selecione pelo menos uma cidade acima para listar os clientes e definir a ordem.
+          </div>
+        `;
+        atualizarContadorPasso1();
+        return;
+      }
+
+      // Filtra clientes das cidades selecionadas
+      const clientesFiltrados = (dbClientes || []).filter(c => {
+        const cid = (c.cidade || 'SEM CIDADE').trim();
+        return cidadesSel.includes(cid);
+      });
+
+      // Agrupa por cidade
+      const porCidade = {};
+      clientesFiltrados.forEach(c => {
+        const cid = (c.cidade || 'SEM CIDADE').trim();
+        if (!porCidade[cid]) porCidade[cid] = [];
+        porCidade[cid].push(c);
+      });
+
+      // Constrói HTML agrupado por cidade
+      let html = '';
+      for (const [cid, listaCli] of Object.entries(porCidade)) {
+        html += `
+          <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+              <span class="font-bold text-xs text-slate-700 flex items-center gap-1.5">
+                <i class="ph ph-map-pin text-blue-600"></i> ${escapeHtml(cid)}
+              </span>
+              <span class="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">${listaCli.length} clientes</span>
+            </div>
+            <div class="divide-y divide-slate-100 bg-white">
+        `;
+
+        listaCli.forEach(c => {
+          const codStr = String(c.codigo || c.codCliente || '').trim();
+          const nomeCli = c.fantasia || c.razao || 'Cliente Sem Nome';
+          
+          // Verifica se já tem rota cadastrada neste dia
+          const rotaAtual = (dbRotasVendedor || []).find(r => String(r.codCliente).trim() === codStr && (r.diaPrinc === diaVisita));
+          const ordemSugerida = rotaAtual ? rotaAtual.ordem : '';
+
+          html += `
+            <div class="p-2.5 flex items-center justify-between gap-2 hover:bg-blue-50/30 transition">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">#${codStr}</span>
+                  <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(nomeCli)}</div>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-0.5 truncate">
+                  ${c.bairro ? escapeHtml(c.bairro) + ' • ' : ''}${rotaAtual ? `<span class="text-blue-600 font-semibold">Já nesta rota (Ordem ${rotaAtual.ordem})</span>` : '<span class="text-slate-400">Sem rota para ' + diaVisita + '</span>'}
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-[10px] font-bold text-slate-400 uppercase">Ordem:</span>
+                <input type="number" min="1" max="99" class="input-ordem-passo1 w-16 p-1.5 text-center font-bold text-blue-600 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs bg-slate-50 focus:bg-white transition" data-cod="${codStr}" data-cidade="${escapeHtml(cid)}" data-nome="${escapeHtml(nomeCli)}" value="${ordemSugerida}" placeholder="#" oninput="atualizarContadorPasso1()">
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+      atualizarContadorPasso1();
+    }
+
+    function atualizarContadorPasso1() {
+      const inputs = document.querySelectorAll('.input-ordem-passo1');
+      let comOrdem = 0;
+      inputs.forEach(inp => {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val > 0) comOrdem++;
+      });
+
+      const badge = document.getElementById('badgeContadorClientesOrdem');
+      if (badge) badge.textContent = `${comOrdem} com ordem`;
+
+      const btnAvancar = document.getElementById('btnAvancarPasso2');
+      if (btnAvancar) {
+        btnAvancar.innerHTML = `
+          <span>Avançar para o Passo 2: Informações de Atendimento (${comOrdem} clientes)</span>
+          <i class="ph ph-arrow-right text-base"></i>
+        `;
+      }
+    }
+
+    function avancarParaPasso2Roteirizacao() {
+      const inputs = document.querySelectorAll('.input-ordem-passo1');
+      clientesPasso1Selecionados = [];
+
+      inputs.forEach(inp => {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val > 0) {
+          const cod = inp.dataset.cod;
+          const cidade = inp.dataset.cidade;
+          const nome = inp.dataset.nome;
+
+          // Busca dados completos do cliente em dbClientes ou dbRotasVendedor
+          const cliBase = (dbClientes || []).find(c => String(c.codigo || c.codCliente).trim() === cod) || {};
+          const rotaBase = (dbRotasVendedor || []).find(r => String(r.codCliente).trim() === cod) || {};
+
+          clientesPasso1Selecionados.push({
+            codigo: cod,
+            ordem: val,
+            cidade: cidade,
+            razao: cliBase.razao || rotaBase.razao || nome,
+            fantasia: cliBase.fantasia || rotaBase.fantasia || nome,
+            comprador: cliBase.comprador || rotaBase.comprador || '',
+            whatsapp: cliBase.whatsapp || rotaBase.whatsapp || '',
+            freq: rotaBase.freq || 'Toda Semana',
+            obs: rotaBase.obs || ''
+          });
+        }
+      });
+
+      if (clientesPasso1Selecionados.length === 0) {
+        alert('Por favor, defina a ordem de visita (ex: 1, 2, 3...) de pelo menos um cliente para avançar.');
+        return;
+      }
+
+      // Ordena rigorosamente pela ordem digitada
+      clientesPasso1Selecionados.sort((a, b) => a.ordem - b.ordem);
+
+      const diaVisita = getDiaRoteirizacaoCidades();
+
+      // Transiciona para o Passo 2
+      document.getElementById('painelPasso1Cidades').classList.add('hidden');
+      document.getElementById('painelPasso2Cidades').classList.remove('hidden');
+      document.getElementById('stepBadgeRoteirizacao').textContent = '2';
+      document.getElementById('stepTituloRoteirizacao').textContent = 'Passo 2: Informações de Atendimento';
+      document.getElementById('stepSubRoteirizacao').textContent = 'Confira dados existentes e complemente apenas o que estiver faltando';
+      document.getElementById('wizardStepIndicator').textContent = 'Passo 2 de 2';
+
+      document.getElementById('badgeDiaPasso2').textContent = diaVisita;
+      document.getElementById('badgeTotalClientesPasso2').textContent = `${clientesPasso1Selecionados.length} paradas`;
+
+      renderizarPasso2Validacao();
+    }
+
+    function renderizarPasso2Validacao() {
+      const container = document.getElementById('listaValidacaoClientesPasso2');
+      if (!container) return;
+
+      container.innerHTML = clientesPasso1Selecionados.map((cli, idx) => {
+        const rawWhats = String(cli.whatsapp || '').replace(/\D/g, '');
+        const temComprador = !!(cli.comprador && cli.comprador.trim().length > 0);
+        const temWhats = !!(rawWhats.length >= 8);
+        const dadosCompletos = temComprador && temWhats;
+
+        const nomeExibicao = cli.fantasia || cli.razao || 'Cliente #' + cli.codigo;
+
+        if (dadosCompletos) {
+          // Cliente com dados completos: exibe card compacto verde aprovado
+          return `
+            <div class="bg-white p-3 rounded-xl border border-green-200 bg-green-50/20 shadow-2xs space-y-1.5" id="card_passo2_${cli.codigo}">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-green-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">${cli.ordem}</span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-bold">#${cli.codigo}</span>
+                      <h4 class="font-bold text-xs text-slate-800 truncate">${escapeHtml(nomeExibicao)}</h4>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-0.5 truncate">
+                      ${escapeHtml(cli.cidade)} • Comprador: <strong class="text-slate-700">${escapeHtml(cli.comprador)}</strong> • Tel: <strong class="text-slate-700">${formatarTelefoneBrasil(cli.whatsapp)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full border border-green-200">
+                    ✓ Pronto
+                  </span>
+                  <button type="button" onclick="document.getElementById('campos_edit_${cli.codigo}').classList.toggle('hidden')" class="text-[10px] text-slate-500 hover:text-blue-600 font-semibold p-1" title="Editar dados deste cliente">
+                    <i class="ph ph-pencil-simple text-sm"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Campos Ocultos com Dados Prontos (ou editáveis se o vendedor abrir) -->
+              <div id="campos_edit_${cli.codigo}" class="hidden pt-2 border-t border-slate-100 space-y-2 text-xs">
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-[10px] font-bold text-slate-600 block mb-0.5">Nome Comprador</label>
+                    <input type="text" id="passo2_comp_${cli.codigo}" value="${escapeHtml(cli.comprador)}" class="w-full p-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white outline-none">
+                  </div>
+                  <div>
+                    <label class="text-[10px] font-bold text-slate-600 block mb-0.5">WhatsApp</label>
+                    <input type="tel" id="passo2_whats_${cli.codigo}" value="${formatarTelefoneBrasil(cli.whatsapp)}" class="w-full p-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white outline-none font-medium" oninput="formatarWhatsAppSmart(this)">
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-[10px] font-bold text-slate-600 block mb-0.5">Frequência</label>
+                    <select id="passo2_freq_${cli.codigo}" class="w-full p-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white outline-none">
+                      <option value="Toda Semana" ${cli.freq === 'Toda Semana' ? 'selected' : ''}>Toda Semana</option>
+                      <option value="S1" ${cli.freq === 'S1' ? 'selected' : ''}>Apenas Semana 1 (S1)</option>
+                      <option value="S2" ${cli.freq === 'S2' ? 'selected' : ''}>Apenas Semana 2 (S2)</option>
+                      <option value="S3" ${cli.freq === 'S3' ? 'selected' : ''}>Apenas Semana 3 (S3)</option>
+                      <option value="S4" ${cli.freq === 'S4' ? 'selected' : ''}>Apenas Semana 4 (S4)</option>
+                      <option value="S5" ${cli.freq === 'S5' ? 'selected' : ''}>Apenas Semana 5 (S5)</option>
+                      <option value="S1, S3" ${cli.freq === 'S1, S3' ? 'selected' : ''}>Quinzenal (S1, S3)</option>
+                      <option value="S2, S4" ${cli.freq === 'S2, S4' ? 'selected' : ''}>Quinzenal (S2, S4)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="text-[10px] font-bold text-slate-600 block mb-0.5">Observações</label>
+                    <input type="text" id="passo2_obs_${cli.codigo}" value="${escapeHtml(cli.obs || '')}" class="w-full p-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white outline-none" placeholder="Obs...">
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          // Cliente com dados incompletos: exibe campos abertos destacados para preenchimento ágil
+          return `
+            <div class="bg-white p-3.5 rounded-xl border-2 border-amber-300 bg-amber-50/30 shadow-xs space-y-2.5" id="card_passo2_${cli.codigo}">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">${cli.ordem}</span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-bold">#${cli.codigo}</span>
+                      <h4 class="font-bold text-xs text-slate-800 truncate">${escapeHtml(nomeExibicao)}</h4>
+                    </div>
+                    <div class="text-[11px] text-amber-800 font-medium mt-0.5">
+                      <i class="ph ph-warning-circle"></i> Complete os dados para finalizar este cliente:
+                    </div>
+                  </div>
+                </div>
+
+                <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full shrink-0">
+                  Preencher
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-amber-200/60 text-xs">
+                <div>
+                  <label class="text-[10px] font-bold text-slate-700 block mb-1">Nome Comprador <span class="text-red-500">*</span></label>
+                  <input type="text" id="passo2_comp_${cli.codigo}" value="${escapeHtml(cli.comprador)}" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome do comprador...">
+                </div>
+                <div>
+                  <label class="text-[10px] font-bold text-slate-700 block mb-1">WhatsApp <span class="text-red-500">*</span></label>
+                  <input type="tel" id="passo2_whats_${cli.codigo}" value="${formatarTelefoneBrasil(cli.whatsapp)}" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:ring-2 focus:ring-green-500 font-medium" placeholder="(19) 9 9999-9999" oninput="formatarWhatsAppSmart(this)">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label class="text-[10px] font-bold text-slate-700 block mb-1">Frequência</label>
+                  <select id="passo2_freq_${cli.codigo}" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white outline-none">
+                    <option value="Toda Semana" ${cli.freq === 'Toda Semana' ? 'selected' : ''}>Toda Semana</option>
+                    <option value="S1" ${cli.freq === 'S1' ? 'selected' : ''}>Apenas Semana 1 (S1)</option>
+                    <option value="S2" ${cli.freq === 'S2' ? 'selected' : ''}>Apenas Semana 2 (S2)</option>
+                    <option value="S3" ${cli.freq === 'S3' ? 'selected' : ''}>Apenas Semana 3 (S3)</option>
+                    <option value="S4" ${cli.freq === 'S4' ? 'selected' : ''}>Apenas Semana 4 (S4)</option>
+                    <option value="S5" ${cli.freq === 'S5' ? 'selected' : ''}>Apenas Semana 5 (S5)</option>
+                    <option value="S1, S3" ${cli.freq === 'S1, S3' ? 'selected' : ''}>Quinzenal (S1, S3)</option>
+                    <option value="S2, S4" ${cli.freq === 'S2, S4' ? 'selected' : ''}>Quinzenal (S2, S4)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-[10px] font-bold text-slate-700 block mb-1">Observações</label>
+                  <input type="text" id="passo2_obs_${cli.codigo}" value="${escapeHtml(cli.obs || '')}" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:ring-2 focus:ring-amber-500" placeholder="Ex: Recebe após as 14h...">
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+    }
+
+    function voltarParaPasso1Roteirizacao() {
+      document.getElementById('painelPasso2Cidades').classList.add('hidden');
+      document.getElementById('painelPasso1Cidades').classList.remove('hidden');
+      document.getElementById('stepBadgeRoteirizacao').textContent = '1';
+      document.getElementById('stepTituloRoteirizacao').textContent = 'Passo 1: Dia, Cidades e Ordem';
+      document.getElementById('stepSubRoteirizacao').textContent = 'Defina o dia da visita, marque as cidades e digite a ordem dos clientes';
+      document.getElementById('wizardStepIndicator').textContent = 'Passo 1 de 2';
+    }
+
+    async function finalizarESalvarRoteirizacaoCidades() {
+      if (!usuarioLogado) {
+        alert('Faça login para salvar as rotas.');
+        return;
+      }
+
+      const diaVisita = getDiaRoteirizacaoCidades();
+      const loteParaSalvar = [];
+
+      for (const cli of clientesPasso1Selecionados) {
+        const inpComp = document.getElementById(`passo2_comp_${cli.codigo}`);
+        const inpWhats = document.getElementById(`passo2_whats_${cli.codigo}`);
+        const inpFreq = document.getElementById(`passo2_freq_${cli.codigo}`);
+        const inpObs = document.getElementById(`passo2_obs_${cli.codigo}`);
+
+        const compradorFinal = inpComp ? inpComp.value.trim() : (cli.comprador || '');
+        const whatsappFinal = inpWhats ? inpWhats.value.trim() : (cli.whatsapp || '');
+        const freqFinal = inpFreq ? inpFreq.value : (cli.freq || 'Toda Semana');
+        const obsFinal = inpObs ? inpObs.value.trim() : (cli.obs || '');
+
+        loteParaSalvar.push({
+          codVendedor: usuarioLogado.cod,
+          nomeVendedor: usuarioLogado.nome,
+          equipeVendedor: usuarioLogado.equipe,
+          codCliente: cli.codigo,
+          razaoSocial: cli.razao,
+          nomeFantasia: cli.fantasia,
+          cidade: cli.cidade,
+          ordemVisita: cli.ordem,
+          diaPrincipal: diaVisita,
+          diasSecundarios: '',
+          semanas: freqFinal,
+          comprador: compradorFinal,
+          whatsapp: whatsappFinal,
+          obs: obsFinal
+        });
+      }
+
+      const btn = document.getElementById('btnSalvarRoteirizacaoFinal');
+      const htmlOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white;"></div> <span>Gravando Rota...</span>`;
+
+      try {
+        const res = await chamarBackendScript({
+          acao: 'SALVAR_LOTE',
+          lista: loteParaSalvar
+        });
+
+        if (res.sucesso) {
+          // Atualiza em memória local
+          loteParaSalvar.forEach(item => {
+            const idx = dbRotasVendedor.findIndex(r => String(r.codCliente).trim() === String(item.codCliente).trim() && (r.diaPrinc === item.diaPrincipal));
+            const rotaObj = {
+              codCliente: item.codCliente,
+              razao: item.razaoSocial,
+              fantasia: item.nomeFantasia,
+              cidade: item.cidade,
+              ordem: item.ordemVisita,
+              diaPrinc: item.diaPrincipal,
+              diasSec: '',
+              freq: item.semanas,
+              comprador: item.comprador,
+              whatsapp: item.whatsapp,
+              obs: item.obs
+            };
+            if (idx !== -1) {
+              dbRotasVendedor[idx] = rotaObj;
+            } else {
+              dbRotasVendedor.push(rotaObj);
+            }
+
+            // Atualiza status do cliente em dbClientes
+            const cliLocal = dbClientes.find(c => String(c.codigo || c.codCliente).trim() === String(item.codCliente).trim());
+            if (cliLocal) {
+              cliLocal.mapeado = true;
+              cliLocal.comprador = item.comprador;
+              cliLocal.whatsapp = item.whatsapp;
+            }
+          });
+
+          exibirModalAlerta('sucesso', `Roteirização concluída com sucesso!`, `${loteParaSalvar.length} paradas foram programadas e salvas para ${diaVisita}.`);
+
+          // Seleciona o dia correspondente em Minha Rota e navega até lá
+          const rdDia = document.getElementById(`rd_${diaVisita}`);
+          if (rdDia) rdDia.checked = true;
+
+          // Volta assistente para o estado inicial
+          voltarParaPasso1Roteirizacao();
+
+          mudarAba('minha-rota');
+          renderizarRotaDoDia();
+        } else {
+          alert('Erro ao gravar rota em lote: ' + (res.erro || 'Falha no servidor.'));
+        }
+      } catch (err) {
+        console.error('Erro ao salvar roteirização por cidades:', err);
+        alert('Erro de comunicação ao salvar rota. Tente novamente.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = htmlOriginal;
+      }
     }
 
     function carregarDadosRotaNoFormulario(rota) {
