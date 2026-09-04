@@ -3,20 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ameripan - Gestão de Canhotos e Entregas</title>
+  <title>Ameripan - Gestão e Controle de Canhotos</title>
+  
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome Icons -->
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome 6.4 Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <!-- SheetJS para exportação em Excel -->
+  
+  <!-- Cropper.js (Recorte, Rotação e Ajuste de Canhotos) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+  <!-- SheetJS para exportação em Excel (.xlsx) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
   <script>
     tailwind.config = {
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif']
+          },
           colors: {
             ameripan: {
-              navy: '#12264f',
+              navy: '#0f1f3d',
               blue: '#1e3a8a',
               accent: '#f59e0b',
               light: '#f8fafc',
@@ -27,61 +43,90 @@
       }
     }
   </script>
+  
   <style>
     @media print {
       .no-print { display: none !important; }
       .print-only { display: block !important; }
       body { background: white !important; font-size: 11pt; }
-      .shadow-md, .shadow-lg, .shadow-sm { box-shadow: none !important; }
+      .shadow-md, .shadow-lg, .shadow-sm, .shadow-2xl { box-shadow: none !important; }
     }
     .badge-pendente { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
     .badge-recebido { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .badge-atraso { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    
+    /* Customização do Cropper */
+    .cropper-view-box,
+    .cropper-face {
+      border-radius: 4px;
+      outline: 2px solid #38bdf8 !important;
+      outline-color: rgba(56, 189, 248, 0.85) !important;
+    }
+    .cropper-line, .cropper-point {
+      background-color: #38bdf8 !important;
+    }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
 
   <!-- ================= TOP HEADER ================= -->
-  <header class="bg-ameripan-navy text-white shadow-lg no-print sticky top-0 z-40">
+  <header class="bg-ameripan-navy text-white shadow-lg no-print sticky top-0 z-40 border-b border-slate-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         
         <!-- Logo & Titulo -->
-        <div class="flex items-center space-x-3 cursor-pointer" onclick="navegarPara('lancar')">
-          <div class="w-10 h-10 rounded-lg bg-ameripan-accent text-slate-950 font-black flex items-center justify-center text-xl shadow">
+        <div class="flex items-center space-x-3 cursor-pointer select-none" onclick="navegarPara('lancar')">
+          <div class="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-black flex items-center justify-center text-xl shadow-md transform hover:rotate-3 transition">
             <i class="fa-solid fa-receipt"></i>
           </div>
           <div>
             <div class="flex items-center space-x-2">
-              <span class="font-extrabold text-lg tracking-wide uppercase text-white">AMERIPAN</span>
-              <span class="text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-500/40">Canhotos PRO</span>
+              <span class="font-black text-lg tracking-wide uppercase text-white">AMERIPAN</span>
+              <span class="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-400/30">Canhotos PRO</span>
             </div>
-            <p class="text-xs text-slate-300">Controle de Comprovantes de Entrega</p>
+            <p class="text-[11px] text-slate-300">Controle e Rastreio de Comprovantes Fiscais</p>
           </div>
         </div>
 
-        <!-- Menu de Navegação Superior (Desktop & Mobile) -->
+        <!-- Menu de Navegação Superior -->
         <nav class="flex items-center space-x-1 sm:space-x-2">
-          <button id="btn-nav-lancar" onclick="navegarPara('lancar')" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition bg-blue-800 text-white flex items-center space-x-1.5">
+          
+          <!-- Lançar (Público) -->
+          <button id="btn-nav-lancar" onclick="navegarPara('lancar')" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-blue-800 text-white flex items-center space-x-1.5 shadow-sm">
             <i class="fa-solid fa-cloud-arrow-up"></i>
             <span class="hidden sm:inline">Lançar Canhoto</span>
             <span class="sm:hidden">Lançar</span>
           </button>
           
-          <button id="btn-nav-consulta" onclick="navegarPara('consulta')" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5">
+          <!-- Consultar (Público) -->
+          <button id="btn-nav-consulta" onclick="navegarPara('consulta')" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5">
             <i class="fa-solid fa-magnifying-glass"></i>
             <span class="hidden sm:inline">Consultar Pedido</span>
             <span class="sm:hidden">Consultar</span>
           </button>
 
-          <button id="btn-nav-financeiro" onclick="solicitarAcessoFinanceiro()" class="px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5 border border-slate-700">
+          <!-- Financeiro (PROTEGIDO POR SENHA NO GS) -->
+          <button id="btn-nav-financeiro" onclick="solicitarAcesso('financeiro')" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition flex items-center space-x-1.5 border border-slate-700/80">
             <i class="fa-solid fa-sack-dollar text-emerald-400"></i>
             <span>Financeiro</span>
+            <i id="lock-icon-fin" class="fa-solid fa-lock text-[10px] text-amber-400 ml-0.5"></i>
           </button>
 
-          <button onclick="abrirConfiguracoes()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition" title="Configurações & API">
+          <!-- Configurações (PROTEGIDO POR SENHA NO GS) -->
+          <button id="btn-nav-configuracoes" onclick="solicitarAcesso('configuracoes')" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition relative" title="Configurações & API (Acesso Restrito)">
             <i class="fa-solid fa-gear"></i>
+            <span id="lock-dot-cfg" class="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full"></span>
           </button>
+
+          <!-- Indicador de Sessão Autenticada -->
+          <div id="admin-badge-session" class="hidden items-center space-x-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs px-2.5 py-1.5 rounded-lg ml-1">
+            <i class="fa-solid fa-shield-check text-emerald-400"></i>
+            <span class="hidden md:inline font-bold">Admin Conectado</span>
+            <button onclick="desconectarAdmin()" class="text-rose-300 hover:text-rose-100 font-bold ml-1.5 text-[11px] uppercase tracking-wider transition" title="Bloquear / Encerrar Sessão">
+              <i class="fa-solid fa-right-from-bracket"></i> Sair
+            </button>
+          </div>
+
         </nav>
       </div>
     </div>
@@ -90,8 +135,8 @@
   <!-- BANNER DE STATUS DA CONEXÃO COM O BACKEND -->
   <div id="banner-conexao" class="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-1.5 text-xs text-center flex items-center justify-center space-x-2 no-print hidden">
     <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
-    <span id="texto-banner-conexao">Modo Demonstração local ativo. Configure a URL do Google Apps Script nas configurações para sincronizar na nuvem.</span>
-    <button onclick="abrirConfiguracoes()" class="underline font-bold text-amber-800 hover:text-amber-950 ml-1">Configurar Agora</button>
+    <span id="texto-banner-conexao">Modo Demonstração ativo. Conecte com a URL do Google Apps Script para sincronização ao vivo.</span>
+    <button onclick="solicitarAcesso('configuracoes')" class="underline font-bold text-amber-800 hover:text-amber-950 ml-1">Acessar Configurações</button>
   </div>
 
   <!-- ================= CONTEÚDO PRINCIPAL ================= -->
@@ -105,11 +150,11 @@
         
         <!-- Cabeçalho do Card -->
         <div class="bg-gradient-to-r from-ameripan-navy to-ameripan-blue text-white px-6 py-5">
-          <h1 class="text-xl sm:text-2xl font-bold flex items-center space-x-2">
+          <h1 class="text-xl sm:text-2xl font-black flex items-center space-x-2">
             <i class="fa-solid fa-file-invoice-dollar text-amber-400"></i>
             <span>Registrar Canhoto Entregue</span>
           </h1>
-          <p class="text-sm text-blue-100 mt-1">Envie a foto do canhoto assinado no ato da entrega para o Financeiro acompanhar.</p>
+          <p class="text-xs sm:text-sm text-blue-100 mt-1">Fotografe e recorte o canhoto assinado para comprovar a entrega e liberar o financeiro.</p>
         </div>
 
         <form id="form-canhoto" onsubmit="enviarCanhoto(event)" class="p-6 space-y-6">
@@ -118,7 +163,7 @@
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Quem está registrando?</label>
             <div class="grid grid-cols-2 gap-3">
-              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none" id="label-role-vendedor">
+              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none border-blue-700 bg-blue-50/50" id="label-role-vendedor">
                 <input type="radio" name="tipo_responsavel" value="VENDEDOR" checked class="sr-only" onchange="alternarTipoResponsavel('VENDEDOR')">
                 <div class="text-center">
                   <i class="fa-solid fa-user-tie text-2xl text-blue-700 mb-1"></i>
@@ -127,7 +172,7 @@
                 </div>
               </label>
 
-              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none" id="label-role-motorista">
+              <label class="relative flex items-center justify-center p-3.5 rounded-xl border-2 cursor-pointer transition select-none border-slate-200" id="label-role-motorista">
                 <input type="radio" name="tipo_responsavel" value="MOTORISTA" class="sr-only" onchange="alternarTipoResponsavel('MOTORISTA')">
                 <div class="text-center">
                   <i class="fa-solid fa-truck text-2xl text-slate-500 mb-1" id="icon-motorista"></i>
@@ -143,8 +188,9 @@
             <div>
               <div class="flex items-center justify-between mb-1">
                 <label class="block text-xs font-bold text-slate-700 uppercase">Código do Vendedor (Ameripan)</label>
-                <span class="text-[11px] text-blue-700 font-semibold cursor-pointer hover:underline" onclick="abrirModalBuscaVendedor()">
-                  <i class="fa-solid fa-list mr-1"></i>Ver Lista de Vendedores
+                <span class="text-[11px] text-blue-700 font-semibold cursor-pointer hover:underline flex items-center space-x-1" onclick="abrirModalBuscaVendedor()">
+                  <i class="fa-solid fa-list"></i>
+                  <span>Ver Lista Completa</span>
                 </span>
               </div>
               <div class="relative">
@@ -196,8 +242,8 @@
 
             <div>
               <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp do Vendedor</label>
-              <input type="tel" id="input-vend-telefone" placeholder="Ex: 19 99999-9999" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
-              <p class="text-[11px] text-slate-500 mt-1">Utilizado pelo Financeiro caso haja pendência física do documento.</p>
+              <input type="tel" id="input-vend-telefone" placeholder="Ex: (19) 99999-9999" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
+              <p class="text-[11px] text-slate-500 mt-1">Utilizado pelo Financeiro para acompanhamento da entrega física do canhoto.</p>
             </div>
           </div>
 
@@ -210,7 +256,7 @@
 
             <div>
               <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp do Motorista <span class="text-rose-600">*</span></label>
-              <input type="tel" id="input-motorista-telefone" placeholder="Ex: 19 98888-7777" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
+              <input type="tel" id="input-motorista-telefone" placeholder="Ex: (19) 98888-7777" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm" oninput="formatarTelefone(this)">
             </div>
           </div>
 
@@ -221,13 +267,13 @@
                 <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Número do Pedido / NF-e <span class="text-rose-600">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-bold">#</div>
-                  <input type="text" id="input-numero-pedido" required placeholder="Ex: 48920" class="w-full pl-8 pr-4 py-3 rounded-lg border-2 border-slate-300 focus:border-blue-600 focus:ring-0 text-lg font-black text-slate-900 tracking-wider">
+                  <input type="text" id="input-numero-pedido" required placeholder="Ex: 57057" class="w-full pl-8 pr-4 py-3 rounded-lg border-2 border-slate-300 focus:border-blue-600 focus:ring-0 text-lg font-black text-slate-900 tracking-wider">
                 </div>
               </div>
 
               <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome do Cliente / Razão Social</label>
-                <input type="text" id="input-nome-cliente" placeholder="Ex: Sorveteria Gelato & Cia" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm uppercase">
+                <input type="text" id="input-nome-cliente" placeholder="Ex: D.Luna Doces e Sorvetes" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none text-sm uppercase">
               </div>
             </div>
 
@@ -237,42 +283,63 @@
             </div>
           </div>
 
-          <!-- FOTO DO CANHOTO (Compressão inteligente no cliente) -->
+          <!-- FOTO DO CANHOTO COM FERRAMENTA DE RECORTE PROFISSIONAL -->
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Foto do Canhoto Assinado / Carimbado <span class="text-rose-600">*</span></label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-bold text-slate-700 uppercase">Foto do Canhoto Assinado / Carimbado <span class="text-rose-600">*</span></label>
+              <span class="text-[11px] text-emerald-700 font-semibold flex items-center space-x-1">
+                <i class="fa-solid fa-crop-simple"></i>
+                <span>Com Recorte e Rotação</span>
+              </span>
+            </div>
             
             <div class="mt-1 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-4 text-center transition bg-slate-50/50">
               
-              <!-- Container de Preview quando selecionado -->
+              <!-- Container de Preview quando imagem foi recortada -->
               <div id="foto-preview-container" class="hidden mb-3">
-                <div class="relative inline-block border-2 border-emerald-500 rounded-xl overflow-hidden shadow">
-                  <img id="img-preview" src="#" alt="Canhoto preview" class="max-h-60 max-w-full rounded-lg object-contain mx-auto bg-black/5" />
-                  <button type="button" onclick="removerFoto()" class="absolute top-2 right-2 bg-rose-600 text-white rounded-full p-2 shadow-lg hover:bg-rose-700 transition" title="Remover Foto">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </button>
+                <div class="relative inline-block border-2 border-emerald-500 rounded-xl overflow-hidden shadow-md max-w-full bg-slate-900">
+                  <img id="img-preview" src="#" alt="Canhoto recortado" class="max-h-64 max-w-full rounded-lg object-contain mx-auto" />
+                  
+                  <div class="absolute top-2 right-2 flex space-x-1.5">
+                    <button type="button" onclick="reabrirCropper()" class="bg-blue-600 text-white rounded-lg px-2.5 py-1.5 shadow-lg hover:bg-blue-700 text-xs font-bold transition flex items-center space-x-1" title="Recortar Novamente">
+                      <i class="fa-solid fa-crop-simple"></i>
+                      <span class="hidden sm:inline">Ajustar</span>
+                    </button>
+                    <button type="button" onclick="removerFoto()" class="bg-rose-600 text-white rounded-lg px-2.5 py-1.5 shadow-lg hover:bg-rose-700 text-xs font-bold transition flex items-center space-x-1" title="Remover Foto">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
                 </div>
-                <div id="foto-info-text" class="text-xs text-emerald-700 font-semibold mt-2">Imagem pronta e otimizada para envio!</div>
+
+                <div class="flex items-center justify-center space-x-2 mt-2">
+                  <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full border border-emerald-300 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Canhoto recortado, nítido e pronto para envio!</span>
+                  </span>
+                </div>
               </div>
 
               <!-- Botões de Ação de Câmera e Upload -->
               <div id="foto-upload-actions" class="space-y-3">
-                <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xl">
+                <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xl shadow-inner">
                   <i class="fa-solid fa-camera"></i>
                 </div>
-                <div class="text-sm font-semibold text-slate-700">Fotografe o canhoto de forma nítida com assinatura e data</div>
-                <div class="flex flex-wrap justify-center gap-3">
-                  <!-- Captura de câmera nativa de celular -->
-                  <label class="inline-flex items-center px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold rounded-xl cursor-pointer shadow transition active:scale-95">
-                    <i class="fa-solid fa-camera mr-2"></i> Tirar Foto Agora
-                    <input type="file" id="input-foto-camera" accept="image/*" capture="environment" class="hidden" onchange="processarFoto(this)">
+                <div class="text-sm font-bold text-slate-800">Fotografe ou carregue o canhoto de papel</div>
+                <p class="text-xs text-slate-500 max-w-md mx-auto">Você poderá recortar exatamente a tira do canhoto, girar e dar zoom antes de enviar.</p>
+                
+                <div class="flex flex-wrap justify-center gap-3 pt-1">
+                  <!-- Câmera direta -->
+                  <label class="inline-flex items-center px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold rounded-xl cursor-pointer shadow-md transition active:scale-95">
+                    <i class="fa-solid fa-camera mr-2"></i> Tirar Foto com Câmera
+                    <input type="file" id="input-foto-camera" accept="image/*" capture="environment" class="hidden" onchange="carregarFotoParaRecorte(this)">
                   </label>
-                  <!-- Escolher arquivo / galeria -->
+
+                  <!-- Galeria / Arquivos -->
                   <label class="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-bold rounded-xl cursor-pointer shadow-sm transition active:scale-95">
                     <i class="fa-solid fa-images mr-2 text-slate-500"></i> Galeria de Fotos
-                    <input type="file" id="input-foto-galeria" accept="image/*" class="hidden" onchange="processarFoto(this)">
+                    <input type="file" id="input-foto-galeria" accept="image/*" class="hidden" onchange="carregarFotoParaRecorte(this)">
                   </label>
                 </div>
-                <div class="text-[11px] text-slate-400">A imagem é compactada automaticamente para gastar poucos dados da internet.</div>
               </div>
 
             </div>
@@ -295,17 +362,17 @@
     <!-- ========================================================================= -->
     <section id="view-consulta" class="hidden max-w-3xl mx-auto space-y-6">
       <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-6">
-        <h2 class="text-xl font-bold text-slate-900 flex items-center space-x-2 mb-2">
+        <h2 class="text-xl font-black text-slate-900 flex items-center space-x-2 mb-2">
           <i class="fa-solid fa-magnifying-glass text-blue-600"></i>
           <span>Consultar Status do Canhoto</span>
         </h2>
-        <p class="text-sm text-slate-600 mb-4">Digite o número do pedido ou o código do vendedor para verificar se o papel já foi recebido no Financeiro da Ameripan.</p>
+        <p class="text-xs sm:text-sm text-slate-600 mb-4">Digite o número do pedido, código ou nome do vendedor para verificar se o papel já foi recebido no Financeiro da Ameripan.</p>
         
         <div class="flex gap-2">
           <div class="relative flex-1">
-            <input type="text" id="input-busca-pedido" placeholder="Digite o número do pedido (Ex: 45892)" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-bold text-slate-800" onkeydown="if(event.key==='Enter') executarConsultaPedido()">
+            <input type="text" id="input-busca-pedido" placeholder="Digite o número do pedido (Ex: 57057)" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-bold text-slate-800" onkeydown="if(event.key==='Enter') executarConsultaPedido()">
           </div>
-          <button onclick="executarConsultaPedido()" class="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl transition flex items-center space-x-2">
+          <button onclick="executarConsultaPedido()" class="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl transition flex items-center space-x-2 shadow">
             <i class="fa-solid fa-magnifying-glass"></i>
             <span class="hidden sm:inline">Buscar</span>
           </button>
@@ -319,7 +386,7 @@
     </section>
 
     <!-- ========================================================================= -->
-    <!-- VIEW 3: PAINEL DO FINANCEIRO (GESTÃO, BAIXAS, WHATSAPP & RELATÓRIOS) -->
+    <!-- VIEW 3: PAINEL DO FINANCEIRO (PROTEGIDO POR SENHA) -->
     <!-- ========================================================================= -->
     <section id="view-financeiro" class="hidden space-y-6">
       
@@ -327,7 +394,7 @@
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center space-x-2">
-            <span class="p-2 bg-emerald-100 text-emerald-800 rounded-lg"><i class="fa-solid fa-building-columns"></i></span>
+            <span class="p-2 bg-emerald-100 text-emerald-800 rounded-xl"><i class="fa-solid fa-building-columns"></i></span>
             <h2 class="text-xl sm:text-2xl font-black text-slate-900">Painel do Setor Financeiro</h2>
           </div>
           <p class="text-xs text-slate-500 mt-1">Conferência física de canhotos, baixa no sistema, cobrança via WhatsApp e relatórios fiscais.</p>
@@ -349,6 +416,11 @@
             <i class="fa-solid fa-print"></i>
             <span>Imprimir / PDF</span>
           </button>
+
+          <button onclick="desconectarAdmin()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-300 transition flex items-center space-x-1.5" title="Encerrar Sessão">
+            <i class="fa-solid fa-lock"></i>
+            <span>Bloquear</span>
+          </button>
         </div>
       </div>
 
@@ -360,7 +432,7 @@
             <span class="text-blue-600 bg-blue-50 p-2 rounded-lg text-sm"><i class="fa-solid fa-receipt"></i></span>
           </div>
           <div id="kpi-total" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">0</div>
-          <div class="text-[11px] text-slate-400 mt-1">Canhotos lançados</div>
+          <div class="text-[11px] text-slate-400 mt-1">Canhotos no sistema</div>
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-amber-200 shadow-sm bg-amber-50/20">
@@ -378,7 +450,7 @@
             <span class="text-rose-600 bg-rose-100 p-2 rounded-lg text-sm"><i class="fa-solid fa-triangle-exclamation"></i></span>
           </div>
           <div id="kpi-atrasados" class="text-2xl sm:text-3xl font-black text-rose-700 mt-2">0</div>
-          <div class="text-[11px] text-rose-600 mt-1">Exigem cobrança imediata</div>
+          <div class="text-[11px] text-rose-600 mt-1">Cobrança necessária</div>
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm bg-emerald-50/20">
@@ -455,71 +527,110 @@
     </section>
 
     <!-- ========================================================================= -->
-    <!-- VIEW 4: GESTÃO DE VENDEDORES & CONFIGURAÇÕES -->
+    <!-- VIEW 4: CONFIGURAÇÕES & ADMINISTRAÇÃO (PROTEGIDO POR SENHA) -->
     <!-- ========================================================================= -->
     <section id="view-configuracoes" class="hidden max-w-4xl mx-auto space-y-6">
       
-      <!-- Card Conexão Google Apps Script -->
+      <!-- Cabeçalho das Configurações -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-black text-slate-900 flex items-center space-x-2">
+            <i class="fa-solid fa-sliders text-blue-600"></i>
+            <span>Painel Administrativo & Configurações</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Gerenciamento seguro da API Google Apps Script, senha mestra e cadastro de vendedores.</p>
+        </div>
+        <button onclick="desconectarAdmin()" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition">
+          <i class="fa-solid fa-lock mr-1"></i>Bloquear Acesso
+        </button>
+      </div>
+
+      <!-- Card 1: Conexão Google Apps Script -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+          <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
             <i class="fa-solid fa-plug text-blue-600"></i>
             <span>Conexão Google Apps Script (Web App)</span>
-          </h2>
-          <span id="badge-api-status" class="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800">Não configurado</span>
+          </h3>
+          <span id="badge-api-status" class="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800">Verificando...</span>
         </div>
         
-        <p class="text-xs text-slate-600">
-          Cole a URL gerada na publicação do seu script (Google Apps Script) como "Aplicativo da Web". Isso salva os dados e as fotos direto no seu Google Drive e Sheets.
+        <p class="text-xs text-slate-600 leading-relaxed">
+          A URL do WebApp pode ser definida diretamente no código HTML (<code class="bg-slate-100 px-1.5 py-0.5 rounded text-blue-800 font-mono">CONFIG_WEBAPP_URL</code>) ou alterada no campo abaixo para este dispositivo. Todos os registros e fotos são enviados diretamente para sua pasta do Google Drive e planilha Google Sheets.
         </p>
 
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">URL da API (Exec Google Apps Script)</label>
-          <input type="url" id="config-api-url" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-mono">
+          <input type="url" id="config-api-url" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-800">
         </div>
 
-        <div class="flex flex-wrap gap-2">
-          <button onclick="salvarConfigApi()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition">
-            Salvar URL e Testar Conexão
+        <div class="flex flex-wrap gap-2 pt-1">
+          <button onclick="salvarConfigApi()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition shadow-sm flex items-center space-x-1.5">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Salvar URL e Testar Conexão</span>
           </button>
-          <button onclick="limparConfigApi()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition">
+          
+          <button onclick="restaurarUrlPadraoCodigo()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition border border-slate-300 flex items-center space-x-1.5">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Restaurar URL do Código HTML</span>
+          </button>
+
+          <button onclick="limparConfigApi()" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-lg transition border border-amber-300">
             Usar Modo Demonstração (Local)
           </button>
         </div>
       </div>
 
-      <!-- Card Senha do Setor Financeiro -->
+      <!-- Card 2: Senha Segura & Alteração no Back-end -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-        <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
-          <i class="fa-solid fa-lock text-slate-700"></i>
-          <span>Segurança & Senha do Painel Financeiro</span>
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+            <i class="fa-solid fa-shield-halved text-emerald-600"></i>
+            <span>Segurança & Senha do Back-end (Google Apps Script)</span>
+          </h3>
+          <span class="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">Proteção Ativa</span>
+        </div>
+        
+        <p class="text-xs text-slate-600">
+          A senha principal fica salva de forma segura na aba <strong>CONFIGURACOES</strong> da sua planilha Google Sheets. Você pode alterá-la aqui mesmo:
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Senha de Acesso ao Financeiro</label>
-            <input type="password" id="config-senha-financeiro" value="ameripan123" class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Senha Atual</label>
+            <input type="password" id="input-senha-atual" placeholder="Senha atual" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs">
           </div>
-          <div class="flex items-end">
-            <button onclick="salvarSenhaFinanceiro()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg transition">
-              Atualizar Senha
-            </button>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Nova Senha</label>
+            <input type="password" id="input-nova-senha" placeholder="Mínimo 4 caracteres" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs">
           </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Confirmar Nova Senha</label>
+            <input type="password" id="input-confirma-nova-senha" placeholder="Repita a nova senha" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs">
+          </div>
+        </div>
+
+        <div class="pt-1">
+          <button onclick="executarTrocaSenhaBackend()" id="btn-trocar-senha" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg transition shadow flex items-center space-x-1.5">
+            <i class="fa-solid fa-key"></i>
+            <span>Atualizar Senha no Google Apps Script</span>
+          </button>
         </div>
       </div>
 
-      <!-- Gestor de Telefones dos Vendedores Ameripan -->
+      <!-- Card 3: Gestor de Telefones dos Vendedores Ameripan -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
-              <i class="fa-solid fa-address-book text-emerald-600"></i>
+            <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <i class="fa-solid fa-address-book text-blue-600"></i>
               <span>Cadastro & WhatsApps dos Vendedores Ameripan</span>
-            </h2>
-            <p class="text-xs text-slate-500">Mantenha os telefones atualizados para envio automático das mensagens de cobrança.</p>
+            </h3>
+            <p class="text-xs text-slate-500">Mantenha os telefones atualizados para envio das mensagens de cobrança.</p>
           </div>
-          <button onclick="abrirModalNovoVendedor()" class="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition flex items-center space-x-1">
+          <button onclick="abrirModalNovoVendedor()" class="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg transition flex items-center space-x-1 shadow">
             <i class="fa-solid fa-plus"></i>
-            <span>Novo Vendedor</span>
+            <span>Cadastrar Vendedor</span>
           </button>
         </div>
 
@@ -529,13 +640,13 @@
 
         <div class="max-h-96 overflow-y-auto border border-slate-200 rounded-xl">
           <table class="w-full text-left text-xs border-collapse">
-            <thead class="bg-slate-100 text-slate-700 font-bold sticky top-0">
+            <thead class="bg-slate-100 text-slate-700 font-bold sticky top-0 border-b border-slate-200">
               <tr>
                 <th class="p-2.5">Cód</th>
                 <th class="p-2.5">Nome</th>
                 <th class="p-2.5">Equipe</th>
                 <th class="p-2.5">Telefone WhatsApp</th>
-                <th class="p-2.5 text-center">Ações</th>
+                <th class="p-2.5 text-center">Testar WhatsApp</th>
               </tr>
             </thead>
             <tbody id="tbody-config-vendedores" class="divide-y divide-slate-100">
@@ -550,26 +661,172 @@
   </main>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: PREVIEW DE FOTO AMPLIADA -->
+  <!-- MODAL: RECORTAR E AJUSTAR CANHOTO (CROPPER.JS) -->
   <!-- ========================================================================= -->
-  <div id="modal-foto" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 hidden">
-    <div class="relative max-w-3xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
+  <div id="modal-cropper" class="fixed inset-0 z-50 bg-black/90 flex flex-col justify-between hidden backdrop-blur-sm">
+    
+    <!-- Barra Superior do Cropper -->
+    <div class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white select-none">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 font-black flex items-center justify-center text-sm">
+          <i class="fa-solid fa-crop-simple"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm sm:text-base">Recortar Tira do Canhoto</h3>
+          <p class="text-[11px] text-slate-300">Enquadre a assinatura, data e número da nota fiscal</p>
+        </div>
+      </div>
+
+      <button type="button" onclick="cancelarCropper()" class="text-slate-400 hover:text-white text-xl p-2" title="Fechar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Área de Visualização e Recorte do Cropper -->
+    <div class="flex-1 overflow-hidden relative flex items-center justify-center p-2 sm:p-4 bg-slate-950/90">
+      <div class="max-h-[68vh] max-w-[95vw] sm:max-w-[85vw] flex items-center justify-center">
+        <img id="img-cropper-target" src="#" alt="Para recortar" class="max-h-[65vh] max-w-full block" />
+      </div>
+    </div>
+
+    <!-- Barra Inferior de Ferramentas e Presets -->
+    <div class="bg-slate-900 border-t border-slate-800 p-3 sm:p-4 text-white space-y-3 select-none">
+      
+      <!-- Presets de Formato e Rotação -->
+      <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
+        
+        <!-- Botão Livre -->
+        <button type="button" onclick="definirAspectCropper(NaN)" id="btn-crop-free" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold transition flex items-center space-x-1">
+          <i class="fa-solid fa-vector-square"></i>
+          <span>Livre</span>
+        </button>
+
+        <!-- Canhoto Horizontal (típico Danfe) -->
+        <button type="button" onclick="definirAspectCropper(4 / 1)" id="btn-crop-h" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition flex items-center space-x-1 border border-slate-700">
+          <i class="fa-solid fa-arrows-left-right"></i>
+          <span>Horizontal (4:1)</span>
+        </button>
+
+        <!-- Canhoto Vertical (como canhoto_exemplo.jpg) -->
+        <button type="button" onclick="definirAspectCropper(1 / 4)" id="btn-crop-v" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition flex items-center space-x-1 border border-slate-700">
+          <i class="fa-solid fa-arrows-up-down"></i>
+          <span>Vertical (1:4)</span>
+        </button>
+
+        <div class="h-5 w-px bg-slate-700 hidden sm:block mx-1"></div>
+
+        <!-- Girar 90 graus para esquerda -->
+        <button type="button" onclick="girarCropper(-90)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition" title="Girar 90° para esquerda">
+          <i class="fa-solid fa-rotate-left mr-1"></i> -90°
+        </button>
+
+        <!-- Girar 90 graus para direita -->
+        <button type="button" onclick="girarCropper(90)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition" title="Girar 90° para direita">
+          <i class="fa-solid fa-rotate-right mr-1"></i> +90°
+        </button>
+
+        <!-- Zoom In -->
+        <button type="button" onclick="zoomCropper(0.1)" class="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition" title="Aumentar Zoom">
+          <i class="fa-solid fa-magnifying-glass-plus"></i>
+        </button>
+
+        <!-- Zoom Out -->
+        <button type="button" onclick="zoomCropper(-0.1)" class="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition" title="Diminuir Zoom">
+          <i class="fa-solid fa-magnifying-glass-minus"></i>
+        </button>
+
+        <!-- Reset -->
+        <button type="button" onclick="resetCropper()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition" title="Restaurar tamanho original">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
+        </button>
+      </div>
+
+      <!-- Botões de Conclusão -->
+      <div class="flex items-center justify-end space-x-3 pt-1">
+        <button type="button" onclick="cancelarCropper()" class="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition">
+          Cancelar
+        </button>
+        <button type="button" onclick="concluirRecorteFoto()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black rounded-xl shadow-lg transition flex items-center space-x-2 active:scale-95">
+          <i class="fa-solid fa-check text-base"></i>
+          <span>CONFIRMAR RECORTE</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: AUTENTICAÇÃO SEGURA (ACESSO RESTRITO FINANCEIRO E CONFIG) -->
+  <!-- ========================================================================= -->
+  <div id="modal-autenticacao" class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="relative max-w-sm w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      
+      <!-- Topo Modal -->
+      <div class="bg-gradient-to-r from-ameripan-navy to-ameripan-blue text-white p-6 text-center">
+        <div class="w-14 h-14 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg text-2xl font-black">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h3 class="font-extrabold text-lg">Acesso Restrito</h3>
+        <p class="text-xs text-blue-100 mt-1">Informe a senha do Google Apps Script para acessar esta área.</p>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <!-- Mensagem de Erro -->
+        <div id="auth-erro-msg" class="hidden bg-rose-50 border border-rose-300 text-rose-800 text-xs p-3 rounded-xl flex items-center space-x-2">
+          <i class="fa-solid fa-circle-exclamation text-rose-600 text-base shrink-0"></i>
+          <span id="auth-erro-texto">Senha incorreta! Tente novamente.</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Senha de Acesso</label>
+          <div class="relative">
+            <input type="password" id="input-auth-senha" placeholder="Digite a senha..." class="w-full pl-4 pr-11 py-3 rounded-xl border-2 border-slate-300 focus:border-blue-600 focus:ring-0 text-sm font-semibold text-slate-900" onkeydown="if(event.key==='Enter') autenticarAcessoAdmin()">
+            <button type="button" onclick="alternarVisibilidadeSenhaAuth()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700">
+              <i id="icone-olho-auth" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">Senha padrão inicial: <code class="font-mono text-slate-600">ameripan123</code></p>
+        </div>
+
+        <div class="flex space-x-2 pt-2">
+          <button type="button" onclick="fecharModalAutenticacao()" class="w-1/2 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition">
+            Cancelar
+          </button>
+          <button type="button" id="btn-submit-auth" onclick="autenticarAcessoAdmin()" class="w-1/2 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center space-x-1.5">
+            <span>Acessar Painel</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: PREVIEW DE FOTO AMPLIADA COM ROTAÇÃO E DOWNLOAD -->
+  <!-- ========================================================================= -->
+  <div id="modal-foto" class="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-6 hidden backdrop-blur-sm">
+    <div class="relative max-w-3xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
       <div class="flex items-center justify-between px-4 py-3 bg-slate-800 text-white">
         <div class="text-sm font-bold flex items-center space-x-2">
-          <i class="fa-solid fa-image text-amber-400"></i>
+          <i class="fa-solid fa-receipt text-amber-400"></i>
           <span id="modal-foto-titulo">Comprovante do Pedido</span>
         </div>
         <div class="flex items-center space-x-2">
-          <a id="modal-foto-link-download" href="#" target="_blank" download class="text-xs bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded font-bold transition">
-            <i class="fa-solid fa-download mr-1"></i> Baixar
+          <button onclick="girarFotoVisualizador()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg font-bold transition flex items-center space-x-1" title="Girar Imagem 90°">
+            <i class="fa-solid fa-rotate-right"></i>
+            <span class="hidden sm:inline">Girar</span>
+          </button>
+          <a id="modal-foto-link-download" href="#" target="_blank" download class="text-xs bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg font-bold transition flex items-center space-x-1">
+            <i class="fa-solid fa-download"></i>
+            <span>Baixar</span>
           </a>
-          <button onclick="fecharModalFoto()" class="text-slate-400 hover:text-white text-lg px-2">
+          <button onclick="fecharModalFoto()" class="text-slate-400 hover:text-white text-xl p-1 ml-1">
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
       </div>
-      <div class="p-4 flex items-center justify-center bg-black/90 min-h-[300px] max-h-[80vh]">
-        <img id="modal-foto-img" src="#" alt="Canhoto em alta resolução" class="max-h-[75vh] max-w-full object-contain rounded" />
+      <div class="p-4 flex-1 flex items-center justify-center bg-black/95 overflow-auto">
+        <img id="modal-foto-img" src="#" alt="Canhoto em alta resolução" class="max-h-[75vh] max-w-full object-contain rounded transition-transform duration-200" />
       </div>
     </div>
   </div>
@@ -577,14 +834,14 @@
   <!-- ========================================================================= -->
   <!-- MODAL: COBRANÇA WHATSAPP AUTOMÁTICA -->
   <!-- ========================================================================= -->
-  <div id="modal-whatsapp" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+  <div id="modal-whatsapp" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden backdrop-blur-sm">
     <div class="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       <div class="px-6 py-4 bg-emerald-700 text-white flex items-center justify-between">
         <div class="flex items-center space-x-2">
           <i class="fa-brands fa-whatsapp text-2xl text-emerald-300"></i>
           <div>
             <h3 class="font-bold text-base">Cobrança de Canhoto Físico</h3>
-            <p class="text-xs text-emerald-100">Disparo via WhatsApp com mensagem inteligente</p>
+            <p class="text-xs text-emerald-100">Disparo via WhatsApp com mensagem formatada Ameripan</p>
           </div>
         </div>
         <button onclick="fecharModalWhatsApp()" class="text-emerald-200 hover:text-white text-xl">
@@ -624,7 +881,7 @@
   <!-- ========================================================================= -->
   <!-- MODAL: CONFIRMAÇÃO DE BAIXA FÍSICA -->
   <!-- ========================================================================= -->
-  <div id="modal-baixa" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+  <div id="modal-baixa" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden backdrop-blur-sm">
     <div class="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       <div class="px-6 py-4 bg-ameripan-navy text-white flex items-center justify-between">
         <h3 class="font-bold text-base flex items-center space-x-2">
@@ -659,7 +916,7 @@
   <!-- ========================================================================= -->
   <!-- MODAL: LISTAGEM DE VENDEDORES (SELEÇÃO RÁPIDA) -->
   <!-- ========================================================================= -->
-  <div id="modal-lista-vendedores" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+  <div id="modal-lista-vendedores" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden backdrop-blur-sm">
     <div class="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       <div class="px-5 py-3.5 bg-blue-900 text-white flex items-center justify-between">
         <h3 class="font-bold text-sm flex items-center space-x-2">
@@ -682,7 +939,7 @@
   <!-- ========================================================================= -->
   <!-- MODAL: CADASTRAR NOVO VENDEDOR -->
   <!-- ========================================================================= -->
-  <div id="modal-novo-vendedor" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden">
+  <div id="modal-novo-vendedor" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 hidden backdrop-blur-sm">
     <div class="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       <div class="px-5 py-3.5 bg-ameripan-blue text-white flex items-center justify-between">
         <h3 class="font-bold text-sm">Cadastrar Novo Vendedor Ameripan</h3>
@@ -703,7 +960,7 @@
         </div>
         <div>
           <label class="block font-bold text-slate-700 uppercase mb-1">Telefone WhatsApp (DDD + Número)</label>
-          <input type="tel" id="modal-novo-vend-tel" placeholder="19999999999" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+          <input type="tel" id="modal-novo-vend-tel" placeholder="(19) 99999-9999" class="w-full px-3 py-2 border border-slate-300 rounded-lg" oninput="formatarTelefone(this)">
         </div>
         <div class="flex justify-end space-x-2 pt-2">
           <button type="button" onclick="fecharModalNovoVendedor()" class="px-3 py-2 border rounded-lg">Cancelar</button>
@@ -717,7 +974,7 @@
   <footer class="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500 no-print mt-auto">
     <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
       <div>Ameripan Distribuidora © 2026 - Piracicaba / Região</div>
-      <div class="text-[11px] text-slate-400">Desenvolvido com foco em velocidade operacional para Vendas e Financeiro</div>
+      <div class="text-[11px] text-slate-400">Sistema Seguro com Recorte Inteligente de Canhotos e Integração Google Sheets</div>
     </div>
   </footer>
 
@@ -725,42 +982,111 @@
   <!-- SCRIPT LOGIC JAVASCRIPT -->
   <!-- ========================================================================= -->
   <script>
-    /* BASE INICIAL DOS 44 VENDEDORES DA AMERIPAN (EMBEDDED CACHE) */
-    const VENDEDORES_PADRAO = [{"cod": "161", "nome": "DEBORA CRISTINA MEIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "268", "nome": "ELLEN GABRIELE RODRIGUES DOS SANTOS", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "234", "nome": "EVELYN BRAZ DA SILVA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "170", "nome": "JORDANIA MAIRA DE SOUSA SILVA MARTINE", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "272", "nome": "KETLYN SANTOS BRAGA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "235", "nome": "MARIA CLARA MARTELOSSI FERREIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "267", "nome": "MARIA FERNANDA DE SOUZA FAUSTINO", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "195", "nome": "MARLEI TERUEL BIAGIONI RIBEIRO GAMA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "254", "nome": "MATEUS HENRIQUE DE JESUS ALVES", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "184", "nome": "MAYSA LOPES DA COSTA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "96", "nome": "NATALINA GOMES BALBINO DE LIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "273", "nome": "PRISCILA CERQUEIRA MACHADO", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "171", "nome": "VITORIA ALONSO SABADIN", "equipe": "EQUIPE TELEPAN", "telefone": ""}, {"cod": "103", "nome": "IVERALDO EDSON PEROTTO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "33", "nome": "JULIO MARCOS DA SILVA COSTA", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "2", "nome": "MARCIO ROBERTO TENORIO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "34", "nome": "SIDNEI DOS SANTOS", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""}, {"cod": "261", "nome": "DANIEL RODRIGUES DE MELLO", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "257", "nome": "DARIO LUCIANO RAMAZZA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "269", "nome": "ITAMAR JOSE TOLEDO DA SILVA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "263", "nome": "THATYANE FRATASSI FERREIRA DOS SANTOS", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""}, {"cod": "165", "nome": "EDIMAR PINHEIRO COSTA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "48", "nome": "EMANUEL RUFINO DA SILVA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "86", "nome": "JORDANO SALOMAO VELICO", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "237", "nome": "MARCELO JOSE DE CARVALHO", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "193", "nome": "MARCELO SANTANA NOVAES", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "233", "nome": "MAURICIO EXEL FERREIRA", "equipe": "EQUIPE SORVETERIA", "telefone": ""}, {"cod": "31", "nome": "FLAVIO EVANDRO MATOS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "137", "nome": "GIOVANI DUARTE MARTINS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "89", "nome": "LUCAS DE PAULA OSORIO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "256", "nome": "MARCOS DANIEL MORO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "9", "nome": "PABLO VICTOR MORELATO", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "21", "nome": "ROBINSON TARCISIO PEREIRA", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "250", "nome": "TATIANA MARY DE ALMEIDA SANTOS", "equipe": "EQUIPE RICCO", "telefone": ""}, {"cod": "218", "nome": "ANA PAULA DE SOUSA VAZ", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "258", "nome": "BRYAN DE SOUZA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "138", "nome": "CRISTIANA BARBOSA SILVA BETTU", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "271", "nome": "CRISTIANO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "262", "nome": "IGOR TEDY RAMOS", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "245", "nome": "JOICE MEDEIROS NASCIMENTO", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "253", "nome": "KLEISON DOS SANTOS", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "226", "nome": "MARCIA BUENO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "215", "nome": "MARILIA GABRIELA BARBORATI", "equipe": "EQUIPE SANDRO", "telefone": ""}, {"cod": "143", "nome": "THIAGO HENRIQUE MARANHO", "equipe": "EQUIPE SANDRO", "telefone": ""}];
+    /**
+     * =========================================================================
+     * 1. CONFIGURAÇÃO PRINCIPAL DO SISTEMA
+     * =========================================================================
+     * Cole abaixo a URL gerada na Implantação do seu Google Apps Script (Code.gs).
+     * Exemplo: "https://script.google.com/macros/s/AKfycby.../exec"
+     */
+    const CONFIG_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz_COLE_SUA_URL_AQUI/exec";
+
+    // Fallback de senha padrão (quando em modo de demonstração local ou sem conexão)
+    const SENHA_LOCAL_FALLBACK = "ameripan123";
+
+    // Chaves de armazenamento LocalStorage / SessionStorage
+    const STORAGE_KEY_API = "ameripan_canhotos_api_url";
+    const STORAGE_KEY_VEND = "ameripan_vendedores_cache";
+    const STORAGE_KEY_CANHOT_LOCAL = "ameripan_canhotos_local";
+    const SESSION_KEY_ADMIN_AUTH = "ameripan_admin_autenticado";
+    const SESSION_KEY_SENHA_ATIVA = "ameripan_admin_senha_ativa";
+
+    /* BASE INICIAL DOS VENDEDORES DA AMERIPAN (EMBEDDED CACHE) */
+    const VENDEDORES_PADRAO = [
+      {"cod": "161", "nome": "DEBORA CRISTINA MEIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "268", "nome": "ELLEN GABRIELE RODRIGUES DOS SANTOS", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "234", "nome": "EVELYN BRAZ DA SILVA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "170", "nome": "JORDANIA MAIRA DE SOUSA SILVA MARTINE", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "272", "nome": "KETLYN SANTOS BRAGA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "235", "nome": "MARIA CLARA MARTELOSSI FERREIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "267", "nome": "MARIA FERNANDA DE SOUZA FAUSTINO", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "195", "nome": "MARLEI TERUEL BIAGIONI RIBEIRO GAMA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "254", "nome": "MATEUS HENRIQUE DE JESUS ALVES", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "184", "nome": "MAYSA LOPES DA COSTA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "96", "nome": "NATALINA GOMES BALBINO DE LIRA", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "273", "nome": "PRISCILA CERQUEIRA MACHADO", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "171", "nome": "VITORIA ALONSO SABADIN", "equipe": "EQUIPE TELEPAN", "telefone": ""},
+      {"cod": "103", "nome": "IVERALDO EDSON PEROTTO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""},
+      {"cod": "33", "nome": "JULIO MARCOS DA SILVA COSTA", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""},
+      {"cod": "2", "nome": "MARCIO ROBERTO TENORIO", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""},
+      {"cod": "34", "nome": "SIDNEI DOS SANTOS", "equipe": "EQUIPE PANIFICAÇÃO", "telefone": ""},
+      {"cod": "261", "nome": "DANIEL RODRIGUES DE MELLO", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""},
+      {"cod": "257", "nome": "DARIO LUCIANO RAMAZZA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""},
+      {"cod": "269", "nome": "ITAMAR JOSE TOLEDO DA SILVA", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""},
+      {"cod": "263", "nome": "THATYANE FRATASSI FERREIRA DOS SANTOS", "equipe": "EQUIPE 4 - VALDIR", "telefone": ""},
+      {"cod": "165", "nome": "EDIMAR PINHEIRO COSTA", "equipe": "EQUIPE SORVETERIA", "telefone": "19982215078"},
+      {"cod": "48", "nome": "EMANUEL RUFINO DA SILVA", "equipe": "EQUIPE SORVETERIA", "telefone": ""},
+      {"cod": "86", "nome": "JORDANO SALOMAO VELICO", "equipe": "EQUIPE SORVETERIA", "telefone": ""},
+      {"cod": "237", "nome": "MARCELO JOSE DE CARVALHO", "equipe": "EQUIPE SORVETERIA", "telefone": ""},
+      {"cod": "193", "nome": "MARCELO SANTANA NOVAES", "equipe": "EQUIPE SORVETERIA", "telefone": ""},
+      {"cod": "233", "nome": "MAURICIO EXEL FERREIRA", "equipe": "EQUIPE SORVETERIA", "telefone": ""},
+      {"cod": "31", "nome": "FLAVIO EVANDRO MATOS", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "137", "nome": "GIOVANI DUARTE MARTINS", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "89", "nome": "LUCAS DE PAULA OSORIO", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "256", "nome": "MARCOS DANIEL MORO", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "9", "nome": "PABLO VICTOR MORELATO", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "21", "nome": "ROBINSON TARCISIO PEREIRA", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "250", "nome": "TATIANA MARY DE ALMEIDA SANTOS", "equipe": "EQUIPE RICCO", "telefone": ""},
+      {"cod": "218", "nome": "ANA PAULA DE SOUSA VAZ", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "258", "nome": "BRYAN DE SOUZA", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "138", "nome": "CRISTIANA BARBOSA SILVA BETTU", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "271", "nome": "CRISTIANO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "262", "nome": "IGOR TEDY RAMOS", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "245", "nome": "JOICE MEDEIROS NASCIMENTO", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "253", "nome": "KLEISON DOS SANTOS", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "226", "nome": "MARCIA BUENO DA SILVA", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "215", "nome": "MARILIA GABRIELA BARBORATI", "equipe": "EQUIPE SANDRO", "telefone": ""},
+      {"cod": "143", "nome": "THIAGO HENRIQUE MARANHO", "equipe": "EQUIPE SANDRO", "telefone": ""}
+    ];
 
     /* ESTADO DA APLICAÇÃO */
     let vendedores = [];
     let canhotos = [];
+    let imagemOriginalDataUrl = "";
     let fotoBase64Atual = "";
+    let cropperInstancia = null;
+    let rotacaoVisualizadorAtual = 0;
     let itemSelecionadoParaWhatsApp = null;
     let itemSelecionadoParaBaixa = null;
-
-    // Configurações salvas no LocalStorage
-    const STORAGE_KEY_API = "ameripan_canhotos_api_url";
-    const STORAGE_KEY_SENHA_FIN = "ameripan_senha_financeiro";
-    const STORAGE_KEY_VEND = "ameripan_vendedores_cache";
-    const STORAGE_KEY_CANHOT_LOCAL = "ameripan_canhotos_local";
+    let destinoAutenticacaoPendente = null;
 
     /* INICIALIZAÇÃO */
     document.addEventListener("DOMContentLoaded", () => {
       carregarConfiguracoesLocais();
       inicializarVendedores();
       carregarCanhotosLocais();
+      atualizarBadgeSessaoAdmin();
       verificarConexaoBackend();
-      filtrarTabelaCanhotos();
     });
 
-    /* CARREGA CONFIGURAÇÕES DO LOCALSTORAGE */
-    function carregarConfiguracoesLocais() {
-      const urlSalva = localStorage.getItem(STORAGE_KEY_API) || "";
-      document.getElementById("config-api-url").value = urlSalva;
-      
-      const senhaSalva = localStorage.getItem(STORAGE_KEY_SENHA_FIN) || "ameripan123";
-      document.getElementById("config-senha-financeiro").value = senhaSalva;
+    /**
+     * Obtém a URL ativa do WebApp (prioriza Storage, depois constante embutida)
+     */
+    function getApiUrl() {
+      const salva = localStorage.getItem(STORAGE_KEY_API);
+      if (salva && salva.trim().length > 10) {
+        return salva.trim();
+      }
+      if (CONFIG_WEBAPP_URL && !CONFIG_WEBAPP_URL.includes("COLE_SUA_URL")) {
+        return CONFIG_WEBAPP_URL.trim();
+      }
+      return "";
     }
 
-    function getApiUrl() {
-      return localStorage.getItem(STORAGE_KEY_API) || "";
+    function carregarConfiguracoesLocais() {
+      const urlAtiva = getApiUrl();
+      const inputUrl = document.getElementById("config-api-url");
+      if (inputUrl) inputUrl.value = urlAtiva;
     }
 
     function inicializarVendedores() {
@@ -803,82 +1129,191 @@
     function getCanhotosExemplo() {
       return [
         {
-          id: "CNH-260828-4589",
-          data_registro: "2026-08-28 14:30",
-          num_pedido: "45892",
+          id: "CNH-260904-9910",
+          data_registro: "2026-09-04 01:46",
+          num_pedido: "57057",
           tipo_responsavel: "VENDEDOR",
           cod_vendedor: "165",
           nome_responsavel: "EDIMAR PINHEIRO COSTA",
-          telefone: "19999999999",
-          cliente: "SORVETES GELODOCE",
+          telefone: "19982215078",
+          cliente: "D.LUNA DOCES E SORVETERIA",
           status: "PENDENTE",
-          dias_pendente: calcularDiasDiferenca("2026-08-28"),
-          data_baixa: "",
-          responsavel_baixa: "",
-          previsao_entrega: "Retorno na rota de sexta",
-          obs_cobranca: "Aguardando envio",
-          url_foto: "https://images.unsplash.com/photo-1554415707-9e4901f417e4?w=800&auto=format&fit=crop&q=60"
-        },
-        {
-          id: "CNH-260830-1015",
-          data_registro: "2026-08-30 10:15",
-          num_pedido: "45910",
-          tipo_responsavel: "MOTORISTA",
-          cod_vendedor: "",
-          nome_responsavel: "CARLOS SILVA (MOTORISTA)",
-          telefone: "19988887777",
-          cliente: "PANIFICADORA ESTRELA",
-          status: "RECEBIDO",
           dias_pendente: 0,
-          data_baixa: "2026-09-01 16:00",
-          responsavel_baixa: "MARIA FINANCEIRO",
-          previsao_entrega: "01/09/2026",
-          obs_cobranca: "Entregue no malote",
-          url_foto: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=60"
-        },
-        {
-          id: "CNH-260902-0940",
-          data_registro: "2026-09-02 09:40",
-          num_pedido: "46005",
-          tipo_responsavel: "VENDEDOR",
-          cod_vendedor: "48",
-          nome_responsavel: "EMANUEL RUFINO DA SILVA",
-          telefone: "19977776666",
-          cliente: "AÇAÍ TROPICAL",
-          status: "PENDENTE",
-          dias_pendente: calcularDiasDiferenca("2026-09-02"),
           data_baixa: "",
           responsavel_baixa: "",
-          previsao_entrega: "",
+          previsao_entrega: "entrego 04/09/26",
           obs_cobranca: "",
-          url_foto: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&auto=format&fit=crop&q=60"
+          url_foto: "https://lh3.googleusercontent.com/u/0/d/195Wdb81o0BWpsrgcd6c--77y3LpkaZkU=w1600"
         }
       ];
     }
 
-    function calcularDiasDiferenca(dataStr) {
-      if (!dataStr) return 0;
-      const dataReg = new Date(dataStr.replace(" ", "T"));
-      if (isNaN(dataReg)) return 0;
-      const hoje = new Date();
-      const diffTime = Math.abs(hoje - dataReg);
-      return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    /**
+     * =========================================================================
+     * 2. CONTROLE DE ACESSO E SEGURANÇA (FINANCEIRO & CONFIGURAÇÕES)
+     * =========================================================================
+     */
+    function isAdminAutenticado() {
+      return sessionStorage.getItem(SESSION_KEY_ADMIN_AUTH) === "true";
     }
 
-    /* CONTROLE DE ABAS / NAVEGAÇÃO */
+    function getSenhaAtivaAdmin() {
+      return sessionStorage.getItem(SESSION_KEY_SENHA_ATIVA) || "";
+    }
+
+    function atualizarBadgeSessaoAdmin() {
+      const badge = document.getElementById("admin-badge-session");
+      const lockFin = document.getElementById("lock-icon-fin");
+      const lockCfg = document.getElementById("lock-dot-cfg");
+
+      if (isAdminAutenticado()) {
+        if (badge) badge.classList.remove("hidden");
+        if (badge) badge.classList.add("flex");
+        if (lockFin) lockFin.className = "fa-solid fa-lock-open text-[10px] text-emerald-400 ml-0.5";
+        if (lockCfg) lockCfg.classList.add("hidden");
+      } else {
+        if (badge) badge.classList.add("hidden");
+        if (badge) badge.classList.remove("flex");
+        if (lockFin) lockFin.className = "fa-solid fa-lock text-[10px] text-amber-400 ml-0.5";
+        if (lockCfg) lockCfg.classList.remove("hidden");
+      }
+    }
+
+    function solicitarAcesso(destino) {
+      if (isAdminAutenticado()) {
+        navegarPara(destino);
+        return;
+      }
+      destinoAutenticacaoPendente = destino;
+      abrirModalAutenticacao();
+    }
+
+    function abrirModalAutenticacao() {
+      document.getElementById("input-auth-senha").value = "";
+      document.getElementById("auth-erro-msg").classList.add("hidden");
+      document.getElementById("modal-autenticacao").classList.remove("hidden");
+      setTimeout(() => {
+        document.getElementById("input-auth-senha").focus();
+      }, 100);
+    }
+
+    function fecharModalAutenticacao() {
+      document.getElementById("modal-autenticacao").classList.add("hidden");
+      destinoAutenticacaoPendente = null;
+    }
+
+    function alternarVisibilidadeSenhaAuth() {
+      const input = document.getElementById("input-auth-senha");
+      const icone = document.getElementById("icone-olho-auth");
+      if (input.type === "password") {
+        input.type = "text";
+        icone.className = "fa-solid fa-eye-slash";
+      } else {
+        input.type = "password";
+        icone.className = "fa-solid fa-eye";
+      }
+    }
+
+    async function autenticarAcessoAdmin() {
+      const senha = document.getElementById("input-auth-senha").value.trim();
+      const erroBox = document.getElementById("auth-erro-msg");
+      const erroTxt = document.getElementById("auth-erro-texto");
+      const btn = document.getElementById("btn-submit-auth");
+
+      if (!senha) {
+        erroTxt.textContent = "Por favor, digite a senha!";
+        erroBox.classList.remove("hidden");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Validando...';
+      erroBox.classList.add("hidden");
+
+      const apiUrl = getApiUrl();
+      let autenticadoComSucesso = false;
+
+      // Se temos URL do WebApp configurada, valida diretamente no Google Apps Script
+      if (apiUrl && apiUrl.startsWith("http")) {
+        try {
+          const urlValidacao = `${apiUrl}?action=validarSenha&senha=${encodeURIComponent(senha)}`;
+          const res = await fetch(urlValidacao);
+          const json = await res.json();
+          if (json.success && json.authorized) {
+            autenticadoComSucesso = true;
+          } else {
+            erroTxt.textContent = json.message || "Senha incorreta no Google Apps Script!";
+          }
+        } catch (err) {
+          console.warn("Falha na validação remota, verificando contingência:", err);
+          // Caso a conexão falhe, permite validação com fallback local
+          if (senha === SENHA_LOCAL_FALLBACK) {
+            autenticadoComSucesso = true;
+          } else {
+            erroTxt.textContent = "Não foi possível validar com o servidor e a senha local não confere.";
+          }
+        }
+      } else {
+        // Modo local
+        if (senha === SENHA_LOCAL_FALLBACK) {
+          autenticadoComSucesso = true;
+        } else {
+          erroTxt.textContent = "Senha incorreta! (Padrão: ameripan123)";
+        }
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<span>Acessar Painel</span><i class="fa-solid fa-arrow-right"></i>';
+
+      if (autenticadoComSucesso) {
+        sessionStorage.setItem(SESSION_KEY_ADMIN_AUTH, "true");
+        sessionStorage.setItem(SESSION_KEY_SENHA_ATIVA, senha);
+        atualizarBadgeSessaoAdmin();
+        const destino = destinoAutenticacaoPendente || "financeiro";
+        fecharModalAutenticacao();
+        navegarPara(destino);
+        // Sincroniza dados com o backend já com a senha autorizada
+        if (apiUrl && apiUrl.startsWith("http")) {
+          sincronizarDadosComBackend(false);
+        }
+      } else {
+        erroBox.classList.remove("hidden");
+        document.getElementById("input-auth-senha").select();
+      }
+    }
+
+    function desconectarAdmin() {
+      sessionStorage.removeItem(SESSION_KEY_ADMIN_AUTH);
+      sessionStorage.removeItem(SESSION_KEY_SENHA_ATIVA);
+      atualizarBadgeSessaoAdmin();
+      navegarPara("lancar");
+      alert("🔒 Sessão administrativa bloqueada com sucesso!");
+    }
+
+    /**
+     * =========================================================================
+     * 3. NAVEGAÇÃO ENTRE ABAS
+     * =========================================================================
+     */
     function navegarPara(viewId) {
+      // Protege Financeiro e Configurações
+      if ((viewId === "financeiro" || viewId === "configuracoes") && !isAdminAutenticado()) {
+        solicitarAcesso(viewId);
+        return;
+      }
+
       const views = ["lancar", "consulta", "financeiro", "configuracoes"];
       views.forEach(v => {
         const sec = document.getElementById("view-" + v);
         if (sec) sec.classList.add("hidden");
       });
 
-      const navBtns = ["lancar", "consulta", "financeiro"];
+      const navBtns = ["lancar", "consulta", "financeiro", "configuracoes"];
       navBtns.forEach(b => {
         const btn = document.getElementById("btn-nav-" + b);
         if (btn) {
           btn.classList.remove("bg-blue-800", "text-white");
-          btn.classList.add("text-slate-200");
+          btn.classList.add("text-slate-300");
         }
       });
 
@@ -888,7 +1323,7 @@
       const activeBtn = document.getElementById("btn-nav-" + viewId);
       if (activeBtn) {
         activeBtn.classList.add("bg-blue-800", "text-white");
-        activeBtn.classList.remove("text-slate-200");
+        activeBtn.classList.remove("text-slate-300");
       }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -896,34 +1331,168 @@
       if (viewId === "financeiro") {
         filtrarTabelaCanhotos();
       }
+      if (viewId === "configuracoes") {
+        renderizarTabelaVendedoresConfig();
+        verificarConexaoBackend();
+      }
     }
 
-    function abrirConfiguracoes() {
-      navegarPara("configuracoes");
-    }
-
-    /* CONTROLE DE SENHA DO FINANCEIRO */
-    function solicitarAcessoFinanceiro() {
-      const senhaCorreta = localStorage.getItem(STORAGE_KEY_SENHA_FIN) || "ameripan123";
+    /**
+     * =========================================================================
+     * 4. MÓDULO DE RECORTE PROFISSIONAL DE CANHOTOS (CROPPER.JS)
+     * =========================================================================
+     */
+    function carregarFotoParaRecorte(inputElem) {
+      if (!inputElem.files || !inputElem.files[0]) return;
+      const file = inputElem.files[0];
       
-      // Se já logou nesta sessão, permite direto
-      if (sessionStorage.getItem("ameripan_financeiro_logado") === "true") {
-        navegarPara("financeiro");
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        imagemOriginalDataUrl = e.target.result;
+        abrirCropper(imagemOriginalDataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function abrirCropper(dataUrl) {
+      const modal = document.getElementById("modal-cropper");
+      const imgTarget = document.getElementById("img-cropper-target");
+      
+      // Destrói instância anterior se houver
+      if (cropperInstancia) {
+        cropperInstancia.destroy();
+        cropperInstancia = null;
+      }
+
+      imgTarget.src = dataUrl;
+      modal.classList.remove("hidden");
+
+      // Inicializa Cropper.js com suporte completo a toque
+      setTimeout(() => {
+        cropperInstancia = new Cropper(imgTarget, {
+          viewMode: 1,
+          dragMode: 'crop',
+          autoCropArea: 0.85,
+          responsive: true,
+          restore: true,
+          checkCrossOrigin: false,
+          checkOrientation: false,
+          modal: true,
+          guides: true,
+          center: true,
+          highlight: true,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          toggleDragModeOnDblclick: false,
+          minContainerWidth: 280,
+          minContainerHeight: 250
+        });
+      }, 150);
+    }
+
+    function reabrirCropper() {
+      if (imagemOriginalDataUrl) {
+        abrirCropper(imagemOriginalDataUrl);
+      } else if (fotoBase64Atual) {
+        abrirCropper(fotoBase64Atual);
+      }
+    }
+
+    function definirAspectCropper(aspectRatio) {
+      if (!cropperInstancia) return;
+      cropperInstancia.setAspectRatio(aspectRatio);
+
+      // Estilos visuais dos botões
+      const btnFree = document.getElementById("btn-crop-free");
+      const btnH = document.getElementById("btn-crop-h");
+      const btnV = document.getElementById("btn-crop-v");
+
+      [btnFree, btnH, btnV].forEach(b => {
+        if (b) {
+          b.classList.remove("bg-blue-600", "text-white");
+          b.classList.add("bg-slate-800", "text-slate-200");
+        }
+      });
+
+      if (isNaN(aspectRatio)) {
+        btnFree.classList.add("bg-blue-600", "text-white");
+        btnFree.classList.remove("bg-slate-800", "text-slate-200");
+      } else if (aspectRatio > 1) {
+        btnH.classList.add("bg-blue-600", "text-white");
+        btnH.classList.remove("bg-slate-800", "text-slate-200");
+      } else {
+        btnV.classList.add("bg-blue-600", "text-white");
+        btnV.classList.remove("bg-slate-800", "text-slate-200");
+      }
+    }
+
+    function girarCropper(graus) {
+      if (cropperInstancia) cropperInstancia.rotate(graus);
+    }
+
+    function zoomCropper(fator) {
+      if (cropperInstancia) cropperInstancia.zoom(fator);
+    }
+
+    function resetCropper() {
+      if (cropperInstancia) cropperInstancia.reset();
+    }
+
+    function cancelarCropper() {
+      if (cropperInstancia) {
+        cropperInstancia.destroy();
+        cropperInstancia = null;
+      }
+      document.getElementById("modal-cropper").classList.add("hidden");
+      // Limpa os inputs para permitir selecionar a mesma foto se desejar
+      document.getElementById("input-foto-camera").value = "";
+      document.getElementById("input-foto-galeria").value = "";
+    }
+
+    function concluirRecorteFoto() {
+      if (!cropperInstancia) return;
+
+      // Obtém o Canvas recortado com alta nitidez (max 1600px para manter legibilidade dos números fiscais)
+      const canvas = cropperInstancia.getCroppedCanvas({
+        maxWidth: 1600,
+        maxHeight: 1600,
+        fillColor: '#ffffff',
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      });
+
+      if (!canvas) {
+        alert("Erro ao recortar imagem. Tente novamente.");
         return;
       }
 
-      const input = prompt("🔐 Digite a senha de acesso ao Painel do Financeiro Ameripan:");
-      if (input === null) return; // cancelou
+      // Compacta em JPEG qualidade 0.82 (peso ~150KB - 250KB, perfeito para 3G/4G e Google Drive)
+      fotoBase64Atual = canvas.toDataURL("image/jpeg", 0.82);
 
-      if (input.trim() === senhaCorreta.trim()) {
-        sessionStorage.setItem("ameripan_financeiro_logado", "true");
-        navegarPara("financeiro");
-      } else {
-        alert("❌ Senha incorreta! Acesso restrito ao Setor Financeiro.");
-      }
+      // Exibe preview recortado
+      document.getElementById("img-preview").src = fotoBase64Atual;
+      document.getElementById("foto-preview-container").classList.remove("hidden");
+      document.getElementById("foto-upload-actions").classList.add("hidden");
+
+      // Fecha o cropper
+      cancelarCropper();
     }
 
-    /* ALTERNAR TIPO: VENDEDOR VS MOTORISTA */
+    function removerFoto() {
+      fotoBase64Atual = "";
+      imagemOriginalDataUrl = "";
+      document.getElementById("img-preview").src = "#";
+      document.getElementById("foto-preview-container").classList.add("hidden");
+      document.getElementById("foto-upload-actions").classList.remove("hidden");
+      document.getElementById("input-foto-camera").value = "";
+      document.getElementById("input-foto-galeria").value = "";
+    }
+
+    /**
+     * =========================================================================
+     * 5. VENDEDORES & FORMULÁRIO DE LANÇAMENTO
+     * =========================================================================
+     */
     function alternarTipoResponsavel(tipo) {
       const labelVend = document.getElementById("label-role-vendedor");
       const labelMot = document.getElementById("label-role-motorista");
@@ -949,7 +1518,6 @@
       }
     }
 
-    /* BUSCA VENDEDOR PELO CÓDIGO (AUTOCOMPLETE OU AVISO DE NÃO CADASTRADO) */
     function buscarVendedorPorCodigo(codInput) {
       const codLimpo = String(codInput).trim();
       const cardEncontrado = document.getElementById("card-vendedor-encontrado");
@@ -979,63 +1547,6 @@
       }
     }
 
-    /* PROCESSAMENTO DA FOTO COM COMPRESSÃO INTELIGENTE NO CLIENTE */
-    function processarFoto(inputElem) {
-      if (!inputElem.files || !inputElem.files[0]) return;
-      
-      const file = inputElem.files[0];
-      const reader = new FileReader();
-
-      reader.onload = function(e) {
-        const imgTemp = new Image();
-        imgTemp.onload = function() {
-          // Redimensionamento Inteligente (Max 1280px para não estourar payload do Apps Script)
-          const MAX_WIDTH = 1280;
-          const MAX_HEIGHT = 1280;
-          let width = imgTemp.width;
-          let height = imgTemp.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(imgTemp, 0, 0, width, height);
-
-          // Compressão em JPEG 0.75 (alta nitidez para canhotos, tamanho ~150KB)
-          fotoBase64Atual = canvas.toDataURL("image/jpeg", 0.75);
-
-          // Atualiza UI
-          document.getElementById("img-preview").src = fotoBase64Atual;
-          document.getElementById("foto-preview-container").classList.remove("hidden");
-          document.getElementById("foto-upload-actions").classList.add("hidden");
-        };
-        imgTemp.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function removerFoto() {
-      fotoBase64Atual = "";
-      document.getElementById("img-preview").src = "#";
-      document.getElementById("foto-preview-container").classList.add("hidden");
-      document.getElementById("foto-upload-actions").classList.remove("hidden");
-      document.getElementById("input-foto-camera").value = "";
-      document.getElementById("input-foto-galeria").value = "";
-    }
-
-    /* ENVIAR CANHOTO (POST PARA GOOGLE APPS SCRIPT / LOCAL) */
     async function enviarCanhoto(event) {
       event.preventDefault();
 
@@ -1051,7 +1562,7 @@
       }
 
       if (!fotoBase64Atual) {
-        alert("Atenção: É obrigatório fotografar ou anexar o canhoto assinado!");
+        alert("Atenção: É obrigatório fotografar e recortar o canhoto assinado!");
         return;
       }
 
@@ -1066,7 +1577,6 @@
         if (vend) {
           nomeResponsavel = vend.nome;
         } else {
-          // Vendedor novo que preencheu manualmente
           const nomeNovo = document.getElementById("input-vend-nome-novo").value.trim();
           if (!nomeNovo) {
             alert("Como o código não foi encontrado, por favor digite seu Nome Completo!");
@@ -1074,8 +1584,6 @@
           }
           nomeResponsavel = nomeNovo.toUpperCase();
           const equipeNova = document.getElementById("select-vend-equipe-novo").value;
-          
-          // Adiciona à lista de vendedores local
           vendedores.push({ cod: codVendedor || String(Date.now()).slice(-4), nome: nomeResponsavel, equipe: equipeNova, telefone: document.getElementById("input-vend-telefone").value });
           salvarCacheVendedores();
         }
@@ -1090,7 +1598,6 @@
         }
       }
 
-      // Payload estruturado
       const novoCanhoto = {
         action: "salvarCanhoto",
         num_pedido: numPedido,
@@ -1104,9 +1611,8 @@
         foto_base64: fotoBase64Atual
       };
 
-      // Feedback visual de carregamento
       btnSubmit.disabled = true;
-      btnSubmit.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Enviando canhoto e foto...';
+      btnSubmit.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Enviando canhoto recortado...';
 
       const apiUrl = getApiUrl();
 
@@ -1121,7 +1627,6 @@
           
           if (json.success) {
             alert("✅ Canhoto registrado com sucesso no Financeiro da Ameripan!");
-            // Adiciona localmente também
             novoCanhoto.id = json.data.id;
             novoCanhoto.data_registro = json.data.data_registro;
             novoCanhoto.status = "PENDENTE";
@@ -1135,10 +1640,9 @@
         } catch (err) {
           console.error("Erro na API, salvando localmente:", err);
           salvarRegistroCanhotoLocalmente(novoCanhoto);
-          alert("⚠️ Sem conexão direta com o Google Sheets, o canhoto foi salvo com segurança na memória local do seu dispositivo!");
+          alert("⚠️ Sem conexão com o Google Sheets no momento. O canhoto foi salvo com segurança na memória local do seu dispositivo!");
         }
       } else {
-        // Salva modo local
         salvarRegistroCanhotoLocalmente(novoCanhoto);
         alert("✅ Canhoto registrado com sucesso no sistema local!");
       }
@@ -1179,7 +1683,11 @@
       salvarCanhotosLocalmente();
     }
 
-    /* CONSULTAR STATUS POR PEDIDO */
+    /**
+     * =========================================================================
+     * 6. CONSULTA DE STATUS (PÚBLICO)
+     * =========================================================================
+     */
     function executarConsultaPedido() {
       const termo = document.getElementById("input-busca-pedido").value.trim().toLowerCase();
       const container = document.getElementById("container-resultados-consulta");
@@ -1198,10 +1706,10 @@
 
       if (resultados.length === 0) {
         container.innerHTML = `
-          <div class="bg-white rounded-xl p-8 text-center border border-slate-200">
+          <div class="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm">
             <i class="fa-solid fa-file-circle-question text-4xl text-slate-300 mb-2"></i>
-            <h4 class="font-bold text-slate-700">Nenhum canhoto encontrado com o termo "${termo}"</h4>
-            <p class="text-xs text-slate-500 mt-1">Verifique o número digitado ou faça o lançamento do canhoto se ainda não foi registrado.</p>
+            <h4 class="font-bold text-slate-800 text-base">Nenhum canhoto localizado para "${termo}"</h4>
+            <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Verifique se digitou o número correto da nota fiscal ou realize o lançamento se a entrega acabou de ser feita.</p>
           </div>
         `;
         return;
@@ -1210,24 +1718,24 @@
       resultados.forEach(item => {
         const isRecebido = item.status === "RECEBIDO";
         const card = document.createElement("div");
-        card.className = "bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4";
+        card.className = "bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4";
         
         card.innerHTML = `
           <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
             <div>
-              <div class="text-xs font-bold text-slate-400">PEDIDO AMERIPAN</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pedido / NF-e Ameripan</div>
               <div class="text-2xl font-black text-blue-900">#${item.num_pedido}</div>
-              ${item.cliente ? `<div class="text-xs font-bold text-slate-600">${item.cliente}</div>` : ''}
+              ${item.cliente ? `<div class="text-xs font-bold text-slate-700 uppercase mt-0.5">${item.cliente}</div>` : ''}
             </div>
             <div>
               ${isRecebido 
-                ? '<span class="px-3 py-1 rounded-full text-xs font-bold badge-recebido"><i class="fa-solid fa-circle-check mr-1"></i>RECEBIDO NO FINANCEIRO</span>'
-                : '<span class="px-3 py-1 rounded-full text-xs font-bold badge-pendente"><i class="fa-solid fa-clock mr-1"></i>PENDENTE DE ENTREGA FÍSICA</span>'
+                ? '<span class="px-3 py-1 rounded-full text-xs font-bold badge-recebido inline-flex items-center space-x-1"><i class="fa-solid fa-circle-check"></i><span>RECEBIDO NO FINANCEIRO</span></span>'
+                : '<span class="px-3 py-1 rounded-full text-xs font-bold badge-pendente inline-flex items-center space-x-1"><i class="fa-solid fa-clock"></i><span>AGUARDANDO ENTREGA DO PAPEL</span></span>'
               }
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <strong class="text-slate-500 block">Responsável pelo Envio:</strong>
               <span class="font-bold text-slate-800">${item.nome_responsavel}</span> 
@@ -1238,23 +1746,23 @@
               <span class="text-slate-700 font-medium">${item.data_registro}</span>
             </div>
             ${isRecebido ? `
-              <div class="sm:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                <div class="font-bold text-emerald-900 text-xs"><i class="fa-solid fa-stamp mr-1"></i>Baixa Física Realizada!</div>
-                <div class="text-emerald-800 text-[11px] mt-0.5">Recebido por: <strong>${item.responsavel_baixa || 'Financeiro'}</strong> em ${item.data_baixa || '--'}</div>
+              <div class="sm:col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <div class="font-bold text-emerald-900 text-xs flex items-center space-x-1.5"><i class="fa-solid fa-stamp"></i><span>Baixa Física Realizada!</span></div>
+                <div class="text-emerald-800 text-[11px] mt-0.5">Recebido por: <strong>${item.responsavel_baixa || 'Financeiro Ameripan'}</strong> em ${item.data_baixa || '--'}</div>
               </div>
             ` : `
-              <div class="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div class="font-bold text-amber-900 text-xs"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Aguardando entrega física do papel</div>
-                <div class="text-amber-800 text-[11px] mt-0.5">O canhoto de papel ainda não chegou fisicamente nas mãos do Financeiro Ameripan. Dias em posse: <strong>${item.dias_pendente} dia(s)</strong>.</div>
+              <div class="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <div class="font-bold text-amber-900 text-xs flex items-center space-x-1.5"><i class="fa-solid fa-clock"></i><span>Aguardando papel físico no Financeiro</span></div>
+                <div class="text-amber-800 text-[11px] mt-0.5">O documento ainda não deu entrada no malote físico da Ameripan. Tempo decorrido: <strong>${item.dias_pendente} dia(s)</strong>.</div>
               </div>
             `}
           </div>
 
           ${item.url_foto ? `
             <div class="pt-2">
-              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition flex items-center space-x-1.5 border border-slate-300">
-                <i class="fa-solid fa-image text-blue-600"></i>
-                <span>Ver Foto do Canhoto</span>
+              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl font-bold transition flex items-center space-x-1.5 border border-slate-300 shadow-sm">
+                <i class="fa-solid fa-receipt text-blue-600"></i>
+                <span>Ver Canhoto Recortado</span>
               </button>
             </div>
           ` : ''}
@@ -1263,14 +1771,17 @@
       });
     }
 
-    /* RENDERIZAÇÃO DA TABELA DO FINANCEIRO & FILTROS */
+    /**
+     * =========================================================================
+     * 7. PAINEL FINANCEIRO & AÇÕES
+     * =========================================================================
+     */
     function filtrarTabelaCanhotos() {
       const buscaTexto = document.getElementById("filtro-busca-texto").value.trim().toLowerCase();
       const filtroStatus = document.getElementById("filtro-status").value;
       const filtroDias = document.getElementById("filtro-dias").value;
 
       let filtrados = canhotos.filter(item => {
-        // Filtro texto
         if (buscaTexto) {
           const match = String(item.num_pedido).toLowerCase().includes(buscaTexto) ||
                         String(item.nome_responsavel).toLowerCase().includes(buscaTexto) ||
@@ -1279,12 +1790,10 @@
           if (!match) return false;
         }
 
-        // Filtro status
         if (filtroStatus !== "TODOS" && item.status !== filtroStatus) {
           return false;
         }
 
-        // Filtro dias em atraso
         if (filtroDias === "ATRASO_3" && (item.status === "RECEBIDO" || item.dias_pendente <= 3)) {
           return false;
         }
@@ -1320,23 +1829,23 @@
         tr.innerHTML = `
           <td class="py-3 px-4">
             ${isRecebido 
-              ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-recebido"><i class="fa-solid fa-check mr-1"></i>RECEBIDO</span>'
+              ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-recebido inline-flex items-center"><i class="fa-solid fa-check mr-1"></i>RECEBIDO</span>'
               : (isAtrasado 
-                  ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-atraso"><i class="fa-solid fa-triangle-exclamation mr-1"></i>PENDENTE (${item.dias_pendente}d)</span>`
-                  : `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-pendente"><i class="fa-solid fa-clock mr-1"></i>PENDENTE</span>`
+                  ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-atraso inline-flex items-center"><i class="fa-solid fa-triangle-exclamation mr-1"></i>PENDENTE (${item.dias_pendente}d)</span>`
+                  : `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold badge-pendente inline-flex items-center"><i class="fa-solid fa-clock mr-1"></i>PENDENTE</span>`
                 )
             }
           </td>
 
           <td class="py-3 px-4">
-            <div class="font-extrabold text-blue-900 text-sm">#${item.num_pedido}</div>
-            <div class="text-[11px] text-slate-500 font-medium truncate max-w-[140px]">${item.cliente || 'Sem cliente especificado'}</div>
+            <div class="font-black text-blue-900 text-sm">#${item.num_pedido}</div>
+            <div class="text-[11px] text-slate-500 font-medium truncate max-w-[140px] uppercase">${item.cliente || 'Sem cliente'}</div>
           </td>
 
           <td class="py-3 px-4">
             <div class="font-bold text-slate-800">${item.nome_responsavel}</div>
-            <div class="text-[10px] text-slate-500 flex items-center space-x-1">
-              <span class="px-1.5 py-0.2 bg-slate-200 rounded font-semibold text-slate-700">${item.tipo_responsavel}</span>
+            <div class="text-[10px] text-slate-500 flex items-center space-x-1 mt-0.5">
+              <span class="px-1.5 py-0.2 bg-slate-200 rounded font-bold text-slate-700">${item.tipo_responsavel}</span>
               ${item.cod_vendedor ? `<span>Cód: <strong>${item.cod_vendedor}</strong></span>` : ''}
             </div>
           </td>
@@ -1344,15 +1853,15 @@
           <td class="py-3 px-4">
             <div class="text-xs text-slate-700">${item.data_registro}</div>
             ${!isRecebido 
-              ? `<div class="text-[11px] font-bold ${item.dias_pendente >= 3 ? 'text-rose-600' : 'text-amber-600'}">Há ${item.dias_pendente} dia(s) com ele</div>`
+              ? `<div class="text-[11px] font-bold ${item.dias_pendente >= 3 ? 'text-rose-600' : 'text-amber-600'}">Há ${item.dias_pendente} dia(s) em aberto</div>`
               : `<div class="text-[11px] text-emerald-700">Baixado: ${item.data_baixa || '--'}</div>`
             }
           </td>
 
           <td class="py-3 px-3 text-center">
             ${item.url_foto ? `
-              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="p-1.5 rounded-lg hover:bg-slate-200 transition text-blue-600" title="Ver foto">
-                <i class="fa-solid fa-image text-lg"></i>
+              <button onclick="abrirModalFoto('${item.url_foto}', 'Pedido #${item.num_pedido}')" class="p-1.5 rounded-lg hover:bg-blue-100 transition text-blue-700" title="Ver foto recortada">
+                <i class="fa-solid fa-receipt text-lg"></i>
               </button>
             ` : '<span class="text-slate-300 text-xs">Sem foto</span>'}
           </td>
@@ -1374,7 +1883,7 @@
                   <span class="hidden lg:inline">Cobrar</span>
                 </button>
               ` : `
-                <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-200 inline-flex items-center">
                   <i class="fa-solid fa-circle-check mr-1"></i>Concluído
                 </span>
               `}
@@ -1418,6 +1927,7 @@
 
       const apiUrl = getApiUrl();
       const agora = new Date().toISOString().slice(0, 16).replace("T", " ");
+      const senhaAtiva = getSenhaAtivaAdmin();
 
       if (apiUrl && apiUrl.startsWith("http")) {
         try {
@@ -1426,6 +1936,7 @@
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
               action: "darBaixa",
+              senha: senhaAtiva,
               id: itemSelecionadoParaBaixa.id,
               responsavel_baixa: operador
             })
@@ -1448,7 +1959,7 @@
 
       fecharModalBaixa();
       filtrarTabelaCanhotos();
-      alert("✅ Baixa registrada com sucesso! Documento físico conferido.");
+      alert("✅ Baixa física registrada com sucesso! Documento conferido no Financeiro.");
     }
 
     /* MODAL & MENSAGEM AUTOMÁTICA DE WHATSAPP */
@@ -1457,7 +1968,6 @@
       if (!item) return;
       itemSelecionadoParaWhatsApp = item;
 
-      // Localiza o telefone do vendedor se estiver sem
       let tel = item.telefone || "";
       if (!tel && item.tipo_responsavel === "VENDEDOR" && item.cod_vendedor) {
         const v = vendedores.find(x => String(x.cod).trim() === String(item.cod_vendedor).trim());
@@ -1470,7 +1980,6 @@
       document.getElementById("wpp-modal-dias").textContent = item.dias_pendente + " dia(s) em posse";
       document.getElementById("wpp-modal-previsao-input").value = item.previsao_entrega || "";
 
-      // Monta mensagem automática profissional com formatação Ameripan
       const msgPadrao = `Olá ${item.nome_responsavel}, tudo bem?
 
 Aqui é do Setor Financeiro da *Ameripan Distribuidora*.
@@ -1480,8 +1989,8 @@ Consta em nosso sistema que o canhoto físico do *Pedido #${item.num_pedido}* (r
 Precisamos do papel em mãos para a conciliação fiscal e fechamento contábil. Qual é a sua previsão para nos entregar esse canhoto aqui no financeiro?
 
 Ficamos no aguardo. Muito obrigado!`;
+      
       document.getElementById("wpp-modal-texto").value = msgPadrao;
-
       document.getElementById("modal-whatsapp").classList.remove("hidden");
     }
 
@@ -1502,19 +2011,20 @@ Ficamos no aguardo. Muito obrigado!`;
         if (v && v.telefone) tel = v.telefone;
       }
 
-      // Atualiza previsão e histórico
       itemSelecionadoParaWhatsApp.previsao_entrega = novaPrevisao;
       itemSelecionadoParaWhatsApp.obs_cobranca = "Cobrado via WhatsApp em " + new Date().toLocaleDateString("pt-BR");
       salvarCanhotosLocalmente();
 
-      // Grava no backend se conectado
       const apiUrl = getApiUrl();
+      const senhaAtiva = getSenhaAtivaAdmin();
+
       if (apiUrl && apiUrl.startsWith("http")) {
         fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "salvarObservacao",
+            senha: senhaAtiva,
             id: itemSelecionadoParaWhatsApp.id,
             previsao_entrega: novaPrevisao,
             obs_cobranca: itemSelecionadoParaWhatsApp.obs_cobranca
@@ -1522,7 +2032,6 @@ Ficamos no aguardo. Muito obrigado!`;
         }).catch(e => console.error(e));
       }
 
-      // Sanitiza telefone (remove não-dígitos)
       const telNumeros = tel.replace(/[^0-9]/g, "");
       let telFinal = telNumeros;
       if (telFinal.length === 10 || telFinal.length === 11) {
@@ -1535,8 +2044,7 @@ Ficamos no aguardo. Muito obrigado!`;
       if (telFinal && telFinal.length >= 12) {
         urlWhatsApp = `https://api.whatsapp.com/send?phone=${telFinal}&text=${encodedMsg}`;
       } else {
-        // Abre sem número específico se não tiver telefone cadastrado
-        alert("Atenção: Vendedor/Motorista sem número cadastrado. O WhatsApp será aberto para você selecionar o contato.");
+        alert("Atenção: Contato sem telefone cadastrado. O WhatsApp será aberto para seleção manual.");
         urlWhatsApp = `https://api.whatsapp.com/send?text=${encodedMsg}`;
       }
 
@@ -1545,9 +2053,12 @@ Ficamos no aguardo. Muito obrigado!`;
       filtrarTabelaCanhotos();
     }
 
-    /* MODAL DE FOTO */
+    /* MODAL DE FOTO COM ZOOM E ROTAÇÃO */
     function abrirModalFoto(url, titulo) {
-      document.getElementById("modal-foto-img").src = url;
+      rotacaoVisualizadorAtual = 0;
+      const img = document.getElementById("modal-foto-img");
+      img.style.transform = "rotate(0deg)";
+      img.src = url;
       document.getElementById("modal-foto-titulo").textContent = titulo || "Visualização do Canhoto";
       document.getElementById("modal-foto-link-download").href = url;
       document.getElementById("modal-foto").classList.remove("hidden");
@@ -1556,6 +2067,11 @@ Ficamos no aguardo. Muito obrigado!`;
     function fecharModalFoto() {
       document.getElementById("modal-foto").classList.add("hidden");
       document.getElementById("modal-foto-img").src = "#";
+    }
+
+    function girarFotoVisualizador() {
+      rotacaoVisualizadorAtual = (rotacaoVisualizadorAtual + 90) % 360;
+      document.getElementById("modal-foto-img").style.transform = `rotate(${rotacaoVisualizadorAtual}deg)`;
     }
 
     /* MODAL DE BUSCA RÁPIDA DE VENDEDOR */
@@ -1607,10 +2123,10 @@ Ficamos no aguardo. Muito obrigado!`;
       }
 
       const dadosPlanilha = canhotos.map(item => ({
-        "ID_CANHOTO": item.id,
+        "ID": item.id,
         "DATA_REGISTRO": item.data_registro,
         "NUM_PEDIDO": item.num_pedido,
-        "TIPO": item.tipo_responsavel,
+        "TIPO_RESPONSAVEL": item.tipo_responsavel,
         "COD_VENDEDOR": item.cod_vendedor || "",
         "NOME_RESPONSAVEL": item.nome_responsavel,
         "TELEFONE": item.telefone || "",
@@ -1620,19 +2136,23 @@ Ficamos no aguardo. Muito obrigado!`;
         "DATA_BAIXA": item.data_baixa || "",
         "RESPONSAVEL_BAIXA": item.responsavel_baixa || "",
         "PREVISAO_ENTREGA": item.previsao_entrega || "",
-        "OBSERVACOES_COBRANCA": item.obs_cobranca || "",
-        "LINK_FOTO": item.url_foto || ""
+        "OBS_COBRANCA": item.obs_cobranca || "",
+        "URL_FOTO": item.url_foto || ""
       }));
 
       const ws = XLSX.utils.json_to_sheet(dadosPlanilha);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "CANHOTOS_AMERIPAN");
+      XLSX.utils.book_append_sheet(wb, ws, "CANHOTOS");
 
       const dataHoje = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `Relatorio_Canhotos_Ameripan_${dataHoje}.xlsx`);
+      XLSX.writeFile(wb, `canhotos_pro_ameripan_${dataHoje}.xlsx`);
     }
 
-    /* GESTÃO DE VENDEDORES NA ABA DE CONFIGURAÇÕES */
+    /**
+     * =========================================================================
+     * 8. GESTÃO DE VENDEDORES & CONFIGURAÇÕES (ABA PROTEGIDA)
+     * =========================================================================
+     */
     function renderizarTabelaVendedoresConfig() {
       const tbody = document.getElementById("tbody-config-vendedores");
       if (!tbody) return;
@@ -1646,7 +2166,7 @@ Ficamos no aguardo. Muito obrigado!`;
         v.equipe.toLowerCase().includes(termo)
       );
 
-      filtrados.forEach((v, index) => {
+      filtrados.forEach((v) => {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-slate-50 border-b border-slate-100";
         tr.innerHTML = `
@@ -1654,11 +2174,11 @@ Ficamos no aguardo. Muito obrigado!`;
           <td class="p-2.5 font-semibold text-slate-800">${v.nome}</td>
           <td class="p-2.5 text-slate-500">${v.equipe}</td>
           <td class="p-2.5">
-            <input type="tel" value="${v.telefone || ''}" placeholder="Ex: 19999999999" class="px-2 py-1 border border-slate-300 rounded text-xs w-36 font-mono" onchange="atualizarTelefoneVendedorLocal('${v.cod}', this.value)">
+            <input type="tel" value="${v.telefone || ''}" placeholder="Ex: (19) 99999-9999" class="px-2.5 py-1 border border-slate-300 rounded text-xs w-40 font-mono" onchange="atualizarTelefoneVendedorLocal('${v.cod}', this.value)" oninput="formatarTelefone(this)">
           </td>
           <td class="p-2.5 text-center">
-            <button onclick="dispararWppDireto('${v.telefone}', '${v.nome}')" class="text-emerald-600 hover:text-emerald-800 p-1" title="Testar WhatsApp">
-              <i class="fa-brands fa-whatsapp text-base"></i>
+            <button onclick="dispararWppDireto('${v.telefone}', '${v.nome}')" class="text-emerald-600 hover:text-emerald-800 p-1 transition" title="Testar WhatsApp">
+              <i class="fa-brands fa-whatsapp text-lg"></i>
             </button>
           </td>
         `;
@@ -1671,6 +2191,21 @@ Ficamos no aguardo. Muito obrigado!`;
       if (v) {
         v.telefone = novoTel.trim();
         salvarCacheVendedores();
+
+        // Se conectado e logado como admin, envia para o Google Apps Script
+        const apiUrl = getApiUrl();
+        const senhaAtiva = getSenhaAtivaAdmin();
+        if (apiUrl && apiUrl.startsWith("http") && senhaAtiva) {
+          fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "atualizarTelefones",
+              senha: senhaAtiva,
+              vendedores: [{ cod: cod, telefone: novoTel }]
+            })
+          }).catch(e => console.warn(e));
+        }
       }
     }
 
@@ -1680,7 +2215,11 @@ Ficamos no aguardo. Muito obrigado!`;
         return;
       }
       const num = tel.replace(/[^0-9]/g, "");
-      window.open(`https://api.whatsapp.com/send?phone=55${num}&text=Olá%20${encodeURIComponent(nome)}!`, "_blank");
+      let telFinal = num;
+      if (telFinal.length === 10 || telFinal.length === 11) {
+        telFinal = "55" + telFinal;
+      }
+      window.open(`https://api.whatsapp.com/send?phone=${telFinal}&text=Olá%20${encodeURIComponent(nome)}!`, "_blank");
     }
 
     function abrirModalNovoVendedor() {
@@ -1707,14 +2246,16 @@ Ficamos no aguardo. Muito obrigado!`;
       vendedores.push(novo);
       salvarCacheVendedores();
 
-      // Se conectado ao backend, envia
       const apiUrl = getApiUrl();
-      if (apiUrl && apiUrl.startsWith("http")) {
+      const senhaAtiva = getSenhaAtivaAdmin();
+
+      if (apiUrl && apiUrl.startsWith("http") && senhaAtiva) {
         fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "cadastrarVendedor",
+            senha: senhaAtiva,
             cod: cod,
             nome: nome,
             equipe: equipe,
@@ -1739,6 +2280,13 @@ Ficamos no aguardo. Muito obrigado!`;
       verificarConexaoBackend(true);
     }
 
+    function restaurarUrlPadraoCodigo() {
+      localStorage.removeItem(STORAGE_KEY_API);
+      document.getElementById("config-api-url").value = getApiUrl();
+      verificarConexaoBackend(true);
+      alert("URL restaurada para o padrão configurado no código HTML!");
+    }
+
     function limparConfigApi() {
       localStorage.removeItem(STORAGE_KEY_API);
       document.getElementById("config-api-url").value = "";
@@ -1746,14 +2294,59 @@ Ficamos no aguardo. Muito obrigado!`;
       alert("Modo demonstração local ativado com sucesso!");
     }
 
-    function salvarSenhaFinanceiro() {
-      const novaSenha = document.getElementById("config-senha-financeiro").value.trim();
-      if (!novaSenha) {
-        alert("A senha não pode ser vazia!");
+    async function executarTrocaSenhaBackend() {
+      const senhaAtual = document.getElementById("input-senha-atual").value.trim();
+      const novaSenha = document.getElementById("input-nova-senha").value.trim();
+      const confirma = document.getElementById("input-confirma-nova-senha").value.trim();
+      const btn = document.getElementById("btn-trocar-senha");
+
+      if (!senhaAtual || !novaSenha) {
+        alert("Preencha a senha atual e a nova senha!");
         return;
       }
-      localStorage.setItem(STORAGE_KEY_SENHA_FIN, novaSenha);
-      alert("✅ Senha do Painel Financeiro atualizada com sucesso!");
+      if (novaSenha !== confirma) {
+        alert("A nova senha e a confirmação não coincidem!");
+        return;
+      }
+      if (novaSenha.length < 4) {
+        alert("A nova senha deve ter no mínimo 4 caracteres!");
+        return;
+      }
+
+      const apiUrl = getApiUrl();
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Atualizando...';
+
+      if (apiUrl && apiUrl.startsWith("http")) {
+        try {
+          const res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "alterarSenha",
+              senha_atual: senhaAtual,
+              nova_senha: novaSenha
+            })
+          });
+          const json = await res.json();
+          if (json.success) {
+            sessionStorage.setItem(SESSION_KEY_SENHA_ATIVA, novaSenha);
+            alert("✅ Senha mestra atualizada com sucesso no Google Apps Script!");
+            document.getElementById("input-senha-atual").value = "";
+            document.getElementById("input-nova-senha").value = "";
+            document.getElementById("input-confirma-nova-senha").value = "";
+          } else {
+            alert("❌ Erro ao alterar senha: " + (json.error || "Senha atual incorreta!"));
+          }
+        } catch (e) {
+          alert("Erro de conexão ao alterar senha: " + e.toString());
+        }
+      } else {
+        alert("⚠️ Em modo local a alteração é simulada. Conecte ao Google Apps Script para salvar permanentemente.");
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-key"></i><span>Atualizar Senha no Google Apps Script</span>';
     }
 
     async function verificarConexaoBackend(notificar = false) {
@@ -1762,34 +2355,42 @@ Ficamos no aguardo. Muito obrigado!`;
       const badge = document.getElementById("badge-api-status");
 
       if (!url || !url.startsWith("http")) {
-        banner.classList.remove("hidden");
-        badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800";
-        badge.textContent = "Modo Demonstração (Local)";
+        if (banner) banner.classList.remove("hidden");
+        if (badge) {
+          badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800";
+          badge.textContent = "Modo Demonstração (Local)";
+        }
         return;
       }
 
-      badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-800";
-      badge.textContent = "Testando conexão...";
+      if (badge) {
+        badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-800";
+        badge.textContent = "Testando conexão...";
+      }
 
       try {
         const res = await fetch(url + "?action=ping");
         const json = await res.json();
         if (json.success) {
-          banner.classList.add("hidden");
-          badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800";
-          badge.textContent = "● Conectado ao Google Sheets";
+          if (banner) banner.classList.add("hidden");
+          if (badge) {
+            badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800";
+            badge.textContent = "● Conectado ao Google Sheets";
+          }
           if (notificar) alert("✅ Conexão estabelecida com sucesso com o Google Apps Script!");
+          // Sincroniza dados automaticamente
           sincronizarDadosComBackend(false);
         } else {
           throw new Error("Resposta inválida da API");
         }
       } catch (err) {
         console.warn("Falha no ping da API:", err);
-        banner.classList.remove("hidden");
-        document.getElementById("texto-banner-conexao").textContent = "Aviso: Não foi possível sincronizar com o Google Apps Script. Verifique permissões de implantação.";
-        badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-800";
-        badge.textContent = "Erro de Conexão";
-        if (notificar) alert("❌ Não foi possível conectar ao Google Apps Script. Verifique se publicou com permissão 'Qualquer pessoa'.");
+        if (banner) banner.classList.remove("hidden");
+        if (badge) {
+          badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-800";
+          badge.textContent = "Erro de Conexão";
+        }
+        if (notificar) alert("❌ Não foi possível conectar ao Google Apps Script. Verifique se a URL foi implantada com permissão 'Qualquer pessoa'.");
       }
     }
 
@@ -1797,23 +2398,27 @@ Ficamos no aguardo. Muito obrigado!`;
       const url = getApiUrl();
       if (!url || !url.startsWith("http")) return;
 
-      try {
-        // 1. Busca Canhotos
-        const resCanh = await fetch(url + "?action=getCanhotos");
-        const jsonCanh = await resCanh.json();
-        if (jsonCanh.success && Array.isArray(jsonCanh.data) && jsonCanh.data.length > 0) {
-          canhotos = jsonCanh.data;
-          salvarCanhotosLocalmente();
-          filtrarTabelaCanhotos();
-        }
+      const senhaAtiva = getSenhaAtivaAdmin();
 
-        // 2. Busca Vendedores
+      try {
+        // 1. Busca Vendedores (Pública)
         const resVend = await fetch(url + "?action=getVendedores");
         const jsonVend = await resVend.json();
         if (jsonVend.success && Array.isArray(jsonVend.data) && jsonVend.data.length > 0) {
           vendedores = jsonVend.data;
           salvarCacheVendedores();
           renderizarTabelaVendedoresConfig();
+        }
+
+        // 2. Busca Canhotos (Exige senha autorizada)
+        if (senhaAtiva) {
+          const resCanh = await fetch(`${url}?action=getCanhotos&senha=${encodeURIComponent(senhaAtiva)}`);
+          const jsonCanh = await resCanh.json();
+          if (jsonCanh.success && Array.isArray(jsonCanh.data)) {
+            canhotos = jsonCanh.data;
+            salvarCanhotosLocalmente();
+            filtrarTabelaCanhotos();
+          }
         }
 
         if (exibirAlerta) alert("✅ Dados sincronizados com o Google Sheets em tempo real!");
@@ -1823,7 +2428,7 @@ Ficamos no aguardo. Muito obrigado!`;
       }
     }
 
-    /* MÁSCARA / FORMATADOR DE TELEFONE */
+    /* MÁSCARA DE TELEFONE (DDD + NÚMERO) */
     function formatarTelefone(input) {
       let v = input.value.replace(/\D/g, "");
       if (v.length > 11) v = v.substring(0, 11);
