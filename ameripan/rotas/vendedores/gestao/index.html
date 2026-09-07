@@ -791,6 +791,10 @@
                         <i class="ph ph-clock-counter-clockwise text-sm"></i>
                         <span>Carregar Histórico</span>
                     </button>
+                    <button onclick="sincronizarInativosComClientes()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-bold px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-2xs" title="Varre a aba CLIENTES_INATIVOS e remove automaticamente esses clientes das abas ativas CLIENTES e ROTAS na planilha">
+                        <i class="ph ph-trash-simple text-sm"></i>
+                        <span>Sincronizar Inativos</span>
+                    </button>
                 </div>
             </div>
 
@@ -1334,6 +1338,19 @@
                 rawSolicitacoesPendentes = dadosGas.solicitacoesPendentes || [];
                 rawUltimasSolicitacoes = dadosGas.ultimasSolicitacoes || [];
                 atualizarBadgeSolicitacoes();
+
+                if (dadosGas.totalInativos !== undefined) {
+                    const kpiInat = document.getElementById('kpi-total-inativos');
+                    const countInat = document.getElementById('count-hist-inativos');
+                    if (kpiInat) kpiInat.textContent = dadosGas.totalInativos;
+                    if (countInat) countInat.textContent = dadosGas.totalInativos;
+                }
+                if (dadosGas.totalTransferidos !== undefined) {
+                    const kpiTrans = document.getElementById('kpi-total-transferidos');
+                    const countTrans = document.getElementById('count-hist-transferidos');
+                    if (kpiTrans) kpiTrans.textContent = dadosGas.totalTransferidos;
+                    if (countTrans) countTrans.textContent = dadosGas.totalTransferidos;
+                }
 
                 rawEntregas = {};
                 cityDisplayMap = {};
@@ -4936,6 +4953,12 @@
         atualizarBadgeSolicitacoes();
         popularSelectGestorDestino();
 
+        if (!historicoCarregado) {
+            carregarHistoricoMovimentacoes();
+        } else {
+            renderTabelasHistorico();
+        }
+
         const container = document.getElementById('container-solicitacoes-pendentes');
         if (!container) return;
 
@@ -5327,10 +5350,13 @@
                 const kpiInat = document.getElementById('kpi-total-inativos');
                 const kpiTrans = document.getElementById('kpi-total-transferidos');
 
-                if (countInat) countInat.textContent = rawHistoricoInativos.length;
-                if (countTrans) countTrans.textContent = rawHistoricoTransferidos.length;
-                if (kpiInat) kpiInat.textContent = rawHistoricoInativos.length;
-                if (kpiTrans) kpiTrans.textContent = rawHistoricoTransferidos.length;
+                const totalInat = (res.totalInativos !== undefined) ? res.totalInativos : rawHistoricoInativos.length;
+                const totalTrans = (res.totalTransferidos !== undefined) ? res.totalTransferidos : rawHistoricoTransferidos.length;
+
+                if (countInat) countInat.textContent = totalInat;
+                if (countTrans) countTrans.textContent = totalTrans;
+                if (kpiInat) kpiInat.textContent = totalInat;
+                if (kpiTrans) kpiTrans.textContent = totalTrans;
 
                 renderTabelasHistorico();
             } else {
@@ -5381,19 +5407,22 @@
         if (tbodyInat) {
             const filtradosInat = rawHistoricoInativos.filter(item => {
                 if (!q) return true;
-                const txt = `${item.codigo} ${item.razao} ${item.fantasia} ${item.cidade} ${item.vendedorAnterior} ${item.motivo}`.toLowerCase();
+                const cod = item.codigo || item.codCliente || '';
+                const txt = `${cod} ${item.razao} ${item.fantasia} ${item.cidade} ${item.vendedorAnterior} ${item.motivo}`.toLowerCase();
                 return txt.includes(q);
             });
 
             if (filtradosInat.length === 0) {
                 tbodyInat.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400 italic">Nenhum cliente inativo localizado.</td></tr>`;
             } else {
-                tbodyInat.innerHTML = filtradosInat.slice(0, 150).map(r => {
-                    const dataStr = r.dataInativacao ? new Date(r.dataInativacao).toLocaleDateString('pt-BR') : '-';
+                tbodyInat.innerHTML = filtradosInat.slice(0, 1000).map(r => {
+                    const dt = r.dataInativacao || r.data;
+                    const dataStr = dt ? new Date(dt).toLocaleDateString('pt-BR') : '-';
+                    const cod = r.codigo || r.codCliente || '-';
                     return `
                         <tr class="hover:bg-slate-50 transition">
                             <td class="p-3 font-mono text-[11px]">${dataStr}</td>
-                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(r.codigo)}</td>
+                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(cod)}</td>
                             <td class="p-3 font-semibold text-slate-700">${escapeHtml(r.fantasia || r.razao)}</td>
                             <td class="p-3">${escapeHtml(r.cidade)}</td>
                             <td class="p-3">${escapeHtml(r.vendedorAnterior)}</td>
@@ -5410,19 +5439,22 @@
         if (tbodyTrans) {
             const filtradosTrans = rawHistoricoTransferidos.filter(item => {
                 if (!q) return true;
-                const txt = `${item.codigo} ${item.razao} ${item.cidade} ${item.vendedorDoador} ${item.vendedorDestino} ${item.motivo}`.toLowerCase();
+                const cod = item.codigo || item.codCliente || '';
+                const txt = `${cod} ${item.razao} ${item.cidade} ${item.vendedorDoador} ${item.vendedorDestino} ${item.motivo}`.toLowerCase();
                 return txt.includes(q);
             });
 
             if (filtradosTrans.length === 0) {
                 tbodyTrans.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400 italic">Nenhum registro de transferência localizado.</td></tr>`;
             } else {
-                tbodyTrans.innerHTML = filtradosTrans.slice(0, 150).map(r => {
-                    const dataStr = r.dataTransferencia ? new Date(r.dataTransferencia).toLocaleDateString('pt-BR') : '-';
+                tbodyTrans.innerHTML = filtradosTrans.slice(0, 1000).map(r => {
+                    const dt = r.dataTransferencia || r.data;
+                    const dataStr = dt ? new Date(dt).toLocaleDateString('pt-BR') : '-';
+                    const cod = r.codigo || r.codCliente || '-';
                     return `
                         <tr class="hover:bg-slate-50 transition">
                             <td class="p-3 font-mono text-[11px]">${dataStr}</td>
-                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(r.codigo)}</td>
+                            <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(cod)}</td>
                             <td class="p-3 font-semibold text-slate-700">${escapeHtml(r.razao)}</td>
                             <td class="p-3">${escapeHtml(r.cidade)}</td>
                             <td class="p-3 text-slate-600">${escapeHtml(r.vendedorDoador)}</td>
@@ -5434,6 +5466,35 @@
                     `;
                 }).join('');
             }
+        }
+    }
+
+    async function sincronizarInativosComClientes() {
+        const conf = confirm(
+            'Deseja executar a sincronização e expurgo no backend da planilha?\n\n' +
+            'O servidor irá ler todos os clientes arquivados em CLIENTES_INATIVOS e garantir ' +
+            'que eles sejam completamente removidos das abas ativas CLIENTES, ROTAS e SEM_ATENDIMENTO.'
+        );
+        if (!conf) return;
+
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'SINCRONIZAR_INATIVOS_CLIENTES'
+            });
+
+            if (res && res.sucesso) {
+                alert(res.mensagem || 'Sincronização concluída com sucesso!');
+                await carregarDados();
+                await carregarHistoricoMovimentacoes(true);
+            } else {
+                alert('Erro: ' + (res.erro || 'Falha ao sincronizar inativos.'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro de comunicação com o servidor: ' + (e.message || e.toString()));
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
         }
     }
 
