@@ -1236,6 +1236,22 @@
     const DIAS_LISTA = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
     const DIAS_VALOR = { 'SEG':1, 'TER':2, 'QUA':3, 'QUI':4, 'SEX':5, 'SAB':6 };
 
+    // Regra estrita de ordenação: Visitas presenciais (1..N) vêm primeiro em ordem crescente.
+    // Atendimentos não presenciais (0 e 99 - WhatsApp / Ligação / Online) ficam SEMPRE ao final da rota e relatórios.
+    function obterPesoOrdenacaoRota(ordem) {
+        const str = String(ordem ?? '').trim();
+        if (!str) return 2000000;
+        if (str === '0') return 1000000;
+        if (str === '99') return 1000099;
+        const low = str.toLowerCase();
+        if (low.includes('whats') || low.includes('remoto') || low.includes('online') || low.includes('ligacao') || low.includes('ligação')) {
+            return 1000000;
+        }
+        const n = parseInt(str, 10);
+        if (isNaN(n) || n <= 0) return 1000000;
+        return n;
+    }
+
     // Estado (camada de dados)
     let rawRotas = [];
     let rawVendedores = [];
@@ -1384,7 +1400,17 @@
                         razao,
                         fantasia,
                         cliente: clienteNome,
-                        ordem: parseInt(r.ordem, 10) || 99,
+                        ordem: (() => {
+                            const ordRaw = (r.ordem !== undefined && r.ordem !== null) ? String(r.ordem).trim() : '';
+                            if (ordRaw === '0') return 0;
+                            if (ordRaw === '99') return 99;
+                            const n = parseInt(ordRaw, 10);
+                            return isNaN(n) ? 99 : n;
+                        })(),
+                        isRemoto: (() => {
+                            const ordRaw = (r.ordem !== undefined && r.ordem !== null) ? String(r.ordem).trim() : '';
+                            return ordRaw === '0' || ordRaw === '99';
+                        })(),
                         freq: normalizarFreq((r.freq || '').toString()),
                         diaPrinc: normalizarDia((r.diaPrinc || '').toString()),
                         diasSec: (r.diasSec ? r.diasSec.toString().split(',').map(d => normalizarDia(d)).filter(Boolean) : []),
@@ -1436,7 +1462,17 @@
                     razao,
                     fantasia,
                     cliente: clienteNome,
-                    ordem: parseInt(r[COL.ORDEM], 10) || 99,
+                    ordem: (() => {
+                        const ordRaw = (r[COL.ORDEM] !== undefined && r[COL.ORDEM] !== null) ? String(r[COL.ORDEM]).trim() : '';
+                        if (ordRaw === '0') return 0;
+                        if (ordRaw === '99') return 99;
+                        const n = parseInt(ordRaw, 10);
+                        return isNaN(n) ? 99 : n;
+                    })(),
+                    isRemoto: (() => {
+                        const ordRaw = (r[COL.ORDEM] !== undefined && r[COL.ORDEM] !== null) ? String(r[COL.ORDEM]).trim() : '';
+                        return ordRaw === '0' || ordRaw === '99';
+                    })(),
                     freq: normalizarFreq((r[COL.FREQ] || '').toString()),
                     diaPrinc: normalizarDia((r[COL.DIA_PRINC] || '').toString()),
                     diasSec: (r[COL.DIAS_SEC] ? r[COL.DIAS_SEC].toString().split(',').map(d => normalizarDia(d)).filter(Boolean) : []),
@@ -1739,7 +1775,7 @@
 
         subset.sort((a, b) => {
             if (a.cidade !== b.cidade) return a.cidade.localeCompare(b.cidade);
-            return (a.ordem - b.ordem);
+            return (obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem));
         });
         return subset;
     }
@@ -1756,18 +1792,20 @@
         const subset = getRotaSubset();
 
         const total = subset.length;
+        const presenciais = subset.filter(r => r.ordem !== 0 && r.ordem !== 99).length;
+        const remotos = subset.filter(r => r.ordem === 0 || r.ordem === 99).length;
         const cities = new Set(subset.map(r => r.cidade)).size;
         const waCount = subset.filter(r => !!r.whatsappUrl).length;
         const semWa = total - waCount;
 
         document.getElementById('rota-kpi-paradas').innerText = String(total);
-        document.getElementById('rota-kpi-paradas-sub').innerText = `${cities} cidades • ${semanaLabel}`;
+        document.getElementById('rota-kpi-paradas-sub').innerText = `${cities} cidades • ${presenciais} presenciais • ${remotos} Whats/Online`;
         document.getElementById('rota-kpi-wa').innerText = String(waCount);
         document.getElementById('rota-kpi-wa-sub').innerText = semWa > 0 ? `${semWa} sem WhatsApp` : 'Cobertura total';
 
         const title = `${vend} • ${dia} • ${semanaLabel}`;
         document.getElementById('rota-summary-title').innerText = title;
-        document.getElementById('rota-summary-sub').innerText = `${total} paradas • ${waCount} com WhatsApp • clique no Cód. para abrir o contato`;
+        document.getElementById('rota-summary-sub').innerText = `${total} paradas (${presenciais} presenciais • ${remotos} não presenciais Whats/Online ao fim) • clique no Cód. para contato`;
 
         renderRotaVendChart(vend);
         renderRotaList(subset);
@@ -1845,6 +1883,22 @@
         const comprador = r.comprador ? escapeHtml(r.comprador) : '-';
         const obs = r.obs ? escapeHtml(r.obs) : '';
 
+        const isRemoto = (r.ordem === 0 || r.ordem === 99 || r.isRemoto);
+        const ordemBadge = isRemoto ? `
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-300 flex flex-col items-center justify-center font-bold text-emerald-800 mono text-xs shadow-2xs" title="Ordem ${r.ordem}: Atendimento Não Presencial (WhatsApp / Ligação / Online) por ausência de ponto de visita">
+                <span class="text-[11px] leading-none font-black">${r.ordem}</span>
+                <i class="ph ph-whatsapp-logo text-xs text-emerald-600 -mt-0.5"></i>
+            </div>
+        ` : `
+            <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-slate-700 mono">${(r.ordem !== undefined && r.ordem !== null && r.ordem !== '') ? r.ordem : ''}</div>
+        `;
+
+        const tagRemoto = isRemoto ? `
+            <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200 shadow-2xs" title="Cliente sem ponto de encontro presencial ou horário adequado - Atendimento à distância via WhatsApp/Ligação">
+                <i class="ph ph-whatsapp-logo text-emerald-700"></i> Não Presencial (Whats #${r.ordem})
+            </span>
+        ` : '';
+
         const codEl = r.whatsappUrl
             ? `<a class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400" href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener">${cod}</a>`
             : `<span class="mono text-slate-700 font-bold">${cod}</span>`;
@@ -1866,15 +1920,16 @@
         const obsLine = (!compact && obs) ? `<div class="text-[11px] text-slate-400 mt-1">Obs: ${obs}</div>` : '';
 
         return `
-            <div class="p-3 hover:bg-slate-50 fade-in">
+            <div class="p-3 hover:bg-slate-50 fade-in ${isRemoto ? 'bg-emerald-50/20' : ''}">
                 <div class="flex items-start gap-3">
                     <div class="w-12 flex-shrink-0">
-                        <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-slate-700 mono">${r.ordem || ''}</div>
+                        ${ordemBadge}
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                             ${codEl}
                             <button class="text-left hover:underline font-bold text-slate-800 truncate" onclick="openClientModal('${escapeHtml(r.codCliente)}')">${escapeHtml(r.cliente || '')}</button>
+                            ${tagRemoto}
                             ${r.whatsappRaw ? `<span class="pill">${escapeHtml(r.whatsappRaw)}</span>` : `<span class="pill">sem tel</span>`}
                         </div>
                         ${infoLine}
@@ -2168,7 +2223,11 @@
                 </td>
                 <td class="p-2">${escapeHtml(r.diaPrinc || '-')}</td>
                 <td class="p-2 text-[10px]">${escapeHtml((r.freq || []).join(','))}</td>
-                <td class="p-2 text-center">${r.ordem}</td>
+                <td class="p-2 text-center">
+                    ${(r.ordem === 0 || r.ordem === 99 || r.isRemoto)
+                        ? `<span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 shadow-2xs" title="Atendimento Não Presencial (WhatsApp / Ligação)"><i class="ph ph-whatsapp-logo text-emerald-700"></i> Whats (${r.ordem})</span>`
+                        : `<span class="font-bold text-slate-700">${(r.ordem !== undefined && r.ordem !== null && r.ordem !== '') ? r.ordem : ''}</span>`}
+                </td>
             </tr>`;
         }).join('');
 
@@ -2284,7 +2343,11 @@
                         <button class="text-left hover:underline" onclick="openClientModal('${escapeHtml(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
                     </div>
                     <div class="col-span-1 text-center font-bold text-blue-600">${escapeHtml(r.diaPrinc || '-')}</div>
-                    <div class="col-span-1 text-center mono">${escapeHtml(String(r.ordem || ''))}</div>
+                    <div class="col-span-1 text-center mono">
+                        ${(r.ordem === 0 || r.ordem === 99 || r.isRemoto)
+                            ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded" title="Atendimento Não Presencial (WhatsApp)">Whats(${r.ordem})</span>`
+                            : escapeHtml(String((r.ordem !== undefined && r.ordem !== null && r.ordem !== '') ? r.ordem : ''))}
+                    </div>
                 </div>
             `;
         }
@@ -2359,7 +2422,7 @@
             const diaA = DIAS_VALOR[a.diaPrinc] || 9;
             const diaB = DIAS_VALOR[b.diaPrinc] || 9;
             if (diaA !== diaB) return diaA - diaB;
-            return a.ordem - b.ordem;
+            return obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem);
         });
 
         const tableBody = dadosSort.map(r => {
@@ -2370,13 +2433,14 @@
                 ? { content: r.codCliente, whatsappUrl: r.whatsappUrl, styles: { textColor: [14, 165, 233], fontStyle: 'bold' } } // azul claro
                 : r.codCliente;
 
-            return [r.equipe, r.vendedor, r.diaPrinc || '-', cidadeDisplay, codCell, r.cliente, r.ordem];
+            const ordDisplay = (r.ordem === 0 || r.ordem === 99 || r.isRemoto) ? `Whats (${r.ordem})` : r.ordem;
+            return [r.equipe, r.vendedor, r.diaPrinc || '-', cidadeDisplay, codCell, r.cliente, ordDisplay];
         });
 
         doc.setFontSize(14);
         doc.text(tituloRelatorio, 14, 15);
         doc.setFontSize(9);
-        doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${filteredData.length}`, 14, 22);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${filteredData.length} | * Ord Whats (0/99): Não Presencial ao final`, 14, 22);
 
         doc.autoTable({
             head: [['Equipe', 'Vend', 'Dia', 'Cidade (Entrega)', 'Cód.', 'Cliente', 'Ord']],
@@ -2432,7 +2496,7 @@
                 if (!(freq.includes('TODAS') || freq.includes(tagSemana))) return false;
             }
             return true;
-        }).sort((a, b) => (a.cidade.localeCompare(b.cidade) || (a.ordem - b.ordem)));
+        }).sort((a, b) => (a.cidade.localeCompare(b.cidade) || (obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem))));
     }
 
     function buildPdfCodeCell(r) {
@@ -2459,13 +2523,15 @@
         doc.text(`${dia} • ${semanaLabel} • Gerado em: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`, 14, 22);
 
         const total = subset.length;
+        const presenciais = subset.filter(r => r.ordem !== 0 && r.ordem !== 99).length;
+        const remotos = subset.filter(r => r.ordem === 0 || r.ordem === 99).length;
         const wa = subset.filter(r => !!r.whatsappUrl).length;
         const cidades = new Set(subset.map(r => r.cidade)).size;
         doc.setFontSize(9);
-        doc.text(`Paradas: ${total} • Cidades: ${cidades} • WhatsApp: ${wa}`, 14, 28);
+        doc.text(`Paradas: ${total} (${presenciais} presencial • ${remotos} Whats/Online) • Cidades: ${cidades} • WhatsApp: ${wa}`, 14, 28);
 
         const body = subset.map(r => ([
-            r.ordem,
+            (r.ordem === 0 || r.ordem === 99 || r.isRemoto) ? `Whats (${r.ordem})` : r.ordem,
             buildPdfCodeCell(r),
             r.cliente,
             r.comprador || '',
@@ -2566,8 +2632,8 @@
 
         if (rows.length === 0) { alert("Sem dados para a semana selecionada."); return; }
 
-        // Ordena por dia, cidade, ordem
-        rows.sort((a, b) => (DIAS_VALOR[a.__dia] - DIAS_VALOR[b.__dia]) || a.cidade.localeCompare(b.cidade) || (a.ordem - b.ordem));
+        // Ordena por dia, cidade, ordem (com remotos/Whats sempre no fim)
+        rows.sort((a, b) => (DIAS_VALOR[a.__dia] - DIAS_VALOR[b.__dia]) || a.cidade.localeCompare(b.cidade) || (obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem)));
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'landscape' });
@@ -2579,7 +2645,7 @@
 
         const body = rows.map(r => ([
             r.__dia,
-            r.ordem,
+            (r.ordem === 0 || r.ordem === 99 || r.isRemoto) ? `Whats (${r.ordem})` : r.ordem,
             r.cidade,
             buildPdfCodeCell(r),
             r.cliente,
@@ -2857,19 +2923,24 @@
         const obs = Array.from(p.observacoes).slice(0, 10).join(' • ') || '-';
 
         const linhasHtml = (p.linhas || [])
-            .sort((a, b) => (DIAS_VALOR[a.dia] || 9) - (DIAS_VALOR[b.dia] || 9) || (a.ordem - b.ordem))
+            .sort((a, b) => (DIAS_VALOR[a.dia] || 9) - (DIAS_VALOR[b.dia] || 9) || (obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem)))
             .slice(0, 100)
-            .map(l => `
-                <tr class="border-b border-slate-100">
+            .map(l => {
+                const isRem = (l.ordem === 0 || l.ordem === 99 || String(l.ordem) === '0' || String(l.ordem) === '99');
+                const ordBadge = isRem
+                    ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 shadow-2xs" title="Atendimento Não Presencial (WhatsApp / Ligação)"><i class="ph ph-whatsapp-logo text-xs"></i> Whats (${l.ordem})</span>`
+                    : escapeHtml(String((l.ordem !== undefined && l.ordem !== null && l.ordem !== '') ? l.ordem : ''));
+                return `
+                <tr class="border-b border-slate-100 ${isRem ? 'bg-emerald-50/20' : ''}">
                     <td class="p-2 font-mono text-xs">${escapeHtml(l.vendedor || '-')}</td>
                     <td class="p-2">${escapeHtml(l.equipe || '-')}</td>
                     <td class="p-2">${escapeHtml(l.cidade || '-')}</td>
                     <td class="p-2 font-bold text-blue-600">${escapeHtml(l.dia || '-')}</td>
                     <td class="p-2 text-[10px]">${escapeHtml(l.freq || '-')}</td>
                     <td class="p-2 text-[10px]">${escapeHtml(l.entrega || 'N/D')}</td>
-                    <td class="p-2 text-center">${escapeHtml(String(l.ordem || ''))}</td>
+                    <td class="p-2 text-center">${ordBadge}</td>
                 </tr>
-            `).join('');
+            `}).join('');
 
         document.getElementById('client-modal-body').innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
