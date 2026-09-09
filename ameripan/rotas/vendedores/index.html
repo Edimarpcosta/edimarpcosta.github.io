@@ -628,6 +628,55 @@
       white-space: nowrap !important;
     }
 
+    /* Botão de Cortar / Liberar Ordem no Passo 2 */
+    .btn-cortar-ordem {
+      width: 22px !important;
+      height: 22px !important;
+      border-radius: 9999px !important;
+      background-color: #fee2e2 !important;
+      border: 1px solid #fca5a5 !important;
+      color: #dc2626 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+      user-select: none !important;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
+    }
+    .btn-cortar-ordem:hover {
+      background-color: #ef4444 !important;
+      border-color: #dc2626 !important;
+      color: #ffffff !important;
+      transform: scale(1.1) !important;
+    }
+    .btn-cortar-ordem:active {
+      transform: scale(0.95) !important;
+    }
+
+    /* Estados Interativos dos Slots de Ordem no Passo 2 */
+    .slot-alvo-ordem {
+      cursor: pointer !important;
+      border-radius: 8px !important;
+      padding: 2px 4px !important;
+      transition: all 0.15s ease !important;
+    }
+    .slot-alvo-ordem:hover {
+      background-color: #f1f5f9 !important;
+    }
+    .slot-alvo-ordem.pulsando, .slot-alvo-ordem.selecionado {
+      background-color: #fef3c7 !important;
+      border-radius: 8px !important;
+      animation: pulseAmber 1.2s infinite;
+    }
+    .card-ordem-selecionado {
+      border-color: #f59e0b !important;
+      background-color: #fffbeb !important;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25) !important;
+    }
+
   </style>
 </head>
 <body class="pb-28 text-slate-800" un-cloak>
@@ -3687,6 +3736,7 @@
                     <div class="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                       <span>🚚 Entrega: <strong class="text-blue-700">${escapeHtml(diasEnt)}</strong></span>
                       ${diaSugerido ? `<span class="text-emerald-700">• Sugestão: <strong>${escapeHtml(diaSugerido)}</strong></span>` : ''}
+                      ${c.mapeados && c.mapeados.length > 0 ? `<span class="text-slate-600 font-bold">• Já na rota: <strong class="text-emerald-700">${c.mapeados.length} cli</strong></span>` : ''}
                     </div>
                   </div>
                 </div>
@@ -3694,7 +3744,7 @@
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${associadosCidade === c.naoMapeados.length ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-900 border-amber-200'} border flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full ${associadosCidade === c.naoMapeados.length ? 'bg-emerald-600' : 'bg-amber-600 animate-pulse'}"></span>
-                    ${associadosCidade}/${c.naoMapeados.length} ligados
+                    ${associadosCidade === c.naoMapeados.length ? `Todos ${c.naoMapeados.length} ligados 🎉` : `${associadosCidade}/${c.naoMapeados.length} ligados`}
                   </span>
                 </div>
               </div>
@@ -3835,6 +3885,24 @@
 
       salvarRascunhoMapeamentoLocal();
       renderizarNaoMapeados();
+
+      // Notificações de conclusão de mapeamento (por cidade e carteira completa)
+      try {
+        const diag = obterDiagnosticoCarteiraVendedor();
+        const cidObj = diag.cidades.find(c => normalizarTexto(c.cidade) === normalizarTexto(cli.cidade || ''));
+        if (cidObj && cidObj.naoMapeados.length > 0) {
+          const associadosCidade = cidObj.naoMapeados.filter(c => rascunhoMapeamento[c.codigo] && rascunhoMapeamento[c.codigo].diaPrinc).length;
+          if (associadosCidade === cidObj.naoMapeados.length) {
+            mostrarToastFeedback(`✅ Todos os ${cidObj.naoMapeados.length} clientes de ${cli.cidade} foram associados aos dias!`, 'sucesso');
+          }
+        }
+        const totalLigados = Object.values(rascunhoMapeamento).filter(item => item.diaPrinc).length;
+        if (diag.totalNaoMapeados > 0 && totalLigados >= diag.totalNaoMapeados) {
+          mostrarToastFeedback(`🎉 Todos os clientes da sua carteira foram associados aos dias! Avance para o Passo 2 para definir a ordem.`, 'sucesso');
+        }
+      } catch(e) {
+        console.warn('Erro ao verificar conclusão do mapeamento:', e);
+      }
     }
 
     function desconectarClienteDia(codCliente, cidSlug) {
@@ -4036,8 +4104,32 @@
     }
 
     // ============================================================
-    // PASSO 2: ORDEM (ESTILO MINHA ROTA, DIGITAÇÃO DIRETA, SUPORTE 0 E 99 WHATSAPP) & FREQUÊNCIA
+    // PASSO 2: ORDEM (CONTINUIDADE INTELIGENTE POR CIDADE/DIA, DIGITAÇÃO, 0 E 99 WHATSAPP) & FREQUÊNCIA
     // ============================================================
+    function obterEstatisticasRotaDiaCidade(dia, nomeCidade) {
+      const nomeNorm = normalizarTexto(nomeCidade || '');
+      const clientesExistentes = (dbRotasVendedor || []).filter(r => {
+        const diaMatch = (r.diaPrinc === dia) || (r.diasSec && r.diasSec.includes(dia));
+        return diaMatch && normalizarTexto(r.cidade || '') === nomeNorm;
+      });
+
+      const ordensExistentes = clientesExistentes
+        .map(r => parseInt(r.ordem, 10))
+        .filter(n => !isNaN(n) && n > 0 && n !== 99)
+        .sort((a, b) => a - b);
+
+      const maxOrdem = ordensExistentes.length > 0 ? ordensExistentes[ordensExistentes.length - 1] : 0;
+      const minOrdem = ordensExistentes.length > 0 ? ordensExistentes[0] : 0;
+
+      return {
+        total: clientesExistentes.length,
+        ordens: ordensExistentes,
+        maxOrdem: maxOrdem,
+        minOrdem: minOrdem,
+        clientes: clientesExistentes
+      };
+    }
+
     function renderizarMapearEtapa2() {
       const painel = document.getElementById('painelMapearEtapa2');
       if (!painel) return;
@@ -4065,16 +4157,66 @@
         cidadesDoDiaMap.get(cid).push(cli);
       });
 
+      // Calcula continuidade de ordem por cidade no dia selecionado
+      const rotasDoDia = (dbRotasVendedor || []).filter(r => (r.diaPrinc === diaMapearEtapa2Selecionado) || (r.diasSec && r.diasSec.includes(diaMapearEtapa2Selecionado)));
+      let maxOrdemGeralDia = 0;
+      rotasDoDia.forEach(r => {
+        const n = parseInt(r.ordem, 10);
+        if (!isNaN(n) && n > 0 && n !== 99 && n > maxOrdemGeralDia) {
+          maxOrdemGeralDia = n;
+        }
+      });
+
+      const mapaSequenciaCidades = new Map();
+      let seqTracker = maxOrdemGeralDia;
+
+      for (const [nomeCidade, listaCli] of cidadesDoDiaMap.entries()) {
+        const stats = obterEstatisticasRotaDiaCidade(diaMapearEtapa2Selecionado, nomeCidade);
+        let inicio = 1;
+        if (stats.maxOrdem > 0) {
+          inicio = stats.maxOrdem + 1;
+        } else {
+          inicio = seqTracker + 1;
+        }
+        const fim = inicio + listaCli.length - 1;
+        seqTracker = Math.max(seqTracker, fim);
+        mapaSequenciaCidades.set(nomeCidade, { stats, inicio, fim, qtd: listaCli.length });
+      }
+
+      // Constrói conjunto de números sugeridos para os slots da coluna direita
+      const numerosSlotsSet = new Set();
+      for (const info of mapaSequenciaCidades.values()) {
+        for (let n = info.inicio; n <= info.fim; n++) {
+          numerosSlotsSet.add(n);
+        }
+      }
+      clientesDoDia.forEach(i => {
+        const n = parseInt(i.ordem, 10);
+        if (!isNaN(n) && n > 0 && n !== 99) {
+          numerosSlotsSet.add(n);
+        }
+      });
+      if (numerosSlotsSet.size === 0) {
+        for (let n = 1; n <= clientesDoDia.length; n++) {
+          numerosSlotsSet.add(n);
+        }
+      }
+      const maxSlotAtual = Math.max(...numerosSlotsSet, 0);
+      if (maxSlotAtual > 0) {
+        numerosSlotsSet.add(maxSlotAtual + 1);
+      }
+      const numerosSlots = Array.from(numerosSlotsSet).sort((a, b) => a - b);
+
       painel.innerHTML = `
         <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
           <div class="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Passo 2: Ordem & Frequência de Visita</h3>
-              <p class="text-[11px] text-slate-500">Defina a sequência das visitas presenciais (1..N). Use #0 ou #99 para clientes sem ponto de encontro presencial.</p>
+              <p class="text-[11px] text-slate-500">Defina a sequência das visitas presenciais continuando a rota existente. Use #0 ou #99 para clientes remotos (WhatsApp).</p>
             </div>
             <button type="button" onclick="autoOrdenarClientesDiaEtapa2('${diaMapearEtapa2Selecionado}')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
               <i class="ph ph-sort-ascending text-sm"></i>
-              <span>Auto-ordenar Presencial (1..N)</span>
+              <span>Auto-ordenar Presencial (Contínuo)</span>
             </button>
           </div>
 
@@ -4111,15 +4253,29 @@
             <!-- Coluna da Esquerda: Clientes do Dia Agrupados por Cidade -->
             <div class="flex-1 space-y-4">
               ${Array.from(cidadesDoDiaMap.entries()).map(([nomeCidade, listaCli]) => {
+                const seqInfo = mapaSequenciaCidades.get(nomeCidade) || { stats: { total: 0, minOrdem: 0, maxOrdem: 0 }, inicio: 1, fim: listaCli.length };
                 return `
                   <div class="space-y-2">
                     <!-- Cabeçalho da Cidade no Dia -->
-                    <div class="flex items-center justify-between px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200/80">
-                      <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                        <i class="ph ph-buildings text-amber-600"></i>
-                        <span>${escapeHtml(nomeCidade)}</span>
+                    <div class="flex items-center justify-between px-2.5 py-2 bg-gradient-to-r from-slate-100 to-amber-50/40 rounded-xl border border-slate-200/90 gap-2 flex-wrap">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                          <i class="ph ph-buildings text-amber-600 text-sm"></i>
+                          <span>${escapeHtml(nomeCidade)}</span>
+                        </div>
+                        ${seqInfo.stats.total > 0 ? `
+                          <span class="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs flex items-center gap-1" title="${seqInfo.stats.total} cliente(s) já cadastrados nesta cidade no dia ${diaMapearEtapa2Selecionado}">
+                            <i class="ph ph-check-circle text-emerald-600"></i> ${seqInfo.stats.total} já na rota (#${seqInfo.stats.minOrdem === seqInfo.stats.maxOrdem ? seqInfo.stats.minOrdem : seqInfo.stats.minOrdem + ' a #' + seqInfo.stats.maxOrdem})
+                          </span>
+                        ` : `
+                          <span class="text-[10px] text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded font-medium">Início de rota na cidade</span>
+                        `}
                       </div>
-                      <span class="text-[10px] font-semibold text-slate-500">${listaCli.length} cliente${listaCli.length > 1 ? 's' : ''}</span>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md shadow-2xs">
+                          ${listaCli.length} novo(s) • Ordem: #${seqInfo.inicio} a #${seqInfo.fim}
+                        </span>
+                      </div>
                     </div>
 
                     <!-- Cards dos Clientes desta Cidade -->
@@ -4135,9 +4291,12 @@
                           <div id="card_ordem_${codStr}" class="bg-white p-3 rounded-xl border ${ordStr ? (isRemoto ? 'border-emerald-300 bg-emerald-50/20 shadow-xs' : 'border-blue-300 bg-blue-50/20 shadow-xs') : 'border-slate-200'} hover:border-blue-400 transition flex items-center justify-between gap-2.5 relative">
                             <div class="flex items-start gap-2.5 flex-1 min-w-0">
                               
-                              <!-- Badge / Input de Digitação Direta da Ordem (Onde ficava o #2) -->
+                              <!-- Badge / Input de Digitação Direta da Ordem + Botão de Corte [X] -->
                               <div class="flex flex-col items-center justify-center shrink-0">
-                                <div class="badge-ordem-box ${ordStr ? (ordStr === '0' ? 'badge-ordem-zero' : (ordStr === '99' ? 'badge-ordem-99' : 'badge-ordem-val')) : 'badge-ordem-empty'}" id="badge_box_${codStr}" title="Digite a ordem aqui ou conecte ao slot à direita">
+                                <div class="badge-ordem-box ${ordStr ? (ordStr === '0' ? 'badge-ordem-zero' : (ordStr === '99' ? 'badge-ordem-99' : 'badge-ordem-val')) : 'badge-ordem-empty'}" 
+                                     id="badge_box_${codStr}" 
+                                     onclick="tratarCliqueDotOrdemEtapa2('CLIENTE', '${codStr}', document.getElementById('dot_ord_cli_${codStr}'))"
+                                     title="Clique para selecionar/trocar ordem, ou digite diretamente">
                                   <span class="text-[9px] font-black opacity-80 select-none">#</span>
                                   <input type="text" inputmode="numeric" pattern="[0-9]*" 
                                     id="input_ord_${codStr}" 
@@ -4145,11 +4304,18 @@
                                     placeholder="?" 
                                     class="input-ordem-inline" 
                                     title="Digite a ordem (ex: 1, 2, 0 ou 99)"
+                                    onclick="event.stopPropagation()"
                                     onfocus="this.select()"
                                     oninput="this.value = this.value.replace(/[^0-9]/g, ''); atualizarOrdemDigitada('${codStr}', this.value)"
                                     onkeydown="if(event.key === 'Enter'){ this.blur(); }"
                                   >
                                 </div>
+
+                                ${ordStr ? `
+                                  <button type="button" onclick="cortarConexaoClienteEtapa2('${codStr}')" class="btn-cortar-ordem mt-1" title="Cortar conexão (#${ordStr}) e liberar vaga">
+                                    ✕
+                                  </button>
+                                ` : ''}
                                 
                                 <!-- Atalhos rápidos Whats: 0 e 99 sem limite de clientes -->
                                 <div class="flex items-center gap-0.5 mt-1">
@@ -4166,7 +4332,7 @@
                               <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                   <span class="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold">#${escapeHtml(codStr)}</span>
-                                  <h4 class="text-xs font-bold text-slate-800 truncate">${escapeHtml(nomeCli)}</h4>
+                                  <h4 class="text-xs font-bold text-slate-800 truncate cursor-pointer" onclick="tratarCliqueDotOrdemEtapa2('CLIENTE', '${codStr}', document.getElementById('dot_ord_cli_${codStr}'))">${escapeHtml(nomeCli)}</h4>
                                   ${isRemoto ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-emerald-200 shadow-2xs" title="Cliente sem ponto de encontro presencial ou horário adequado - Atendimento à distância via WhatsApp/Ligação"><i class="ph ph-whatsapp-logo text-emerald-600"></i> Não Presencial (Whats #${ordStr})</span>` : ''}
                                 </div>
 
@@ -4195,10 +4361,19 @@
                               </div>
                             </div>
 
-                            <!-- Conector Dot de Ordem do Cliente -->
+                            <!-- Conector Dot de Ordem do Cliente + Botão de Corte [X] -->
                             <div class="flex flex-col items-center justify-center pl-1 shrink-0 select-none">
-                              <div class="dot-origem-cliente ${ordStr ? 'conectado' : ''}" data-cod-cliente="${codStr}" id="dot_ord_cli_${codStr}" title="Arraste ou clique para ligar ao número de ordem"></div>
-                              ${ordStr ? `<span class="text-[9px] font-bold ${ordStr === '0' ? 'text-emerald-700' : (ordStr === '99' ? 'text-indigo-700' : 'text-blue-700')} mt-0.5" id="lbl_ord_${codStr}">#${ordStr}</span>` : ''}
+                              <div class="dot-origem-cliente ${ordStr ? 'conectado' : ''}" 
+                                   data-cod-cliente="${codStr}" 
+                                   id="dot_ord_cli_${codStr}" 
+                                   onclick="tratarCliqueDotOrdemEtapa2('CLIENTE', '${codStr}', this)"
+                                   title="Clique para selecionar/trocar a ordem, ou arraste até o número"></div>
+                              ${ordStr ? `
+                                <div class="flex items-center gap-0.5 mt-0.5">
+                                  <span class="text-[9.5px] font-black ${ordStr === '0' ? 'text-emerald-700' : (ordStr === '99' ? 'text-indigo-700' : 'text-blue-700')}" id="lbl_ord_${codStr}">#${ordStr}</span>
+                                  <button type="button" onclick="cortarConexaoClienteEtapa2('${codStr}')" class="text-rose-500 hover:text-rose-700 font-extrabold text-xs px-0.5 cursor-pointer leading-none" title="Cortar conexão e liberar ordem">✕</button>
+                                </div>
+                              ` : ''}
                             </div>
                           </div>
                         `;
@@ -4209,28 +4384,45 @@
               }).join('')}
             </div>
 
-            <!-- Coluna Direita: Números de Ordem 0, 1..N e 99 -->
+            <!-- Coluna Direita: Números de Ordem 0, Sequenciais Disponíveis e 99 -->
             <div class="w-16 space-y-2 select-none shrink-0" id="colunaNumerosEtapa2">
               
               <!-- Slot Especial 0 (WhatsApp / Contato - Ilimitado) -->
-              <div class="slot-alvo-ordem flex items-center gap-1.5 pb-1 border-b border-slate-200" id="slot_alvo_etapa2_0" data-ordem="0">
+              <div class="slot-alvo-ordem flex items-center gap-1.5 pb-1 border-b border-slate-200" 
+                   id="slot_alvo_etapa2_0" 
+                   data-ordem="0"
+                   onclick="tratarCliqueSlotOrdemEtapa2('0')">
                 <div class="dot-alvo-ordem" data-alvo-ordem="0" id="dot_alvo_etapa2_0" style="border-color: #059669 !important;" title="Ordem 0: WhatsApp / Contato (Pode ser atribuído a vários clientes)"></div>
                 <div class="badge-alvo-ordem text-xs font-black" style="background-color: #ecfdf5 !important; color: #065f46 !important; border: 1.5px solid #10b981 !important;" id="badge_alvo_etapa2_0" title="Ordem 0 (WhatsApp)">0</div>
               </div>
 
-              <!-- Slots 1..N Sequenciais -->
-              ${Array.from({ length: clientesDoDia.length }, (_, idx) => {
-                const numAlvo = idx + 1;
+              ${maxOrdemGeralDia > 0 ? `
+                <div class="py-1 px-1 text-[8.5px] font-bold text-slate-500 bg-slate-100 rounded-md border border-slate-200 text-center leading-tight shadow-2xs" title="Ordens 1 a ${maxOrdemGeralDia} já estão ocupadas por paradas existentes nesta rota">
+                  #1 a #${maxOrdemGeralDia}<br><span class="text-[7.5px] font-semibold text-emerald-700">já na rota</span>
+                </div>
+              ` : ''}
+
+              <!-- Slots Sequenciais para os Novos Clientes -->
+              ${numerosSlots.map(numAlvo => {
+                const cliOcupante = clientesDoDia.find(i => String(i.ordem) === String(numAlvo));
+                const ocupado = !!cliOcupante;
                 return `
-                  <div class="slot-alvo-ordem flex items-center gap-1.5" id="slot_alvo_etapa2_${numAlvo}" data-ordem="${numAlvo}">
-                    <div class="dot-alvo-ordem" data-alvo-ordem="${numAlvo}" id="dot_alvo_etapa2_${numAlvo}" title="Ligar ordem #${numAlvo}"></div>
-                    <div class="badge-alvo-ordem text-xs font-bold" id="badge_alvo_etapa2_${numAlvo}">${numAlvo}</div>
+                  <div class="slot-alvo-ordem flex items-center gap-1.5 ${ocupado ? 'ocupado' : ''}" 
+                       id="slot_alvo_etapa2_${numAlvo}" 
+                       data-ordem="${numAlvo}"
+                       onclick="tratarCliqueSlotOrdemEtapa2('${numAlvo}')"
+                       title="${ocupado ? 'Ordem #' + numAlvo + ' atribuída a: ' + (cliOcupante.fantasia || cliOcupante.razao) : 'Clique para ligar ao número #' + numAlvo}">
+                    <div class="dot-alvo-ordem ${ocupado ? 'conectado' : ''}" data-alvo-ordem="${numAlvo}" id="dot_alvo_etapa2_${numAlvo}"></div>
+                    <div class="badge-alvo-ordem text-xs font-bold ${ocupado ? 'bg-blue-600 text-white border-blue-700' : ''}" id="badge_alvo_etapa2_${numAlvo}">${numAlvo}</div>
                   </div>
                 `;
               }).join('')}
 
               <!-- Slot Especial 99 (WhatsApp / Ver depois - Ilimitado) -->
-              <div class="slot-alvo-ordem flex items-center gap-1.5 pt-1 border-t border-slate-200" id="slot_alvo_etapa2_99" data-ordem="99">
+              <div class="slot-alvo-ordem flex items-center gap-1.5 pt-1 border-t border-slate-200" 
+                   id="slot_alvo_etapa2_99" 
+                   data-ordem="99"
+                   onclick="tratarCliqueSlotOrdemEtapa2('99')">
                 <div class="dot-alvo-ordem" data-alvo-ordem="99" id="dot_alvo_etapa2_99" style="border-color: #4f46e5 !important;" title="Ordem 99: WhatsApp / Ver depois (Pode ser atribuído a vários clientes)"></div>
                 <div class="badge-alvo-ordem text-[11px] font-black" style="background-color: #eef2ff !important; color: #3730a3 !important; border: 1.5px solid #6366f1 !important;" id="badge_alvo_etapa2_99" title="Ordem 99 (WhatsApp)">99</div>
               </div>
@@ -4292,16 +4484,81 @@
 
     function autoOrdenarClientesDiaEtapa2(dia) {
       const itensDoDia = Object.values(rascunhoMapeamento).filter(i => i.diaPrinc === dia);
-      let seq = 1;
+      if (itensDoDia.length === 0) return;
+
+      // Agrupa clientes do dia por cidade na ordem em que aparecem
+      const cidadesMap = new Map();
       itensDoDia.forEach(cli => {
-        // Se já for 0 ou 99 (WhatsApp), preserva sem alterar
-        if (String(cli.ordem) === '0' || String(cli.ordem) === '99') {
-          return;
-        }
-        cli.ordem = String(seq++);
+        const cid = cli.cidade || 'Outras Cidades';
+        if (!cidadesMap.has(cid)) cidadesMap.set(cid, []);
+        cidadesMap.get(cid).push(cli);
       });
+
+      // Descobre a maior ordem presencial já cadastrada em dbRotasVendedor para qualquer cliente do dia
+      const todosDoDia = (dbRotasVendedor || []).filter(r => (r.diaPrinc === dia) || (r.diasSec && r.diasSec.includes(dia)));
+      let maxOrdemGeralDia = 0;
+      todosDoDia.forEach(r => {
+        const n = parseInt(r.ordem, 10);
+        if (!isNaN(n) && n > 0 && n !== 99 && n > maxOrdemGeralDia) {
+          maxOrdemGeralDia = n;
+        }
+      });
+
+      let seqCorrente = maxOrdemGeralDia;
+
+      for (const [nomeCidade, listaCli] of cidadesMap.entries()) {
+        const stats = obterEstatisticasRotaDiaCidade(dia, nomeCidade);
+        
+        // Ponto de partida para esta cidade:
+        // Se a cidade já tem clientes cadastrados no dia, começa após o maior dela;
+        // Se a cidade não tem clientes cadastrados no dia, começa após onde a cidade/rota anterior do dia parou
+        let inicioCidade = 1;
+        if (stats.maxOrdem > 0) {
+          inicioCidade = stats.maxOrdem + 1;
+        } else {
+          inicioCidade = seqCorrente + 1;
+        }
+
+        let seqCidade = inicioCidade;
+        listaCli.forEach(cli => {
+          // Se for atendimento não presencial 0 ou 99, preserva
+          if (String(cli.ordem) === '0' || String(cli.ordem) === '99') {
+            return;
+          }
+          cli.ordem = String(seqCidade++);
+        });
+
+        seqCorrente = Math.max(seqCorrente, seqCidade - 1);
+      }
+
       salvarRascunhoMapeamentoLocal();
       renderizarMapearEtapa2();
+      mostrarToastFeedback(`Ordens atribuídas dando continuidade aos clientes já existentes neste dia!`, 'sucesso');
+
+      // Verifica se todas as visitas do dia foram ordenadas
+      const pendentesDia = itensDoDia.filter(i => !i.ordem);
+      if (pendentesDia.length === 0) {
+        setTimeout(() => {
+          mostrarToastFeedback(`🎉 Todas as visitas de ${dia} foram ordenadas!`, 'sucesso');
+        }, 800);
+      }
+    }
+
+    // --- Cortar Conexão / Liberar Ordem [X] ---
+    function cortarConexaoClienteEtapa2(codCliente) {
+      const codStr = String(codCliente).trim();
+      if (!rascunhoMapeamento[codStr]) return;
+
+      const ordemAntiga = rascunhoMapeamento[codStr].ordem;
+      rascunhoMapeamento[codStr].ordem = '';
+      salvarRascunhoMapeamentoLocal();
+
+      if (selecaoPendenteMapear && selecaoPendenteMapear.id === codStr) {
+        selecaoPendenteMapear = null;
+      }
+
+      renderizarMapearEtapa2();
+      mostrarToastFeedback(`Conexão removida. Ordem #${ordemAntiga} liberada para outro cliente!`, 'info');
     }
 
     // --- Digitação direta da Ordem no input sem perda de foco ---
@@ -4368,6 +4625,12 @@
       }
 
       desenharLinhasSVGEtapa2();
+
+      // Verifica se todos os clientes do dia já possuem ordem
+      const clientesDoDia = Object.values(rascunhoMapeamento).filter(i => i.diaPrinc === diaMapearEtapa2Selecionado);
+      if (clientesDoDia.every(i => i.ordem) && clientesDoDia.length > 0) {
+        mostrarToastFeedback(`🎉 Todas as visitas de ${diaMapearEtapa2Selecionado} foram ordenadas!`, 'sucesso');
+      }
     }
 
     // --- Conexão via clique / arrasto aos slots ou botões #0 e #99 ---
@@ -4395,7 +4658,24 @@
         }
         salvarRascunhoMapeamentoLocal();
         renderizarMapearEtapa2();
+
+        // Avisos de conclusão de ordenação
+        const clientesDoDia = Object.values(rascunhoMapeamento).filter(i => i.diaPrinc === diaMapearEtapa2Selecionado);
+        if (clientesDoDia.every(i => i.ordem) && clientesDoDia.length > 0) {
+          mostrarToastFeedback(`🎉 Todas as visitas de ${diaMapearEtapa2Selecionado} foram ordenadas!`, 'sucesso');
+        }
+
+        const todosMapeados = Object.values(rascunhoMapeamento).filter(i => i.diaPrinc);
+        if (todosMapeados.every(i => i.ordem) && todosMapeados.length > 0) {
+          mostrarToastFeedback(`🎉 Todos os clientes da sua carteira estão ordenados! Pronto para ir ao Passo 3.`, 'sucesso');
+        }
       }
+    }
+
+    function tratarCliqueSlotOrdemEtapa2(numOrdem) {
+      const numStr = String(numOrdem).trim();
+      const dot = document.getElementById(`dot_alvo_etapa2_${numStr}`);
+      tratarCliqueDotOrdemEtapa2('ORDEM', numStr, dot || document.getElementById(`slot_alvo_etapa2_${numStr}`));
     }
 
     function inicializarEventosConexaoEtapa2() {
@@ -4408,6 +4688,19 @@
 
       wrapper.querySelectorAll('.dot-alvo-ordem').forEach(dot => {
         dot.onpointerdown = (e) => iniciarArrastoOrdemEtapa2(e, 'ORDEM', dot.dataset.alvoOrdem, dot);
+      });
+
+      // Permite clicar nos slots de ordem (badge ou linha inteira) para conectar com 1 toque
+      wrapper.querySelectorAll('.slot-alvo-ordem').forEach(slot => {
+        const alvo = slot.dataset.ordem;
+        if (alvo !== undefined) {
+          slot.onclick = (e) => {
+            // Evita disparar duas vezes se o clique foi direto no dot
+            if (e.target.classList.contains('dot-alvo-ordem')) return;
+            const dot = slot.querySelector('.dot-alvo-ordem');
+            tratarCliqueDotOrdemEtapa2('ORDEM', alvo, dot || slot);
+          };
+        }
       });
     }
 
@@ -4521,22 +4814,57 @@
     function tratarCliqueDotOrdemEtapa2(tipo, id, el) {
       if (!selecaoPendenteMapear) {
         selecaoPendenteMapear = { tipo, id, el };
-        el.classList.add('pulsando');
-        return;
-      }
-      if (selecaoPendenteMapear.el === el) {
-        el.classList.remove('pulsando');
-        selecaoPendenteMapear = null;
-        return;
-      }
-      if (selecaoPendenteMapear.tipo === tipo) {
-        selecaoPendenteMapear.el.classList.remove('pulsando');
-        selecaoPendenteMapear = { tipo, id, el };
-        el.classList.add('pulsando');
+        if (el) el.classList.add('pulsando');
+        if (tipo === 'CLIENTE') {
+          const card = document.getElementById(`card_ordem_${id}`);
+          if (card) card.classList.add('card-ordem-selecionado');
+          const cli = rascunhoMapeamento[id];
+          const temOrdem = cli && cli.ordem;
+          mostrarToastFeedback(temOrdem ? `Cliente com ordem #${temOrdem} selecionado. Clique no novo número desejado para trocar, ou no [✕] para cortar.` : `Cliente selecionado! Clique no número de ordem desejado à direita.`, 'info');
+        } else {
+          const slot = document.getElementById(`slot_alvo_etapa2_${id}`);
+          if (slot) slot.classList.add('pulsando');
+          mostrarToastFeedback(`Ordem #${id} selecionada! Clique no cliente desejado para conectar.`, 'info');
+        }
         return;
       }
 
-      selecaoPendenteMapear.el.classList.remove('pulsando');
+      // Se clicou no mesmo elemento, cancela seleção
+      if (selecaoPendenteMapear.el === el || (selecaoPendenteMapear.tipo === tipo && selecaoPendenteMapear.id === id)) {
+        if (selecaoPendenteMapear.el) selecaoPendenteMapear.el.classList.remove('pulsando');
+        document.querySelectorAll('.card-ordem-selecionado').forEach(c => c.classList.remove('card-ordem-selecionado'));
+        document.querySelectorAll('.slot-alvo-ordem.pulsando').forEach(s => s.classList.remove('pulsando'));
+        selecaoPendenteMapear = null;
+        mostrarToastFeedback('Seleção cancelada.', 'info');
+        return;
+      }
+
+      // Se clicou em outro elemento do MESMO tipo (trocou de cliente ou trocou de número)
+      if (selecaoPendenteMapear.tipo === tipo) {
+        if (selecaoPendenteMapear.el) selecaoPendenteMapear.el.classList.remove('pulsando');
+        document.querySelectorAll('.card-ordem-selecionado').forEach(c => c.classList.remove('card-ordem-selecionado'));
+        document.querySelectorAll('.slot-alvo-ordem.pulsando').forEach(s => s.classList.remove('pulsando'));
+
+        selecaoPendenteMapear = { tipo, id, el };
+        if (el) el.classList.add('pulsando');
+        if (tipo === 'CLIENTE') {
+          const card = document.getElementById(`card_ordem_${id}`);
+          if (card) card.classList.add('card-ordem-selecionado');
+          const cli = rascunhoMapeamento[id];
+          mostrarToastFeedback(`Cliente selecionado. Clique no número desejado à direita para atribuir a ordem.`, 'info');
+        } else {
+          const slot = document.getElementById(`slot_alvo_etapa2_${id}`);
+          if (slot) slot.classList.add('pulsando');
+          mostrarToastFeedback(`Ordem #${id} selecionada. Clique no cliente desejado para conectar.`, 'info');
+        }
+        return;
+      }
+
+      // Elementos de tipos opostos: um é CLIENTE e o outro é ORDEM -> CONECTA!
+      if (selecaoPendenteMapear.el) selecaoPendenteMapear.el.classList.remove('pulsando');
+      document.querySelectorAll('.card-ordem-selecionado').forEach(c => c.classList.remove('card-ordem-selecionado'));
+      document.querySelectorAll('.slot-alvo-ordem.pulsando').forEach(s => s.classList.remove('pulsando'));
+
       if (selecaoPendenteMapear.tipo === 'CLIENTE') {
         conectarClienteOrdemEtapa2(selecaoPendenteMapear.id, id);
       } else {
