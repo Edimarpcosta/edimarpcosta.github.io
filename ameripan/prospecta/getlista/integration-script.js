@@ -430,6 +430,12 @@ Object.assign(dataHandlers, {
             if (typeof XLSX === 'undefined') throw new Error('XLSX não disponível.');
             if (!state.results || state.results.length === 0) return alert('Não há dados para exportar.');
 
+            // Verifica se o usuário optou por incluir os já-atendidos com coluna "Atende" (Sim/Não)
+            const includeAtendidos = document.getElementById('includeAtendidosExportCheck')?.checked;
+            if (includeAtendidos && state.resultsJaAtendidos && state.resultsJaAtendidos.length > 0) {
+                return this.exportCompletoComAtende();
+            }
+
             utils.updateStatus('Preparando exportação completa...');
             const { successRows, errorRows, apiStats } = this._getFilteredResults();
             const workbook = XLSX.utils.book_new();

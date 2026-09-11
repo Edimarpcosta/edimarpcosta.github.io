@@ -55,6 +55,33 @@ const uiControllers = {
         utils.updateStats();
         this.renderApiQueueStatus();
 
+        // Atualizar Card de Status da Fonte de Dados (Etapa 1)
+        const dsCard = document.getElementById('datasourceStatusCard');
+        const dsCount = document.getElementById('datasourceCount');
+        if (dsCard && dsCount) {
+            dsCount.textContent = cnpjs.length;
+            const isMining = String(source).toLowerCase().includes('minera');
+            const titleEl = dsCard.querySelector('.ds-title');
+            if (titleEl) {
+                titleEl.innerHTML = `<span id="datasourceCount">${cnpjs.length}</span> CNPJs ${isMining ? 'recebidos da mineração' : 'carregados via ' + source}`;
+            }
+            const subEl = dsCard.querySelector('.ds-sub');
+            if (subEl) {
+                subEl.textContent = 'Pronto para enriquecer — utilize os controles da Etapa 3 abaixo.';
+            }
+            dsCard.classList.remove('hidden');
+            dsCard.style.display = 'flex';
+        }
+
+        // Colapsar a caixa de input para economizar espaço e manter o foco no fluxo
+        if (typeof window.toggleCnpjInputSection === 'function') {
+            window.toggleCnpjInputSection(false);
+        } else {
+            document.getElementById('cnpjInputContent')?.classList.add('hidden');
+            const icon = document.getElementById('cnpjInputToggleIcon');
+            if (icon) icon.textContent = '▶';
+        }
+
         // Scroll suave até o botão ▶ Iniciar Consulta Padrão (startBtn) na Etapa 3
         setTimeout(() => {
             const startBtn = document.getElementById('startBtn') || elements.controlsSection;
@@ -253,8 +280,25 @@ const uiControllers = {
             document.getElementById('autoPauseReason').textContent = `Erro: ${errorMessage}`;
             document.getElementById('currentPauseDelay').value = delay;
             countdownTimer.init('autoPauseCountdown');
-            countdownTimer.start(delay, () => {
-                if (state.isPaused && state.isAutoPaused) this.resumeProcessing();
+            countdownTimer.start(delay, async () => {
+                if (state.isPaused && state.isAutoPaused) {
+                    const shouldTest = document.getElementById('testConnectionBeforeResume')?.checked;
+                    if (shouldTest && typeof dataHandlers !== 'undefined' && dataHandlers.testApisConnection) {
+                        utils.updateStatus('⏳ Testando conexão com APIs antes de retomar...');
+                        try {
+                            const testResult = await dataHandlers.testApisConnection();
+                            this.renderApiQueueStatus();
+                            if (!testResult.anyWorking) {
+                                utils.updateStatus('⚠️ APIs continuam indisponíveis. Renovando pausa automática...');
+                                this.triggerAutoPause('APIs ainda indisponíveis após teste de conexão', state.errorTypeToHandle || 'rate_limit');
+                                return;
+                            }
+                        } catch (testErr) {
+                            console.warn('[AutoPause] Erro ao testar conexão:', testErr);
+                        }
+                    }
+                    this.resumeProcessing();
+                }
             });
         }
         utils.updateStatus(`⏸ Pausa automática — todas as APIs falharam`);
@@ -1270,7 +1314,7 @@ const uiControllers = {
         }
 
         const modal = document.getElementById('detailsModal');
-        const content = document.getElementById('detailsContent');
+        const content = document.getElementById('modalContent') || document.getElementById('detailsContent');
         if (!modal || !content) return;
 
         let html = `

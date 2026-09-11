@@ -1948,6 +1948,16 @@ const MiningEngine = {
             }
             document.getElementById('controlsSection')?.classList.remove('hidden');
             document.getElementById('resultsSection')?.classList.remove('hidden');
+            const dsCard = document.getElementById('datasourceStatusCard');
+            const dsCount = document.getElementById('datasourceCount');
+            if (dsCard && dsCount) {
+                dsCount.textContent = uniqueCnpjs.length;
+                dsCard.classList.remove('hidden');
+                dsCard.style.display = 'flex';
+            }
+            if (typeof window.toggleCnpjInputSection === 'function') {
+                window.toggleCnpjInputSection(false);
+            }
         }
 
         // Scroll suave até o botão ▶ Iniciar Consulta Padrão (startBtn) na Etapa 3 (Enriquecimento)
