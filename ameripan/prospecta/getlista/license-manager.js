@@ -8,7 +8,7 @@
 
   const LicenseManager = {
     CONFIG: {
-      DEFAULT_ENDPOINT: 'https://script.google.com/macros/s/AKfycbwtddYDHJmvEmFqfwbX66X-Pr7ae4va72icdN5JmsahsV_ylFqXOSflW7Ae3ds52I6R/exec',
+      DEFAULT_ENDPOINT: 'https://script.google.com/macros/s/AKfycbwlX5LhcSIHZIS41bEwz_dYuPSZ41wIWb_4BfeA-Iq4ZxLhUlrGaOFJFdKzYymGBHL9UQ/exec',
       CACHE_TTL_MS: 24 * 60 * 60 * 1000, // 24 horas de cache offline
       STORAGE_KEY_HWID: 'GETLISTA_LM_HWID',
       STORAGE_KEY_DATA: 'GETLISTA_LM_LICENSE_DATA',
@@ -151,7 +151,11 @@
      */
     async getApiUrl() {
       try {
-        const url = localStorage.getItem(this.CONFIG.STORAGE_KEY_API_URL);
+        let url = localStorage.getItem(this.CONFIG.STORAGE_KEY_API_URL);
+        if (url && url.includes('AKfycbwtddYDHJmvEmFqfwbX66X')) {
+          url = this.CONFIG.DEFAULT_ENDPOINT;
+          localStorage.setItem(this.CONFIG.STORAGE_KEY_API_URL, url);
+        }
         return url || this.CONFIG.DEFAULT_ENDPOINT;
       } catch (e) {
         return this.CONFIG.DEFAULT_ENDPOINT;
