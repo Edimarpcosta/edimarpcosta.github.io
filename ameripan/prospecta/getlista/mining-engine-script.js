@@ -940,6 +940,11 @@ const MiningEngine = {
             input.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    const openDropdown = container.parentElement?.querySelector('.mine-autocomplete-list') || container.querySelector('.mine-autocomplete-list');
+                    if (openDropdown) {
+                        openDropdown.classList.add('hidden');
+                        openDropdown.innerHTML = '';
+                    }
                     const raw = input.value.trim();
                     if (!raw) return;
 
@@ -2576,6 +2581,8 @@ const MiningEngine = {
                 } else if (items.length === 1) {
                     e.preventDefault();
                     addCityChip(items[0].dataset.city);
+                } else {
+                    hideDropdown();
                 }
             } else if (e.key === 'Escape') {
                 hideDropdown();
@@ -2584,6 +2591,12 @@ const MiningEngine = {
 
         input.addEventListener('blur', () => {
             setTimeout(hideDropdown, 200);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
         });
     },
 
@@ -2692,6 +2705,8 @@ const MiningEngine = {
                 } else if (items.length === 1) {
                     e.preventDefault();
                     addCnaeChip(items[0].dataset.code);
+                } else {
+                    hideDropdown();
                 }
             } else if (e.key === 'Escape') {
                 hideDropdown();
@@ -2700,6 +2715,12 @@ const MiningEngine = {
 
         input.addEventListener('blur', () => {
             setTimeout(hideDropdown, 200);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
         });
     },
 
@@ -2807,6 +2828,8 @@ const MiningEngine = {
                 } else if (items.length === 1) {
                     e.preventDefault();
                     addNatjurChip(items[0].dataset.code);
+                } else {
+                    hideDropdown();
                 }
             } else if (e.key === 'Escape') {
                 hideDropdown();
@@ -2815,6 +2838,12 @@ const MiningEngine = {
 
         input.addEventListener('blur', () => {
             setTimeout(hideDropdown, 200);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
         });
     },
 

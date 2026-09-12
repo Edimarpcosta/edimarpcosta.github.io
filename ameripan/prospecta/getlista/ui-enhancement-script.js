@@ -1274,30 +1274,32 @@ const uiControllers = {
                 return `
                 <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 rounded gap-2 text-xs" style="background:var(--bg-badge); border:1px solid var(--border-card);">
                     <div class="flex items-center gap-2">
-                        <input type="checkbox" ${api.active ? 'checked' : ''} onchange="utils.toggleApiActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#6366f1">
-                        <span class="font-bold text-sm" style="color:var(--color-text)">${idx + 1}. ${api.name}</span>
+                        <label for="api_active_${api.id}" class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="api_active_${api.id}" aria-label="Ativar ${api.name}" ${api.active ? 'checked' : ''} onchange="utils.toggleApiActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#6366f1">
+                            <span class="font-bold text-sm" style="color:var(--color-text)">${idx + 1}. ${api.name}</span>
+                        </label>
                         ${api.isFallback ? '<span class="text-xs px-1.5 py-0.5 rounded" style="background:rgba(245,158,11,0.15); color:#f59e0b">Fallback</span>' : ''}
                     </div>
 
                     <div class="flex items-center gap-2 flex-wrap">
                         <div class="flex items-center gap-1" title="Máximo de requisições por minuto para esta API (0 = sem limite)">
-                            <span style="color:var(--color-text-muted)">Req/min:</span>
+                            <label for="req_${api.id}" style="color:var(--color-text-muted)">Req/min:</label>
                             <input type="number" min="0" max="1000" value="${currentReqLimit >= 99999 ? 0 : currentReqLimit}" 
                                 onchange="utils.saveApiSettingsCustom('${api.id}', this.value, document.getElementById('timeout_${api.id}').value)"
-                                id="req_${api.id}" class="w-16 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
+                                id="req_${api.id}" aria-label="Requisições por minuto para ${api.name}" class="w-16 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
                         </div>
 
                         <div class="flex items-center gap-1" title="Timeout máximo em milissegundos para resposta desta API">
-                            <span style="color:var(--color-text-muted)">Timeout:</span>
+                            <label for="timeout_${api.id}" style="color:var(--color-text-muted)">Timeout:</label>
                             <input type="number" min="500" max="15000" step="500" value="${currentTimeout}" 
                                 onchange="utils.saveApiSettingsCustom('${api.id}', document.getElementById('req_${api.id}').value, this.value)"
-                                id="timeout_${api.id}" class="w-20 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
+                                id="timeout_${api.id}" aria-label="Timeout em milissegundos para ${api.name}" class="w-20 p-1 text-xs rounded" style="background:var(--bg-card); border:1px solid var(--border-card); color:var(--color-text)">
                             <span style="color:var(--color-text-muted)">ms</span>
                         </div>
 
                         <div class="flex items-center gap-1 ml-1">
-                            <button type="button" onclick="utils.moveApiUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↑</button>
-                            <button type="button" onclick="utils.moveApiDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↓</button>
+                            <button type="button" aria-label="Mover ${api.name} para cima" onclick="utils.moveApiUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↑</button>
+                            <button type="button" aria-label="Mover ${api.name} para baixo" onclick="utils.moveApiDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-0.5 rounded text-xs font-bold hover:bg-indigo-600 hover:text-white transition-colors" style="background:var(--btn-sec-bg); border:1px solid var(--btn-sec-border); color:var(--color-text)">↓</button>
                         </div>
                     </div>
                 </div>`;
@@ -1405,7 +1407,7 @@ const uiControllers = {
         }
 
         if (successData) {
-            const scoreInfo = utils.calculateB2bScore(successData);
+            const scoreInfo = await utils.calculateB2bScore(successData);
             successData.scoreInfo = scoreInfo;
             state.results[index] = successData;
             this.addResultToTable(successData, index);
@@ -1878,21 +1880,23 @@ var proxyController = {
             return `
             <div class="p-2.5 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs" style="background:var(--bg-badge); border:1px solid var(--border-card);">
                 <div class="flex items-center gap-2 flex-1 overflow-hidden">
-                    <input type="checkbox" ${proxy.active !== false ? 'checked' : ''} onchange="proxyController.toggleActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#10b981">
-                    <div class="truncate">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-white">${idx + 1}. ${proxy.name || 'Proxy Custom'}</span>
-                            ${isDefault ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold border border-emerald-800">Padrão #1</span>' : ''}
-                            ${proxy.apiKey ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 font-bold border border-amber-800">🔑 API Key</span>' : ''}
+                    <label for="proxy_active_${idx}" class="flex items-center gap-2 cursor-pointer flex-1 overflow-hidden">
+                        <input type="checkbox" id="proxy_active_${idx}" aria-label="Ativar proxy ${proxy.name || 'Proxy Custom'}" ${proxy.active !== false ? 'checked' : ''} onchange="proxyController.toggleActive(${idx})" class="w-4 h-4 rounded" style="accent-color:#10b981">
+                        <div class="truncate">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white">${idx + 1}. ${proxy.name || 'Proxy Custom'}</span>
+                                ${isDefault ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold border border-emerald-800">Padrão #1</span>' : ''}
+                                ${proxy.apiKey ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 font-bold border border-amber-800">🔑 API Key</span>' : ''}
+                            </div>
+                            <span class="text-[11px] text-gray-400 font-mono block truncate" title="${proxy.template}">${proxy.template}</span>
                         </div>
-                        <span class="text-[11px] text-gray-400 font-mono block truncate" title="${proxy.template}">${proxy.template}</span>
-                    </div>
+                    </label>
                 </div>
 
                 <div class="flex items-center gap-1.5 self-end md:self-center">
-                    <button type="button" onclick="proxyController.moveUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↑</button>
-                    <button type="button" onclick="proxyController.moveDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↓</button>
-                    <button type="button" onclick="proxyController.deleteProxy(${idx})" class="px-2 py-1 rounded text-xs font-bold bg-rose-950 text-rose-400 border border-rose-800 hover:bg-rose-900" title="Excluir proxy">🗑</button>
+                    <button type="button" aria-label="Mover proxy para cima" onclick="proxyController.moveUp(${idx})" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↑</button>
+                    <button type="button" aria-label="Mover proxy para baixo" onclick="proxyController.moveDown(${idx})" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed"' : ''} class="px-2 py-1 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white">↓</button>
+                    <button type="button" aria-label="Excluir proxy" onclick="proxyController.deleteProxy(${idx})" class="px-2 py-1 rounded text-xs font-bold bg-rose-950 text-rose-400 border border-rose-800 hover:bg-rose-900" title="Excluir proxy">🗑</button>
                 </div>
             </div>`;
         }).join('');

@@ -200,7 +200,7 @@ Object.assign(dataHandlers, {
         if (citiesSet.size === 0 && leads && Array.isArray(leads)) {
             leads.forEach(item => {
                 const r = item.result || item;
-                const mun = r.municipio || r['Município'] || r.cidade;
+                const mun = r.municipio || r['Município'] || r.cidade || r.City || r['City'] || r.Cidade;
                 if (mun) {
                     const s = sanitize(mun);
                     if (s) citiesSet.add(s);
