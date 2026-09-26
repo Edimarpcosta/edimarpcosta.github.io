@@ -1595,6 +1595,15 @@
     let listaDeRotas = [];
     let regrasObrigatoriedade = {};
 
+    function escapeJs(s) {
+      return (s || '').toString()
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+    }
+
     // Regra estrita de ordenação: Visitas presenciais (1..N) vêm primeiro em ordem crescente.
     // Atendimentos não presenciais (0 e 99 - WhatsApp / Ligação / Online) ficam SEMPRE ao final da rota e relatórios.
     function obterPesoOrdenacaoRota(ordem) {
@@ -1815,8 +1824,8 @@
                 <i class="ph ph-spinner animate-spin"></i> Aguardando gestor... a tela atualizará sozinha.
               </div>
               <div class="mt-3 flex flex-col gap-2">
-                <a href="https://wa.me/5519987121005?text=${encodeURIComponent('Olá Edimar, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuarioInput)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Edimar</a>
-                <a href="https://wa.me/5519982213355?text=${encodeURIComponent('Olá Carlos, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuarioInput)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Carlos</a>
+                <a href="https://wa.me/5519987121005?text=${encodeURIComponent('Olá Edimar, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Edimar</a>
+                <a href="https://wa.me/5519982213355?text=${encodeURIComponent('Olá Carlos, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Carlos</a>
               </div>
             </div>
           `;
@@ -1825,6 +1834,7 @@
           msgErro.textContent = res.erro || 'Falha na autenticação.';
         }
       } catch (err) {
+        console.error("Erro capturado no catch do submeterLogin:", err);
         if (window.pollAprovacaoTimer) { clearInterval(window.pollAprovacaoTimer); window.pollAprovacaoTimer = null; }
         msgErro.textContent = 'Erro ao conectar ao servidor. Tente novamente.';
       } finally {
@@ -1968,7 +1978,7 @@
       }
 
       box.innerHTML = filtrados.slice(0, 15).map(v => `
-        <div class="p-3 hover:bg-blue-50 active:bg-blue-100 cursor-pointer flex justify-between items-center transition" onclick="selecionarSugestaoLogin('${v.cod}', '${escapeHtml(v.nome)}')">
+        <div class="p-3 hover:bg-blue-50 active:bg-blue-100 cursor-pointer flex justify-between items-center transition" onclick="selecionarSugestaoLogin('${escapeJs(v.cod)}', '${escapeJs(v.nome)}')">
           <div>
             <div class="font-bold text-sm text-slate-800">${escapeHtml(v.nome)}</div>
             <div class="text-[11px] text-slate-400">Equipe: ${escapeHtml(v.equipe || 'Geral')}</div>
@@ -6516,15 +6526,26 @@
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
           });
-          const data = await response.json();
+          const responseText = await response.text();
+          let data;
+          try {
+             data = JSON.parse(responseText);
+          } catch (e) {
+             console.error('A resposta não é um JSON válido. Resposta (primeiros 200 chars):', responseText.substring(0, 200));
+             throw e;
+          }
           if (data.codigo === 429 || (data.erro && data.erro.includes("ocupado"))) {
             throw new Error(data.erro);
           }
           return data;
         } catch (err) {
           tentativa++;
+          console.error(`Falha de conexão com backend na tentativa ${tentativa}:`, err);
+          if (err.name === 'SyntaxError') {
+            console.error('Possível resposta não-JSON do servidor (CORS bloqueado ou HTML de erro retornado).');
+          }
           if (tentativa >= maxTentativas) {
-            console.error('Falha de conexão com backend após tentativas:', err);
+            console.error('Falha DEFINITIVA de conexão com backend após tentativas:', err);
             return { sucesso: false, erro: err.message || 'Falha de comunicação com o servidor.' };
           }
           const jitter = Math.random() * 300;
@@ -6656,9 +6677,10 @@
     // ============================================================
     function popularCidadesContatos() {
       const select = document.getElementById('filtroContatosCidade');
+      if (!select) return;
       const cidades = new Set();
-      dbClientes.forEach(c => cidades.add(c.cidade));
-      dbSemAtendimento.forEach(c => cidades.add(c.cidade));
+      (dbClientes || []).forEach(c => { if (c && c.cidade) cidades.add(c.cidade); });
+      (dbRotasVendedor || []).forEach(r => { if (r && r.cidade) cidades.add(r.cidade); });
       
       const atual = select.value;
       select.innerHTML = '<option value="">Todas Cidades</option>';
@@ -6681,7 +6703,7 @@
       let todos = [];
       
       // 1. Clientes com visita definida (da rota)
-      dbRotasDoVendedor.forEach(r => {
+      (dbRotasVendedor || []).forEach(r => {
         todos.push({
           origem: 'ROTA',
           cod: r.codCliente,
@@ -6691,13 +6713,13 @@
           comprador: r.comprador,
           whatsapp: r.whatsapp,
           obs: r.observacoes,
-          dia: r.diaVisita
+          dia: r.diaPrinc
         });
       });
       
-      // 2. Clientes sem visita definida (estão em dbClientes mas não em dbRotas)
-      const codsNaRota = new Set(dbRotasDoVendedor.map(r => r.codCliente));
-      dbClientes.forEach(c => {
+      // 2. Clientes sem visita definida (estão em dbClientes mas não em dbRotasVendedor)
+      const codsNaRota = new Set((dbRotasVendedor || []).map(r => r.codCliente));
+      (dbClientes || []).forEach(c => {
         if (!codsNaRota.has(c.cod) && c.vendedor === usuarioLogado?.nome) {
           todos.push({
             origem: 'CLIENTE',
@@ -6758,7 +6780,7 @@
             </div>
             <div class="flex items-center gap-2">
               <i class="ph ph-whatsapp-logo text-slate-400"></i>
-              <input type="tel" id="contato-tel-${c.cod}" class="flex-1 text-[11px] p-1.5 border border-slate-300 rounded focus:border-blue-500 outline-none" placeholder="WhatsApp (DDD+Número)" value="${c.whatsapp || ''}">
+              <input type="tel" id="contato-tel-${c.cod}" class="flex-1 text-[11px] p-1.5 border border-slate-300 rounded focus:border-blue-500 outline-none" placeholder="WhatsApp (DDD+Número)" value="${c.whatsapp || ''}" oninput="formatarTelefoneEmTempoReal(this)">
             </div>
             <div class="flex items-center gap-2">
               <i class="ph ph-text-align-left text-slate-400"></i>
@@ -6772,6 +6794,26 @@
       `).join('');
 
       container.innerHTML = html;
+    }
+
+    function formatarTelefoneEmTempoReal(el) {
+      let v = el.value.replace(/\D/g, ''); // Remove tudo o que não é dígito
+      if (v.startsWith('55') && v.length > 10) {
+        v = v.substring(2); // Remove DDI 55 do Brasil se colado
+      }
+      if (v.length > 11) {
+         v = v.substring(0, 11);
+      }
+      if (v.length > 10) {
+        // (XX)X XXXX-XXXX (formato com nono dígito)
+        v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, '($1)$2 $3-$4');
+      } else if (v.length > 6) {
+        // (XX) XXXX-XXXX (formato fixo)
+        v = v.replace(/^(\d{2})(\d{4,5})(\d{0,4})$/, '($1) $2-$3');
+      } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{0,5})$/, '($1) $2');
+      }
+      el.value = v;
     }
 
     async function salvarContatoSimples(cod, origem) {
@@ -6811,7 +6853,7 @@
           }, 2000);
 
           // Atualiza na memoria
-          const rota = dbRotasDoVendedor.find(r => r.codCliente === cod);
+          const rota = (dbRotasVendedor || []).find(r => r.codCliente === cod);
           if (rota) {
             rota.comprador = comp;
             rota.whatsapp = tel;
