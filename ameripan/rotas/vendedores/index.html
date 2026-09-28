@@ -1508,7 +1508,7 @@
         <div>
           <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Vendedor</label>
           <div class="relative">
-            <input type="text" id="loginUsuario" placeholder="Digite seu nome ou código..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500" autocomplete="off" oninput="this.removeAttribute('data-cod'); filtrarSugestoesLogin(this.value)" onfocus="filtrarSugestoesLogin(this.value)">
+            <input type="text" id="loginUsuario" placeholder="Digite seu nome ou código..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500" autocomplete="off" oninput="cancelarEsperaAutorizacao(); this.removeAttribute('data-cod'); filtrarSugestoesLogin(this.value)" onfocus="filtrarSugestoesLogin(this.value)">
             <i class="ph ph-magnifying-glass absolute right-3 top-3 text-slate-400"></i>
             <!-- Sugestões dropdown -->
             <div id="loginSugestoes" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-56 overflow-y-auto z-50 divide-y divide-slate-100"></div>
@@ -1518,7 +1518,7 @@
         <div>
           <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Senha de Acesso</label>
           <div class="relative">
-            <input type="password" id="loginSenha" placeholder="Digite sua senha..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500" onkeydown="if(event.key === 'Enter') submeterLogin()">
+            <input type="password" id="loginSenha" placeholder="Digite sua senha..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500" oninput="cancelarEsperaAutorizacao()" onkeydown="if(event.key === 'Enter') submeterLogin()">
             <button type="button" onclick="toggleMostrarSenha('loginSenha')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
               <i class="ph ph-eye text-lg"></i>
             </button>
@@ -1767,6 +1767,7 @@
         return;
       }
 
+      let emEsperaAutorizacao = false;
       btnEntrar.disabled = true;
       btnEntrar.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;border-top-color:white;"></div> Entrando...';
 
@@ -1784,10 +1785,7 @@
         });
 
         if (res.sucesso && res.usuario) {
-          if (window.pollAprovacaoTimer) {
-            clearInterval(window.pollAprovacaoTimer);
-            window.pollAprovacaoTimer = null;
-          }
+          cancelarEsperaAutorizacao();
           usuarioLogado = res.usuario;
           if (res.token) usuarioLogado.token = res.token;
           localStorage.setItem('ameripan_sessao_vendedor', JSON.stringify(usuarioLogado));
@@ -1805,44 +1803,136 @@
             setTimeout(() => { document.getElementById('codCliente')?.focus(); }, 120);
           }
         } else if (res.pendenteAprovacao) {
-          if (!window.pollAprovacaoTimer) {
-             window.pollAprovacaoTimer = setInterval(() => {
-                 document.getElementById('btnEntrar').click();
-             }, 5000);
+          emEsperaAutorizacao = true;
+
+          // Renderiza o card de aviso APENAS uma vez (sem piscar nem recriar a cada ping)
+          if (!document.getElementById('cardAguardandoAprovacao')) {
+            msgErro.innerHTML = `
+              <div id="cardAguardandoAprovacao" class="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl space-y-1 text-left animate-fade-in">
+                <div class="font-bold flex items-center gap-1.5 text-amber-800 text-xs">
+                  <i class="ph ph-shield-warning text-base text-amber-600"></i> Dispositivo Aguardando Autorização
+                </div>
+                <p class="text-xs leading-relaxed text-amber-950">${res.erro}</p>
+                <div class="text-[10px] text-amber-700 border-t border-amber-200/70 pt-1 mt-1 flex justify-between">
+                  <span>Aparelho: <b>${escapeHtml(deviceInfo)}</b></span>
+                  <span class="font-mono">ID: ${escapeHtml(deviceId.slice(-8))}</span>
+                </div>
+                <div id="badgeAguardandoGestor" class="mt-2 text-center text-[10px] font-bold text-amber-700 bg-amber-100/50 p-1.5 rounded animate-pulse flex items-center justify-center gap-1.5">
+                  <i class="ph ph-spinner animate-spin"></i> Aguardando gestor... a tela atualizará sozinha.
+                </div>
+                <div class="mt-3 flex flex-col gap-2">
+                  <a href="https://wa.me/5519987121005?text=${encodeURIComponent('Olá Edimar, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2 shadow-sm active:scale-98 transition"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Edimar</a>
+                  <a href="https://wa.me/5519982213355?text=${encodeURIComponent('Olá Carlos, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2 shadow-sm active:scale-98 transition"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Carlos</a>
+                </div>
+              </div>
+            `;
           }
-          msgErro.innerHTML = `
-            <div class="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl space-y-1 text-left animate-fade-in">
-              <div class="font-bold flex items-center gap-1.5 text-amber-800 text-xs">
-                <i class="ph ph-shield-warning text-base text-amber-600"></i> Dispositivo Aguardando Autorização
-              </div>
-              <p class="text-xs leading-relaxed text-amber-950">${res.erro}</p>
-              <div class="text-[10px] text-amber-700 border-t border-amber-200/70 pt-1 mt-1 flex justify-between">
-                <span>Aparelho: <b>${deviceInfo}</b></span>
-                <span class="font-mono">ID: ${deviceId.slice(-8)}</span>
-              </div>
-              <div class="mt-2 text-center text-[10px] font-bold text-amber-700 bg-amber-100/50 p-1.5 rounded animate-pulse">
-                <i class="ph ph-spinner animate-spin"></i> Aguardando gestor... a tela atualizará sozinha.
-              </div>
-              <div class="mt-3 flex flex-col gap-2">
-                <a href="https://wa.me/5519987121005?text=${encodeURIComponent('Olá Edimar, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Edimar</a>
-                <a href="https://wa.me/5519982213355?text=${encodeURIComponent('Olá Carlos, por favor aprove meu novo dispositivo Ameripan Rotas. Link de aprovação rápida: https://edimarpcosta.github.io/ameripan/rotas/vendedores/aprove_new_device.html?deviceId=' + deviceId + '&cod=' + usuario)}" target="_blank" class="w-full bg-green-600 text-white text-xs font-semibold py-2 px-3 rounded-lg text-center flex items-center justify-center gap-2"><i class="ph ph-whatsapp-logo text-base"></i> Pedir ao Carlos</a>
-              </div>
-            </div>
-          `;
+
+          // Mantém o botão em estado calmo de espera sem redefinir
+          btnEntrar.disabled = true;
+          btnEntrar.style.backgroundColor = '#64748b';
+          btnEntrar.style.color = '#ffffff';
+          btnEntrar.innerHTML = '<i class="ph ph-hourglass-medium text-lg"></i> <span style="color:#ffffff !important;">Aguardando autorização...</span>';
+
+          iniciarPollingAprovacaoSilencioso(usuario, senha, deviceId, deviceInfo);
         } else {
-          if (window.pollAprovacaoTimer) { clearInterval(window.pollAprovacaoTimer); window.pollAprovacaoTimer = null; }
+          cancelarEsperaAutorizacao();
           msgErro.textContent = res.erro || 'Falha na autenticação.';
         }
       } catch (err) {
         console.error("Erro capturado no catch do submeterLogin:", err);
-        if (window.pollAprovacaoTimer) { clearInterval(window.pollAprovacaoTimer); window.pollAprovacaoTimer = null; }
+        cancelarEsperaAutorizacao();
         msgErro.textContent = 'Erro ao conectar ao servidor. Tente novamente.';
       } finally {
+        if (!emEsperaAutorizacao) {
+          btnEntrar.disabled = false;
+          btnEntrar.style.backgroundColor = '#2563eb';
+          btnEntrar.style.color = '#ffffff';
+          btnEntrar.innerHTML = '<i class="ph ph-sign-in text-lg" style="color:#ffffff !important;"></i> <span style="color:#ffffff !important;">Entrar no Sistema</span>';
+        }
+      }
+    }
+
+    function cancelarEsperaAutorizacao() {
+      if (window.pollAprovacaoTimer) {
+        clearInterval(window.pollAprovacaoTimer);
+        window.pollAprovacaoTimer = null;
+      }
+      const card = document.getElementById('cardAguardandoAprovacao');
+      if (card) card.remove();
+      const btnEntrar = document.getElementById('btnEntrar');
+      if (btnEntrar) {
         btnEntrar.disabled = false;
         btnEntrar.style.backgroundColor = '#2563eb';
         btnEntrar.style.color = '#ffffff';
         btnEntrar.innerHTML = '<i class="ph ph-sign-in text-lg" style="color:#ffffff !important;"></i> <span style="color:#ffffff !important;">Entrar no Sistema</span>';
       }
+    }
+
+    function iniciarPollingAprovacaoSilencioso(usuario, senha, deviceId, deviceInfo) {
+      if (window.pollAprovacaoTimer) {
+        clearInterval(window.pollAprovacaoTimer);
+        window.pollAprovacaoTimer = null;
+      }
+
+      window.pollAprovacaoTimer = setInterval(async () => {
+        try {
+          const res = await chamarBackendScript({
+            acao: 'AUTH_LOGIN',
+            tipo: 'VENDEDOR',
+            usuario: usuario,
+            senha: senha,
+            deviceId: deviceId,
+            deviceInfo: deviceInfo
+          }, 1);
+
+          if (res && res.sucesso && res.usuario) {
+            // AUTORIZADO PELO GESTOR!
+            clearInterval(window.pollAprovacaoTimer);
+            window.pollAprovacaoTimer = null;
+
+            const badge = document.getElementById('badgeAguardandoGestor');
+            if (badge) {
+              badge.className = "mt-2 text-center text-xs font-bold text-emerald-800 bg-emerald-100 p-2 rounded-xl flex items-center justify-center gap-1.5 animate-bounce";
+              badge.innerHTML = '<i class="ph ph-check-circle text-base text-emerald-600"></i> Dispositivo Aprovado! Entrando...';
+            }
+
+            usuarioLogado = res.usuario;
+            if (res.token) usuarioLogado.token = res.token;
+            localStorage.setItem('ameripan_sessao_vendedor', JSON.stringify(usuarioLogado));
+            localStorage.setItem('ameripan_senha_vendedor', senha);
+
+            setTimeout(async () => {
+              aplicarUsuarioLogadoUI();
+              document.getElementById('modalLogin').classList.add('hidden');
+
+              if (usuarioLogado.primeiroAcesso || senha === '1234') {
+                abrirModalPrimeiroAcesso();
+              } else {
+                await carregarBasesOperacionais();
+                mudarAba('lancar-visita');
+                setTimeout(() => { document.getElementById('codCliente')?.focus(); }, 120);
+              }
+            }, 600);
+          } else if (res && res.statusDispositivo === 'BLOQUEADO') {
+            clearInterval(window.pollAprovacaoTimer);
+            window.pollAprovacaoTimer = null;
+            const msgErro = document.getElementById('loginMsgErro');
+            if (msgErro) {
+              msgErro.innerHTML = '<div class="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">Este dispositivo foi bloqueado pela gerência da Ameripan.</div>';
+            }
+            const btnEntrar = document.getElementById('btnEntrar');
+            if (btnEntrar) {
+              btnEntrar.disabled = false;
+              btnEntrar.style.backgroundColor = '#2563eb';
+              btnEntrar.style.color = '#ffffff';
+              btnEntrar.innerHTML = '<i class="ph ph-sign-in text-lg" style="color:#ffffff !important;"></i> <span style="color:#ffffff !important;">Entrar no Sistema</span>';
+            }
+          }
+        } catch (silentErr) {
+          console.warn('Ping silencioso de autorização:', silentErr);
+        }
+      }, 4000);
     }
 
     function aplicarUsuarioLogadoUI() {
