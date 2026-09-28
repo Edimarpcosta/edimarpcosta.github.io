@@ -6446,6 +6446,11 @@
       const item = obterDadosFormulario();
       if (!item) return;
 
+      if (!item.codVendedor) {
+        mostrarModal('erro', 'Sessão expirada ou vendedor não identificado.', 'Por favor, faça login novamente antes de gravar.');
+        return;
+      }
+
       if (statusCliente === 'ja_gravado' && !forcarAtualizacao && !atualizacaoConfirmadaPeloVendedor) {
         const codCli = document.getElementById('codCliente').value.trim();
         const rExist = dbRotasVendedor.find(r => String(r.codCliente).trim() === codCli) || listaDeRotas.find(r => String(r.codCliente).trim() === codCli);
@@ -6546,7 +6551,10 @@
           }
           if (tentativa >= maxTentativas) {
             console.error('Falha DEFINITIVA de conexão com backend após tentativas:', err);
-            return { sucesso: false, erro: err.message || 'Falha de comunicação com o servidor.' };
+            const msgAmigavel = (err.name === 'TypeError' && String(err.message || '').includes('fetch'))
+              ? 'Falha ao conectar com o Google Apps Script (Servidor indisponível ou erro no script backend).'
+              : (err.message || 'Falha de comunicação com o servidor.');
+            return { sucesso: false, erro: msgAmigavel };
           }
           const jitter = Math.random() * 300;
           await new Promise(res => setTimeout(res, atraso + jitter));
@@ -6833,8 +6841,14 @@
       try {
         const payload = {
           acao: 'ATUALIZAR_CONTATO_CLIENTE',
+          codVendedor: usuarioLogado ? usuarioLogado.cod : '',
+          codCliente: cod,
+          comprador: comp,
+          whatsapp: tel,
+          observacoes: obs,
+          deviceId: obterOuCriarDeviceId(),
           dados: {
-            codVendedor: usuarioLogado.cod,
+            codVendedor: usuarioLogado ? usuarioLogado.cod : '',
             codCliente: cod,
             comprador: comp,
             whatsapp: tel,
