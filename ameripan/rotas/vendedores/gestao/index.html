@@ -1633,6 +1633,9 @@
     let cityObsMap = {};
     let filteredData = [];
     let charts = {};
+    let rawTarefasCadastro = [];
+    let auditoriaSubTab = 'a-gerar';
+    let auditoriaSelecionados = new Set();
 
     // Paginação
     let reportPaging = { page: 1, pageSize: 50 };
@@ -1712,7 +1715,9 @@
                 rawDispositivos = dadosGas.dispositivos || [];
                 rawSolicitacoesPendentes = dadosGas.solicitacoesPendentes || [];
                 rawUltimasSolicitacoes = dadosGas.ultimasSolicitacoes || [];
+                rawTarefasCadastro = dadosGas.tarefasCadastro || [];
                 atualizarBadgeSolicitacoes();
+                atualizarBadgesTarefasAuditoria();
 
                 if (dadosGas.totalInativos !== undefined) {
                     const kpiInat = document.getElementById('kpi-total-inativos');
@@ -7000,42 +7005,95 @@
         if (elInv) elInv.innerText = auditoriaCache.telInvalido.length;
     }
 
-    function abrirModalAuditoriaCadastral(tipo) {
-        auditarQualidadeCadastral();
-        auditoriaCache.tipoAtivo = tipo;
-        const m = document.getElementById('modalAuditoriaCadastral');
-        const tit = document.getElementById('modal-auditoria-titulo');
-        const sub = document.getElementById('modal-auditoria-subtitulo');
-        const ico = document.getElementById('modal-auditoria-icone');
-        const inpBusca = document.getElementById('modal-auditoria-busca');
-        if (inpBusca) inpBusca.value = '';
+    function mudarSubTabAuditoria(tab) {
+        auditoriaSubTab = tab;
+        const tabs = ['a-gerar', 'pendentes', 'em-auditoria', 'homologadas'];
+        tabs.forEach(t => {
+            const btn = document.getElementById(`btn-tab-aud-${t}`);
+            if (btn) {
+                if (t === tab) {
+                    btn.className = 'px-3.5 py-2 border-b-2 border-amber-600 text-amber-800 flex items-center gap-1.5 transition font-black';
+                } else {
+                    btn.className = 'px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition';
+                }
+            }
+        });
 
-        let lista = [];
-        if (tipo === 'SEM_ROTA') {
-            lista = auditoriaCache.semRota;
-            if (tit) tit.textContent = 'Clientes sem Roteirização / Dia';
-            if (sub) sub.textContent = 'Clientes ativos na base sem definição de dia principal de visita';
-            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold';
-        } else if (tipo === 'SEM_COMPRADOR') {
-            lista = auditoriaCache.semComprador;
-            if (tit) tit.textContent = 'Clientes sem Comprador Cadastrado';
-            if (sub) sub.textContent = 'Cadastros com campo de comprador em branco ou não identificado';
-            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-xl font-bold';
-        } else if (tipo === 'SEM_TELEFONE') {
-            lista = auditoriaCache.semTelefone;
-            if (tit) tit.textContent = 'Clientes sem Telefone Comercial';
-            if (sub) sub.textContent = 'Clientes sem nenhum número de contato ou WhatsApp registrado';
-            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xl font-bold';
-        } else if (tipo === 'TEL_INVALIDO') {
-            lista = auditoriaCache.telInvalido;
-            if (tit) tit.textContent = 'Telefones Suspeitos / Inválidos';
-            if (sub) sub.textContent = 'Números com falhas heurísticas (DDD inexistente, repetidos ou incompletos)';
-            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl font-bold';
+        const btnAcaoGerar = document.getElementById('btn-acao-gerar-tarefa');
+        if (btnAcaoGerar) {
+            btnAcaoGerar.style.display = (tab === 'a-gerar') ? 'flex' : 'none';
         }
 
-        auditoriaCache.filtrados = lista;
         renderTabelaAuditoria();
+    }
 
+    function atualizarBadgesTarefasAuditoria() {
+        const bAGerar = document.getElementById('badge-aud-tab-a-gerar');
+        const bPend = document.getElementById('badge-aud-tab-pendentes');
+        const bEmAud = document.getElementById('badge-aud-tab-em-auditoria');
+        const bHom = document.getElementById('badge-aud-tab-homologadas');
+
+        // Total a gerar = soma dos problemas sem duplicar clientes
+        const todosProblemas = new Set();
+        (auditoriaCache.semRota || []).forEach(r => todosProblemas.add(r.codCliente));
+        (auditoriaCache.semComprador || []).forEach(r => todosProblemas.add(r.codCliente));
+        (auditoriaCache.semTelefone || []).forEach(r => todosProblemas.add(r.codCliente));
+        (auditoriaCache.telInvalido || []).forEach(r => todosProblemas.add(r.codCliente));
+        if (bAGerar) bAGerar.textContent = todosProblemas.size;
+
+        const pendentes = (rawTarefasCadastro || []).filter(t => t.status === 'PENDENTE' || t.status === 'REJEITADO');
+        const emAud = (rawTarefasCadastro || []).filter(t => t.status === 'EM_AUDITORIA');
+        const hom = (rawTarefasCadastro || []).filter(t => t.status === 'HOMOLOGADO');
+
+        if (bPend) bPend.textContent = pendentes.length;
+        if (bEmAud) bEmAud.textContent = emAud.length;
+        if (bHom) bHom.textContent = hom.length;
+    }
+
+    function popularFiltrosAuditoria() {
+        const selVend = document.getElementById('modal-auditoria-sel-vendedor');
+        const selCid = document.getElementById('modal-auditoria-sel-cidade');
+        if (!selVend || !selCid) return;
+
+        // Vendedores
+        const vendsSet = new Map();
+        rawRotas.forEach(r => {
+            if (r.vendCod && r.vendedor && r.vendedor !== 'N/A') {
+                vendsSet.set(r.vendCod, r.vendedor);
+            }
+        });
+        const vendsOrdenados = Array.from(vendsSet.entries()).sort((a,b) => a[1].localeCompare(b[1]));
+        const currVend = selVend.value;
+        selVend.innerHTML = '<option value="">Todos os Vendedores</option>' + 
+            vendsOrdenados.map(([cod, nome]) => `<option value="${escapeHtml(cod)}">${escapeHtml(nome)} (${escapeHtml(cod)})</option>`).join('');
+        if (currVend) selVend.value = currVend;
+
+        // Cidades
+        const cidsSet = new Set();
+        rawRotas.forEach(r => {
+            if (r.cidade) cidsSet.add(r.cidade.trim().toUpperCase());
+        });
+        const cidsOrdenadas = Array.from(cidsSet).sort();
+        const currCid = selCid.value;
+        selCid.innerHTML = '<option value="">Todas as Cidades</option>' + 
+            cidsOrdenadas.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        if (currCid) selCid.value = currCid;
+    }
+
+    function abrirModalAuditoriaCadastral(tipo = 'TODOS') {
+        auditarQualidadeCadastral();
+        popularFiltrosAuditoria();
+        atualizarBadgesTarefasAuditoria();
+
+        const selTipo = document.getElementById('modal-auditoria-sel-tipo');
+        if (selTipo) {
+            selTipo.value = (tipo && tipo !== 'ALL') ? tipo : 'TODOS';
+        }
+
+        auditoriaSubTab = 'a-gerar';
+        mudarSubTabAuditoria('a-gerar');
+
+        const m = document.getElementById('modalAuditoriaCadastral');
         if (m) {
             m.style.display = 'flex';
             m.classList.remove('hidden');
@@ -7050,96 +7108,355 @@
         }
     }
 
-    function filtrarTabelaAuditoria() {
-        const termo = (document.getElementById('modal-auditoria-busca')?.value || '').trim().toLowerCase();
-        let listaOrig = [];
-        const tipo = auditoriaCache.tipoAtivo;
-        if (tipo === 'SEM_ROTA') listaOrig = auditoriaCache.semRota;
-        else if (tipo === 'SEM_COMPRADOR') listaOrig = auditoriaCache.semComprador;
-        else if (tipo === 'SEM_TELEFONE') listaOrig = auditoriaCache.semTelefone;
-        else if (tipo === 'TEL_INVALIDO') listaOrig = auditoriaCache.telInvalido;
-
-        if (!termo) {
-            auditoriaCache.filtrados = listaOrig;
-        } else {
-            auditoriaCache.filtrados = listaOrig.filter(r => {
-                const cod = String(r.codCliente || '').toLowerCase();
-                const cli = String(r.cliente || '').toLowerCase();
-                const vend = String(r.vendedor || '').toLowerCase();
-                const cid = String(r.cidade || '').toLowerCase();
-                const comp = String(r.comprador || '').toLowerCase();
-                const tel = String(r.whatsappRaw || '').toLowerCase();
-                return cod.includes(termo) || cli.includes(termo) || vend.includes(termo) || cid.includes(termo) || comp.includes(termo) || tel.includes(termo);
-            });
-        }
+    function aoMudarFiltroAuditoria() {
         renderTabelaAuditoria();
     }
 
-    function renderTabelaAuditoria() {
-        const tbody = document.getElementById('modal-auditoria-tbody');
-        const badgeTotal = document.getElementById('modal-auditoria-badge-total');
-        const statusPag = document.getElementById('modal-auditoria-status-pag');
-        if (!tbody) return;
+    function toggleSelectAllAuditoria(masterChk) {
+        const isChecked = masterChk.checked;
+        const checkboxes = document.querySelectorAll('.chk-auditoria-item');
+        checkboxes.forEach(cb => {
+            cb.checked = isChecked;
+            const cod = cb.getAttribute('data-cod');
+            if (isChecked) auditoriaSelecionados.add(cod);
+            else auditoriaSelecionados.delete(cod);
+        });
+        atualizarContadorSelecaoAuditoria();
+    }
 
-        const lista = auditoriaCache.filtrados || [];
-        if (badgeTotal) badgeTotal.textContent = `${lista.length} ocorrência(s)`;
-        if (statusPag) statusPag.textContent = `Exibindo ${lista.length} registros`;
+    function toggleAuditoriaCliente(cod) {
+        if (auditoriaSelecionados.has(cod)) auditoriaSelecionados.delete(cod);
+        else auditoriaSelecionados.add(cod);
+        atualizarContadorSelecaoAuditoria();
+    }
 
-        if (lista.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 italic">Nenhuma pendência encontrada nesta categoria. Base 100% regularizada!</td></tr>`;
-            return;
+    function atualizarContadorSelecaoAuditoria() {
+        const btn = document.getElementById('btn-acao-gerar-tarefa');
+        if (btn) {
+            const count = auditoriaSelecionados.size;
+            if (count > 0) {
+                btn.innerHTML = `<i class="ph ph-whatsapp-logo text-base"></i><span>Gerar Tarefa (${count}) & WhatsApp</span>`;
+                btn.classList.remove('opacity-60', 'pointer-events-none');
+            } else {
+                btn.innerHTML = `<i class="ph ph-whatsapp-logo text-base"></i><span>Gerar Tarefa & Notificar WhatsApp</span>`;
+            }
         }
+    }
 
-        tbody.innerHTML = lista.slice(0, 200).map(r => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="p-2.5 font-bold text-blue-700">${escapeHtml(r.codCliente)}</td>
-                <td class="p-2.5">
-                    <div class="font-bold text-slate-800">${escapeHtml(r.cliente || r.razao)}</div>
-                    ${r.fantasia ? `<div class="text-[10px] text-slate-400 font-medium">${escapeHtml(r.fantasia)}</div>` : ''}
-                </td>
-                <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.vendedor)}</td>
-                <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.cidade)}</td>
-                <td class="p-2.5">${r.comprador ? `<span class="font-semibold text-slate-700">${escapeHtml(r.comprador)}</span>` : `<span class="text-red-500 italic text-[11px]">Não cadastrado</span>`}</td>
-                <td class="p-2.5">${r.whatsappRaw ? `<span class="font-mono text-slate-700 text-[11px]">${escapeHtml(r.whatsappRaw)}</span>` : `<span class="text-red-500 italic text-[11px]">Sem telefone</span>`}</td>
-                <td class="p-2.5">
-                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        <i class="ph ph-warning-circle"></i> ${escapeHtml(r._motivoAuditoria || 'Revisar')}
-                    </span>
-                </td>
-                <td class="p-2.5 text-center">
-                    <button type="button" onclick="openClientModal('${escapeJs(r.codCliente)}')" class="px-2 py-1 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded font-bold text-[10px] border border-slate-200 transition" title="Ver Detalhes do Cliente">
-                        <i class="ph ph-eye"></i> Detalhes
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+    function renderTabelaAuditoria() {
+        const thead = document.getElementById('modal-auditoria-thead');
+        const tbody = document.getElementById('modal-auditoria-tbody');
+        const statusPag = document.getElementById('modal-auditoria-status-pag');
+        if (!thead || !tbody) return;
+
+        const vendFiltro = (document.getElementById('modal-auditoria-sel-vendedor')?.value || '').trim();
+        const cidFiltro = (document.getElementById('modal-auditoria-sel-cidade')?.value || '').trim().toUpperCase();
+        const tipoFiltro = (document.getElementById('modal-auditoria-sel-tipo')?.value || 'TODOS').trim();
+        const busca = (document.getElementById('modal-auditoria-busca')?.value || '').trim().toLowerCase();
+
+        if (auditoriaSubTab === 'a-gerar') {
+            thead.innerHTML = `
+                <tr>
+                    <th class="p-2.5 w-8 text-center">
+                        <input type="checkbox" onchange="toggleSelectAllAuditoria(this)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                    </th>
+                    <th class="p-2.5">Cód</th>
+                    <th class="p-2.5">Cliente / Fantasia</th>
+                    <th class="p-2.5">Vendedor</th>
+                    <th class="p-2.5">Cidade</th>
+                    <th class="p-2.5">Comprador</th>
+                    <th class="p-2.5">Telefone / Whats</th>
+                    <th class="p-2.5">Diagnóstico / Motivo</th>
+                    <th class="p-2.5 text-center">Ações</th>
+                </tr>
+            `;
+
+            // Junta as inconsistências
+            let listaBruta = [];
+            if (tipoFiltro === 'TODOS') {
+                const mapCli = new Map();
+                [...auditoriaCache.semTelefone, ...auditoriaCache.telInvalido, ...auditoriaCache.semComprador, ...auditoriaCache.semRota].forEach(r => {
+                    if (!mapCli.has(r.codCliente)) mapCli.set(r.codCliente, r);
+                    else {
+                        const exist = mapCli.get(r.codCliente);
+                        exist._motivoAuditoria += ' • ' + r._motivoAuditoria;
+                    }
+                });
+                listaBruta = Array.from(mapCli.values());
+            } else if (tipoFiltro === 'SEM_ROTA') listaBruta = auditoriaCache.semRota;
+            else if (tipoFiltro === 'SEM_COMPRADOR') listaBruta = auditoriaCache.semComprador;
+            else if (tipoFiltro === 'SEM_TELEFONE') listaBruta = auditoriaCache.semTelefone;
+            else if (tipoFiltro === 'TEL_INVALIDO') listaBruta = auditoriaCache.telInvalido;
+
+            // Aplica filtros
+            const filtrados = listaBruta.filter(r => {
+                if (vendFiltro && String(r.vendCod || '').trim() !== vendFiltro && normalizarTexto(r.vendedor) !== normalizarTexto(vendFiltro)) return false;
+                if (cidFiltro && (r.cidade || '').trim().toUpperCase() !== cidFiltro) return false;
+                if (busca) {
+                    const str = `${r.codCliente} ${r.cliente} ${r.razao} ${r.fantasia} ${r.vendedor} ${r.cidade} ${r.comprador}`.toLowerCase();
+                    if (!str.includes(busca)) return false;
+                }
+                return true;
+            });
+
+            if (statusPag) statusPag.textContent = `Exibindo ${filtrados.length} cliente(s) com pendências a gerar`;
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-400 italic">Nenhuma pendência encontrada com os filtros selecionados. Base 100% regularizada!</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtrados.slice(0, 200).map(r => {
+                const cod = escapeHtml(r.codCliente);
+                const isSel = auditoriaSelecionados.has(r.codCliente);
+                return `
+                    <tr class="hover:bg-slate-50 transition ${isSel ? 'bg-amber-50/60' : ''}">
+                        <td class="p-2.5 text-center">
+                            <input type="checkbox" data-cod="${cod}" onchange="toggleAuditoriaCliente('${cod}')" ${isSel ? 'checked' : ''} class="chk-auditoria-item rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                        </td>
+                        <td class="p-2.5 font-bold text-blue-700">${cod}</td>
+                        <td class="p-2.5">
+                            <div class="font-bold text-slate-800">${escapeHtml(r.cliente || r.razao)}</div>
+                            ${r.fantasia ? `<div class="text-[10px] text-slate-400 font-medium">${escapeHtml(r.fantasia)}</div>` : ''}
+                        </td>
+                        <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.vendedor)}</td>
+                        <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.cidade)}</td>
+                        <td class="p-2.5">${r.comprador ? `<span class="font-semibold text-slate-700">${escapeHtml(r.comprador)}</span>` : `<span class="text-red-500 italic text-[11px]">Não cadastrado</span>`}</td>
+                        <td class="p-2.5">${r.whatsappRaw ? `<span class="font-mono text-slate-700 text-[11px]">${escapeHtml(r.whatsappRaw)}</span>` : `<span class="text-red-500 italic text-[11px]">Sem telefone</span>`}</td>
+                        <td class="p-2.5">
+                            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                <i class="ph ph-warning-circle text-xs"></i> ${escapeHtml(r._motivoAuditoria || 'Revisar')}
+                            </span>
+                        </td>
+                        <td class="p-2.5 text-center">
+                            <button type="button" onclick="openClientModal('${escapeJs(r.codCliente)}')" class="px-2 py-1 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded font-bold text-[10px] border border-slate-200 transition" title="Ver Detalhes do Cliente">
+                                <i class="ph ph-eye"></i> Detalhes
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else if (auditoriaSubTab === 'pendentes') {
+            thead.innerHTML = `
+                <tr>
+                    <th class="p-2.5">ID Tarefa</th>
+                    <th class="p-2.5">Data Criação</th>
+                    <th class="p-2.5">Vendedor</th>
+                    <th class="p-2.5">Cliente / Razão</th>
+                    <th class="p-2.5">Cidade</th>
+                    <th class="p-2.5">Pendência</th>
+                    <th class="p-2.5">Status</th>
+                    <th class="p-2.5">Obs. Gestão</th>
+                </tr>
+            `;
+
+            const filtrados = (rawTarefasCadastro || []).filter(t => {
+                if (t.status !== 'PENDENTE' && t.status !== 'REJEITADO') return false;
+                if (vendFiltro && t.codVendedor !== vendFiltro && normalizarTexto(t.nomeVendedor) !== normalizarTexto(vendFiltro)) return false;
+                if (cidFiltro && (t.cidade || '').toUpperCase() !== cidFiltro) return false;
+                if (busca) {
+                    const str = `${t.idTarefa} ${t.codCliente} ${t.razaoSocial} ${t.nomeVendedor} ${t.cidade}`.toLowerCase();
+                    if (!str.includes(busca)) return false;
+                }
+                return true;
+            });
+
+            if (statusPag) statusPag.textContent = `Exibindo ${filtrados.length} tarefa(s) pendente(s) com o vendedor`;
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 italic">Nenhuma tarefa pendente com o vendedor no momento.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(t => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-2.5 font-mono text-xs font-bold text-slate-500">${escapeHtml(t.idTarefa)}</td>
+                    <td class="p-2.5 text-slate-600 text-xs">${escapeHtml(t.dataCriacao)}</td>
+                    <td class="p-2.5 font-bold text-slate-800">${escapeHtml(t.nomeVendedor)} (${escapeHtml(t.codVendedor)})</td>
+                    <td class="p-2.5">
+                        <div class="font-bold text-blue-700">${escapeHtml(t.codCliente)}</div>
+                        <div class="text-[11px] text-slate-700">${escapeHtml(t.razaoSocial)}</div>
+                    </td>
+                    <td class="p-2.5 font-medium text-slate-600">${escapeHtml(t.cidade)}</td>
+                    <td class="p-2.5 font-bold text-amber-700">${escapeHtml(t.tipoPendencia)}</td>
+                    <td class="p-2.5">
+                        ${t.status === 'REJEITADO' ? 
+                            `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800">REJEITADA (REABERTA)</span>` :
+                            `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800">AGUARDANDO VENDEDOR</span>`}
+                    </td>
+                    <td class="p-2.5 text-xs text-rose-700">${escapeHtml(t.obsGestor || '-')}</td>
+                </tr>
+            `).join('');
+        } else if (auditoriaSubTab === 'em-auditoria') {
+            thead.innerHTML = `
+                <tr>
+                    <th class="p-2.5">Cód / Cliente</th>
+                    <th class="p-2.5">Vendedor</th>
+                    <th class="p-2.5">Cidade</th>
+                    <th class="p-2.5">Valor Anterior</th>
+                    <th class="p-2.5">Novo Valor Preenchido</th>
+                    <th class="p-2.5">Justificativa</th>
+                    <th class="p-2.5">Conclusão</th>
+                    <th class="p-2.5 text-center">Decisão / Teste</th>
+                </tr>
+            `;
+
+            const filtrados = (rawTarefasCadastro || []).filter(t => {
+                if (t.status !== 'EM_AUDITORIA') return false;
+                if (vendFiltro && t.codVendedor !== vendFiltro && normalizarTexto(t.nomeVendedor) !== normalizarTexto(vendFiltro)) return false;
+                if (cidFiltro && (t.cidade || '').toUpperCase() !== cidFiltro) return false;
+                if (busca) {
+                    const str = `${t.idTarefa} ${t.codCliente} ${t.razaoSocial} ${t.nomeVendedor} ${t.valorCorrigido} ${t.justificativa}`.toLowerCase();
+                    if (!str.includes(busca)) return false;
+                }
+                return true;
+            });
+
+            if (statusPag) statusPag.textContent = `Exibindo ${filtrados.length} tarefa(s) aguardando homologação`;
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 italic">Nenhuma tarefa aguardando auditoria no momento.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(t => {
+                const idT = escapeHtml(t.idTarefa);
+                // Extrai telefone se houver no valor corrigido
+                let telLimpo = '';
+                const matchTel = (t.valorCorrigido || '').match(/Tel:\s*(\d+)/i);
+                if (matchTel && matchTel[1]) telLimpo = matchTel[1];
+
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-2.5">
+                            <div class="font-bold text-blue-700">${escapeHtml(t.codCliente)}</div>
+                            <div class="text-[11px] font-bold text-slate-800">${escapeHtml(t.razaoSocial)}</div>
+                        </td>
+                        <td class="p-2.5 font-medium text-slate-700">${escapeHtml(t.nomeVendedor)}</td>
+                        <td class="p-2.5 font-medium text-slate-600">${escapeHtml(t.cidade)}</td>
+                        <td class="p-2.5 text-slate-400 text-xs italic">${escapeHtml(t.valorAnterior || 'Vazio')}</td>
+                        <td class="p-2.5 font-mono text-xs font-bold text-emerald-800 bg-emerald-50/50 p-2 rounded">
+                            ${escapeHtml(t.valorCorrigido || '-')}
+                        </td>
+                        <td class="p-2.5 text-xs text-amber-800">${escapeHtml(t.justificativa || '-')}</td>
+                        <td class="p-2.5 text-xs text-slate-500">${escapeHtml(t.dataConclusao || '-')}</td>
+                        <td class="p-2.5 text-center">
+                            <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                                ${telLimpo ? `
+                                    <button type="button" onclick="testarWhatsAppAuditoria('${telLimpo}')" class="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold text-[10px] flex items-center gap-1 transition" title="Testar WhatsApp do Cliente">
+                                        <i class="ph ph-whatsapp-logo text-xs"></i> Testar
+                                    </button>
+                                ` : ''}
+                                <button type="button" onclick="decidirAuditoriaGestor('${idT}', 'HOMOLOGAR')" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] flex items-center gap-1 shadow-2xs transition" title="Homologar Cadastro">
+                                    <i class="ph ph-check"></i> Homologar
+                                </button>
+                                <button type="button" onclick="decidirAuditoriaGestor('${idT}', 'REJEITAR')" class="px-2 py-1 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded font-bold text-[10px] flex items-center gap-1 transition" title="Rejeitar e Reabrir Tarefa">
+                                    <i class="ph ph-x"></i> Rejeitar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else if (auditoriaSubTab === 'homologadas') {
+            thead.innerHTML = `
+                <tr>
+                    <th class="p-2.5">ID Tarefa</th>
+                    <th class="p-2.5">Data Conclusão</th>
+                    <th class="p-2.5">Vendedor</th>
+                    <th class="p-2.5">Cliente</th>
+                    <th class="p-2.5">Cidade</th>
+                    <th class="p-2.5">Valor Homologado</th>
+                    <th class="p-2.5">Status</th>
+                </tr>
+            `;
+
+            const filtrados = (rawTarefasCadastro || []).filter(t => {
+                if (t.status !== 'HOMOLOGADO') return false;
+                if (vendFiltro && t.codVendedor !== vendFiltro && normalizarTexto(t.nomeVendedor) !== normalizarTexto(vendFiltro)) return false;
+                if (cidFiltro && (t.cidade || '').toUpperCase() !== cidFiltro) return false;
+                if (busca) {
+                    const str = `${t.idTarefa} ${t.codCliente} ${t.razaoSocial} ${t.nomeVendedor} ${t.valorCorrigido}`.toLowerCase();
+                    if (!str.includes(busca)) return false;
+                }
+                return true;
+            });
+
+            if (statusPag) statusPag.textContent = `Exibindo ${filtrados.length} tarefa(s) homologada(s)`;
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 italic">Nenhum histórico homologado encontrado.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(t => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-2.5 font-mono text-xs font-bold text-slate-500">${escapeHtml(t.idTarefa)}</td>
+                    <td class="p-2.5 text-xs text-slate-600">${escapeHtml(t.dataConclusao || t.dataCriacao)}</td>
+                    <td class="p-2.5 font-bold text-slate-800">${escapeHtml(t.nomeVendedor)} (${escapeHtml(t.codVendedor)})</td>
+                    <td class="p-2.5 font-medium text-blue-700">${escapeHtml(t.codCliente)} - ${escapeHtml(t.razaoSocial)}</td>
+                    <td class="p-2.5 text-slate-600">${escapeHtml(t.cidade)}</td>
+                    <td class="p-2.5 font-mono text-xs font-bold text-emerald-800">${escapeHtml(t.valorCorrigido || '-')}</td>
+                    <td class="p-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">HOMOLOGADO</span></td>
+                </tr>
+            `).join('');
+        }
     }
 
     function exportarExcelAuditoria() {
-        const lista = auditoriaCache.filtrados || [];
-        if (lista.length === 0) {
-            alert('Não há registros para exportar.');
-            return;
-        }
-
         const dataIso = new Date().toISOString().slice(0, 10);
-        const wsData = lista.map(r => ({
-            "Cód. Cliente": r.codCliente,
-            "Razão Social / Cliente": r.cliente || r.razao,
-            "Nome Fantasia": r.fantasia || '',
-            "Vendedor": r.vendedor,
-            "Equipe": r.equipe,
-            "Cidade": r.cidade,
-            "Dia Visita": r.diaPrinc || '',
-            "Comprador": r.comprador || '',
-            "Telefone / WhatsApp": r.whatsappRaw || '',
-            "Diagnóstico de Inconsistência": r._motivoAuditoria || ''
-        }));
+        let wsData = [];
+
+        if (auditoriaSubTab === 'a-gerar') {
+            const lista = auditoriaCache.filtrados || [];
+            if (lista.length === 0) {
+                alert('Não há registros para exportar.');
+                return;
+            }
+            wsData = lista.map(r => ({
+                "Cód. Cliente": r.codCliente,
+                "Razão Social / Cliente": r.cliente || r.razao,
+                "Nome Fantasia": r.fantasia || '',
+                "Vendedor": r.vendedor,
+                "Equipe": r.equipe,
+                "Cidade": r.cidade,
+                "Dia Visita": r.diaPrinc || '',
+                "Comprador": r.comprador || '',
+                "Telefone / WhatsApp": r.whatsappRaw || '',
+                "Diagnóstico de Inconsistência": r._motivoAuditoria || ''
+            }));
+        } else {
+            const lista = rawTarefasCadastro.filter(t => {
+                if (auditoriaSubTab === 'pendentes') return t.status === 'PENDENTE' || t.status === 'REJEITADO';
+                if (auditoriaSubTab === 'em-auditoria') return t.status === 'EM_AUDITORIA';
+                if (auditoriaSubTab === 'homologadas') return t.status === 'HOMOLOGADO';
+                return true;
+            });
+            if (lista.length === 0) {
+                alert('Não há registros nesta aba para exportar.');
+                return;
+            }
+            wsData = lista.map(t => ({
+                "ID Tarefa": t.idTarefa,
+                "Data Criação": t.dataCriacao,
+                "Vendedor": `${t.nomeVendedor} (${t.codVendedor})`,
+                "Cód. Cliente": t.codCliente,
+                "Razão Social": t.razaoSocial,
+                "Cidade": t.cidade,
+                "Tipo Pendência": t.tipoPendencia,
+                "Valor Anterior": t.valorAnterior,
+                "Valor Corrigido": t.valorCorrigido,
+                "Justificativa": t.justificativa,
+                "Status": t.status,
+                "Data Conclusão": t.dataConclusao,
+                "Obs. Gestão": t.obsGestor
+            }));
+        }
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, "Auditoria");
-        XLSX.writeFile(wb, `Auditoria_Qualidade_Cadastral_${auditoriaCache.tipoAtivo}_${dataIso}.xlsx`);
+        XLSX.writeFile(wb, `Auditoria_${auditoriaSubTab}_${dataIso}.xlsx`);
     }
 
     function verAuditoriaNosDadosBrutos(tipo = null) {
@@ -7956,55 +8273,96 @@
     </div>
   </div>
 
-  <!-- Modal: Detalhamento de Auditoria Cadastral & Contatos -->
-  <div id="modalAuditoriaCadastral" onclick="fecharModalAuditoriaCadastral()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[230] items-center justify-center p-4 hidden" style="display: none;">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-scale-up" onclick="event.stopPropagation()">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-        <div class="flex items-center gap-3">
-          <div id="modal-auditoria-icone" class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold">
-            <i class="ph ph-shield-warning"></i>
+  <!-- Modal: Centro de Comando de Auditoria Cadastral & Gestão de Tarefas -->
+  <div id="modalAuditoriaCadastral" onclick="fecharModalAuditoriaCadastral()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[230] items-center justify-center p-3 sm:p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100 animate-scale-up" onclick="event.stopPropagation()">
+      <!-- Cabeçalho com Abas Operacionais -->
+      <div class="p-5 border-b border-slate-100 bg-slate-50/80 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div id="modal-auditoria-icone" class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold shadow-xs">
+              <i class="ph ph-shield-warning"></i>
+            </div>
+            <div>
+              <h3 id="modal-auditoria-titulo" class="text-base font-black text-slate-800">Centro de Auditoria & Saneamento Cadastral</h3>
+              <p id="modal-auditoria-subtitulo" class="text-xs text-slate-500">Geração de tarefas obrigatórias, notificação WhatsApp e homologação anti-sabotagem</p>
+            </div>
           </div>
-          <div>
-            <h3 id="modal-auditoria-titulo" class="text-base font-bold text-slate-800">Inconsistências Cadastrais</h3>
-            <p id="modal-auditoria-subtitulo" class="text-xs text-slate-400">Listagem de clientes com pendências ou dados a revisar</p>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="fecharModalAuditoriaCadastral()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition">
+              <i class="ph ph-x text-xl font-bold"></i>
+            </button>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span id="modal-auditoria-badge-total" class="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-full">0 ocorrências</span>
-          <button type="button" onclick="fecharModalAuditoriaCadastral()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition">
-            <i class="ph ph-x text-xl font-bold"></i>
+
+        <!-- 4 Sub-Tabs de Navegação -->
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-0 overflow-x-auto text-xs font-bold">
+          <button type="button" onclick="mudarSubTabAuditoria('a-gerar')" id="btn-tab-aud-a-gerar" class="px-3.5 py-2 border-b-2 border-amber-600 text-amber-800 flex items-center gap-1.5 transition">
+            <i class="ph ph-list-plus"></i>
+            <span>1. Inconsistências (A Gerar)</span>
+            <span id="badge-aud-tab-a-gerar" class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 ml-1">0</span>
+          </button>
+          <button type="button" onclick="mudarSubTabAuditoria('pendentes')" id="btn-tab-aud-pendentes" class="px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition">
+            <i class="ph ph-clock"></i>
+            <span>2. Pendentes com Vendedor</span>
+            <span id="badge-aud-tab-pendentes" class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-200 text-slate-700 ml-1">0</span>
+          </button>
+          <button type="button" onclick="mudarSubTabAuditoria('em-auditoria')" id="btn-tab-aud-em-auditoria" class="px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition">
+            <i class="ph ph-magnifying-glass"></i>
+            <span>3. Em Auditoria (Concluídas)</span>
+            <span id="badge-aud-tab-em-auditoria" class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-100 text-purple-900 ml-1">0</span>
+          </button>
+          <button type="button" onclick="mudarSubTabAuditoria('homologadas')" id="btn-tab-aud-homologadas" class="px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition">
+            <i class="ph ph-check-circle"></i>
+            <span>4. Homologadas (Histórico)</span>
+            <span id="badge-aud-tab-homologadas" class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900 ml-1">0</span>
           </button>
         </div>
       </div>
 
-      <div class="p-4 border-b border-slate-100 bg-white flex flex-wrap gap-3 items-center justify-between">
-        <div class="relative flex-1 min-w-[200px]">
-          <input type="text" id="modal-auditoria-busca" oninput="filtrarTabelaAuditoria()" placeholder="Filtrar por código, cliente, vendedor ou cidade..." class="w-full p-2 pl-8 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
-          <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-400"></i>
+      <!-- Barra de Filtros e Ferramentas -->
+      <div class="p-3 border-b border-slate-100 bg-white flex flex-wrap gap-2.5 items-center justify-between">
+        <div class="flex flex-wrap items-center gap-2 flex-1">
+          <!-- Filtro Vendedor -->
+          <select id="modal-auditoria-sel-vendedor" onchange="aoMudarFiltroAuditoria()" class="text-xs font-semibold p-2 border border-slate-200 rounded-lg text-slate-700 bg-slate-50/50 outline-none focus:ring-1 focus:ring-blue-500 min-w-[150px]">
+            <option value="">Todos os Vendedores</option>
+          </select>
+          <!-- Filtro Cidade -->
+          <select id="modal-auditoria-sel-cidade" onchange="aoMudarFiltroAuditoria()" class="text-xs font-semibold p-2 border border-slate-200 rounded-lg text-slate-700 bg-slate-50/50 outline-none focus:ring-1 focus:ring-blue-500 min-w-[130px]">
+            <option value="">Todas as Cidades</option>
+          </select>
+          <!-- Filtro Tipo de Inconsistência -->
+          <select id="modal-auditoria-sel-tipo" onchange="aoMudarFiltroAuditoria()" class="text-xs font-semibold p-2 border border-slate-200 rounded-lg text-slate-700 bg-slate-50/50 outline-none focus:ring-1 focus:ring-blue-500 min-w-[150px]">
+            <option value="TODOS">Todas as Inconsistências</option>
+            <option value="SEM_TELEFONE">Sem Telefone</option>
+            <option value="TEL_INVALIDO">Telefones Suspeitos</option>
+            <option value="SEM_COMPRADOR">Sem Comprador</option>
+            <option value="SEM_ROTA">Sem Roteirização / Dia</option>
+          </select>
+          <!-- Campo Busca Texto -->
+          <div class="relative flex-1 min-w-[180px]">
+            <input type="text" id="modal-auditoria-busca" oninput="aoMudarFiltroAuditoria()" placeholder="Buscar cliente, código ou pendência..." class="w-full p-2 pl-7 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+            <i class="ph ph-magnifying-glass absolute left-2 top-2.5 text-slate-400 text-xs"></i>
+          </div>
         </div>
+
         <div class="flex items-center gap-2">
-          <button type="button" onclick="verAuditoriaNosDadosBrutos()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-2xs">
-            <i class="ph ph-table text-sm"></i> Ver em Dados Brutos
+          <!-- Botão Gerar Tarefa & Notificar WhatsApp (visível na aba a-gerar) -->
+          <button type="button" id="btn-acao-gerar-tarefa" onclick="abrirModalDisparoWhatsAppSaneamento()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black flex items-center gap-1.5 transition shadow-xs">
+            <i class="ph ph-whatsapp-logo text-base"></i>
+            <span>Gerar Tarefa & Notificar WhatsApp</span>
           </button>
-          <button type="button" onclick="exportarExcelAuditoria()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-2xs">
-            <i class="ph ph-file-xls text-sm"></i> Exportar Excel
+          <button type="button" onclick="exportarExcelAuditoria()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-2xs">
+            <i class="ph ph-file-xls text-sm text-emerald-600"></i> Exportar
           </button>
         </div>
       </div>
 
+      <!-- Tabela Principal Scrollável -->
       <div class="flex-1 overflow-auto p-4 bg-slate-50">
         <table class="w-full text-left text-xs bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
-          <thead class="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0 border-b border-slate-200">
-            <tr>
-              <th class="p-2.5">Cód</th>
-              <th class="p-2.5">Cliente / Fantasia</th>
-              <th class="p-2.5">Vendedor</th>
-              <th class="p-2.5">Cidade</th>
-              <th class="p-2.5">Comprador</th>
-              <th class="p-2.5">Telefone / Whats</th>
-              <th class="p-2.5">Diagnóstico / Motivo</th>
-              <th class="p-2.5 text-center">Ações</th>
-            </tr>
+          <thead id="modal-auditoria-thead" class="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0 border-b border-slate-200">
+            <!-- Cabeçalhos dinâmicos baseados na sub-tab -->
           </thead>
           <tbody id="modal-auditoria-tbody" class="divide-y divide-slate-100 text-slate-700">
             <!-- Linhas geradas dinamicamente -->
@@ -8012,14 +8370,57 @@
         </table>
       </div>
 
-      <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-        <span id="modal-auditoria-status-pag" class="text-xs text-slate-400">Exibindo registros encontrados</span>
+      <!-- Rodapé -->
+      <div class="p-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+        <span id="modal-auditoria-status-pag" class="text-xs text-slate-500 font-medium">Exibindo registros</span>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="verAuditoriaNosDadosBrutos()" class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition border border-blue-200 flex items-center gap-1.5">
-            <i class="ph ph-table"></i> Abrir na Tabela Geral
-          </button>
           <button type="button" onclick="fecharModalAuditoriaCadastral()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">Fechar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação e Disparo WhatsApp da Tarefa de Saneamento -->
+  <div id="modalDisparoWhatsAppSaneamento" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[240] items-center justify-center p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col animate-scale-up" onclick="event.stopPropagation()">
+      <div class="p-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl font-bold">
+            <i class="ph ph-whatsapp-logo"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-black">Notificar Vendedor via WhatsApp</h4>
+            <span class="text-[10px] text-emerald-100">Disparo oficial de tarefa de auditoria</span>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalDisparoWhatsAppSaneamento()" class="text-white/80 hover:text-white p-1">
+          <i class="ph ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Vendedor Selecionado:</label>
+          <div id="disp-whats-vendedor-nome" class="font-black text-sm text-slate-800 bg-slate-50 p-2.5 rounded-lg border border-slate-200">--</div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Telefone WhatsApp do Vendedor:</label>
+          <input type="tel" id="disp-whats-telefone-vendedor" placeholder="Ex: (19) 98712-1005" class="w-full text-xs font-mono font-bold p-2.5 border border-slate-200 rounded-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Mensagem que será enviada:</label>
+          <textarea id="disp-whats-preview-mensagem" rows="7" readonly class="w-full text-[11px] font-mono p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 leading-relaxed"></textarea>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button type="button" onclick="fecharModalDisparoWhatsAppSaneamento()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">Cancelar</button>
+        <button type="button" onclick="confirmarGerarTarefaEDispararWhatsApp()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5">
+          <i class="ph ph-whatsapp-logo text-base"></i>
+          <span>Gerar Tarefa no Banco & Abrir WhatsApp</span>
+        </button>
       </div>
     </div>
   </div>
