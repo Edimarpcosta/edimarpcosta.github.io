@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -16,6 +17,17 @@
   
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
+
+  <script>
+    (function() {
+      try {
+        var isAuth = sessionStorage.getItem('ameripan_gestor_auth') === 'true' || localStorage.getItem('ameripan_gestor_auth') === 'true';
+        if (isAuth) {
+          document.documentElement.classList.add('gestor-authenticated');
+        }
+      } catch(e) {}
+    })();
+  </script>
 
   <style>
     /* Base */
@@ -217,6 +229,23 @@
     /* Virtualização (beta) */
     .virt-row { height: 42px; }
 
+    /* Transição instantânea sem piscar para gestor autenticado */
+    html.gestor-authenticated #modalLoginGestor {
+      display: none !important;
+    }
+    html.gestor-authenticated #loading-overlay {
+      display: flex !important;
+      opacity: 1 !important;
+      pointer-events: all !important;
+    }
+
+    /* Overlay de Loading Global On-Top (Anti-Duplo Clique) */
+    #loading-overlay.loading-active {
+      display: flex !important;
+      opacity: 1 !important;
+      pointer-events: all !important;
+    }
+
   </style>
 </head>
 <body un-cloak>
@@ -224,10 +253,13 @@
   <!-- Container da Aplicação (Visível apenas após autenticação do Gerente) -->
   <div id="app-container" class="flex h-full w-full overflow-hidden" style="display: none;">
   <aside id="app-sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 z-20 shadow-sm">
-    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-        <div>
-            <h1 class="text-lg font-bold text-blue-700 flex items-center gap-2"><i class="ph ph-truck-trailer"></i> Gestão Rotas</h1>
-            <p class="text-[11px] text-slate-400 mt-0.5">Ameripan Distribuidora</p>
+    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <img src="https://cdn.awsli.com.br/400x300/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan" class="h-9 w-auto object-contain">
+            <div>
+                <h1 class="text-sm font-extrabold text-blue-900 flex items-center gap-1.5 leading-tight"><i class="ph ph-shield-check text-blue-600"></i> Gestão Pro</h1>
+                <p class="text-[10px] text-slate-400 font-medium">Ameripan Distribuidora</p>
+            </div>
         </div>
         <button onclick="toggleSidebar()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition" title="Recolher Menu">
             <i class="ph ph-sidebar-simple text-lg"></i>
@@ -249,9 +281,10 @@
             <li><a href="javascript:void(0)" onclick="switchView('reports')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-file-text text-lg"></i> Dados Brutos</a></li>
         </ul>
     </nav>
-    <div class="p-4 border-t border-slate-100 bg-slate-50">
-        <button onclick="carregarDados()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded shadow text-sm font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-arrows-clockwise"></i> Atualizar Dados</button>
-        <button onclick="efetuarLogoutGestor()" class="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-sign-out"></i> Sair / Bloquear</button>
+    <div class="p-4 border-t border-slate-100 bg-slate-50 space-y-2">
+        <button onclick="carregarDados()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg shadow-sm text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-arrows-clockwise"></i> Atualizar Dados</button>
+        <button onclick="abrirModalAlterarSenhaGestor()" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition shadow-2xs"><i class="ph ph-key text-blue-600"></i> Alterar Senha</button>
+        <button onclick="efetuarLogoutGestor()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-sign-out"></i> Sair / Bloquear</button>
     </div>
   </aside>
 
@@ -300,9 +333,84 @@
                 <div class="bg-white p-4 rounded shadow-sm border-l-4 border-amber-500"><p class="text-xs text-slate-400 font-bold uppercase">Dia de Pico</p><h3 class="text-lg font-bold text-slate-700 truncate" id="kpi-dia-pico">-</h3></div>
                 <div class="bg-white p-4 rounded shadow-sm border-l-4 border-purple-500"><p class="text-xs text-slate-400 font-bold uppercase">Equipes Ativas</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-equipes-ativas">0</h3></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Distribuição Semanal (Escala: 0-20+)</h3><canvas id="chartDias"></canvas></div>
                 <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Top 5 Cidades</h3><canvas id="chartCidades"></canvas></div>
+            </div>
+
+            <!-- Seção de Auditoria & Qualidade Cadastral -->
+            <div class="mt-8 pt-6 border-t border-slate-200">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="ph ph-shield-warning text-amber-500 text-xl"></i> Auditoria de Qualidade Cadastral & Contatos
+                        </h3>
+                        <p class="text-xs text-slate-500">Detecção heurística contínua de inconsistências na carteira e dados de contato.</p>
+                    </div>
+                    <span class="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs">Auditoria Automática</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Card 1: Sem Roteirização -->
+                    <div onclick="abrirModalAuditoriaCadastral('SEM_ROTA')" class="bg-white p-4 rounded-xl border border-slate-200 hover:border-amber-400 hover:shadow-md cursor-pointer transition group">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[11px] text-slate-500 font-bold uppercase">Sem Roteirização / Dia</p>
+                            <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-lg group-hover:scale-110 transition"><i class="ph ph-map-pin-line"></i></span>
+                        </div>
+                        <h4 class="text-2xl font-black text-slate-800 mt-2" id="kpi-auditoria-sem-rota">0</h4>
+                        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 gap-2">
+                            <span class="text-[11px] text-amber-600 font-semibold flex items-center gap-1 hover:underline truncate"><i class="ph ph-arrow-right"></i> Ver clientes sem dia fixado</span>
+                            <button type="button" onclick="event.stopPropagation(); verAuditoriaNosDadosBrutos('SEM_ROTA')" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 transition flex items-center gap-1 flex-shrink-0 bg-slate-50 hover:bg-blue-50 px-2 py-0.5 rounded border border-slate-200/80" title="Visualizar filtrado em Dados Brutos">
+                                <i class="ph ph-table"></i> Dados Brutos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Sem Comprador -->
+                    <div onclick="abrirModalAuditoriaCadastral('SEM_COMPRADOR')" class="bg-white p-4 rounded-xl border border-slate-200 hover:border-orange-400 hover:shadow-md cursor-pointer transition group">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[11px] text-slate-500 font-bold uppercase">Sem Comprador</p>
+                            <span class="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center text-lg group-hover:scale-110 transition"><i class="ph ph-user-circle-dashed"></i></span>
+                        </div>
+                        <h4 class="text-2xl font-black text-slate-800 mt-2" id="kpi-auditoria-sem-comprador">0</h4>
+                        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 gap-2">
+                            <span class="text-[11px] text-orange-600 font-semibold flex items-center gap-1 hover:underline truncate"><i class="ph ph-arrow-right"></i> Ver cadastros sem comprador</span>
+                            <button type="button" onclick="event.stopPropagation(); verAuditoriaNosDadosBrutos('SEM_COMPRADOR')" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 transition flex items-center gap-1 flex-shrink-0 bg-slate-50 hover:bg-blue-50 px-2 py-0.5 rounded border border-slate-200/80" title="Visualizar filtrado em Dados Brutos">
+                                <i class="ph ph-table"></i> Dados Brutos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Sem Telefone -->
+                    <div onclick="abrirModalAuditoriaCadastral('SEM_TELEFONE')" class="bg-white p-4 rounded-xl border border-slate-200 hover:border-red-400 hover:shadow-md cursor-pointer transition group">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[11px] text-slate-500 font-bold uppercase">Sem Telefone</p>
+                            <span class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-lg group-hover:scale-110 transition"><i class="ph ph-phone-slash"></i></span>
+                        </div>
+                        <h4 class="text-2xl font-black text-slate-800 mt-2" id="kpi-auditoria-sem-telefone">0</h4>
+                        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 gap-2">
+                            <span class="text-[11px] text-red-600 font-semibold flex items-center gap-1 hover:underline truncate"><i class="ph ph-arrow-right"></i> Ver clientes sem contato</span>
+                            <button type="button" onclick="event.stopPropagation(); verAuditoriaNosDadosBrutos('SEM_TELEFONE')" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 transition flex items-center gap-1 flex-shrink-0 bg-slate-50 hover:bg-blue-50 px-2 py-0.5 rounded border border-slate-200/80" title="Visualizar filtrado em Dados Brutos">
+                                <i class="ph ph-table"></i> Dados Brutos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Telefones Inválidos / Suspeitos -->
+                    <div onclick="abrirModalAuditoriaCadastral('TEL_INVALIDO')" class="bg-white p-4 rounded-xl border border-slate-200 hover:border-rose-500 hover:shadow-md cursor-pointer transition group">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[11px] text-slate-500 font-bold uppercase">Telefones Suspeitos</p>
+                            <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-lg group-hover:scale-110 transition"><i class="ph ph-warning-circle"></i></span>
+                        </div>
+                        <h4 class="text-2xl font-black text-slate-800 mt-2" id="kpi-auditoria-tel-invalido">0</h4>
+                        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 gap-2">
+                            <span class="text-[11px] text-rose-600 font-semibold flex items-center gap-1 hover:underline truncate"><i class="ph ph-arrow-right"></i> Ver números com falha heurística</span>
+                            <button type="button" onclick="event.stopPropagation(); verAuditoriaNosDadosBrutos('TEL_INVALIDO')" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 transition flex items-center gap-1 flex-shrink-0 bg-slate-50 hover:bg-blue-50 px-2 py-0.5 rounded border border-slate-200/80" title="Visualizar filtrado em Dados Brutos">
+                                <i class="ph ph-table"></i> Dados Brutos
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -314,6 +422,7 @@
                     <p class="text-sm text-slate-500">Planeje o dia/semana, facilite o contato com o cliente e gere PDFs “prontos pra rua” (comprador, telefone e Cód. clicável no WhatsApp).</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <button onclick="iniciarKitCoberturaFerias()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-3.5 py-2 rounded-lg shadow-md hover:shadow-lg text-xs font-extrabold flex items-center gap-2 transition active:scale-95"><i class="ph ph-suitcase text-lg"></i> Kit Cobertura de Férias (1 Clique)</button>
                     <button onclick="exportVcfRota()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-address-book text-lg"></i> Gerar VCF da Rota</button>
                     <button onclick="exportPDFRotaDia()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> PDF Rota do Dia</button>
                     <button onclick="exportPDFContatosDia()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-address-book text-lg"></i> PDF Contatos</button>
@@ -1254,9 +1363,20 @@
         </div>
 
         <div id="view-calendar" class="view-section p-6">
-            <div class="flex justify-between items-end mb-4">
-                <div><h2 class="text-lg font-bold text-slate-700">Calendário Mensal de Visitas</h2><p class="text-xs text-slate-500">Planejamento Semanal (1 a 5) x Dia da Semana.</p></div>
-                <button onclick="generateCalendarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF Mensal</button>
+                        <div class="flex flex-wrap justify-between items-end gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-700">Calendário Mensal de Visitas</h2>
+                    <p class="text-xs text-slate-500">Planejamento Semanal (1 a 5) x Dia da Semana com densidade visual da carga de visitas.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center gap-2 text-[11px] font-semibold bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs">
+                        <span class="inline-flex items-center gap-1 text-blue-700"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Semanal</span>
+                        <span class="inline-flex items-center gap-1 text-amber-700"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> S1/S3</span>
+                        <span class="inline-flex items-center gap-1 text-purple-700"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> S2/S4</span>
+                        <span class="inline-flex items-center gap-1 text-slate-700"><span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span> Mensal</span>
+                    </div>
+                    <button onclick="generateCalendarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF Mensal</button>
+                </div>
             </div>
             <div class="bg-white rounded shadow overflow-hidden border border-slate-200">
                 <div class="calendar-grid" style="border-bottom: 0;"><div class="cal-header bg-slate-100">SEM</div><div class="cal-header">SEGUNDA</div><div class="cal-header">TERÇA</div><div class="cal-header">QUARTA</div><div class="cal-header">QUINTA</div><div class="cal-header">SEXTA</div><div class="cal-header">SÁBADO</div></div>
@@ -1320,6 +1440,29 @@
                     </label>
                     <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><i class="ph ph-file-xls text-lg"></i> Baixar Excel</button>
                     <button onclick="exportPDFLista()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><i class="ph ph-file-pdf text-lg"></i> Baixar PDF (Lista Completa)</button>
+                </div>
+            </div>
+
+            <!-- Banner Informativo de Filtro por Auditoria Cadastral -->
+            <div id="banner-filtro-auditoria-reports" class="hidden mb-4 p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl flex items-center justify-between shadow-xs">
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                        <i class="ph ph-funnel"></i>
+                    </span>
+                    <div>
+                        <span class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                            Filtrando por Auditoria: <strong id="lbl-filtro-auditoria-nome" class="text-amber-800 uppercase tracking-tight"></strong>
+                        </span>
+                        <p class="text-[11px] text-amber-800/80">Exibindo apenas os <strong id="lbl-filtro-auditoria-qtd" class="font-bold">0</strong> clientes detectados com esta pendência na carteira.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="abrirModalAuditoriaCadastral(filtroAuditoriaReports ? filtroAuditoriaReports.tipo : 'SEM_ROTA')" class="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs">
+                        <i class="ph ph-shield-warning"></i> Ver Diagnóstico Completo
+                    </button>
+                    <button type="button" onclick="limparFiltroAuditoriaReports()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs">
+                        <i class="ph ph-x"></i> Limpar Filtro
+                    </button>
                 </div>
             </div>
 
@@ -1391,15 +1534,18 @@
   </main>
   </div><!-- Fim app-container -->
 
-    <!-- Overlay Global de Processamento & Bloqueio On-Top -->
-  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-4 transition-opacity duration-150" style="display: none; opacity: 0; pointer-events: none;">
+    <!-- Overlay Global de Processamento & Bloqueio On-Top (Anti-Duplo Clique) -->
+  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-4 transition-opacity duration-150" style="display: none; opacity: 0; pointer-events: none; cursor: wait;">
     <div class="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-slate-200/80 p-6 max-w-sm w-full mx-auto flex flex-col items-center text-center animate-fadeIn relative overflow-hidden">
       <!-- Barra decorativa superior com gradiente Ameripan -->
       <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 animate-pulse"></div>
 
+      <!-- Logotipo Oficial Ameripan -->
+      <img src="https://cdn.awsli.com.br/400x300/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan" class="h-10 object-contain mb-3 drop-shadow">
+
       <!-- Ícone Animado com Efeito Pulso -->
       <div class="relative mb-3.5 mt-1">
-        <div class="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100/80 flex items-center justify-center text-blue-600 shadow-inner">
+        <div class="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100/80 flex items-center justify-center text-blue-600 shadow-inner">
           <i id="loading-icon" class="ph ph-circle-notch text-3xl animate-spin"></i>
         </div>
         <span class="absolute -top-1 -right-1 flex h-3.5 w-3.5">
@@ -1411,6 +1557,7 @@
       <!-- Textos de Status -->
       <h3 id="loading-title" class="text-base font-bold text-slate-800 tracking-tight mb-1">Processando Dados...</h3>
       <p id="loading-sub" class="text-xs text-slate-500 font-medium leading-relaxed max-w-xs">Organizando informações na tela, por favor aguarde um instante...</p>
+      <p id="txtLoadingBloqueanteMsg" class="hidden text-xs font-bold text-slate-700 leading-snug">Sincronizando com a nuvem Ameripan...</p>
 
       <!-- Barra de progresso animada indeterminada -->
       <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-4">
@@ -1418,8 +1565,6 @@
       </div>
       
       <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-3">Ameripan Rotas • Gestão</span>
-    </div>
-  </div>
     </div>
   </div>
 
@@ -1432,7 +1577,8 @@
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxqKHkBKvl9h9rWestV2NBjTs1ftE_Is-BfEQVAvMds4IfCjF5Q4x6Mt-vdc0nQT2p7ug/exec';
     const API_KEY = 'AIzaSyChiZPUY-G3oyZN2NGY_vlgRXUzry9Pkeo';
 
-    const URL_ROTAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ROTAS!A2:O?key=${API_KEY}`;
+    const ABA_ROTAS_ATIVA = 'ROTAS';
+    const URL_ROTAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_ROTAS_ATIVA}!A2:O?key=${API_KEY}`;
     const URL_VENDEDORES = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/VENDEDORES!A2:C?key=${API_KEY}`;
     const URL_ENTREGAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CIDADES-ENTREGAS!A2:B?key=${API_KEY}`;
 
@@ -1515,21 +1661,24 @@
         if (mDesl) mDesl.style.display = 'none';
         const mCli = document.getElementById('client-modal');
         if (mCli) mCli.style.display = 'none';
-        const mLoad = document.getElementById('loading-overlay');
-        if (mLoad) mLoad.style.display = 'none';
+        const mAud = document.getElementById('modalAuditoriaCadastral');
+        if (mAud) { mAud.style.display = 'none'; mAud.classList.add('hidden'); }
 
         // Checagem de autenticação do Gestor
-        const gestorAuth = sessionStorage.getItem('ameripan_gestor_auth');
+        const gestorAuth = sessionStorage.getItem('ameripan_gestor_auth') || localStorage.getItem('ameripan_gestor_auth');
         const appContainer = document.getElementById('app-container');
         const modalLogin = document.getElementById('modalLoginGestor');
 
         if (gestorAuth === 'true') {
-            if (modalLogin) modalLogin.style.display = 'none';
-            if (appContainer) appContainer.style.display = 'flex';
+            if (modalLogin) { modalLogin.style.display = 'none'; modalLogin.classList.add('hidden'); }
+            if (appContainer) { appContainer.style.display = 'flex'; appContainer.classList.remove('hidden'); }
+            mostrarLoadingGlobal('Sincronizando com a nuvem Ameripan...', 'Carregando sua carteira e rotas da Ameripan...', 'ph-circle-notch');
             carregarDados();
         } else {
-            if (appContainer) appContainer.style.display = 'none';
-            if (modalLogin) modalLogin.style.display = 'flex';
+            document.documentElement.classList.remove('gestor-authenticated');
+            if (appContainer) { appContainer.style.display = 'none'; appContainer.classList.add('hidden'); }
+            if (modalLogin) { modalLogin.style.display = 'flex'; modalLogin.classList.remove('hidden'); }
+            esconderLoadingGlobal();
             setTimeout(() => {
                 const inp = document.getElementById('senhaGestorInput');
                 if (inp) inp.focus();
@@ -1541,7 +1690,7 @@
     // 2) CARREGAMENTO
     // ============================================================
     async function carregarDados() {
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Sincronizando com a nuvem Ameripan...', 'Carregando sua carteira e rotas da Ameripan...', 'ph-circle-notch');
         try {
             // Tenta obter dados completos atomicamente via GAS
             let dadosGas = null;
@@ -1549,7 +1698,7 @@
                 const rGas = await fetch(GAS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ acao: 'OBTER_DADOS_GESTAO' })
+                    body: JSON.stringify({ acao: 'OBTER_DADOS_GESTAO', abaRotas: 'ROTAS', ambiente: 'PROD' })
                 });
                 dadosGas = await rGas.json();
             } catch (eGas) {
@@ -1695,12 +1844,12 @@
             popularFiltros();
             inicializarSidebarState();
             syncRotaVendedorOptions();
-            aplicarFiltros();
+            aplicarFiltros(true);
         } catch (e) {
             console.error(e);
             alert("Erro ao carregar dados.");
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -1746,22 +1895,53 @@
     }
 
     function parseWhatsapp(raw) {
-        const digits = (raw || '').replace(/\D/g, '');
-        if (!digits) return null;
-
-        // Se vier com país (55...), mantém
-        let digits55 = digits;
-        if (digits.length === 10 || digits.length === 11) digits55 = '55' + digits;
-        // Se vier com 13/12 e não começar com 55, assume BR
-        if ((digits.length === 12 || digits.length === 13) && !digits.startsWith('55')) digits55 = '55' + digits;
-
-        // Regra simples: precisa ter 12 ou 13 dígitos (55 + DDD + número)
-        if (!(digits55.length === 12 || digits55.length === 13) || !digits55.startsWith('55')) return null;
-
+        const digits55 = sanitizarTelefoneBR(raw);
+        if (!digits55 || (digits55.length !== 12 && digits55.length !== 13)) return null;
+        const digits = digits55.substring(2);
         return { digits, digits55, url: `https://wa.me/${digits55}` };
     }
 
-    
+    /**
+     * Sanitiza telefone brasileiro para padrão WhatsApp internacional (DDI 55 + DDD + Número)
+     * Disponível no escopo local e window.sanitizarTelefoneBR
+     */
+    function sanitizarTelefoneBR(raw) {
+        if (raw === null || raw === undefined) return '';
+        let dig = String(raw).replace(/\D/g, '');
+        if (!dig) return '';
+
+        // 1. Remove 550 inicial se digitado DDI 55 + 0 + DDD (ex: 55019999999999 -> 5519999999999 ou 5501938441234 -> 551938441234)
+        if (dig.startsWith('550') && (dig.length === 13 || dig.length === 14)) {
+            dig = '55' + dig.substring(3);
+        }
+
+        // 2. Se já possui prefixo internacional 55 correto com DDD válido (12 dígitos para fixo ou 13 para celular)
+        if (dig.startsWith('55') && (dig.length === 12 || dig.length === 13)) {
+            return dig;
+        }
+
+        // 3. Remove 0 inicial de discagem interurbana (ex: 019999999999 -> 19999999999 ou 01938441234 -> 1938441234)
+        if (dig.startsWith('0') && (dig.length === 11 || dig.length === 12)) {
+            dig = dig.substring(1);
+        }
+
+        // 4. Se veio com DDD + 8 ou 9 dígitos (10 ou 11 no total)
+        if (dig.length === 10 || dig.length === 11) {
+            return '55' + dig;
+        }
+
+        // 5. Se veio com mais de 11 dígitos
+        if (dig.length > 11) {
+            return '55' + dig.slice(-11);
+        }
+
+        // Menos de 10 dígitos não possui DDD obrigatório para padrão WhatsApp
+        return '';
+    }
+    if (typeof window !== 'undefined') {
+        window.sanitizarTelefoneBR = sanitizarTelefoneBR;
+    }
+
     function escapeJs(s) {
         return (s || '').toString().replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
     }
@@ -1853,36 +2033,58 @@
         const titleEl = document.getElementById('loading-title');
         const subEl = document.getElementById('loading-sub');
         const iconEl = document.getElementById('loading-icon');
+        const msgEl = document.getElementById('txtLoadingBloqueanteMsg');
 
-        if (titleEl) titleEl.textContent = titulo || 'Processando Dados...';
-        if (subEl) subEl.textContent = subtitulo || 'Por favor aguarde um instante...';
+        const tit = titulo || 'Sincronizando com a nuvem Ameripan...';
+        const sub = subtitulo || 'Carregando sua carteira e rotas da Ameripan...';
+
+        if (titleEl) titleEl.textContent = tit;
+        if (subEl) subEl.textContent = sub;
+        if (msgEl) msgEl.textContent = tit;
         if (iconEl) {
             iconEl.className = 'ph ' + (icone || 'ph-circle-notch') + ' text-3xl animate-spin text-blue-600';
         }
 
+        overlay.classList.add('loading-active');
         overlay.style.display = 'flex';
-        overlay.style.pointerEvents = 'auto';
-        requestAnimationFrame(() => {
-            overlay.style.opacity = '1';
-        });
+        overlay.style.pointerEvents = 'all';
+        overlay.style.cursor = 'wait';
+        overlay.style.opacity = '1';
     }
 
     function esconderLoadingGlobal() {
         const overlay = document.getElementById('loading-overlay');
         if (!overlay) return;
+        document.documentElement.classList.remove('gestor-authenticated');
+        overlay.classList.remove('loading-active');
         overlay.style.opacity = '0';
         overlay.style.pointerEvents = 'none';
+        overlay.style.cursor = 'default';
         setTimeout(() => {
-            if (overlay.style.opacity === '0') {
+            if (!overlay.classList.contains('loading-active') && !document.documentElement.classList.contains('gestor-authenticated')) {
                 overlay.style.display = 'none';
             }
         }, 150);
     }
 
+    // Compatibilidade com padrões e chamadas de index_vendas.html
+    function exibirLoading(msg) {
+        mostrarLoadingGlobal(msg || 'Sincronizando com a nuvem Ameripan...', 'Carregando sua carteira e rotas da Ameripan...', 'ph-circle-notch');
+    }
+    function ocultarLoading() {
+        esconderLoadingGlobal();
+    }
+    if (typeof window !== 'undefined') {
+        window.exibirLoading = exibirLoading;
+        window.ocultarLoading = ocultarLoading;
+    }
+
     function switchView(v, el) {
         // 1. Atualiza seleção visual imediata do menu lateral
         document.querySelectorAll('.menu-item').forEach(mi => mi.classList.remove('active'));
-        const target = el || (window.event && window.event.currentTarget) || document.querySelector(`.menu-item[onclick*="'${v}'"]`);
+        const target = (el && el.classList && el.classList.contains('menu-item'))
+            ? el
+            : document.querySelector(`.menu-item[onclick*="'${v}'"]`);
         if (target) target.classList.add('active');
 
         const cfg = MENU_LOADING_CONFIG[v] || {
@@ -1938,13 +2140,15 @@
         lista.forEach(i => s.appendChild(new Option(i, i)));
     }
 
-    function aplicarFiltros() {
-        mostrarLoadingGlobal('Atualizando Filtros...', 'Aplicando filtros de equipe, vendedor e cidade...', 'ph-funnel');
-        setTimeout(() => {
+    function aplicarFiltros(silent = false) {
+        if (!silent) {
+            mostrarLoadingGlobal('Atualizando Filtros...', 'Aplicando filtros de equipe, vendedor e cidade...', 'ph-funnel');
+        }
+        const execFiltros = () => {
             try {
-                const fEq = document.getElementById('filtro-equipe').value;
-                const fVend = document.getElementById('filtro-vendedor').value;
-                const fCid = document.getElementById('filtro-cidade').value;
+                const fEq = document.getElementById('filtro-equipe')?.value || '';
+                const fVend = document.getElementById('filtro-vendedor')?.value || '';
+                const fCid = document.getElementById('filtro-cidade')?.value || '';
 
                 filteredData = rawRotas.filter(r =>
                     (!fEq || r.equipe === fEq) &&
@@ -1955,7 +2159,8 @@
                 reportPaging.page = 1;
                 logPaging.page = 1;
 
-                document.getElementById('kpi-total-top').innerText = filteredData.length;
+                const elTot = document.getElementById('kpi-total-top');
+                if (elTot) elTot.innerText = filteredData.length;
                 buildLogRows();
 
                 const active = document.querySelector('.view-section.active')?.id?.replace('view-', '') || 'dashboard';
@@ -1963,13 +2168,21 @@
             } catch (err) {
                 console.error('Erro em aplicarFiltros', err);
             } finally {
-                requestAnimationFrame(() => {
-                    setTimeout(() => {
-                        esconderLoadingGlobal();
-                    }, 50);
-                });
+                if (!silent) {
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            esconderLoadingGlobal();
+                        }, 50);
+                    });
+                }
             }
-        }, 25);
+        };
+
+        if (silent) {
+            execFiltros();
+        } else {
+            setTimeout(execFiltros, 25);
+        }
     }
 
     function renderView(v) {
@@ -2002,6 +2215,8 @@
         renderChart('chartDias', 'bar', Object.keys(diasCount), Object.values(diasCount), '#3b82f6', {
             scales: { y: { beginAtZero: true, suggestedMax: 20, ticks: { precision: 0 } } }
         });
+        auditarQualidadeCadastral();
+
 
         const cidCount = {};
         filteredData.forEach(r => cidCount[r.cidade] = (cidCount[r.cidade] || 0) + 1);
@@ -2506,22 +2721,57 @@
 
     function renderCalendar() {
         const c = document.getElementById('calendar-body');
+        if (!c) return;
         c.innerHTML = '';
         for (let sem = 1; sem <= 5; sem++) {
-            c.innerHTML += `<div class="cal-header bg-slate-100 flex items-center justify-center border-b border-slate-200">SEMANA ${sem}</div>`;
+            c.innerHTML += `<div class="cal-header bg-slate-100 flex items-center justify-center border-b border-slate-200 font-extrabold text-slate-700">SEMANA ${sem}</div>`;
             DIAS_LISTA.forEach(dia => {
                 const clientes = filteredData.filter(r =>
-                    (r.diaPrinc === dia || r.diasSec.includes(dia)) &&
+                    (r.diaPrinc === dia || (r.diasSec && r.diasSec.includes(dia))) &&
                     (r.freq.includes('TODAS') || r.freq.includes(`S${sem}`))
                 );
 
-                let html = `<div class="cal-cell border border-slate-100">`;
+                // Classificação por frequência para badges de densidade visual
+                let semCount = 0;
+                let s1s3Count = 0;
+                let s2s4Count = 0;
+                let mensCount = 0;
+
+                clientes.forEach(r => {
+                    const fStr = (r.freq || []).join(' ');
+                    if (fStr.includes('TODAS') || fStr.includes('SEMANAL')) {
+                        semCount++;
+                    } else if (fStr.includes('S1') || fStr.includes('S3')) {
+                        s1s3Count++;
+                    } else if (fStr.includes('S2') || fStr.includes('S4')) {
+                        s2s4Count++;
+                    } else {
+                        mensCount++;
+                    }
+                });
+
+                let html = `<div class="cal-cell border border-slate-100 flex flex-col p-2 space-y-1.5 min-h-[90px] bg-white">`;
                 if (clientes.length > 0) {
+                    html += `
+                        <div class="flex items-center justify-between pb-1 border-b border-slate-100">
+                            <span class="text-[10px] font-bold text-slate-600 uppercase">${dia}</span>
+                            <span class="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">${clientes.length} vis.</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1 text-[9px] font-bold">
+                            ${semCount > 0 ? `<span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200" title="Semanal">${semCount} Sem</span>` : ''}
+                            ${s1s3Count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200" title="S1/S3">${s1s3Count} S1/3</span>` : ''}
+                            ${s2s4Count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200" title="S2/S4">${s2s4Count} S2/4</span>` : ''}
+                            ${mensCount > 0 ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200" title="Mensal/Outros">${mensCount} Mês</span>` : ''}
+                        </div>
+                    `;
+
                     const cids = {};
                     clientes.forEach(x => cids[x.cidade] = (cids[x.cidade] || 0) + 1);
                     Object.entries(cids).sort().forEach(([n, q]) => {
-                        html += `<div class="cal-city-item"><span class="cal-city-name">${escapeHtml(n)} (${q})</span><span class="cal-city-delivery">[ENT: ${escapeHtml(getEntregaStr(normalizarTexto(n)))}]</span></div>`;
+                        html += `<div class="cal-city-item text-[10px] truncate"><span class="cal-city-name font-semibold text-slate-800">${escapeHtml(n)} (${q})</span><span class="cal-city-delivery text-[9px] text-emerald-600 font-bold ml-1">[ENT: ${escapeHtml(getEntregaStr(normalizarTexto(n)))}]</span></div>`;
                     });
+                } else {
+                    html += `<div class="text-[10px] text-slate-300 italic text-center py-4">Sem visitas</div>`;
                 }
                 html += `</div>`;
                 c.appendChild(new DOMParser().parseFromString(html, 'text/html').body.firstChild);
@@ -2596,28 +2846,48 @@
 
     function renderReports() {
         setReportModeUI();
+        atualizarBannerFiltroAuditoriaReports();
         if (reportVirtual.enabled) { renderReportsVirtual(); return; }
         const tb = document.getElementById('table-report-body');
 
-        const total = filteredData.length;
+        const dadosFonte = (filtroAuditoriaReports && filtroAuditoriaReports.codigos)
+            ? filteredData.filter(r => filtroAuditoriaReports.codigos.has(String(r.codCliente)))
+            : filteredData;
+
+        const total = dadosFonte.length;
         const pageSize = reportPaging.pageSize;
         const pages = Math.max(1, Math.ceil(total / pageSize));
         reportPaging.page = Math.min(Math.max(1, reportPaging.page), pages);
 
         const start = (reportPaging.page - 1) * pageSize;
-        const slice = filteredData.slice(start, start + pageSize);
+        const slice = dadosFonte.slice(start, start + pageSize);
 
         tb.innerHTML = slice.map(r => {
             const codCell = r.whatsappUrl
                 ? `<a href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener" class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400">${escapeHtml(r.codCliente)}</a>`
                 : `<span class="font-mono text-slate-700">${escapeHtml(r.codCliente)}</span>`;
 
+            let badgeAuditoria = '';
+            if (filtroAuditoriaReports) {
+                if (filtroAuditoriaReports.tipo === 'SEM_ROTA') {
+                    badgeAuditoria = `<div class="text-[10px] text-amber-700 font-semibold flex items-center gap-1 mt-0.5"><i class="ph ph-warning"></i> Sem dia de visita</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'SEM_COMPRADOR') {
+                    badgeAuditoria = `<div class="text-[10px] text-orange-700 font-semibold flex items-center gap-1 mt-0.5"><i class="ph ph-user-circle-dashed"></i> Comprador não cadastrado</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'SEM_TELEFONE') {
+                    badgeAuditoria = `<div class="text-[10px] text-red-700 font-semibold flex items-center gap-1 mt-0.5"><i class="ph ph-phone-slash"></i> Sem telefone / WhatsApp</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'TEL_INVALIDO') {
+                    const heur = analisarTelefoneHeuristica(r.whatsappRaw);
+                    badgeAuditoria = `<div class="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5" title="${escapeHtml(heur.motivo)}"><i class="ph ph-warning-circle"></i> ${escapeHtml(r.whatsappRaw || 'Inválido')}: ${escapeHtml(heur.motivo)}</div>`;
+                }
+            }
+
             return `<tr class="hover:bg-slate-50 border-b border-slate-100">
                 <td class="p-2 font-mono">${codCell}</td>
                 <td class="p-2 font-bold text-slate-700">${escapeHtml(r.vendedor)}</td>
                 <td class="p-2">${escapeHtml(r.cidade)}</td>
-                <td class="p-2 truncate max-w-[180px]">
-                    <button class="text-left hover:underline" onclick="openClientModal('${escapeJs(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                <td class="p-2 truncate max-w-[200px]">
+                    <button class="text-left hover:underline block font-semibold text-slate-800" onclick="openClientModal('${escapeJs(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                    ${badgeAuditoria}
                 </td>
                 <td class="p-2">${escapeHtml(r.diaPrinc || '-')}</td>
                 <td class="p-2 text-[10px]">${escapeHtml((r.freq || []).join(','))}</td>
@@ -2697,6 +2967,7 @@
 
     function renderReportsVirtual() {
         setReportModeUI();
+        atualizarBannerFiltroAuditoriaReports();
 
         const vp = document.getElementById('report-virtual-viewport');
         const spacer = document.getElementById('report-virtual-spacer');
@@ -2704,7 +2975,11 @@
         const info = document.getElementById('report-virtual-info');
         if (!vp || !spacer || !rowsEl || !info) return;
 
-        const total = filteredData.length;
+        const dadosFonte = (filtroAuditoriaReports && filtroAuditoriaReports.codigos)
+            ? filteredData.filter(r => filtroAuditoriaReports.codigos.has(String(r.codCliente)))
+            : filteredData;
+
+        const total = dadosFonte.length;
         const rowH = reportVirtual.rowHeight;
         const overscan = reportVirtual.overscan;
 
@@ -2724,7 +2999,7 @@
         // Renderiza apenas o slice visível
         let html = '';
         for (let i = start; i < end; i++) {
-            const r = filteredData[i];
+            const r = dadosFonte[i];
             const top = i * rowH;
 
             const cod = escapeHtml(r.codCliente);
@@ -2732,13 +3007,28 @@
                 ? `<a class="text-sky-500 font-bold underline decoration-sky-200 hover:decoration-sky-400" href="${escapeHtml(r.whatsappUrl)}" target="_blank" rel="noopener">${cod}</a>`
                 : `<span class="mono text-slate-700 font-bold">${cod}</span>`;
 
+            let badgeAuditoria = '';
+            if (filtroAuditoriaReports) {
+                if (filtroAuditoriaReports.tipo === 'SEM_ROTA') {
+                    badgeAuditoria = `<div class="text-[9px] text-amber-700 font-semibold truncate"><i class="ph ph-warning"></i> Sem dia</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'SEM_COMPRADOR') {
+                    badgeAuditoria = `<div class="text-[9px] text-orange-700 font-semibold truncate"><i class="ph ph-user-circle-dashed"></i> Sem comprador</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'SEM_TELEFONE') {
+                    badgeAuditoria = `<div class="text-[9px] text-red-700 font-semibold truncate"><i class="ph ph-phone-slash"></i> Sem contato</div>`;
+                } else if (filtroAuditoriaReports.tipo === 'TEL_INVALIDO') {
+                    const heur = analisarTelefoneHeuristica(r.whatsappRaw);
+                    badgeAuditoria = `<div class="text-[9px] text-rose-700 font-semibold truncate" title="${escapeHtml(heur.motivo)}"><i class="ph ph-warning-circle"></i> ${escapeHtml(heur.motivo)}</div>`;
+                }
+            }
+
             html += `
                 <div class="virt-row grid grid-cols-12 gap-2 px-3 items-center border-b border-slate-100 hover:bg-slate-50 absolute left-0 right-0" style="top:${top}px;">
                     <div class="col-span-2">${codEl}</div>
                     <div class="col-span-3 truncate font-bold text-slate-700">${escapeHtml(r.vendedor)}</div>
                     <div class="col-span-2 truncate">${escapeHtml(r.cidade)}</div>
                     <div class="col-span-3 truncate">
-                        <button class="text-left hover:underline" onclick="openClientModal('${escapeJs(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                        <button class="text-left hover:underline block font-semibold text-slate-800 truncate" onclick="openClientModal('${escapeJs(r.codCliente)}')">${escapeHtml(r.cliente)}</button>
+                        ${badgeAuditoria}
                     </div>
                     <div class="col-span-1 text-center font-bold text-blue-600">${escapeHtml(r.diaPrinc || '-')}</div>
                     <div class="col-span-1 text-center mono">
@@ -2751,6 +3041,7 @@
         }
 
         rowsEl.innerHTML = html;
+        atualizarBannerFiltroAuditoriaReports();
     }
 
 
@@ -2779,8 +3070,11 @@
     // 7) EXPORTAÇÕES
     // ============================================================
     function exportToExcel() {
-        if (filteredData.length === 0) { alert("Sem dados."); return; }
-        const ws = XLSX.utils.json_to_sheet(filteredData.map(r => ({
+        const dadosFonte = (filtroAuditoriaReports && filtroAuditoriaReports.codigos)
+            ? filteredData.filter(r => filtroAuditoriaReports.codigos.has(String(r.codCliente)))
+            : filteredData;
+        if (dadosFonte.length === 0) { alert("Sem dados."); return; }
+        const ws = XLSX.utils.json_to_sheet(dadosFonte.map(r => ({
             "Cód. Cliente": r.codCliente,
             "Vendedor": r.vendedor,
             "Equipe": r.equipe,
@@ -2799,11 +3093,15 @@
         })));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Roteiro");
-        XLSX.writeFile(wb, "Roteiro_Ameripan.xlsx");
+        const sufixo = (filtroAuditoriaReports && filtroAuditoriaReports.tipo) ? `_Auditoria_${filtroAuditoriaReports.tipo}` : '';
+        XLSX.writeFile(wb, `Roteiro_Ameripan${sufixo}.xlsx`);
     }
 
     function exportPDFLista() {
-        if (filteredData.length === 0) { alert("Sem dados."); return; }
+        const dadosFonte = (filtroAuditoriaReports && filtroAuditoriaReports.codigos)
+            ? filteredData.filter(r => filtroAuditoriaReports.codigos.has(String(r.codCliente)))
+            : filteredData;
+        if (dadosFonte.length === 0) { alert("Sem dados."); return; }
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'portrait' });
 
@@ -2811,10 +3109,11 @@
         const fEq = document.getElementById('filtro-equipe').value || "Todas";
 
         let tituloRelatorio = "Relatório Geral de Rotas";
-        if (fVend !== "Todos") tituloRelatorio = `Relatório de Vendas - ${fVend}`;
+        if (filtroAuditoriaReports) tituloRelatorio += ` [Auditoria: ${filtroAuditoriaReports.nome}]`;
+        else if (fVend !== "Todos") tituloRelatorio = `Relatório de Vendas - ${fVend}`;
         else if (fEq !== "Todas") tituloRelatorio = `Relatório de Equipe - ${fEq}`;
 
-        const dadosSort = [...filteredData].sort((a, b) => {
+        const dadosSort = [...dadosFonte].sort((a, b) => {
             if (a.equipe !== b.equipe) return a.equipe.localeCompare(b.equipe);
             if (a.vendedor !== b.vendedor) return a.vendedor.localeCompare(b.vendedor);
             const diaA = DIAS_VALOR[a.diaPrinc] || 9;
@@ -2838,7 +3137,7 @@
         doc.setFontSize(14);
         doc.text(tituloRelatorio, 14, 15);
         doc.setFontSize(9);
-        doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${filteredData.length} | * Ord Whats (0/99): Não Presencial ao final`, 14, 22);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString()} | Total Clientes: ${dadosFonte.length} | * Ord Whats (0/99): Não Presencial ao final`, 14, 22);
 
         doc.autoTable({
             head: [['Equipe', 'Vend', 'Dia', 'Cidade (Entrega)', 'Cód.', 'Cliente', 'Ord']],
@@ -3482,13 +3781,14 @@
     async function fetchComRetry(url, payload, maxTentativas = 3) {
         let tentativa = 0;
         let atraso = 1000;
+        const payloadEnv = (payload && typeof payload === 'object') ? { abaRotas: 'ROTAS', ambiente: 'PROD', ...payload } : payload;
 
         while (tentativa < maxTentativas) {
             try {
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payloadEnv)
                 });
                 const data = await response.json();
                 if (data.codigo === 429 || (data.erro && data.erro.includes("ocupado"))) {
@@ -3527,6 +3827,7 @@
 
         btn.disabled = true;
         btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Validando...';
+        mostrarLoadingGlobal('Autenticando Gestor...', 'Validando credenciais de acesso seguro Ameripan...', 'ph-lock-key');
 
         try {
             const res = await fetchComRetry(GAS_API_URL, {
@@ -3554,13 +3855,16 @@
                     app.classList.remove('hidden');
                 }
 
-                carregarDados();
+                mostrarLoadingGlobal('Sincronizando com a nuvem Ameripan...', 'Carregando sua carteira e rotas da Ameripan...', 'ph-circle-notch');
+                await carregarDados();
             } else {
+                esconderLoadingGlobal();
                 err.textContent = res.erro || 'Senha incorreta. Acesso negado.';
                 inp.value = '';
                 inp.focus();
             }
         } catch (e) {
+            esconderLoadingGlobal();
             err.textContent = 'Erro ao conectar ao servidor de autenticação.';
         } finally {
             btn.disabled = false;
@@ -4291,7 +4595,7 @@
 
         if (!confirm(`Confirma transferir ${descr} para ${novoVend} (Equipe: ${novaEq || 'Geral'})?\n\nO sistema atualizará as abas CLIENTES e ROTAS automaticamente.`)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Remanejando Clientes...', 'Processando transferência por cidade no servidor...', 'ph-arrows-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'REMANEJAR_LOTE',
@@ -4313,7 +4617,7 @@
         } catch (e) {
             alert("Erro de comunicação com o servidor.");
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -4395,7 +4699,7 @@
 
         if (!confirm(`Confirma transferir ${remanSelecionados.size} cliente(s) para ${novoVend} (Equipe: ${novaEq || 'Geral'})?\n\nO sistema atualizará as abas CLIENTES e ROTAS automaticamente.`)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Transferindo Clientes...', 'Gravando remanejamento em lote no servidor...', 'ph-arrows-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'REMANEJAR_LOTE',
@@ -4417,7 +4721,7 @@
         } catch (e) {
             alert("Erro de comunicação com o servidor.");
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -4834,7 +5138,7 @@
 
         if (!confirm(msg)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Dispositivo...', isAprovar ? 'Aprovando dispositivo para acesso seguro...' : 'Bloqueando/revogando dispositivo...', 'ph-shield-check');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: isAprovar ? 'APROVAR_DISPOSITIVO' : 'REVOGAR_DISPOSITIVO',
@@ -4852,7 +5156,7 @@
         } catch (e) {
             alert('Erro de comunicação com o servidor.');
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5026,7 +5330,7 @@
     async function reativarVendedor(cod, nome) {
         if (!confirm(`Deseja reativar o vendedor ${nome} (Cód: ${cod})?\n\nO status será alterado para ATIVO e uma nova senha padrão (1234) será definida.`)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Reativando Vendedor...', `Reativando ${nome} e reconfigurando acessos...`, 'ph-user-check');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'SALVAR_VENDEDOR',
@@ -5047,7 +5351,7 @@
         } catch (e) {
             alert('Erro de comunicação com o servidor.');
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5155,7 +5459,7 @@
     async function confirmarExcluirCidade(cidadeNome) {
         if (!confirm(`Tem certeza que deseja remover a cidade "${cidadeNome}" do calendário de entregas?\n\nEssa ação apagará a configuração da aba CIDADES-ENTREGAS.`)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Removendo Cidade...', `Excluindo ${cidadeNome} do calendário logístico...`, 'ph-trash');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'EXCLUIR_CIDADE_ENTREGA',
@@ -5172,7 +5476,7 @@
         } catch (e) {
             alert('Erro ao conectar ao servidor.');
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5480,7 +5784,7 @@
             return;
         }
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Redistribuindo Clientes...', 'Atribuindo clientes sem atendimento no servidor...', 'ph-arrows-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'REMANEJAR_LOTE',
@@ -5501,7 +5805,7 @@
         } catch (e) {
             alert("Erro de comunicação com o servidor.");
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5634,7 +5938,7 @@
             obsDecisao = justificativa.trim() || 'Recusado pelo gerente';
         }
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Solicitação...', `Gravando decisão (${decisao}) no servidor...`, 'ph-check-circle');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'DECIDIR_SOLICITACAO_MOVIMENTACAO',
@@ -5658,7 +5962,7 @@
             console.error(e);
             alert('Erro de comunicação com o servidor: ' + (e.message || e.toString()));
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5873,7 +6177,7 @@
 
         if (!confirm(msgAviso)) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Movimentação em Lote...', 'Gravando movimentações na nuvem Ameripan...', 'ph-arrows-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'EXECUTAR_MOVIMENTACAO_DIRETA_GESTOR',
@@ -5902,7 +6206,7 @@
             console.error(err);
             alert('Erro de comunicação com o servidor: ' + (err.message || err.toString()));
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -5912,7 +6216,7 @@
             return;
         }
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Histórico...', 'Carregando histórico de transferências e inativações...', 'ph-clock-counter-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'OBTER_HISTORICO_MOVIMENTACOES'
@@ -5944,7 +6248,7 @@
             console.error(e);
             alert('Erro ao consultar histórico de movimentações.');
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -6234,7 +6538,7 @@
         const conf = confirm(`CONFIRMAÇÃO DE RESGATE DE CARTEIRA:\n\nDeseja realmente reativar e transferir ${inativosSelecionados.size} cliente(s) inativo(s) para o vendedor:\n\n👉 ${novoVend}${eqInfo}?\n\nOs clientes sairão de CLIENTES_INATIVOS e serão reativados na base de CLIENTES.`);
         if (!conf) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Resgatando Carteira...', `Reativando ${inativosSelecionados.size} cliente(s) no servidor...`, 'ph-arrow-u-down-left');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'REMANEJAR_LOTE',
@@ -6255,7 +6559,7 @@
         } catch (e) {
             alert("Erro de comunicação com o servidor: " + (e.message || e.toString()));
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -6349,7 +6653,7 @@
         );
         if (!conf) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Sincronizando Inativos...', 'Expurgando inativos da base de clientes ativos...', 'ph-arrows-clockwise');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'SINCRONIZAR_INATIVOS_CLIENTES'
@@ -6366,7 +6670,7 @@
             console.error(e);
             alert('Erro de comunicação com o servidor: ' + (e.message || e.toString()));
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -6378,7 +6682,7 @@
         );
         if (!conf) return;
 
-        document.getElementById('loading-overlay').style.display = 'flex';
+        mostrarLoadingGlobal('Limpando Órfãos...', 'Removendo clientes atendidos da aba SEM_ATENDIMENTO...', 'ph-broom');
         try {
             const res = await fetchComRetry(GAS_API_URL, {
                 acao: 'LIMPAR_SEM_ATENDIMENTO_ATENDIDOS'
@@ -6395,7 +6699,7 @@
             console.error(e);
             alert('Erro de comunicação com o servidor: ' + (e.message || e.toString()));
         } finally {
-            document.getElementById('loading-overlay').style.display = 'none';
+            esconderLoadingGlobal();
         }
     }
 
@@ -6583,17 +6887,629 @@
         doc.save(`Atendimentos_WhatsApp_Ameripan_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
+
+    // ============================================================
+    // SEÇÃO: AUDITORIA CADASTRAL & QUALIDADE DE CONTATOS (HEURÍSTICA)
+    // ============================================================
+    const DDDS_VALIDOS_BR = new Set([
+        11, 12, 13, 14, 15, 16, 17, 18, 19,
+        21, 22, 24, 27, 28,
+        31, 32, 33, 34, 35, 37, 38,
+        41, 42, 43, 44, 45, 46, 47, 48, 49,
+        51, 53, 54, 55,
+        61, 62, 64, 63, 65, 66, 67, 68, 69,
+        71, 73, 74, 75, 77, 79,
+        81, 87, 82, 83, 84, 85, 88, 86, 89,
+        91, 93, 94, 92, 97, 95, 96, 98, 99
+    ]);
+
+    let auditoriaCache = {
+        semRota: [],
+        semComprador: [],
+        semTelefone: [],
+        telInvalido: [],
+        tipoAtivo: 'SEM_ROTA',
+        filtrados: []
+    };
+
+    let filtroAuditoriaReports = null;
+
+    function analisarTelefoneHeuristica(telRaw) {
+        if (!telRaw) return { valido: false, motivo: 'Telefone não preenchido' };
+        const clean55 = sanitizarTelefoneBR(telRaw);
+        if (!clean55) return { valido: false, motivo: 'Sem dígitos numéricos válidos' };
+        let dig = clean55.startsWith('55') ? clean55.substring(2) : clean55;
+
+        if (dig.length < 10) {
+            return { valido: false, motivo: `Incompleto (${dig.length} dígitos, mínimo 10)` };
+        }
+        if (dig.length > 11) {
+            return { valido: false, motivo: `Excesso de dígitos (${dig.length} dígitos, máximo 11)` };
+        }
+
+        const ddd = parseInt(dig.substring(0, 2), 10);
+        if (!DDDS_VALIDOS_BR.has(ddd)) {
+            return { valido: false, motivo: `DDD (${ddd}) não existe no Brasil` };
+        }
+
+        const corpo = dig.substring(2);
+        // Dígitos repetidos: ex. 99999999 ou 11111111
+        if (/^(\d)\1+$/.test(corpo)) {
+            return { valido: false, motivo: `Número repetido suspeito (${corpo.slice(0, 4)}...)` };
+        }
+
+        // Sequências óbvias contínuas
+        if ('01234567890123456789'.includes(corpo) || '98765432109876543210'.includes(corpo)) {
+            return { valido: false, motivo: 'Sequência numérica óbvia (ex: 123456...)' };
+        }
+
+        // Se tem 11 dígitos (celular), o primeiro dígito do corpo precisa ser 9
+        if (dig.length === 11) {
+            if (corpo.charAt(0) !== '9') {
+                return { valido: false, motivo: 'Celular de 11 dígitos sem o nono dígito 9 inicial' };
+            }
+        }
+
+        return { valido: true, digitos: dig };
+    }
+
+    function auditarQualidadeCadastral() {
+        const base = (filteredData && filteredData.length > 0) ? filteredData : rawRotas;
+        auditoriaCache.semRota = [];
+        auditoriaCache.semComprador = [];
+        auditoriaCache.semTelefone = [];
+        auditoriaCache.telInvalido = [];
+
+        base.forEach(r => {
+            // 1. Sem Roteirização / Dia
+            const d = (r.diaPrinc || '').trim();
+            if (!d || d === 'N/A' || d === '-' || !DIAS_LISTA.includes(d)) {
+                auditoriaCache.semRota.push({ ...r, _motivoAuditoria: 'Dia de visita não definido ou inválido' });
+            }
+
+            // 2. Sem Comprador
+            const comp = (r.comprador || '').trim();
+            if (!comp) {
+                auditoriaCache.semComprador.push({ ...r, _motivoAuditoria: 'Nome do comprador não cadastrado' });
+            }
+
+            // 3. Sem Telefone
+            const tel = (r.whatsappRaw || '').replace(/\D/g, '');
+            if (!tel) {
+                auditoriaCache.semTelefone.push({ ...r, _motivoAuditoria: 'Telefone comercial/WhatsApp não informado' });
+            } else {
+                // 4. Telefones Suspeitos / Inválidos
+                const heur = analisarTelefoneHeuristica(r.whatsappRaw);
+                if (!heur.valido) {
+                    auditoriaCache.telInvalido.push({ ...r, _motivoAuditoria: heur.motivo });
+                }
+            }
+        });
+
+        // Atualiza contadores dos cards
+        const elRota = document.getElementById('kpi-auditoria-sem-rota');
+        if (elRota) elRota.innerText = auditoriaCache.semRota.length;
+
+        const elComp = document.getElementById('kpi-auditoria-sem-comprador');
+        if (elComp) elComp.innerText = auditoriaCache.semComprador.length;
+
+        const elTel = document.getElementById('kpi-auditoria-sem-telefone');
+        if (elTel) elTel.innerText = auditoriaCache.semTelefone.length;
+
+        const elInv = document.getElementById('kpi-auditoria-tel-invalido');
+        if (elInv) elInv.innerText = auditoriaCache.telInvalido.length;
+    }
+
+    function abrirModalAuditoriaCadastral(tipo) {
+        auditarQualidadeCadastral();
+        auditoriaCache.tipoAtivo = tipo;
+        const m = document.getElementById('modalAuditoriaCadastral');
+        const tit = document.getElementById('modal-auditoria-titulo');
+        const sub = document.getElementById('modal-auditoria-subtitulo');
+        const ico = document.getElementById('modal-auditoria-icone');
+        const inpBusca = document.getElementById('modal-auditoria-busca');
+        if (inpBusca) inpBusca.value = '';
+
+        let lista = [];
+        if (tipo === 'SEM_ROTA') {
+            lista = auditoriaCache.semRota;
+            if (tit) tit.textContent = 'Clientes sem Roteirização / Dia';
+            if (sub) sub.textContent = 'Clientes ativos na base sem definição de dia principal de visita';
+            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold';
+        } else if (tipo === 'SEM_COMPRADOR') {
+            lista = auditoriaCache.semComprador;
+            if (tit) tit.textContent = 'Clientes sem Comprador Cadastrado';
+            if (sub) sub.textContent = 'Cadastros com campo de comprador em branco ou não identificado';
+            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-xl font-bold';
+        } else if (tipo === 'SEM_TELEFONE') {
+            lista = auditoriaCache.semTelefone;
+            if (tit) tit.textContent = 'Clientes sem Telefone Comercial';
+            if (sub) sub.textContent = 'Clientes sem nenhum número de contato ou WhatsApp registrado';
+            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xl font-bold';
+        } else if (tipo === 'TEL_INVALIDO') {
+            lista = auditoriaCache.telInvalido;
+            if (tit) tit.textContent = 'Telefones Suspeitos / Inválidos';
+            if (sub) sub.textContent = 'Números com falhas heurísticas (DDD inexistente, repetidos ou incompletos)';
+            if (ico) ico.className = 'w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl font-bold';
+        }
+
+        auditoriaCache.filtrados = lista;
+        renderTabelaAuditoria();
+
+        if (m) {
+            m.style.display = 'flex';
+            m.classList.remove('hidden');
+        }
+    }
+
+    function fecharModalAuditoriaCadastral() {
+        const m = document.getElementById('modalAuditoriaCadastral');
+        if (m) {
+            m.style.display = 'none';
+            m.classList.add('hidden');
+        }
+    }
+
+    function filtrarTabelaAuditoria() {
+        const termo = (document.getElementById('modal-auditoria-busca')?.value || '').trim().toLowerCase();
+        let listaOrig = [];
+        const tipo = auditoriaCache.tipoAtivo;
+        if (tipo === 'SEM_ROTA') listaOrig = auditoriaCache.semRota;
+        else if (tipo === 'SEM_COMPRADOR') listaOrig = auditoriaCache.semComprador;
+        else if (tipo === 'SEM_TELEFONE') listaOrig = auditoriaCache.semTelefone;
+        else if (tipo === 'TEL_INVALIDO') listaOrig = auditoriaCache.telInvalido;
+
+        if (!termo) {
+            auditoriaCache.filtrados = listaOrig;
+        } else {
+            auditoriaCache.filtrados = listaOrig.filter(r => {
+                const cod = String(r.codCliente || '').toLowerCase();
+                const cli = String(r.cliente || '').toLowerCase();
+                const vend = String(r.vendedor || '').toLowerCase();
+                const cid = String(r.cidade || '').toLowerCase();
+                const comp = String(r.comprador || '').toLowerCase();
+                const tel = String(r.whatsappRaw || '').toLowerCase();
+                return cod.includes(termo) || cli.includes(termo) || vend.includes(termo) || cid.includes(termo) || comp.includes(termo) || tel.includes(termo);
+            });
+        }
+        renderTabelaAuditoria();
+    }
+
+    function renderTabelaAuditoria() {
+        const tbody = document.getElementById('modal-auditoria-tbody');
+        const badgeTotal = document.getElementById('modal-auditoria-badge-total');
+        const statusPag = document.getElementById('modal-auditoria-status-pag');
+        if (!tbody) return;
+
+        const lista = auditoriaCache.filtrados || [];
+        if (badgeTotal) badgeTotal.textContent = `${lista.length} ocorrência(s)`;
+        if (statusPag) statusPag.textContent = `Exibindo ${lista.length} registros`;
+
+        if (lista.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 italic">Nenhuma pendência encontrada nesta categoria. Base 100% regularizada!</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = lista.slice(0, 200).map(r => `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="p-2.5 font-bold text-blue-700">${escapeHtml(r.codCliente)}</td>
+                <td class="p-2.5">
+                    <div class="font-bold text-slate-800">${escapeHtml(r.cliente || r.razao)}</div>
+                    ${r.fantasia ? `<div class="text-[10px] text-slate-400 font-medium">${escapeHtml(r.fantasia)}</div>` : ''}
+                </td>
+                <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.vendedor)}</td>
+                <td class="p-2.5 font-medium text-slate-600">${escapeHtml(r.cidade)}</td>
+                <td class="p-2.5">${r.comprador ? `<span class="font-semibold text-slate-700">${escapeHtml(r.comprador)}</span>` : `<span class="text-red-500 italic text-[11px]">Não cadastrado</span>`}</td>
+                <td class="p-2.5">${r.whatsappRaw ? `<span class="font-mono text-slate-700 text-[11px]">${escapeHtml(r.whatsappRaw)}</span>` : `<span class="text-red-500 italic text-[11px]">Sem telefone</span>`}</td>
+                <td class="p-2.5">
+                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        <i class="ph ph-warning-circle"></i> ${escapeHtml(r._motivoAuditoria || 'Revisar')}
+                    </span>
+                </td>
+                <td class="p-2.5 text-center">
+                    <button type="button" onclick="openClientModal('${escapeJs(r.codCliente)}')" class="px-2 py-1 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded font-bold text-[10px] border border-slate-200 transition" title="Ver Detalhes do Cliente">
+                        <i class="ph ph-eye"></i> Detalhes
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function exportarExcelAuditoria() {
+        const lista = auditoriaCache.filtrados || [];
+        if (lista.length === 0) {
+            alert('Não há registros para exportar.');
+            return;
+        }
+
+        const dataIso = new Date().toISOString().slice(0, 10);
+        const wsData = lista.map(r => ({
+            "Cód. Cliente": r.codCliente,
+            "Razão Social / Cliente": r.cliente || r.razao,
+            "Nome Fantasia": r.fantasia || '',
+            "Vendedor": r.vendedor,
+            "Equipe": r.equipe,
+            "Cidade": r.cidade,
+            "Dia Visita": r.diaPrinc || '',
+            "Comprador": r.comprador || '',
+            "Telefone / WhatsApp": r.whatsappRaw || '',
+            "Diagnóstico de Inconsistência": r._motivoAuditoria || ''
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, "Auditoria");
+        XLSX.writeFile(wb, `Auditoria_Qualidade_Cadastral_${auditoriaCache.tipoAtivo}_${dataIso}.xlsx`);
+    }
+
+    function verAuditoriaNosDadosBrutos(tipo = null) {
+        auditarQualidadeCadastral();
+        const tipoFinal = tipo || auditoriaCache.tipoAtivo || 'SEM_ROTA';
+        let lista = [];
+        const nomes = {
+            'SEM_ROTA': 'Sem Roteirização / Dia',
+            'SEM_COMPRADOR': 'Sem Comprador Cadastrado',
+            'SEM_TELEFONE': 'Sem Telefone Comercial',
+            'TEL_INVALIDO': 'Telefones Suspeitos / Inválidos'
+        };
+
+        if (tipoFinal === 'SEM_ROTA') lista = auditoriaCache.semRota;
+        else if (tipoFinal === 'SEM_COMPRADOR') lista = auditoriaCache.semComprador;
+        else if (tipoFinal === 'SEM_TELEFONE') lista = auditoriaCache.semTelefone;
+        else if (tipoFinal === 'TEL_INVALIDO') lista = auditoriaCache.telInvalido;
+
+        const codigos = new Set(lista.map(r => String(r.codCliente)));
+        filtroAuditoriaReports = {
+            tipo: tipoFinal,
+            nome: nomes[tipoFinal] || tipoFinal,
+            codigos: codigos,
+            qtd: lista.length
+        };
+
+        fecharModalAuditoriaCadastral();
+        switchView('reports');
+        atualizarBannerFiltroAuditoriaReports();
+        reportPaging.page = 1;
+        renderReports();
+
+        setTimeout(() => {
+            const elBanner = document.getElementById('banner-filtro-auditoria-reports');
+            if (elBanner) {
+                elBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 120);
+    }
+
+    function limparFiltroAuditoriaReports() {
+        filtroAuditoriaReports = null;
+        atualizarBannerFiltroAuditoriaReports();
+        reportPaging.page = 1;
+        renderReports();
+    }
+
+    function atualizarBannerFiltroAuditoriaReports() {
+        const banner = document.getElementById('banner-filtro-auditoria-reports');
+        const lblNome = document.getElementById('lbl-filtro-auditoria-nome');
+        const lblQtd = document.getElementById('lbl-filtro-auditoria-qtd');
+        if (!banner) return;
+
+        if (filtroAuditoriaReports && filtroAuditoriaReports.codigos) {
+            banner.classList.remove('hidden');
+            if (lblNome) lblNome.textContent = filtroAuditoriaReports.nome || '';
+            if (lblQtd) lblQtd.textContent = filtroAuditoriaReports.qtd || 0;
+        } else {
+            banner.classList.add('hidden');
+            if (lblNome) lblNome.textContent = '';
+            if (lblQtd) lblQtd.textContent = '0';
+        }
+    }
+
+    // ============================================================
+    // SEÇÃO: KIT COBERTURA DE FÉRIAS DO RCA (1 CLIQUE)
+    // ============================================================
+    function iniciarKitCoberturaFerias() {
+        const vendAtual = getEffectiveRotaVendedor();
+        if (vendAtual && vendAtual !== 'Todos') {
+            gerarKitCoberturaFerias(vendAtual);
+            return;
+        }
+
+        // Se nenhum vendedor estiver selecionado, abre o seletor modal
+        const sel = document.getElementById('selectVendedorKitFerias');
+        if (sel) {
+            sel.innerHTML = '<option value="">Selecione um vendedor...</option>';
+            const vends = Array.from(new Set(rawRotas.map(r => r.vendedor).filter(Boolean))).sort();
+            vends.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                sel.appendChild(opt);
+            });
+        }
+        const m = document.getElementById('modalKitFeriasSelector');
+        if (m) {
+            m.style.display = 'flex';
+            m.classList.remove('hidden');
+        }
+    }
+
+    function fecharModalKitFerias() {
+        const m = document.getElementById('modalKitFeriasSelector');
+        if (m) {
+            m.style.display = 'none';
+            m.classList.add('hidden');
+        }
+    }
+
+    function confirmarKitFeriasModal() {
+        const sel = document.getElementById('selectVendedorKitFerias');
+        const vend = sel ? sel.value : '';
+        if (!vend) {
+            alert('Por favor, selecione um vendedor para gerar o kit.');
+            return;
+        }
+        fecharModalKitFerias();
+        gerarKitCoberturaFerias(vend);
+    }
+
+    async function gerarKitCoberturaFerias(vendedorNome) {
+        if (!vendedorNome) {
+            alert('Vendedor não especificado.');
+            return;
+        }
+
+        const clientes = rawRotas.filter(r => r.vendedor === vendedorNome);
+        if (clientes.length === 0) {
+            alert(`Nenhum cliente roteirizado encontrado para o vendedor "${vendedorNome}".`);
+            return;
+        }
+
+        mostrarLoadingGlobal(
+            'Gerando Kit Cobertura de Férias (1 Clique)',
+            `Processando carteira completa de ${clientes.length} clientes de ${vendedorNome}...`,
+            'ph-suitcase'
+        );
+
+        try {
+            // Ordenação estrita: por Dia da Semana e Ordem de Visita (visitas presenciais primeiro, whats no fim)
+            const dadosOrdenados = [...clientes].sort((a, b) => {
+                const diaA = DIAS_VALOR[a.diaPrinc] || 9;
+                const diaB = DIAS_VALOR[b.diaPrinc] || 9;
+                if (diaA !== diaB) return diaA - diaB;
+                return obterPesoOrdenacaoRota(a.ordem) - obterPesoOrdenacaoRota(b.ordem);
+            });
+
+            const dataIso = new Date().toISOString().slice(0, 10);
+            const vendSlug = normalizarTexto(vendedorNome).replace(/[^A-Z0-9_]/gi, '_');
+
+            // 1) Gerar VCF vCard 3.0 dos Contatos
+            const contatosUnicos = deduplicarContatosPorCodigo(dadosOrdenados);
+            const vcfBlob = await gerarVcfAssincrono(contatosUnicos);
+            const linkVcf = document.createElement('a');
+            linkVcf.download = `Kit_Ferias_${vendSlug}_Contatos_${dataIso}.vcf`;
+            linkVcf.href = URL.createObjectURL(vcfBlob);
+            document.body.appendChild(linkVcf);
+            linkVcf.click();
+            document.body.removeChild(linkVcf);
+            URL.revokeObjectURL(linkVcf.href);
+
+            // 2) Gerar Planilha Excel (.XLSX) Completa
+            const wsData = dadosOrdenados.map(r => ({
+                "Dia da Semana": r.diaPrinc || 'N/A',
+                "Ordem de Visita": (r.ordem === 0 || r.ordem === 99) ? `Whats (${r.ordem})` : r.ordem,
+                "Cód. Cliente": r.codCliente,
+                "Razão Social / Cliente": r.cliente || r.razao,
+                "Nome Fantasia": r.fantasia || '',
+                "Cidade": r.cidade,
+                "Dias de Entrega": getEntregaStr(r.cidadeNorm),
+                "Frequência": (r.freq || []).join(', '),
+                "Comprador": r.comprador || '',
+                "Telefone / WhatsApp": r.whatsappRaw || '',
+                "Observações Comerciais": r.obs || ''
+            }));
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, "Carteira Cobertura");
+            XLSX.writeFile(wb, `Kit_Ferias_${vendSlug}_Carteira_${dataIso}.xlsx`);
+
+            // 3) Gerar PDF de Campo Landscape Alta Densidade
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+
+            doc.setFontSize(14);
+            doc.text(`KIT COBERTURA DE FÉRIAS / SUBSTITUIÇÃO DE RCA — ${vendedorNome.toUpperCase()}`, 14, 14);
+            doc.setFontSize(9);
+            const cidadesUnicas = new Set(dadosOrdenados.map(r => r.cidade)).size;
+            const remotos = dadosOrdenados.filter(r => r.ordem === 0 || r.ordem === 99).length;
+            const presenciais = dadosOrdenados.length - remotos;
+            doc.text(`Ameripan Distribuidora • Total Clientes: ${dadosOrdenados.length} (${presenciais} presenciais, ${remotos} remotos) • Cidades: ${cidadesUnicas} • Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`, 14, 20);
+
+            const tableBody = dadosOrdenados.map(r => [
+                r.diaPrinc || 'N/A',
+                (r.ordem === 0 || r.ordem === 99) ? `Whats(${r.ordem})` : r.ordem,
+                buildPdfCodeCell(r),
+                (r.fantasia ? `${r.cliente}\n[${r.fantasia}]` : r.cliente),
+                r.comprador || '',
+                r.whatsappRaw || '',
+                r.cidade,
+                getEntregaStr(r.cidadeNorm),
+                (r.freq || []).join(','),
+                r.obs || ''
+            ]);
+
+            doc.autoTable({
+                head: [['Dia', 'Ord', 'Cód.', 'Cliente / Razão', 'Comprador', 'WhatsApp / Tel', 'Cidade', 'Entrega', 'Freq', 'Observações']],
+                body: tableBody,
+                startY: 24,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+                headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+                columnStyles: {
+                    0: { cellWidth: 14 },
+                    1: { cellWidth: 16 },
+                    2: { cellWidth: 18 },
+                    3: { cellWidth: 58 },
+                    4: { cellWidth: 32 },
+                    5: { cellWidth: 32 },
+                    6: { cellWidth: 30 },
+                    7: { cellWidth: 24 },
+                    8: { cellWidth: 20 },
+                    9: { cellWidth: 30 },
+                },
+                didDrawCell: function (data) {
+                    if (data.section === 'body' && data.column.index === 2) {
+                        const raw = data.cell.raw;
+                        if (raw && typeof raw === 'object' && raw.whatsappUrl) {
+                            doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: raw.whatsappUrl });
+                        }
+                    }
+                }
+            });
+
+            doc.save(`Kit_Ferias_${vendSlug}_Roteiro_Campo_${dataIso}.pdf`);
+
+            esconderLoadingGlobal();
+            alert(`✅ Kit de Cobertura de Férias de "${vendedorNome}" gerado com sucesso!\n\nForam baixados:\n1) Arquivo .VCF (Contatos da Agenda)\n2) Planilha Excel (.XLSX)\n3) Roteiro de Campo em PDF (Landscape)`);
+        } catch (err) {
+            console.error('Erro ao gerar Kit de Férias:', err);
+            esconderLoadingGlobal();
+            alert('Falha ao gerar um ou mais itens do Kit de Cobertura. Verifique o console para detalhes.');
+        }
+    }
+
+    // ============================================================
+    // SEÇÃO: ALTERAÇÃO DE SENHA DO GESTOR
+    // ============================================================
+    function abrirModalAlterarSenhaGestor() {
+        const m = document.getElementById('modalAlterarSenhaGestor');
+        const msg = document.getElementById('alterarSenhaGestorMsg');
+        if (msg) msg.textContent = '';
+        const inps = ['senhaAtualGestor', 'novaSenhaGestor', 'confirmaNovaSenhaGestor'];
+        inps.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        if (m) {
+            m.style.display = 'flex';
+            m.classList.remove('hidden');
+        }
+    }
+
+    function fecharModalAlterarSenhaGestor() {
+        const m = document.getElementById('modalAlterarSenhaGestor');
+        if (m) {
+            m.style.display = 'none';
+            m.classList.add('hidden');
+        }
+    }
+
+    function toggleMostrarSenhaModal(inputId, iconId) {
+        const inp = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if (!inp) return;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            if (icon) icon.className = 'ph ph-eye-slash text-lg';
+        } else {
+            inp.type = 'password';
+            if (icon) icon.className = 'ph ph-eye text-lg';
+        }
+    }
+
+    async function submeterAlteracaoSenhaGestor() {
+        const atual = document.getElementById('senhaAtualGestor')?.value.trim();
+        const nova = document.getElementById('novaSenhaGestor')?.value.trim();
+        const conf = document.getElementById('confirmaNovaSenhaGestor')?.value.trim();
+        const msg = document.getElementById('alterarSenhaGestorMsg');
+        const btn = document.getElementById('btnSalvarSenhaGestor');
+
+        if (!atual || !nova || !conf) {
+            if (msg) {
+                msg.className = 'text-xs font-semibold text-red-600';
+                msg.textContent = 'Preencha todos os campos obrigatórios.';
+            }
+            return;
+        }
+
+        if (nova.length < 4) {
+            if (msg) {
+                msg.className = 'text-xs font-semibold text-red-600';
+                msg.textContent = 'A nova senha deve possuir pelo menos 4 caracteres.';
+            }
+            return;
+        }
+
+        if (nova !== conf) {
+            if (msg) {
+                msg.className = 'text-xs font-semibold text-red-600';
+                msg.textContent = 'A confirmação de senha não coincide com a nova senha.';
+            }
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Atualizando...';
+        }
+        if (msg) {
+            msg.className = 'text-xs font-semibold text-slate-500';
+            msg.textContent = 'Processando alteração no servidor...';
+        }
+
+        mostrarLoadingGlobal('Atualizando Senha do Gestor', 'Salvando nova credencial com criptografia segura...', 'ph-key');
+
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'ALTERAR_SENHA_GESTOR',
+                usuario: 'gerente',
+                senhaAtual: atual,
+                novaSenha: nova
+            });
+
+            esconderLoadingGlobal();
+
+            if (res.sucesso) {
+                if (msg) {
+                    msg.className = 'text-xs font-semibold text-emerald-600';
+                    msg.textContent = '✅ Senha do gestor atualizada com sucesso!';
+                }
+                setTimeout(() => {
+                    fecharModalAlterarSenhaGestor();
+                    alert('✅ Senha do gestor alterada com sucesso! Guarde sua nova credencial.');
+                }, 1200);
+            } else {
+                if (msg) {
+                    msg.className = 'text-xs font-semibold text-red-600';
+                    msg.textContent = res.erro || 'Falha ao alterar senha. Verifique a senha atual.';
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao alterar senha:', e);
+            esconderLoadingGlobal();
+            if (msg) {
+                msg.className = 'text-xs font-semibold text-red-600';
+                msg.textContent = 'Erro ao comunicar com o servidor. Tente novamente.';
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ph ph-check text-base"></i> Salvar Nova Senha';
+            }
+        }
+    }
+
 </script>
 
   <!-- Modal: Login do Gerente (Bloqueante Seguro) -->
   <div id="modalLoginGestor" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[200] flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-7 border border-slate-100 space-y-5 animate-fade-in">
-      <div class="text-center space-y-1.5">
-        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white flex items-center justify-center mx-auto text-3xl shadow-lg shadow-blue-600/30">
+            <div class="text-center space-y-2">
+        <img src="https://cdn.awsli.com.br/400x300/1284/1284671/logo/1e2bc493d1.png" alt="Ameripan Distribuidora" class="h-10 mx-auto object-contain">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white flex items-center justify-center mx-auto text-2xl shadow-lg shadow-blue-600/30">
           <i class="ph ph-shield-check"></i>
         </div>
         <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">Painel do Gerente</h2>
-        <p class="text-xs text-slate-500 font-medium">Ameripan Distribuidora • Gestão de Rotas</p>
+        <p class="text-xs text-slate-500 font-medium">Ameripan Distribuidora • Gestão de Rotas Pro</p>
       </div>
 
       <form onsubmit="event.preventDefault(); submeterLoginGestor();" class="space-y-4 pt-1">
@@ -6790,6 +7706,8 @@
         </button>
       </div>
     </div>
+  </div>
+
   <!-- Modal: Seleção Múltipla de Cidades (Órfãos) -->
   <div id="modalOrfaosMultiCidades" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-[160] items-center justify-center p-4" style="display: none;">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4 animate-fade-in">
@@ -6929,5 +7847,182 @@
             </div>
         </div>
     </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAIS ADICIONADOS: GESTÃO PRO (BETA_TEST)                   -->
+  <!-- ============================================================ -->
+
+  <!-- Modal: Alteração de Senha do Gestor -->
+  <div id="modalAlterarSenhaGestor" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4 animate-scale-up" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl font-bold">
+            <i class="ph ph-key"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Alterar Senha do Gestor</h3>
+            <p class="text-xs text-slate-400">Atualização segura de credencial de acesso</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalAlterarSenhaGestor()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition">
+          <i class="ph ph-x text-xl font-bold"></i>
+        </button>
+      </div>
+
+      <form onsubmit="event.preventDefault(); submeterAlteracaoSenhaGestor();" class="space-y-3 pt-1">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Senha Atual</label>
+          <div class="relative">
+            <input type="password" id="senhaAtualGestor" placeholder="Digite sua senha atual..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" required>
+            <button type="button" onclick="toggleMostrarSenhaModal('senhaAtualGestor', 'eyeAtualIcon')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+              <i id="eyeAtualIcon" class="ph ph-eye text-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nova Senha (Mínimo 4 caracteres)</label>
+          <div class="relative">
+            <input type="password" id="novaSenhaGestor" placeholder="Digite a nova senha..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" required minlength="4">
+            <button type="button" onclick="toggleMostrarSenhaModal('novaSenhaGestor', 'eyeNovaIcon')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+              <i id="eyeNovaIcon" class="ph ph-eye text-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Confirmar Nova Senha</label>
+          <div class="relative">
+            <input type="password" id="confirmaNovaSenhaGestor" placeholder="Confirme a nova senha..." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" required minlength="4">
+            <button type="button" onclick="toggleMostrarSenhaModal('confirmaNovaSenhaGestor', 'eyeConfirmaIcon')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+              <i id="eyeConfirmaIcon" class="ph ph-eye text-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="alterarSenhaGestorMsg" class="text-xs font-semibold min-h-[1.25rem]"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="fecharModalAlterarSenhaGestor()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Cancelar</button>
+          <button type="submit" id="btnSalvarSenhaGestor" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition active:scale-98">
+            <i class="ph ph-check text-base"></i> Salvar Nova Senha
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Seletor de Vendedor para Kit de Férias -->
+  <div id="modalKitFeriasSelector" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4 animate-scale-up" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-amber-500/30">
+            <i class="ph ph-suitcase"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Kit Cobertura de Férias (1 Clique)</h3>
+            <p class="text-xs text-slate-400">Exportação instantânea: VCF + Excel + PDF de Campo</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalKitFerias()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition">
+          <i class="ph ph-x text-xl font-bold"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed flex items-start gap-2.5">
+          <i class="ph ph-info text-amber-600 text-lg flex-shrink-0 mt-0.5"></i>
+          <span>Selecione o vendedor cuja carteira será transferida ou coberta. Em um único clique, geramos o <strong>arquivo .VCF</strong> (agenda do celular), a <strong>Planilha Excel</strong> detalhada e o <strong>PDF de Campo Landscape</strong> pronto para uso na rua.</span>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Selecione o Vendedor / RCA</label>
+          <select id="selectVendedorKitFerias" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-amber-500 transition">
+            <option value="">Selecione um vendedor...</option>
+          </select>
+        </div>
+
+        <div id="infoVendedorKitFerias" class="text-xs text-slate-500 font-medium min-h-[1.5rem]"></div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="fecharModalKitFerias()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Cancelar</button>
+        <button type="button" onclick="confirmarKitFeriasModal()" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md shadow-amber-500/25 flex items-center gap-2 transition active:scale-98">
+          <i class="ph ph-download-simple text-base font-bold"></i> Gerar Kit Completo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhamento de Auditoria Cadastral & Contatos -->
+  <div id="modalAuditoriaCadastral" onclick="fecharModalAuditoriaCadastral()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[230] items-center justify-center p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-scale-up" onclick="event.stopPropagation()">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div class="flex items-center gap-3">
+          <div id="modal-auditoria-icone" class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold">
+            <i class="ph ph-shield-warning"></i>
+          </div>
+          <div>
+            <h3 id="modal-auditoria-titulo" class="text-base font-bold text-slate-800">Inconsistências Cadastrais</h3>
+            <p id="modal-auditoria-subtitulo" class="text-xs text-slate-400">Listagem de clientes com pendências ou dados a revisar</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="modal-auditoria-badge-total" class="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-full">0 ocorrências</span>
+          <button type="button" onclick="fecharModalAuditoriaCadastral()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition">
+            <i class="ph ph-x text-xl font-bold"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-4 border-b border-slate-100 bg-white flex flex-wrap gap-3 items-center justify-between">
+        <div class="relative flex-1 min-w-[200px]">
+          <input type="text" id="modal-auditoria-busca" oninput="filtrarTabelaAuditoria()" placeholder="Filtrar por código, cliente, vendedor ou cidade..." class="w-full p-2 pl-8 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
+          <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-400"></i>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="verAuditoriaNosDadosBrutos()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-2xs">
+            <i class="ph ph-table text-sm"></i> Ver em Dados Brutos
+          </button>
+          <button type="button" onclick="exportarExcelAuditoria()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-2xs">
+            <i class="ph ph-file-xls text-sm"></i> Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-auto p-4 bg-slate-50">
+        <table class="w-full text-left text-xs bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
+          <thead class="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="p-2.5">Cód</th>
+              <th class="p-2.5">Cliente / Fantasia</th>
+              <th class="p-2.5">Vendedor</th>
+              <th class="p-2.5">Cidade</th>
+              <th class="p-2.5">Comprador</th>
+              <th class="p-2.5">Telefone / Whats</th>
+              <th class="p-2.5">Diagnóstico / Motivo</th>
+              <th class="p-2.5 text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="modal-auditoria-tbody" class="divide-y divide-slate-100 text-slate-700">
+            <!-- Linhas geradas dinamicamente -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+        <span id="modal-auditoria-status-pag" class="text-xs text-slate-400">Exibindo registros encontrados</span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="verAuditoriaNosDadosBrutos()" class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition border border-blue-200 flex items-center gap-1.5">
+            <i class="ph ph-table"></i> Abrir na Tabela Geral
+          </button>
+          <button type="button" onclick="fecharModalAuditoriaCadastral()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
