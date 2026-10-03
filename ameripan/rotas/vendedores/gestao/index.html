@@ -282,6 +282,7 @@
     </nav>
     <div class="p-4 border-t border-slate-100 bg-slate-50 space-y-2">
         <button onclick="carregarDados()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg shadow-sm text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-arrows-clockwise"></i> Atualizar Dados</button>
+        <button onclick="executarSaneamentoEquipesNuvem()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg shadow-2xs text-xs font-bold flex items-center justify-center gap-2 transition" title="Auto-atribui equipes vazias e normaliza nomes na planilha Google Sheets"><i class="ph ph-magic-wand"></i> Sanear Equipes Nuvem</button>
         <button onclick="abrirModalAlterarSenhaGestor()" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition shadow-2xs"><i class="ph ph-key text-blue-600"></i> Alterar Senha</button>
         <button onclick="efetuarLogoutGestor()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-sign-out"></i> Sair / Bloquear</button>
     </div>
@@ -1572,6 +1573,9 @@
                 </div>
                 <!-- Botões de Ação Superior -->
                 <div class="flex flex-wrap gap-2 items-center">
+                    <button type="button" onclick="abrirModalRepescagemInativos()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition" title="Ver e conciliar clientes repescados da base de inativos">
+                        <i class="ph ph-arrows-merge text-base"></i> Conciliação de Inativos (Repescagem)
+                    </button>
                     <button type="button" onclick="abrirModalWhatsAppAdesao()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
                         <i class="ph ph-whatsapp-logo text-base"></i> Cobrar no WhatsApp
                     </button>
@@ -1590,13 +1594,18 @@
             <!-- 4 Cards de Métricas Resumidas (Requirement 4) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <!-- Card 1: Carteira Oficial -->
-                <div class="bg-white p-4 rounded-2xl border-l-4 border-blue-600 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="bg-white p-4 rounded-2xl border-l-4 border-blue-600 border border-slate-200 shadow-sm flex flex-col justify-between cursor-pointer hover:bg-slate-50/50 transition" onclick="abrirModalRepescagemInativos()" title="Clique para ver os clientes repescados da base de inativos">
                     <div class="flex items-center justify-between">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Carteira Oficial</span>
                         <span class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="ph ph-users"></i></span>
                     </div>
                     <div class="mt-2">
-                        <h3 class="text-2xl font-black text-slate-800" id="kpi-adesao-carteira">0</h3>
+                        <div class="flex items-baseline gap-2">
+                            <h3 class="text-2xl font-black text-slate-800" id="kpi-adesao-carteira">0</h3>
+                            <span id="badge-adesao-repescados-container" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hidden" style="display: none;">
+                                <i class="ph ph-arrows-merge text-xs"></i> <span id="kpi-adesao-repescados-badge">0 repescados</span>
+                            </span>
+                        </div>
                         <p class="text-[11px] text-slate-500 mt-0.5">Clientes atribuídos na aba CLIENTES</p>
                     </div>
                 </div>
@@ -1878,6 +1887,8 @@
     let rawTarefasCadastro = [];
     let auditoriaSubTab = 'a-gerar';
     let auditoriaSelecionados = new Set();
+    let rawRepescadosPrevia = [];
+    let repescagemCache = { todos: [], filtrados: [], pagina: 1, itensPorPagina: 25 };
 
     // Paginação
     let reportPaging = { page: 1, pageSize: 50 };
@@ -1965,6 +1976,9 @@
                 rawSolicitacoesPendentes = dadosGas.solicitacoesPendentes || [];
                 rawUltimasSolicitacoes = dadosGas.ultimasSolicitacoes || [];
                 rawTarefasCadastro = dadosGas.tarefasCadastro || [];
+                if (dadosGas.repescadosPrevia) {
+                    rawRepescadosPrevia = dadosGas.repescadosPrevia;
+                }
                 atualizarBadgeSolicitacoes();
                 atualizarBadgesTarefasAuditoria();
 
@@ -1979,6 +1993,21 @@
                     const countTrans = document.getElementById('count-hist-transferidos');
                     if (kpiTrans) kpiTrans.textContent = dadosGas.totalTransferidos;
                     if (countTrans) countTrans.textContent = dadosGas.totalTransferidos;
+                }
+                if (dadosGas.totalRepescados !== undefined || (rawRepescadosPrevia && rawRepescadosPrevia.length > 0)) {
+                    const totalRepesc = dadosGas.totalRepescados !== undefined ? dadosGas.totalRepescados : rawRepescadosPrevia.length;
+                    const badgeRepesc = document.getElementById('badge-adesao-repescados-container');
+                    const textRepesc = document.getElementById('kpi-adesao-repescados-badge');
+                    if (badgeRepesc && textRepesc) {
+                        textRepesc.textContent = `${totalRepesc} repescado${totalRepesc === 1 ? '' : 's'}`;
+                        if (totalRepesc > 0) {
+                            badgeRepesc.classList.remove('hidden');
+                            badgeRepesc.style.display = 'inline-flex';
+                        } else {
+                            badgeRepesc.classList.add('hidden');
+                            badgeRepesc.style.display = 'none';
+                        }
+                    }
                 }
 
                 rawEntregas = {};
@@ -2119,6 +2148,7 @@
             });
             }
 
+            sanearRawRotasEmMemoria();
             buildClientIndex();
             popularFiltros();
             inicializarSidebarState();
@@ -2136,6 +2166,113 @@
     // ============================================================
     // 3) FUNÇÕES AUXILIARES (dados)
     // ============================================================
+    function sanearRawRotasEmMemoria() {
+        if (!Array.isArray(rawRotas) || rawRotas.length === 0) return;
+
+        const mapVendPorCod = new Map();
+        const mapVendPorNome = new Map();
+
+        (rawVendedores || []).forEach(v => {
+            const c = String(v.cod || '').trim();
+            const nNorm = normalizarTexto(v.nome || '');
+            if (c) mapVendPorCod.set(c, v);
+            if (nNorm) mapVendPorNome.set(nNorm, v);
+        });
+
+        const aliases = {
+            'DARIO': 'DARIO LUCIANO RAMAZZA',
+            'DARIO LUCIANO': 'DARIO LUCIANO RAMAZZA'
+        };
+
+        rawRotas.forEach(r => {
+            let vCod = String(r.vendCod || '').trim();
+            let vNome = (r.vendedor || '').trim();
+            let eq = (r.equipe || '').trim();
+
+            const nNorm = normalizarTexto(vNome);
+            if (aliases[nNorm]) {
+                vNome = aliases[nNorm];
+                r.vendedor = vNome;
+            }
+
+            let vendEncontrado = null;
+            if (vCod && mapVendPorCod.has(vCod)) {
+                vendEncontrado = mapVendPorCod.get(vCod);
+            } else if (nNorm && mapVendPorNome.has(nNorm)) {
+                vendEncontrado = mapVendPorNome.get(nNorm);
+            } else {
+                vendEncontrado = (rawVendedores || []).find(v => {
+                    const vn = normalizarTexto(v.nome || '');
+                    return vn && nNorm && (vn.includes(nNorm) || nNorm.includes(vn));
+                });
+            }
+
+            if (vendEncontrado) {
+                if (!vCod && vendEncontrado.cod) {
+                    r.vendCod = String(vendEncontrado.cod).trim();
+                }
+                if (vendEncontrado.nome) {
+                    r.vendedor = vendEncontrado.nome;
+                }
+                if (!eq || eq === 'Geral' || eq === 'Sem Equipe' || eq === 'SEM EQUIPE' || eq === 'N/A') {
+                    if (vendEncontrado.equipe) {
+                        r.equipe = vendEncontrado.equipe;
+                    }
+                }
+            }
+
+            // Fallback determinístico para vendedores conhecidos caso não cadastrados
+            if (!r.equipe || r.equipe === 'Geral' || r.equipe === 'Sem Equipe' || r.equipe === 'SEM EQUIPE' || r.equipe === 'N/A') {
+                const codNum = String(r.vendCod || '').trim();
+                const nomeNorm = normalizarTexto(r.vendedor || '');
+                if (['261', '263', '269', '257', '270'].includes(codNum) ||
+                    nomeNorm.includes('DANIEL') || nomeNorm.includes('THATYANE') ||
+                    nomeNorm.includes('ITAMAR') || nomeNorm.includes('DARIO')) {
+                    r.equipe = 'EQUIPE 4 - VALDIR';
+                    if (!r.vendCod) {
+                        if (nomeNorm.includes('DANIEL')) r.vendCod = '261';
+                        else if (nomeNorm.includes('THATYANE')) r.vendCod = '263';
+                        else if (nomeNorm.includes('ITAMAR')) r.vendCod = '269';
+                        else if (nomeNorm.includes('DARIO')) r.vendCod = '257';
+                    }
+                } else if (codNum === '165' || nomeNorm.includes('EDIMAR')) {
+                    r.equipe = 'EQUIPE SORVETERIA';
+                    r.vendCod = '165';
+                }
+            }
+        });
+    }
+
+    async function executarSaneamentoEquipesNuvem() {
+        const confirmar = confirm("Deseja executar o saneamento automático de Equipes e Vendedores na planilha Google Sheets?\\n\\nIsso irá verificar todas as linhas da aba ROTAS, auto-atribuir a equipe oficial baseada em VENDEDORES e CLIENTES, e normalizar nomes de vendedores abreviados (ex: Dario -> DARIO LUCIANO RAMAZZA).");
+        if (!confirmar) return;
+
+        mostrarLoadingGlobal('Saneando equipes e vendedores na nuvem...', 'Verificando e corrigindo linhas sem equipe na planilha oficial...', 'ph-circle-notch');
+        try {
+            const ctrlGas = new AbortController();
+            const tidGas = setTimeout(() => ctrlGas.abort(), 35000);
+            const resp = await fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ acao: 'SANEAR_EQUIPES_ROTAS', abaRotas: 'ROTAS' }),
+                signal: ctrlGas.signal
+            });
+            clearTimeout(tidGas);
+            const resJson = await resp.json();
+
+            if (resJson && resJson.sucesso) {
+                alert(resJson.mensagem || 'Saneamento na nuvem concluído com sucesso!');
+                await carregarDados();
+            } else {
+                alert('Aviso do servidor: ' + ((resJson && resJson.erro) || 'Não foi possível concluir o saneamento na nuvem.'));
+            }
+        } catch (err) {
+            console.error('Erro ao executar saneamento de equipes na nuvem:', err);
+            alert('Erro ao conectar com a nuvem Google: ' + err.message);
+        } finally {
+            esconderLoadingGlobal();
+        }
+    }
     function normalizarTexto(txt) {
         return txt ? txt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase() : "";
     }
@@ -6115,6 +6252,8 @@
         if (e.key === 'Escape') {
             fecharDropdownCidadesOrfaos();
             fecharModalMultiCidadesOrfaos();
+            fecharModalRepescagemInativos();
+            fecharModalWhatsAppAdesao();
         }
     });
 
@@ -8720,6 +8859,25 @@ Agradecemos sua colaboração e agilidade!`;
         const kpiCart = document.getElementById('kpi-adesao-carteira');
         if (kpiCart) kpiCart.textContent = totalCarteiraEscopo.toLocaleString('pt-BR');
 
+        const badgeRepesc = document.getElementById('badge-adesao-repescados-container');
+        const textRepesc = document.getElementById('kpi-adesao-repescados-badge');
+        if (badgeRepesc && textRepesc) {
+            const listaRepesc = obterListaRepescados();
+            const repescNoEscopo = listaRepesc.filter(r => baseDimensional.some(b => String(b.codCliente).trim() === String(r.codigo).trim())).length;
+            if (repescNoEscopo > 0) {
+                textRepesc.textContent = `${repescNoEscopo} repescado${repescNoEscopo === 1 ? '' : 's'}`;
+                badgeRepesc.classList.remove('hidden');
+                badgeRepesc.style.display = 'inline-flex';
+            } else if (listaRepesc.length > 0 && totalCarteiraEscopo === (rawClientes || []).length) {
+                textRepesc.textContent = `${listaRepesc.length} repescados`;
+                badgeRepesc.classList.remove('hidden');
+                badgeRepesc.style.display = 'inline-flex';
+            } else {
+                badgeRepesc.classList.add('hidden');
+                badgeRepesc.style.display = 'none';
+            }
+        }
+
         const kpiRot = document.getElementById('kpi-adesao-roteirizados');
         if (kpiRot) kpiRot.textContent = totalRoteirizadosEscopo.toLocaleString('pt-BR');
 
@@ -9277,6 +9435,345 @@ Contamos com sua rápida regularização!`;
 
         const fileDate = new Date().toISOString().slice(0, 10);
         doc.save(`Relatorio_Adesao_Rotas_Nao_Preenchidos_${fileDate}.pdf`);
+    }
+
+    // ============================================================
+    // CONCILIAÇÃO & REPESCAGEM DE CLIENTES INATIVOS
+    // ============================================================
+    function obterListaRepescados() {
+        let lista = [];
+
+        if (rawRepescadosPrevia && rawRepescadosPrevia.length > 0) {
+            lista = rawRepescadosPrevia.map(item => {
+                const cod = String(item.codigo || item.codCliente || '').trim();
+                const rotasDoCliente = rawRotas.filter(r => String(r.codCliente).trim() === cod);
+                const jaTemRota = rotasDoCliente.length > 0;
+                const rotaPrincipal = rotasDoCliente[0] || null;
+                const vendAtual = item.vendedor || item.novoVendedor || '';
+                const vendAnt = item.vendedorAnterior || 'Inativo Histórico';
+                const mudouVendedor = normalizarTexto(vendAtual) !== normalizarTexto(vendAnt);
+
+                return {
+                    codigo: cod,
+                    razao: item.razao || '',
+                    fantasia: item.fantasia || item.razao || '',
+                    cidade: item.cidade || '',
+                    vendedorAnterior: vendAnt,
+                    equipeAnterior: item.equipeAnterior || '-',
+                    novoVendedor: vendAtual,
+                    novaEquipe: item.equipe || item.novaEquipe || '',
+                    jaTemRota: jaTemRota,
+                    mudouVendedor: mudouVendedor,
+                    rotaDia: rotaPrincipal ? (rotaPrincipal.dia || rotaPrincipal.data || 'Sim') : '',
+                    rotaVendedor: rotaPrincipal ? (rotaPrincipal.vendedor || '') : '',
+                    rotaTelefone: rotaPrincipal ? (rotaPrincipal.whatsapp || '') : ''
+                };
+            });
+        } else if (rawClientes && rawClientes.length > 0 && rawHistoricoInativos && rawHistoricoInativos.length > 0) {
+            const inatMap = new Map();
+            rawHistoricoInativos.forEach(i => {
+                const cod = String(i.codCliente || i.codigo || '').trim();
+                if (cod) inatMap.set(cod, i);
+            });
+
+            rawClientes.forEach(c => {
+                const cod = String(c.codigo || c.codCliente || '').trim();
+                const vendAtual = String(c.vendedor || '').trim();
+                if (cod && inatMap.has(cod)) {
+                    if (vendAtual && vendAtual.toUpperCase() !== 'SEM ATENDIMENTO' && vendAtual.toUpperCase() !== 'INATIVO') {
+                        const inatObj = inatMap.get(cod);
+                        const rotasDoCliente = rawRotas.filter(r => String(r.codCliente).trim() === cod);
+                        const jaTemRota = rotasDoCliente.length > 0;
+                        const rotaPrincipal = rotasDoCliente[0] || null;
+                        const vendAnt = inatObj.vendedorAnterior || inatObj.vendedor || 'Inativo Histórico';
+                        const mudouVendedor = normalizarTexto(vendAtual) !== normalizarTexto(vendAnt);
+
+                        lista.push({
+                            codigo: cod,
+                            razao: c.razao || inatObj.razaoSocial || inatObj.razao || '',
+                            fantasia: c.fantasia || inatObj.fantasia || c.razao || '',
+                            cidade: c.cidade || inatObj.cidade || '',
+                            vendedorAnterior: vendAnt,
+                            equipeAnterior: inatObj.equipeAnterior || inatObj.equipe || '-',
+                            novoVendedor: vendAtual,
+                            novaEquipe: c.equipe || '',
+                            jaTemRota: jaTemRota,
+                            mudouVendedor: mudouVendedor,
+                            rotaDia: rotaPrincipal ? (rotaPrincipal.dia || rotaPrincipal.data || 'Sim') : '',
+                            rotaVendedor: rotaPrincipal ? (rotaPrincipal.vendedor || '') : '',
+                            rotaTelefone: rotaPrincipal ? (rotaPrincipal.whatsapp || '') : ''
+                        });
+                    }
+                }
+            });
+        }
+
+        return lista;
+    }
+
+    function abrirModalRepescagemInativos() {
+        const modal = document.getElementById('modalRepescagemInativos');
+        if (!modal) return;
+
+        if ((!rawRepescadosPrevia || rawRepescadosPrevia.length === 0) && !historicoCarregado) {
+            carregarHistorico(false).then(() => {
+                configurarFiltrosEModalRepescagem();
+            }).catch(() => {
+                configurarFiltrosEModalRepescagem();
+            });
+        } else {
+            configurarFiltrosEModalRepescagem();
+        }
+
+        // Dual-Safety Display
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    }
+
+    function fecharModalRepescagemInativos() {
+        const modal = document.getElementById('modalRepescagemInativos');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    function configurarFiltrosEModalRepescagem() {
+        const lista = obterListaRepescados();
+        repescagemCache.todos = lista;
+        repescagemCache.pagina = 1;
+
+        const selVend = document.getElementById('filtro-repesc-vendedor');
+        if (selVend) {
+            const vends = Array.from(new Set(lista.map(i => i.novoVendedor).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+            selVend.innerHTML = '<option value="">Vendedor Atual: Todos</option>' + 
+                vends.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        }
+
+        const kpiTotal = document.getElementById('repesc-kpi-total');
+        const badgeTotal = document.getElementById('repesc-badge-total');
+        const kpiComRota = document.getElementById('repesc-kpi-com-rota');
+        const kpiTrocaVend = document.getElementById('repesc-kpi-troca-vend');
+        const kpiMesmoVend = document.getElementById('repesc-kpi-mesmo-vend');
+
+        const total = lista.length;
+        const comRota = lista.filter(i => i.jaTemRota).length;
+        const trocaVend = lista.filter(i => i.mudouVendedor).length;
+        const mesmoVend = total - trocaVend;
+
+        if (kpiTotal) kpiTotal.textContent = total.toLocaleString('pt-BR');
+        if (badgeTotal) badgeTotal.textContent = `${total} cliente${total === 1 ? '' : 's'}`;
+        if (kpiComRota) kpiComRota.textContent = comRota.toLocaleString('pt-BR');
+        if (kpiTrocaVend) kpiTrocaVend.textContent = trocaVend.toLocaleString('pt-BR');
+        if (kpiMesmoVend) kpiMesmoVend.textContent = mesmoVend.toLocaleString('pt-BR');
+
+        aoFiltrarTabelaRepescagem();
+    }
+
+    function aoFiltrarTabelaRepescagem() {
+        const lista = repescagemCache.todos || obterListaRepescados();
+        const fBusca = (document.getElementById('filtro-repesc-busca')?.value || '').trim().toLowerCase();
+        const fStatus = document.getElementById('filtro-repesc-status')?.value || '';
+        const fVend = document.getElementById('filtro-repesc-vendedor')?.value || '';
+
+        const filtrados = lista.filter(item => {
+            if (fStatus === 'COM_ROTA' && !item.jaTemRota) return false;
+            if (fStatus === 'SEM_ROTA' && item.jaTemRota) return false;
+            if (fStatus === 'TROCA_VEND' && !item.mudouVendedor) return false;
+            if (fStatus === 'MESMO_VEND' && item.mudouVendedor) return false;
+
+            if (fVend && item.novoVendedor !== fVend) return false;
+
+            if (fBusca) {
+                const cod = String(item.codigo || '').toLowerCase();
+                const raz = String(item.razao || '').toLowerCase();
+                const fan = String(item.fantasia || '').toLowerCase();
+                const cid = String(item.cidade || '').toLowerCase();
+                const vAnt = String(item.vendedorAnterior || '').toLowerCase();
+                const vNov = String(item.novoVendedor || '').toLowerCase();
+
+                if (!cod.includes(fBusca) && !raz.includes(fBusca) && !fan.includes(fBusca) && 
+                    !cid.includes(fBusca) && !vAnt.includes(fBusca) && !vNov.includes(fBusca)) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        // Persistência de estado antes de renderizar
+        repescagemCache.filtrados = filtrados;
+        repescagemCache.pagina = 1;
+        renderizarTabelaRepescagem();
+    }
+
+    function renderizarTabelaRepescagem() {
+        const tbody = document.getElementById('repesc-tbody');
+        if (!tbody) return;
+
+        const filtrados = repescagemCache.filtrados || [];
+        const total = filtrados.length;
+        const itensPorPagina = repescagemCache.itensPorPagina || 25;
+        const pagAtual = repescagemCache.pagina || 1;
+        const totalPaginas = Math.ceil(total / itensPorPagina) || 1;
+
+        const inicio = (pagAtual - 1) * itensPorPagina;
+        const fim = Math.min(inicio + itensPorPagina, total);
+        const paginaItens = filtrados.slice(inicio, fim);
+
+        const pagInfo = document.getElementById('repesc-pag-info');
+        if (pagInfo) {
+            pagInfo.textContent = total === 0 ? 'Nenhum cliente encontrado' : `Mostrando ${inicio + 1}-${fim} de ${total}`;
+        }
+
+        const btnPrev = document.getElementById('btn-repesc-pag-prev');
+        const btnNext = document.getElementById('btn-repesc-pag-next');
+        if (btnPrev) btnPrev.disabled = pagAtual <= 1;
+        if (btnNext) btnNext.disabled = pagAtual >= totalPaginas;
+
+        if (paginaItens.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-400">
+                        <i class="ph ph-magnifying-glass text-3xl mb-1 text-slate-300 block"></i>
+                        Nenhum cliente repescado corresponde aos filtros aplicados.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = paginaItens.map(item => {
+            const cod = escapeHtml(item.codigo);
+            const razao = escapeHtml(item.razao);
+            const fantasia = escapeHtml(item.fantasia);
+            const cidade = escapeHtml(item.cidade);
+            const vendAnt = escapeHtml(item.vendedorAnterior || 'Inativo Histórico');
+            const eqAnt = escapeHtml(item.equipeAnterior || '-');
+            const vendNov = escapeHtml(item.novoVendedor);
+            const eqNov = escapeHtml(item.novaEquipe || '-');
+
+            let statusRotaHtml = '';
+            if (item.jaTemRota) {
+                statusRotaHtml = `
+                    <div class="inline-flex flex-col items-center">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <i class="ph ph-check-circle text-xs"></i> Rota Semanal Ativa
+                        </span>
+                        <span class="text-[10px] text-slate-500 font-medium mt-0.5">${escapeHtml(item.rotaDia)} ${item.rotaTelefone ? '• Tel OK' : ''}</span>
+                    </div>
+                `;
+            } else {
+                statusRotaHtml = `
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        <i class="ph ph-clock text-xs"></i> Aguardando Grade
+                    </span>
+                `;
+            }
+
+            const mudouBadge = item.mudouVendedor 
+                ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 ml-1">Troca de RCA</span>`
+                : `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 ml-1">Mesmo RCA</span>`;
+
+            return `
+                <tr class="hover:bg-slate-50/80 transition text-xs">
+                    <td class="p-3 font-mono font-bold text-slate-800">${cod}</td>
+                    <td class="p-3">
+                        <button type="button" onclick="openClientModal('${escapeJs(item.codigo)}')" class="text-left font-bold text-blue-700 hover:underline">
+                            ${razao}
+                        </button>
+                        ${fantasia && fantasia !== razao ? `<div class="text-[11px] text-slate-400 font-medium">${fantasia}</div>` : ''}
+                    </td>
+                    <td class="p-3 font-medium text-slate-600">${cidade}</td>
+                    <td class="p-3">
+                        <div class="text-slate-500 line-through font-medium">${vendAnt}</div>
+                        <div class="text-[10px] text-slate-400">${eqAnt}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="font-bold text-slate-800 flex items-center">${vendNov} ${mudouBadge}</div>
+                        <div class="text-[10px] text-slate-500">${eqNov}</div>
+                    </td>
+                    <td class="p-3 text-center">${statusRotaHtml}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function mudarPaginaRepescagem(delta) {
+        const total = (repescagemCache.filtrados || []).length;
+        const itensPorPagina = repescagemCache.itensPorPagina || 25;
+        const totalPaginas = Math.ceil(total / itensPorPagina) || 1;
+        const novaPagina = (repescagemCache.pagina || 1) + delta;
+
+        if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+            repescagemCache.pagina = novaPagina;
+            renderizarTabelaRepescagem();
+        }
+    }
+
+    function exportarExcelRepescagem() {
+        const dados = repescagemCache.filtrados || obterListaRepescados();
+        if (!dados || dados.length === 0) {
+            alert("Nenhum cliente repescado para exportar.");
+            return;
+        }
+
+        const dataIso = new Date().toISOString().slice(0, 10);
+        const wsData = dados.map(item => ({
+            "Cód. Cliente": item.codigo,
+            "Razão Social": item.razao,
+            "Nome Fantasia": item.fantasia || item.razao,
+            "Cidade": item.cidade,
+            "Vendedor Anterior (Inativação)": item.vendedorAnterior,
+            "Equipe Anterior": item.equipeAnterior,
+            "Novo Vendedor Atribuído (CLIENTES)": item.novoVendedor,
+            "Nova Equipe": item.novaEquipe,
+            "Mudança de Vendedor": item.mudouVendedor ? "Sim" : "Não",
+            "Já Possui Rota Semanal": item.jaTemRota ? "Sim" : "Não",
+            "Dia da Visita (ROTAS)": item.rotaDia || "—",
+            "Telefone da Rota": item.rotaTelefone || "—"
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, "Repescagem_Inativos");
+        XLSX.writeFile(wb, `Relatorio_Repescagem_Clientes_Inativos_${dataIso}.xlsx`);
+    }
+
+    async function confirmarConciliarRepescagemInativos() {
+        const lista = repescagemCache.todos || obterListaRepescados();
+        const total = lista.length;
+        if (total === 0) {
+            alert("Não há clientes repescados pendentes de conciliação.");
+            return;
+        }
+
+        const confirmar = confirm(`Deseja executar a conciliação na nuvem de ${total} clientes repescados?\n\nIsso irá:\n1. Remover o bloqueio histórico da aba CLIENTES_INATIVOS.\n2. Gravar o histórico de transferências em CLIENTES_TRANSFERIDOS.\n3. Atualizar a base de dados oficial em tempo real.`);
+        if (!confirmar) return;
+
+        mostrarLoadingGlobal('Conciliando Inativos na Nuvem...', 'Removendo inativações obsoletas e transferindo clientes para novos vendedores...', 'ph-arrows-clockwise');
+
+        try {
+            const payload = {
+                acao: 'CONCILIAR_REPESCAGEM_INATIVOS',
+                usuario: 'Gestor (Repescagem)',
+                ambiente: 'PROD'
+            };
+
+            const res = await fetchComRetry(GAS_API_URL, payload);
+            if (res && res.sucesso) {
+                alert(`✅ ${res.mensagem || 'Conciliação realizada com sucesso!'}`);
+                fecharModalRepescagemInativos();
+                await carregarDados();
+            } else {
+                alert(`⚠️ Falha na conciliação: ${res?.erro || 'Erro desconhecido retornado pelo servidor.'}`);
+            }
+        } catch (err) {
+            console.error("Erro ao conciliar repescagem:", err);
+            alert(`❌ Erro de comunicação com a nuvem: ${err.message || err}`);
+        } finally {
+            esconderLoadingGlobal();
+        }
     }
 
 </script>
@@ -9953,6 +10450,119 @@ Contamos com sua rápida regularização!`;
           <i class="ph ph-whatsapp-logo text-base"></i>
           <span>Abrir no WhatsApp</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Conciliação e Repescagem de Clientes Inativos -->
+  <div id="modalRepescagemInativos" onclick="fecharModalRepescagemInativos()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[245] items-center justify-center p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] border border-slate-200 overflow-hidden flex flex-col animate-scale-up" onclick="event.stopPropagation()">
+      <!-- Header do Modal -->
+      <div class="p-4 bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-white text-2xl font-bold shadow-inner">
+            <i class="ph ph-arrows-merge"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h4 class="text-base font-black">Conciliação & Repescagem de Inativos</h4>
+              <span id="repesc-badge-total" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-white border border-white/30">0 clientes</span>
+            </div>
+            <span class="text-[11px] text-indigo-100">Clientes reatribuídos a vendedores ativos que constavam bloqueados no histórico de inativos</span>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalRepescagemInativos()" class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition" title="Fechar (Esc)">
+          <i class="ph ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Resumo Executivo & Métricas Rápidas -->
+      <div class="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-[10px] font-bold uppercase text-slate-400 block">Total Repescados:</span>
+          <span id="repesc-kpi-total" class="text-lg font-black text-indigo-700">0</span>
+        </div>
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-[10px] font-bold uppercase text-slate-400 block">Já com Rota na Semana:</span>
+          <span id="repesc-kpi-com-rota" class="text-lg font-black text-emerald-600">0</span>
+        </div>
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-[10px] font-bold uppercase text-slate-400 block">Troca de Vendedor:</span>
+          <span id="repesc-kpi-troca-vend" class="text-lg font-black text-blue-600">0</span>
+        </div>
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-[10px] font-bold uppercase text-slate-400 block">Mesmo Vendedor Reativado:</span>
+          <span id="repesc-kpi-mesmo-vend" class="text-lg font-black text-amber-600">0</span>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros e Busca -->
+      <div class="p-3 bg-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-1 flex-wrap items-center gap-2 min-w-[280px]">
+          <div class="relative flex-1 min-w-[180px]">
+            <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
+            <input type="text" id="filtro-repesc-busca" oninput="aoFiltrarTabelaRepescagem()" placeholder="Buscar por código, cliente, cidade, vendedor..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+          </div>
+          <select id="filtro-repesc-status" onchange="aoFiltrarTabelaRepescagem()" class="text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-indigo-500">
+            <option value="">Status: Todos</option>
+            <option value="COM_ROTA">Com Rota Ativa na Semana</option>
+            <option value="SEM_ROTA">Aguardando Rota</option>
+            <option value="TROCA_VEND">Com Troca de Vendedor</option>
+            <option value="MESMO_VEND">Mesmo Vendedor</option>
+          </select>
+          <select id="filtro-repesc-vendedor" onchange="aoFiltrarTabelaRepescagem()" class="text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-indigo-500 max-w-[200px]">
+            <option value="">Vendedor Atual: Todos</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="exportarExcelRepescagem()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+            <i class="ph ph-file-xls text-sm"></i> Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabela com Scroll -->
+      <div class="flex-1 overflow-y-auto min-h-[300px] max-h-[50vh] p-0">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0 shadow-xs z-10 border-b border-slate-200">
+            <tr>
+              <th class="p-3 whitespace-nowrap">Cód.</th>
+              <th class="p-3">Cliente / Razão Social</th>
+              <th class="p-3">Cidade</th>
+              <th class="p-3">Vendedor Anterior (Inativação)</th>
+              <th class="p-3">Novo Vendedor Atribuído (CLIENTES)</th>
+              <th class="p-3 text-center">Status Rota Semanal</th>
+            </tr>
+          </thead>
+          <tbody id="repesc-tbody" class="divide-y divide-slate-100 text-slate-700">
+            <!-- Linhas geradas via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Rodapé com Paginação e Ação Executiva -->
+      <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+          <span id="repesc-pag-info">Mostrando 0 de 0</span>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="mudarPaginaRepescagem(-1)" id="btn-repesc-pag-prev" class="p-1 rounded-lg border border-slate-200 hover:bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed">
+              <i class="ph ph-caret-left"></i>
+            </button>
+            <button type="button" onclick="mudarPaginaRepescagem(1)" id="btn-repesc-pag-next" class="p-1 rounded-lg border border-slate-200 hover:bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed">
+              <i class="ph ph-caret-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="fecharModalRepescagemInativos()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition text-xs">
+            Fechar
+          </button>
+          <button type="button" onclick="confirmarConciliarRepescagemInativos()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5 text-xs">
+            <i class="ph ph-arrows-clockwise text-sm"></i>
+            <span>Executar Conciliação na Nuvem</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
