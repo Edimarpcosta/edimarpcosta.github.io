@@ -30,6 +30,9 @@
   </script>
 
   <style>
+    /* Regra mandatória de resiliência visual */
+    .hidden { display: none !important; }
+
     /* Base */
     body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; display: flex; height: 100vh; overflow: hidden; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -233,11 +236,6 @@
     html.gestor-authenticated #modalLoginGestor {
       display: none !important;
     }
-    html.gestor-authenticated #loading-overlay {
-      display: flex !important;
-      opacity: 1 !important;
-      pointer-events: all !important;
-    }
 
     /* Overlay de Loading Global On-Top (Anti-Duplo Clique) */
     #loading-overlay.loading-active {
@@ -278,6 +276,7 @@
             <li><a href="javascript:void(0)" onclick="switchView('calendar')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-calendar text-lg"></i> Calendário (Mês)</a></li>
             <li><a href="javascript:void(0)" onclick="switchView('logistica')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-map-pin text-lg"></i> Logística & Cobertura</a></li>
             <li><a href="javascript:void(0)" onclick="switchView('team')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-users-three text-lg"></i> Carga da Equipe</a></li>
+            <li><a href="javascript:void(0)" onclick="switchView('adesao')" id="nav-adesao" class="menu-item flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><span class="flex items-center gap-3"><i class="ph ph-user-minus text-lg text-rose-600"></i> Não Preenchidos (Adesão)</span><span id="badge-nav-adesao" class="hidden px-2 py-0.5 text-[10px] font-bold bg-rose-600 text-white rounded-full">0</span></a></li>
             <li><a href="javascript:void(0)" onclick="switchView('reports')" class="menu-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"><i class="ph ph-file-text text-lg"></i> Dados Brutos</a></li>
         </ul>
     </nav>
@@ -336,6 +335,27 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Distribuição Semanal (Escala: 0-20+)</h3><canvas id="chartDias"></canvas></div>
                 <div class="bg-white p-4 rounded shadow-sm h-80"><h3 class="text-sm font-bold text-slate-600 mb-4">Top 5 Cidades</h3><canvas id="chartCidades"></canvas></div>
+            </div>
+
+            <!-- Banner Alerta de Adesão de Rotas (Clientes Não Preenchidos) -->
+            <div id="banner-adesao-dashboard" class="mt-6 p-4 bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border border-rose-200/90 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                <div class="flex items-center gap-3.5">
+                    <span class="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center text-2xl font-bold shadow-xs flex-shrink-0">
+                        <i class="ph ph-user-minus"></i>
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-sm font-black text-rose-950 uppercase tracking-tight">Adesão de Rotas: Clientes Pendentes de Roteirização</h4>
+                            <span id="badge-dash-adesao-pct" class="text-[11px] font-bold bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full">--% Cobertura</span>
+                        </div>
+                        <p class="text-xs text-rose-900/80 mt-0.5">Existem <strong id="lbl-dash-adesao-pendentes" class="font-black text-rose-950">0</strong> clientes atribuídos em CLIENTES que ainda não foram preenchidos na grade semanal de ROTAS.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="switchView('adesao')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition">
+                        <i class="ph ph-arrow-right text-base"></i> Abrir Relatório de Adesão
+                    </button>
+                </div>
             </div>
 
             <!-- Seção de Auditoria & Qualidade Cadastral -->
@@ -1530,12 +1550,233 @@
             </div>
         </div>
 
+        <!-- ============================================================ -->
+        <!-- ABA: RELATÓRIO DE CLIENTES NÃO PREENCHIDOS (ADESÃO DE ROTAS) -->
+        <!-- ============================================================ -->
+        <div id="view-adesao" class="view-section p-6 space-y-6">
+            <!-- Cabeçalho da Seção -->
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[11px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 uppercase tracking-wide">
+                            <i class="ph ph-shield-warning text-xs"></i> Auditoria de Adesão & Cobertura
+                        </span>
+                        <span class="text-[11px] text-slate-400 font-medium">• Comparativo CLIENTES vs ROTAS</span>
+                    </div>
+                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2.5">
+                        <i class="ph ph-user-minus text-rose-600"></i> Relatório de Clientes Não Preenchidos (Adesão de Rotas)
+                    </h2>
+                    <p class="text-xs text-slate-500 max-w-3xl mt-1 leading-relaxed">
+                        Cruzamento sistemático entre a carteira oficial de clientes atribuídos (<span class="font-bold text-slate-700">CLIENTES</span>) e a grade semanal de atendimento (<span class="font-bold text-slate-700">ROTAS</span>). Localize clientes que ficaram de fora da programação, divergências entre carteiras e cobre a regularização imediata do vendedor.
+                    </p>
+                </div>
+                <!-- Botões de Ação Superior -->
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button type="button" onclick="abrirModalWhatsAppAdesao()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="ph ph-whatsapp-logo text-base"></i> Cobrar no WhatsApp
+                    </button>
+                    <button type="button" onclick="exportarExcelAdesao()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="ph ph-file-xls text-base"></i> Exportar Excel
+                    </button>
+                    <button type="button" onclick="exportarPdfAdesao()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="ph ph-file-pdf text-base"></i> Exportar PDF
+                    </button>
+                    <button type="button" onclick="carregarDados()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition border border-slate-200" title="Sincronizar dados da nuvem">
+                        <i class="ph ph-arrows-clockwise text-base"></i> Sincronizar
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4 Cards de Métricas Resumidas (Requirement 4) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Card 1: Carteira Oficial -->
+                <div class="bg-white p-4 rounded-2xl border-l-4 border-blue-600 border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Carteira Oficial</span>
+                        <span class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="ph ph-users"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <h3 class="text-2xl font-black text-slate-800" id="kpi-adesao-carteira">0</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Clientes atribuídos na aba CLIENTES</p>
+                    </div>
+                </div>
+
+                <!-- Card 2: Roteirizados -->
+                <div class="bg-white p-4 rounded-2xl border-l-4 border-emerald-500 border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Roteirizados</span>
+                        <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg"><i class="ph ph-check-circle"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <h3 class="text-2xl font-black text-emerald-700" id="kpi-adesao-roteirizados">0</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Preenchidos na grade semanal ROTAS</p>
+                    </div>
+                </div>
+
+                <!-- Card 3: Pendentes de Preenchimento -->
+                <div class="bg-white p-4 rounded-2xl border-l-4 border-rose-500 border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-rose-500">Pendentes de Preenchimento</span>
+                        <span class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg"><i class="ph ph-warning-octagon"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <h3 class="text-2xl font-black text-rose-600" id="kpi-adesao-pendentes">0</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5" id="kpi-adesao-pendentes-detalhe">0 sem rota • 0 outro RCA</p>
+                    </div>
+                </div>
+
+                <!-- Card 4: % Cobertura -->
+                <div class="bg-white p-4 rounded-2xl border-l-4 border-indigo-500 border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Índice de Cobertura</span>
+                        <span class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg"><i class="ph ph-chart-donut"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="flex items-baseline justify-between">
+                            <h3 class="text-2xl font-black text-slate-800" id="kpi-adesao-cobertura">0.0%</h3>
+                            <span id="kpi-adesao-cobertura-tag" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Calculando...</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden">
+                            <div id="kpi-adesao-cobertura-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros Multidimensionais (Requirement 3: TODOS, POR EQUIPE, POR VENDEDOR, POR CIDADE, busca por código/razão) -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                        <i class="ph ph-funnel text-blue-600"></i> Filtros Multidimensionais
+                    </span>
+                    <button type="button" onclick="limparFiltrosAdesao()" class="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition">
+                        <i class="ph ph-arrow-counter-clockwise"></i> Limpar Filtros
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <!-- Filtro Equipe -->
+                    <div>
+                        <label for="filtro-adesao-equipe" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Equipe:</label>
+                        <select id="filtro-adesao-equipe" onchange="aoMudarFiltroEquipeAdesao()" class="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 font-medium">
+                            <option value="">Todas as Equipes</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro Vendedor -->
+                    <div>
+                        <label for="filtro-adesao-vendedor" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vendedor:</label>
+                        <select id="filtro-adesao-vendedor" onchange="aoFiltrarAdesao(true)" class="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 font-medium">
+                            <option value="">Todos os Vendedores</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro Cidade -->
+                    <div>
+                        <label for="filtro-adesao-cidade" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cidade:</label>
+                        <select id="filtro-adesao-cidade" onchange="aoFiltrarAdesao(true)" class="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 font-medium">
+                            <option value="">Todas as Cidades</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro Situação na Grade -->
+                    <div>
+                        <label for="filtro-adesao-status" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Situação na Grade:</label>
+                        <select id="filtro-adesao-status" onchange="aoFiltrarAdesao(true)" class="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 font-bold text-slate-800">
+                            <option value="PENDENTES" selected>🔴 Apenas Pendentes (Não Preenchidos)</option>
+                            <option value="SEM_ROTA">⚠️ Sem Rota Alguma (Inéditos)</option>
+                            <option value="ROTA_OUTRO_VENDEDOR">🟠 Na Rota de Outro Vendedor</option>
+                            <option value="ROTEIRIZADO">🟢 Roteirizados (Preenchidos)</option>
+                            <option value="TODOS">📋 Todos da Carteira (Completa)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Linha de Busca Rápida -->
+                <div class="pt-1">
+                    <div class="relative">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                        <input type="text" id="filtro-adesao-busca" placeholder="Buscar por código, razão social ou nome fantasia..." oninput="aoBuscarAdesao()" class="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 transition font-medium">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela de Listagem -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- Barra de Ações em Lote e Informações de Paginação -->
+                <div class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-2 font-bold text-slate-700 cursor-pointer select-none">
+                            <input type="checkbox" id="adesao-check-todos" onchange="alternarSelecaoTodosAdesao(this)" class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500">
+                            <span>Marcar todos</span>
+                        </label>
+                        <span class="text-slate-300">|</span>
+                        <span id="adesao-contador-selecionados" class="font-bold text-slate-700">0 selecionado(s)</span>
+                        <button type="button" id="btn-cobrar-selecionados-adesao" onclick="abrirModalWhatsAppAdesao()" class="hidden text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xs transition" style="display: none;">
+                            <i class="ph ph-whatsapp-logo"></i> Cobrar Selecionados
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span id="adesao-info-contagem" class="text-slate-500 font-medium">Exibindo 0 clientes</span>
+                    </div>
+                </div>
+
+                <!-- Tabela Responsiva -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs" id="tabela-adesao">
+                        <thead class="bg-slate-100/75 text-slate-600 font-black uppercase text-[10px] tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 text-center w-10"></th>
+                                <th class="p-3 w-20">Cód.</th>
+                                <th class="p-3">Razão Social / Nome Fantasia</th>
+                                <th class="p-3 w-40">Cidade</th>
+                                <th class="p-3 w-36">Equipe</th>
+                                <th class="p-3 w-48">Vendedor Atribuído (CLIENTES)</th>
+                                <th class="p-3 w-48">Situação na Grade</th>
+                                <th class="p-3 w-44">Detalhes na Rota</th>
+                                <th class="p-3 text-center w-28">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-adesao-tbody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Rodapé de Paginação -->
+                <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Página:</span>
+                        <button type="button" onclick="mudarPaginaAdesao(-1)" id="btn-adesao-prev" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="ph ph-caret-left"></i>
+                        </button>
+                        <span id="adesao-pagina-info" class="font-bold text-slate-800">1 de 1</span>
+                        <button type="button" onclick="mudarPaginaAdesao(1)" id="btn-adesao-next" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="ph ph-caret-right"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Itens por página:</span>
+                        <select id="adesao-page-size" onchange="aoMudarPageSizeAdesao(this.value)" class="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700">
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
     </div>
   </main>
   </div><!-- Fim app-container -->
 
     <!-- Overlay Global de Processamento & Bloqueio On-Top (Anti-Duplo Clique) -->
-  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-4 transition-opacity duration-150" style="display: none; opacity: 0; pointer-events: none; cursor: wait;">
+  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-4 transition-opacity duration-150 hidden" style="display: none; opacity: 0; pointer-events: none; cursor: wait;">
     <div class="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-slate-200/80 p-6 max-w-sm w-full mx-auto flex flex-col items-center text-center animate-fadeIn relative overflow-hidden">
       <!-- Barra decorativa superior com gradiente Ameripan -->
       <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 animate-pulse"></div>
@@ -1581,6 +1822,7 @@
     const URL_ROTAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_ROTAS_ATIVA}!A2:O?key=${API_KEY}`;
     const URL_VENDEDORES = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/VENDEDORES!A2:C?key=${API_KEY}`;
     const URL_ENTREGAS = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CIDADES-ENTREGAS!A2:B?key=${API_KEY}`;
+    const URL_CLIENTES = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/CLIENTES!A2:F?key=${API_KEY}`;
 
     const COL = { DATA:0, VEND_COD:1, VEND_NOME:2, EQUIPE:3, CLIENTE_COD:4, RAZAO:5, FANTASIA:6, CIDADE:7, ORDEM:8, FREQ:9, DIA_PRINC:10, DIAS_SEC:11, COMPRADOR:12, WHATSAPP:13, OBS:14 };
     const DIAS_MAP = { 'SEG':1, 'SEGUNDA':1, 'TER':2, 'TERCA':2, 'QUA':3, 'QUARTA':3, 'QUI':4, 'QUINTA':4, 'SEX':5, 'SEXTA':5, 'SAB':6, 'SABADO':6 };
@@ -1666,6 +1908,8 @@
         if (mCli) mCli.style.display = 'none';
         const mAud = document.getElementById('modalAuditoriaCadastral');
         if (mAud) { mAud.style.display = 'none'; mAud.classList.add('hidden'); }
+        const mWhatsAdesao = document.getElementById('modalDisparoWhatsAppAdesao');
+        if (mWhatsAdesao) { mWhatsAdesao.style.display = 'none'; mWhatsAdesao.classList.add('hidden'); }
 
         // Checagem de autenticação do Gestor
         const gestorAuth = sessionStorage.getItem('ameripan_gestor_auth') || localStorage.getItem('ameripan_gestor_auth');
@@ -1697,14 +1941,19 @@
         try {
             // Tenta obter dados completos atomicamente via GAS
             let dadosGas = null;
+            const ctrlGas = new AbortController();
+            const tidGas = setTimeout(() => ctrlGas.abort(), 25000);
             try {
                 const rGas = await fetch(GAS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ acao: 'OBTER_DADOS_GESTAO', abaRotas: 'ROTAS', ambiente: 'PROD' })
+                    body: JSON.stringify({ acao: 'OBTER_DADOS_GESTAO', abaRotas: 'ROTAS', ambiente: 'PROD' }),
+                    signal: ctrlGas.signal
                 });
+                clearTimeout(tidGas);
                 dadosGas = await rGas.json();
             } catch (eGas) {
+                clearTimeout(tidGas);
                 console.warn("Falha no endpoint GAS, tentando fallback...", eGas);
             }
 
@@ -1783,9 +2032,34 @@
                 });
             } else {
                 // Fallback Sheets API v4
-                const [resRotas, resEnt] = await Promise.all([fetch(URL_ROTAS), fetch(URL_ENTREGAS)]);
+                const ctrlSheets = new AbortController();
+                const tidSheets = setTimeout(() => ctrlSheets.abort(), 20000);
+                let resRotas, resEnt, resCli;
+                try {
+                    [resRotas, resEnt, resCli] = await Promise.all([
+                        fetch(URL_ROTAS, { signal: ctrlSheets.signal }),
+                        fetch(URL_ENTREGAS, { signal: ctrlSheets.signal }),
+                        fetch(URL_CLIENTES, { signal: ctrlSheets.signal })
+                    ]);
+                    clearTimeout(tidSheets);
+                } catch (eFb) {
+                    clearTimeout(tidSheets);
+                    throw eFb;
+                }
                 const jRotas = await resRotas.json();
                 const jEnt = await resEnt.json();
+                const jCli = await resCli.json();
+
+                if (jCli && jCli.values) {
+                    rawClientes = jCli.values.map(r => ({
+                        cidade: String(r[0] || '').trim(),
+                        codigo: String(r[1] || '').trim(),
+                        razao: String(r[2] || '').trim(),
+                        fantasia: String(r[3] || r[2] || '').trim(),
+                        vendedor: String(r[4] || '').trim(),
+                        equipe: String(r[5] || '').trim()
+                    }));
+                }
 
             // Entregas (por cidade)
             rawEntregas = {};
@@ -1849,6 +2123,7 @@
             popularFiltros();
             inicializarSidebarState();
             syncRotaVendedorOptions();
+            atualizarBadgesAdesaoRotas();
             aplicarFiltros(true);
         } catch (e) {
             console.error(e);
@@ -2025,6 +2300,11 @@
             subtitulo: 'Analisando distribuição de paradas e balanceamento...',
             icone: 'ph-users-four'
         },
+        'adesao': {
+            titulo: 'Auditando Adesão de Rotas...',
+            subtitulo: 'Cruzando carteira de CLIENTES com a grade semanal de ROTAS...',
+            icone: 'ph-user-minus'
+        },
         'reports': {
             titulo: 'Carregando Dados Brutos...',
             subtitulo: 'Estruturando listagem analítica para consulta e exportação...',
@@ -2051,6 +2331,7 @@
         }
 
         overlay.classList.add('loading-active');
+        overlay.classList.remove('hidden');
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'all';
         overlay.style.cursor = 'wait';
@@ -2060,16 +2341,12 @@
     function esconderLoadingGlobal() {
         const overlay = document.getElementById('loading-overlay');
         if (!overlay) return;
-        document.documentElement.classList.remove('gestor-authenticated');
         overlay.classList.remove('loading-active');
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
         overlay.style.opacity = '0';
         overlay.style.pointerEvents = 'none';
         overlay.style.cursor = 'default';
-        setTimeout(() => {
-            if (!overlay.classList.contains('loading-active') && !document.documentElement.classList.contains('gestor-authenticated')) {
-                overlay.style.display = 'none';
-            }
-        }, 150);
     }
 
     // Compatibilidade com padrões e chamadas de index_vendas.html
@@ -2199,6 +2476,8 @@
         else if (v === 'calendar') renderCalendar();
         else if (v === 'team') renderTeamLoad();
         else if (v === 'reports') renderReports();
+        else if (v === 'adesao') renderAdesaoRotas();
+        
         else if (v === 'logistica') renderLogistics();
         else if (v === 'deliveries') renderDeliveries();
     }
@@ -3474,8 +3753,12 @@
             if (r.equipe) g.equipes.add(r.equipe);
             if (r.vendedor) g.vendedores.add(r.vendedor);
             if (r.diaPrinc) g.diasVisita.add(r.diaPrinc);
-            (r.diasSec || []).forEach(d => g.diasSec.add(d));
-            (r.freq || []).forEach(f => g.frequencias.add(f));
+            if (Array.isArray(r.diasSec)) r.diasSec.forEach(d => g.diasSec.add(d));
+            else if (r.diasSec) String(r.diasSec).split(',').map(s => s.trim()).filter(Boolean).forEach(d => g.diasSec.add(d));
+
+            if (Array.isArray(r.freq)) r.freq.forEach(f => g.frequencias.add(f));
+            else if (r.freq) g.frequencias.add(String(r.freq).trim());
+
             if (r.comprador) g.compradores.add(r.comprador);
             if (r.obs) g.observacoes.add(r.obs);
             if (!g.whatsappRaw && r.whatsappRaw) g.whatsappRaw = r.whatsappRaw;
@@ -3486,10 +3769,43 @@
                 equipe: r.equipe,
                 cidade: r.cidade,
                 dia: r.diaPrinc || '-',
-                freq: (r.freq || []).join(','),
+                freq: Array.isArray(r.freq) ? r.freq.join(',') : String(r.freq || ''),
                 ordem: r.ordem,
-                entrega: getEntregaStr(r.cidadeNorm)
+                entrega: getEntregaStr(r.cidadeNorm || normalizarTexto(r.cidade || ''))
             });
+        });
+
+        // Complementa índice com clientes atribuídos em CLIENTES que ainda não possuem rotas
+        (rawClientes || []).forEach(c => {
+            const key = String(c.codigo || c.codCliente || '').trim();
+            if (!key) return;
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    codCliente: key,
+                    razao: c.razao || '',
+                    fantasia: c.fantasia || '',
+                    nome: c.fantasia || c.razao || '',
+                    cidades: new Set(c.cidade ? [c.cidade] : []),
+                    equipes: new Set(c.equipe ? [c.equipe] : []),
+                    vendedores: new Set(c.vendedor ? [c.vendedor] : []),
+                    diasVisita: new Set(['NÃO ROTEIRIZADO']),
+                    diasSec: new Set(),
+                    frequencias: new Set(['Pendente']),
+                    compradores: new Set(),
+                    observacoes: new Set(['Cliente consta na carteira oficial (CLIENTES), mas ainda não foi preenchido na grade semanal de ROTAS.']),
+                    whatsappRaw: '',
+                    whatsappUrl: '',
+                    linhas: [{
+                        vendedor: c.vendedor || 'Não informado',
+                        equipe: c.equipe || 'Não informada',
+                        cidade: c.cidade || 'Não informada',
+                        dia: 'PENDENTE (SEM ROTA)',
+                        freq: 'Pendente',
+                        ordem: '—',
+                        entrega: getEntregaStr(normalizarTexto(c.cidade || ''))
+                    }]
+                });
+            }
         });
 
         clientProfiles = Array.from(groups.values()).map(g => {
@@ -3632,6 +3948,32 @@
                 };
             }
         }
+        if (!p && codStr) {
+            const cliItem = (rawClientes || []).find(x => String(x.codigo || x.codCliente || '').trim() === codStr || String(x.codigo || x.codCliente || '').trim().replace(/^0+/, '') === codStr.replace(/^0+/, ''));
+            if (cliItem) {
+                p = {
+                    codCliente: codStr,
+                    nome: cliItem.fantasia || cliItem.razao || codStr,
+                    cidadesArr: cliItem.cidade ? [cliItem.cidade] : [],
+                    diasVisita: new Set(['NÃO ROTEIRIZADO']),
+                    diasSec: new Set([]),
+                    equipes: new Set(cliItem.equipe ? [cliItem.equipe] : []),
+                    vendedores: new Set(cliItem.vendedor ? [cliItem.vendedor] : []),
+                    frequencias: new Set(['Pendente']),
+                    compradores: new Set([]),
+                    observacoes: new Set(['Cliente consta na carteira oficial (CLIENTES), mas ainda não foi preenchido na grade semanal de ROTAS.']),
+                    linhas: [{
+                        vendedor: cliItem.vendedor || 'Não informado',
+                        equipe: cliItem.equipe || 'Não informada',
+                        cidade: cliItem.cidade || 'Não informada',
+                        dia: 'PENDENTE (SEM ROTA)',
+                        freq: 'Pendente',
+                        ordem: '—',
+                        entrega: getEntregaStr(normalizarTexto(cliItem.cidade || ''))
+                    }]
+                };
+            }
+        }
         if (!p) {
             console.warn('Cliente não encontrado no índice:', cod);
             alert('Atenção: Informações detalhadas do cliente (Cód. ' + codStr + ') não foram encontradas nas rotas.');
@@ -3749,6 +4091,7 @@
             closeClientModal();
             if (typeof fecharModalOpcoesVCF === 'function') fecharModalOpcoesVCF();
             if (typeof fecharModalDesligar === 'function') fecharModalDesligar();
+            if (typeof fecharModalWhatsAppAdesao === 'function') fecharModalWhatsAppAdesao();
         }
     });
     function closeClientModal() {
@@ -3789,22 +4132,30 @@
         const payloadEnv = (payload && typeof payload === 'object') ? { abaRotas: 'ROTAS', ambiente: 'PROD', ...payload } : payload;
 
         while (tentativa < maxTentativas) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 25000);
             try {
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payloadEnv)
+                    body: JSON.stringify(payloadEnv),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 const data = await response.json();
                 if (data.codigo === 429 || (data.erro && data.erro.includes("ocupado"))) {
                     throw new Error(data.erro);
                 }
                 return data;
             } catch (err) {
+                clearTimeout(timeoutId);
                 tentativa++;
                 if (tentativa >= maxTentativas) {
                     console.error('Falha de conexão com backend após tentativas:', err);
-                    return { sucesso: false, erro: err.message || 'Falha de comunicação com o servidor.' };
+                    const msgAmigavel = err.name === 'AbortError'
+                        ? 'Tempo limite de conexão esgotado (servidor demorou para responder).'
+                        : (err.message || 'Falha de comunicação com o servidor.');
+                    return { sucesso: false, erro: msgAmigavel };
                 }
                 const jitter = Math.random() * 300;
                 await new Promise(res => setTimeout(res, atraso + jitter));
@@ -7117,16 +7468,20 @@
         const checkboxes = document.querySelectorAll('.chk-auditoria-item');
         checkboxes.forEach(cb => {
             cb.checked = isChecked;
-            const cod = cb.getAttribute('data-cod');
-            if (isChecked) auditoriaSelecionados.add(cod);
-            else auditoriaSelecionados.delete(cod);
+            const cod = String(cb.getAttribute('data-cod') || '').trim();
+            if (cod) {
+                if (isChecked) auditoriaSelecionados.add(cod);
+                else auditoriaSelecionados.delete(cod);
+            }
         });
         atualizarContadorSelecaoAuditoria();
     }
 
     function toggleAuditoriaCliente(cod) {
-        if (auditoriaSelecionados.has(cod)) auditoriaSelecionados.delete(cod);
-        else auditoriaSelecionados.add(cod);
+        const c = String(cod || '').trim();
+        if (!c) return;
+        if (auditoriaSelecionados.has(c)) auditoriaSelecionados.delete(c);
+        else auditoriaSelecionados.add(c);
         atualizarContadorSelecaoAuditoria();
     }
 
@@ -7199,6 +7554,8 @@
                 return true;
             });
 
+            auditoriaCache.filtrados = filtrados;
+
             if (statusPag) statusPag.textContent = `Exibindo ${filtrados.length} cliente(s) com pendências a gerar`;
 
             if (filtrados.length === 0) {
@@ -7208,7 +7565,7 @@
 
             tbody.innerHTML = filtrados.slice(0, 200).map(r => {
                 const cod = escapeHtml(r.codCliente);
-                const isSel = auditoriaSelecionados.has(r.codCliente);
+                const isSel = auditoriaSelecionados.has(String(r.codCliente));
                 return `
                     <tr class="hover:bg-slate-50 transition ${isSel ? 'bg-amber-50/60' : ''}">
                         <td class="p-2.5 text-center">
@@ -7408,17 +7765,31 @@
         let wsData = [];
 
         if (auditoriaSubTab === 'a-gerar') {
-            const lista = auditoriaCache.filtrados || [];
-            if (lista.length === 0) {
-                alert('Não há registros para exportar.');
+            let lista = auditoriaCache.filtrados || [];
+            if (auditoriaSelecionados.size > 0) {
+                const mapCli = new Map();
+                (lista || []).forEach(r => mapCli.set(String(r.codCliente), r));
+                (rawRotas || []).forEach(r => {
+                    if (!mapCli.has(String(r.codCliente))) mapCli.set(String(r.codCliente), r);
+                });
+                const listaSel = [];
+                auditoriaSelecionados.forEach(c => {
+                    if (mapCli.has(String(c))) listaSel.push(mapCli.get(String(c)));
+                });
+                if (listaSel.length > 0) lista = listaSel;
+            }
+
+            if (!lista || lista.length === 0) {
+                alert('Não há registros com pendências para exportar com os filtros atuais.');
                 return;
             }
+
             wsData = lista.map(r => ({
                 "Cód. Cliente": r.codCliente,
                 "Razão Social / Cliente": r.cliente || r.razao,
                 "Nome Fantasia": r.fantasia || '',
                 "Vendedor": r.vendedor,
-                "Equipe": r.equipe,
+                "Equipe": r.equipe || '',
                 "Cidade": r.cidade,
                 "Dia Visita": r.diaPrinc || '',
                 "Comprador": r.comprador || '',
@@ -7426,7 +7797,7 @@
                 "Diagnóstico de Inconsistência": r._motivoAuditoria || ''
             }));
         } else {
-            const lista = rawTarefasCadastro.filter(t => {
+            const lista = (rawTarefasCadastro || []).filter(t => {
                 if (auditoriaSubTab === 'pendentes') return t.status === 'PENDENTE' || t.status === 'REJEITADO';
                 if (auditoriaSubTab === 'em-auditoria') return t.status === 'EM_AUDITORIA';
                 if (auditoriaSubTab === 'homologadas') return t.status === 'HOMOLOGADO';
@@ -7457,6 +7828,275 @@
         const ws = XLSX.utils.json_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, "Auditoria");
         XLSX.writeFile(wb, `Auditoria_${auditoriaSubTab}_${dataIso}.xlsx`);
+    }
+
+    function abrirModalDisparoWhatsAppSaneamento() {
+        if (auditoriaSubTab !== 'a-gerar') {
+            mudarSubTabAuditoria('a-gerar');
+        }
+
+        // Se não houver nada selecionado manualmente, verifica se pode selecionar os filtrados
+        if (auditoriaSelecionados.size === 0) {
+            const filtrados = auditoriaCache.filtrados || [];
+            if (filtrados.length === 0) {
+                alert("Não há clientes com pendências encontrados na listagem atual para gerar tarefas.");
+                return;
+            }
+            const conf = confirm(`Você não marcou clientes específicos.\n\nDeseja selecionar automaticamente todos os ${filtrados.length} cliente(s) filtrados na tabela para gerar tarefas de saneamento?`);
+            if (!conf) return;
+            filtrados.forEach(r => auditoriaSelecionados.add(String(r.codCliente)));
+            atualizarContadorSelecaoAuditoria();
+            renderTabelaAuditoria();
+        }
+
+        const cods = Array.from(auditoriaSelecionados).map(String);
+        if (cods.length === 0) {
+            alert("Por favor, selecione ao menos um cliente com pendência na tabela.");
+            return;
+        }
+
+        const clientesSelecionados = [];
+        const vendsMap = new Map();
+        let totalSemTel = 0;
+        let totalSemComp = 0;
+        let totalSemDia = 0;
+        let totalTelSusp = 0;
+        const cidadesSet = new Set();
+
+        cods.forEach(cCode => {
+            let r = (auditoriaCache.filtrados || []).find(x => String(x.codCliente) === cCode);
+            if (!r) r = rawRotas.find(x => String(x.codCliente) === cCode);
+            if (!r) return;
+
+            let tipo = 'SEM_TELEFONE';
+            let valorAnt = r.whatsappRaw || '';
+            if (!r.diaPrinc || r.diaPrinc === 'N/A' || r.diaPrinc === 'SEM ROTA') {
+                tipo = 'SEM_DIA_VISITA';
+                valorAnt = r.diaPrinc || '';
+                totalSemDia++;
+            } else if (!r.comprador) {
+                tipo = 'SEM_COMPRADOR';
+                valorAnt = r.comprador || '';
+                totalSemComp++;
+            } else if (!r.whatsappRaw) {
+                tipo = 'SEM_TELEFONE';
+                valorAnt = '';
+                totalSemTel++;
+            } else {
+                tipo = 'TEL_SUSPEITO';
+                valorAnt = r.whatsappRaw || '';
+                totalTelSusp++;
+            }
+
+            if (r.cidade) cidadesSet.add(r.cidade.trim());
+
+            const vendCod = String(r.vendCod || '').trim();
+            const vendNome = String(r.vendedor || '').trim();
+            if (vendCod || vendNome) {
+                vendsMap.set(vendCod || vendNome, { cod: vendCod, nome: vendNome });
+            }
+
+            clientesSelecionados.push({
+                codCliente: String(r.codCliente),
+                razaoSocial: r.cliente || r.razao || '',
+                cidade: r.cidade || '',
+                codVendedor: vendCod,
+                nomeVendedor: vendNome,
+                tipoPendencia: tipo,
+                valorAnterior: valorAnt
+            });
+        });
+
+        if (clientesSelecionados.length === 0) {
+            alert("Não foi possível localizar os registros dos clientes selecionados.");
+            return;
+        }
+
+        let targetVendCod = '';
+        let targetVendNome = '';
+        if (vendsMap.size === 1) {
+            const v = Array.from(vendsMap.values())[0];
+            targetVendCod = v.cod;
+            targetVendNome = v.nome;
+        } else if (vendsMap.size > 1) {
+            const filtroVend = (document.getElementById('modal-auditoria-sel-vendedor')?.value || '').trim();
+            if (filtroVend) {
+                const vObj = rawVendedores.find(x => String(x.cod) === filtroVend || normalizarTexto(x.nome) === normalizarTexto(filtroVend));
+                targetVendCod = vObj ? vObj.cod : filtroVend;
+                targetVendNome = vObj ? vObj.nome : filtroVend;
+            } else {
+                targetVendCod = 'MULTIPLOS';
+                targetVendNome = `Múltiplos Vendedores (${vendsMap.size} vendedores)`;
+            }
+        }
+
+        const totalCli = clientesSelecionados.length;
+        const cidadesStr = Array.from(cidadesSet).slice(0, 3).join(', ') + (cidadesSet.size > 3 ? '...' : '');
+        const linkApp = "https://edimarpcosta.github.io/ameripan/rotas/vendedores/";
+
+        const msg = `🚨 *Ameripan • Notificação de Auditoria Cadastral*
+
+Olá, *${targetVendNome || 'Vendedor'}*!
+Identificamos pendências no cadastro de *${totalCli} cliente(s)* da sua carteira (${cidadesStr || 'Geral'}):
+• 📞 Sem Telefone / Suspeitos: ${totalSemTel + totalTelSusp}
+• 👤 Sem Comprador: ${totalSemComp}
+• 📅 Sem Roteirização/Dia: ${totalSemDia}
+
+Para garantir a qualidade de atendimento e entrega, é obrigatório regularizar esses cadastros.
+Ao acessar seu aplicativo de rotas, o *Modo Saneamento* já estará ativo para preenchimento imediato:
+👉 ${linkApp}
+
+Agradecemos sua colaboração e agilidade!`;
+
+        const elNome = document.getElementById('disp-whats-vendedor-nome');
+        const elTel = document.getElementById('disp-whats-telefone-vendedor');
+        const elMsg = document.getElementById('disp-whats-preview-mensagem');
+        if (elNome) elNome.textContent = targetVendNome ? `${targetVendNome} (${targetVendCod})` : '--';
+        if (elMsg) elMsg.value = msg;
+        if (elTel) {
+            const salvo = localStorage.getItem('ameripan_vend_tel_' + targetVendCod) || '';
+            elTel.value = salvo;
+        }
+
+        window._tarefasParaDisparo = {
+            codVendedor: targetVendCod,
+            nomeVendedor: targetVendNome,
+            clientes: clientesSelecionados,
+            mensagem: msg
+        };
+
+        const m = document.getElementById('modalDisparoWhatsAppSaneamento');
+        if (m) {
+            m.style.display = 'flex';
+            m.classList.remove('hidden');
+        }
+    }
+
+    function fecharModalDisparoWhatsAppSaneamento() {
+        const m = document.getElementById('modalDisparoWhatsAppSaneamento');
+        if (m) {
+            m.style.display = 'none';
+            m.classList.add('hidden');
+        }
+    }
+
+    async function confirmarGerarTarefaEDispararWhatsApp() {
+        const dados = window._tarefasParaDisparo;
+        if (!dados || !dados.clientes || dados.clientes.length === 0) {
+            alert("Nenhuma tarefa selecionada para gravar.");
+            return;
+        }
+
+        const elTel = document.getElementById('disp-whats-telefone-vendedor');
+        const telInput = (elTel ? elTel.value : '').replace(/\D/g, '');
+        if (dados.codVendedor && dados.codVendedor !== 'MULTIPLOS' && elTel && elTel.value.trim()) {
+            localStorage.setItem('ameripan_vend_tel_' + dados.codVendedor, elTel.value.trim());
+        }
+
+        fecharModalDisparoWhatsAppSaneamento();
+        mostrarLoadingGlobal(
+            'Gravando Tarefas de Saneamento...',
+            `Gerando ${dados.clientes.length} tarefa(s) na aba TAREFAS_CADASTRO da Ameripan...`,
+            'ph-check-square-offset'
+        );
+
+        try {
+            const payload = {
+                acao: 'GERAR_TAREFAS_SANEAMENTO',
+                codVendedor: dados.codVendedor || '',
+                nomeVendedor: dados.nomeVendedor || '',
+                clientes: dados.clientes
+            };
+
+            const res = await fetchComRetry(GAS_API_URL, payload);
+
+            if (res && res.sucesso) {
+                const msgTexto = dados.mensagem;
+                if (telInput && telInput.length >= 10) {
+                    const dddTel = telInput.startsWith('55') ? telInput : ('55' + telInput);
+                    const waUrl = `https://wa.me/${dddTel}?text=${encodeURIComponent(msgTexto)}`;
+                    window.open(waUrl, '_blank');
+                } else {
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(msgTexto)}`;
+                    window.open(waUrl, '_blank');
+                }
+
+                alert(`✅ Sucesso!\n\n${res.mensagem || `${dados.clientes.length} tarefa(s) registrada(s) no banco de dados.`}\n\nA janela do WhatsApp foi aberta para notificar o vendedor.`);
+
+                auditoriaSelecionados.clear();
+                atualizarContadorSelecaoAuditoria();
+                await carregarDados(true);
+                mudarSubTabAuditoria('pendentes');
+            } else {
+                alert("❌ Erro ao gerar tarefas: " + (res.erro || "Falha na comunicação com o servidor."));
+            }
+        } catch (err) {
+            alert("❌ Erro ao enviar requisição ao servidor: " + (err.message || err.toString()));
+        } finally {
+            esconderLoadingGlobal();
+        }
+    }
+
+    async function decidirAuditoriaGestor(idTarefa, decisao) {
+        if (!idTarefa) return;
+        let motivoRejeicao = '';
+        if (decisao === 'REJEITAR') {
+            motivoRejeicao = prompt("Informe o motivo da rejeição da correção (o vendedor receberá essa observação no aplicativo):");
+            if (motivoRejeicao === null) return;
+            if (!motivoRejeicao.trim()) {
+                alert("É obrigatório informar o motivo ao rejeitar uma auditoria.");
+                return;
+            }
+        } else {
+            if (!confirm("Confirma a HOMOLOGAÇÃO desta correção cadastral?")) return;
+        }
+
+        mostrarLoadingGlobal(
+            decisao === 'HOMOLOGAR' ? 'Homologando Cadastro...' : 'Rejeitando e Reabrindo Tarefa...',
+            'Atualizando status na aba TAREFAS_CADASTRO da Ameripan...',
+            'ph-shield-check'
+        );
+
+        try {
+            const res = await fetchComRetry(GAS_API_URL, {
+                acao: 'AUDITAR_DECISAO_GESTOR',
+                idTarefa: idTarefa,
+                decisao: decisao,
+                motivoRejeicao: motivoRejeicao
+            });
+
+            if (res && res.sucesso) {
+                alert(`✅ Tarefa ${decisao === 'HOMOLOGAR' ? 'homologada com sucesso!' : 'rejeitada e reaberta para o vendedor com sucesso!'}`);
+                await carregarDados(true);
+                renderTabelaAuditoria();
+                atualizarBadgesTarefasAuditoria();
+            } else {
+                alert("❌ Erro ao processar decisão: " + (res.erro || "Falha no servidor."));
+            }
+        } catch (err) {
+            alert("❌ Erro de comunicação: " + (err.message || err.toString()));
+        } finally {
+            esconderLoadingGlobal();
+        }
+    }
+
+    function testarWhatsAppAuditoria(telefone) {
+        if (!telefone) {
+            alert("Telefone não informado.");
+            return;
+        }
+        const dig = String(telefone).replace(/\D/g, '');
+        if (dig.length < 10) {
+            alert("Número de telefone incompleto para WhatsApp: " + telefone);
+            return;
+        }
+        const num = dig.startsWith('55') ? dig : ('55' + dig);
+        const url = `https://wa.me/${num}?text=${encodeURIComponent('Olá, confirmando contato comercial com a Ameripan Distribuidora.')}`;
+        window.open(url, '_blank');
+    }
+
+    function onRemanListaVendChange() {
+        // Atualização visual opcional ao selecionar vendedor de destino para remanejamento
     }
 
     function verAuditoriaNosDadosBrutos(tipo = null) {
@@ -7685,12 +8325,12 @@
 
             doc.save(`Kit_Ferias_${vendSlug}_Roteiro_Campo_${dataIso}.pdf`);
 
-            esconderLoadingGlobal();
             alert(`✅ Kit de Cobertura de Férias de "${vendedorNome}" gerado com sucesso!\n\nForam baixados:\n1) Arquivo .VCF (Contatos da Agenda)\n2) Planilha Excel (.XLSX)\n3) Roteiro de Campo em PDF (Landscape)`);
         } catch (err) {
             console.error('Erro ao gerar Kit de Férias:', err);
-            esconderLoadingGlobal();
             alert('Falha ao gerar um ou mais itens do Kit de Cobertura. Verifique o console para detalhes.');
+        } finally {
+            esconderLoadingGlobal();
         }
     }
 
@@ -7783,8 +8423,6 @@
                 novaSenha: nova
             });
 
-            esconderLoadingGlobal();
-
             if (res.sucesso) {
                 if (msg) {
                     msg.className = 'text-xs font-semibold text-emerald-600';
@@ -7802,17 +8440,843 @@
             }
         } catch (e) {
             console.error('Erro ao alterar senha:', e);
-            esconderLoadingGlobal();
             if (msg) {
                 msg.className = 'text-xs font-semibold text-red-600';
                 msg.textContent = 'Erro ao comunicar com o servidor. Tente novamente.';
             }
         } finally {
+            esconderLoadingGlobal();
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="ph ph-check text-base"></i> Salvar Nova Senha';
             }
         }
+    }
+
+
+    // ============================================================
+    // SEÇÃO: RELATÓRIO DE CLIENTES NÃO PREENCHIDOS (ADESÃO DE ROTAS)
+    // ============================================================
+    let adesaoCache = {
+        todos: [],
+        filtrados: [],
+        pagina: 1,
+        pageSize: 50,
+        selecionados: new Set(),
+        filtroEquipe: '',
+        filtroVendedor: '',
+        filtroCidade: '',
+        filtroStatus: 'PENDENTES',
+        buscaTexto: ''
+    };
+
+    function normalizarCodCliente(cod) {
+        const s = String(cod ?? '').trim();
+        if (!s) return '';
+        const semZeros = s.replace(/^0+/, '');
+        return semZeros || '0';
+    }
+
+    function processarAdesaoRotas() {
+        const vendMapPorNome = new Map();
+        (rawVendedores || []).forEach(v => {
+            const nNorm = normalizarTexto(v.nome);
+            if (nNorm) vendMapPorNome.set(nNorm, v);
+            if (v.cod) vendMapPorNome.set(String(v.cod).trim(), v);
+        });
+
+        // Indexa ROTAS por codCliente normalizado (O(1) lookup estrito sem perdas)
+        const rotasPorCliente = new Map();
+        (rawRotas || []).forEach(r => {
+            const key = normalizarCodCliente(r.codCliente);
+            if (!key) return;
+            if (!rotasPorCliente.has(key)) rotasPorCliente.set(key, []);
+            rotasPorCliente.get(key).push(r);
+        });
+
+        // Mapeia e cruza todos os clientes atribuídos na carteira oficial (CLIENTES)
+        const itens = (rawClientes || []).map(c => {
+            const codRaw = String(c.codigo || c.codCliente || '').trim();
+            const codKey = normalizarCodCliente(codRaw);
+            const rotas = rotasPorCliente.get(codKey) || [];
+            const vendCliNorm = normalizarTexto(c.vendedor);
+
+            const rotasDoMesmoVend = rotas.filter(r => normalizarTexto(r.vendedor) === vendCliNorm);
+
+            let status = 'SEM_ROTA';
+            let statusLabel = 'Não Preenchido (Sem Rota)';
+            let isPendente = true;
+            let rotaInfo = null;
+
+            if (rotasDoMesmoVend.length > 0) {
+                status = 'ROTEIRIZADO';
+                statusLabel = 'Roteirizado';
+                isPendente = false;
+                rotaInfo = rotasDoMesmoVend[0];
+            } else if (rotas.length > 0) {
+                status = 'ROTA_OUTRO_VENDEDOR';
+                statusLabel = 'Rota de Outro Vendedor';
+                isPendente = true;
+                rotaInfo = rotas[0];
+            } else {
+                status = 'SEM_ROTA';
+                statusLabel = 'Não Preenchido (Sem Rota)';
+                isPendente = true;
+            }
+
+            const rotaDias = rotasDoMesmoVend.length > 0
+                ? [...new Set(rotasDoMesmoVend.map(r => r.diaPrinc).filter(Boolean))].join(', ')
+                : (rotaInfo ? String(rotaInfo.diaPrinc || '').trim() : '');
+            const rotaFreqs = rotasDoMesmoVend.length > 0
+                ? [...new Set(rotasDoMesmoVend.map(r => Array.isArray(r.freq) ? r.freq.join(', ') : String(r.freq || '').trim()).filter(Boolean))].join(', ')
+                : (rotaInfo ? (Array.isArray(rotaInfo.freq) ? rotaInfo.freq.join(', ') : String(rotaInfo.freq || '').trim()) : '');
+            const rotaOrdens = rotasDoMesmoVend.length > 0
+                ? rotasDoMesmoVend.map(r => r.ordem).filter(o => o !== undefined && o !== null && o !== '').join(', ')
+                : (rotaInfo && rotaInfo.ordem !== undefined && rotaInfo.ordem !== null ? rotaInfo.ordem : '');
+
+            const vObj = vendMapPorNome.get(vendCliNorm);
+            const codVend = vObj ? vObj.cod : (rotaInfo ? rotaInfo.codVend : '');
+
+            return {
+                codCliente: codRaw,
+                razao: (c.razao || '').toString().trim(),
+                fantasia: (c.fantasia || c.razao || '').toString().trim(),
+                cidade: (c.cidade || '').toString().trim(),
+                equipe: (c.equipe || '').toString().trim(),
+                vendedor: (c.vendedor || '').toString().trim(),
+                codVendedor: codVend || '',
+                status,
+                statusLabel,
+                isPendente,
+                rotaVendedor: rotaInfo ? String(rotaInfo.vendedor || '').trim() : '',
+                rotaDia: rotaDias || '—',
+                rotaFreq: rotaFreqs || '—',
+                rotaOrdem: rotaOrdens || '—'
+            };
+        });
+
+        adesaoCache.todos = itens;
+        return itens;
+    }
+
+    function atualizarBadgesAdesaoRotas() {
+        if (!adesaoCache.todos || adesaoCache.todos.length === 0) {
+            processarAdesaoRotas();
+        }
+        const todos = adesaoCache.todos || [];
+        const totalCarteira = todos.length;
+        const pendentes = todos.filter(i => i.isPendente).length;
+        const roteirizados = totalCarteira - pendentes;
+        const pct = totalCarteira > 0 ? ((roteirizados / totalCarteira) * 100).toFixed(1) : '0.0';
+
+        // Badge no menu lateral com Dual-Safety Display
+        const bNav = document.getElementById('badge-nav-adesao');
+        if (bNav) {
+            if (pendentes > 0) {
+                bNav.textContent = pendentes.toLocaleString('pt-BR');
+                bNav.classList.remove('hidden');
+                bNav.style.display = 'inline-block';
+            } else {
+                bNav.classList.add('hidden');
+                bNav.style.display = 'none';
+            }
+        }
+
+        // Banner no dashboard
+        const lblDash = document.getElementById('lbl-dash-adesao-pendentes');
+        if (lblDash) lblDash.textContent = pendentes.toLocaleString('pt-BR');
+        const bDash = document.getElementById('badge-dash-adesao-pct');
+        if (bDash) {
+            bDash.textContent = `${pct}% Cobertura`;
+            if (parseFloat(pct) >= 95) {
+                bDash.className = 'text-[11px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full';
+            } else if (parseFloat(pct) >= 85) {
+                bDash.className = 'text-[11px] font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full';
+            } else {
+                bDash.className = 'text-[11px] font-bold bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full';
+            }
+        }
+    }
+
+    function renderAdesaoRotas() {
+        processarAdesaoRotas();
+        popularFiltrosAdesao();
+        aoFiltrarAdesao(false);
+    }
+
+    function popularFiltrosAdesao() {
+        if (!adesaoCache.todos || adesaoCache.todos.length === 0) {
+            processarAdesaoRotas();
+        }
+        const todos = adesaoCache.todos || [];
+
+        const selEq = document.getElementById('filtro-adesao-equipe');
+        const selVend = document.getElementById('filtro-adesao-vendedor');
+        const selCid = document.getElementById('filtro-adesao-cidade');
+
+        if (!selEq || !selVend || !selCid) return;
+
+        const equipes = [...new Set(todos.map(i => i.equipe).filter(Boolean))].sort();
+        const cidades = [...new Set(todos.map(i => i.cidade).filter(Boolean))].sort();
+        const vendedores = [...new Set(todos.map(i => i.vendedor).filter(Boolean))].sort();
+
+        const topEq = document.getElementById('filtro-equipe')?.value || '';
+        const topVend = document.getElementById('filtro-vendedor')?.value || '';
+        const topCid = document.getElementById('filtro-cidade')?.value || '';
+
+        const valEqAtual = selEq.value || (equipes.includes(topEq) ? topEq : '');
+        const valVendAtual = selVend.value || (vendedores.includes(topVend) ? topVend : '');
+        const valCidAtual = selCid.value || (cidades.includes(topCid) ? topCid : '');
+
+        selEq.innerHTML = '<option value="">Todas as Equipes</option>' + equipes.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
+        if (valEqAtual && equipes.includes(valEqAtual)) selEq.value = valEqAtual;
+
+        selVend.innerHTML = '<option value="">Todos os Vendedores</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        if (valVendAtual && vendedores.includes(valVendAtual)) selVend.value = valVendAtual;
+
+        selCid.innerHTML = '<option value="">Todas as Cidades</option>' + cidades.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        if (valCidAtual && cidades.includes(valCidAtual)) selCid.value = valCidAtual;
+    }
+
+    function aoMudarFiltroEquipeAdesao() {
+        const selEq = document.getElementById('filtro-adesao-equipe');
+        const selVend = document.getElementById('filtro-adesao-vendedor');
+        if (!selEq || !selVend) return;
+
+        const eqSelecionada = selEq.value;
+        const todos = adesaoCache.todos || [];
+
+        let vendedores;
+        if (eqSelecionada) {
+            vendedores = [...new Set(todos.filter(i => i.equipe === eqSelecionada).map(i => i.vendedor).filter(Boolean))].sort();
+        } else {
+            vendedores = [...new Set(todos.map(i => i.vendedor).filter(Boolean))].sort();
+        }
+
+        const valVendAtual = selVend.value;
+        selVend.innerHTML = '<option value="">Todos os Vendedores</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        if (valVendAtual && vendedores.includes(valVendAtual)) {
+            selVend.value = valVendAtual;
+        } else {
+            selVend.value = '';
+        }
+
+        aoFiltrarAdesao(true);
+    }
+
+    function aoFiltrarAdesao(resetPage) {
+        if (resetPage) adesaoCache.pagina = 1;
+
+        const selEq = document.getElementById('filtro-adesao-equipe');
+        const selVend = document.getElementById('filtro-adesao-vendedor');
+        const selCid = document.getElementById('filtro-adesao-cidade');
+        const selStatus = document.getElementById('filtro-adesao-status');
+        const inpBusca = document.getElementById('filtro-adesao-busca');
+
+        const fEq = selEq ? selEq.value : '';
+        const fVend = selVend ? selVend.value : '';
+        const fCid = selCid ? selCid.value : '';
+        const fStatus = (selStatus && selStatus.value) ? selStatus.value : 'PENDENTES';
+        const fBusca = (inpBusca ? inpBusca.value : '').trim().toLowerCase();
+
+        adesaoCache.filtroEquipe = fEq;
+        adesaoCache.filtroVendedor = fVend;
+        adesaoCache.filtroCidade = fCid;
+        adesaoCache.filtroStatus = fStatus;
+        adesaoCache.buscaTexto = fBusca;
+
+        if (!adesaoCache.todos || adesaoCache.todos.length === 0) {
+            processarAdesaoRotas();
+        }
+
+        // 1. Filtragem dimensional base (Equipe, Vendedor, Cidade e Busca Textual)
+        const baseDimensional = (adesaoCache.todos || []).filter(item => {
+            if (fEq && item.equipe !== fEq) return false;
+            if (fVend && item.vendedor !== fVend) return false;
+            if (fCid && item.cidade !== fCid) return false;
+
+            if (fBusca) {
+                const cod = String(item.codCliente || '').toLowerCase();
+                const raz = String(item.razao || '').toLowerCase();
+                const fan = String(item.fantasia || '').toLowerCase();
+                const cid = String(item.cidade || '').toLowerCase();
+                if (!cod.includes(fBusca) && !raz.includes(fBusca) && !fan.includes(fBusca) && !cid.includes(fBusca)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // 2. Atualiza Métricas Resumidas (Requirement 4) correspondentes ao escopo dimensional selecionado
+        const totalCarteiraEscopo = baseDimensional.length;
+        const totalRoteirizadosEscopo = baseDimensional.filter(i => !i.isPendente).length;
+        const totalPendentesEscopo = baseDimensional.filter(i => i.isPendente).length;
+        const totalSemRotaEscopo = baseDimensional.filter(i => i.status === 'SEM_ROTA').length;
+        const totalOutroRcaEscopo = baseDimensional.filter(i => i.status === 'ROTA_OUTRO_VENDEDOR').length;
+        const pctCoberturaEscopo = totalCarteiraEscopo > 0 
+            ? ((totalRoteirizadosEscopo / totalCarteiraEscopo) * 100).toFixed(1) 
+            : '0.0';
+
+        const kpiCart = document.getElementById('kpi-adesao-carteira');
+        if (kpiCart) kpiCart.textContent = totalCarteiraEscopo.toLocaleString('pt-BR');
+
+        const kpiRot = document.getElementById('kpi-adesao-roteirizados');
+        if (kpiRot) kpiRot.textContent = totalRoteirizadosEscopo.toLocaleString('pt-BR');
+
+        const kpiPend = document.getElementById('kpi-adesao-pendentes');
+        if (kpiPend) kpiPend.textContent = totalPendentesEscopo.toLocaleString('pt-BR');
+
+        const kpiPendDet = document.getElementById('kpi-adesao-pendentes-detalhe');
+        if (kpiPendDet) kpiPendDet.textContent = `${totalSemRotaEscopo} sem rota • ${totalOutroRcaEscopo} em outro RCA`;
+
+        const kpiCob = document.getElementById('kpi-adesao-cobertura');
+        if (kpiCob) kpiCob.textContent = `${pctCoberturaEscopo}%`;
+
+        const kpiBar = document.getElementById('kpi-adesao-cobertura-bar');
+        const kpiTag = document.getElementById('kpi-adesao-cobertura-tag');
+        const pctNum = parseFloat(pctCoberturaEscopo);
+
+        if (kpiBar) {
+            kpiBar.style.width = `${Math.min(100, Math.max(0, pctNum))}%`;
+            if (totalCarteiraEscopo === 0) {
+                kpiBar.className = 'h-full bg-slate-300 rounded-full transition-all duration-300';
+            } else if (pctNum >= 95) {
+                kpiBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
+            } else if (pctNum >= 85) {
+                kpiBar.className = 'h-full bg-amber-500 rounded-full transition-all duration-300';
+            } else {
+                kpiBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
+            }
+        }
+
+        if (kpiTag) {
+            if (totalCarteiraEscopo === 0) {
+                kpiTag.textContent = 'Sem Registros';
+                kpiTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600';
+            } else if (pctNum >= 95) {
+                kpiTag.textContent = 'Excelente Adesão';
+                kpiTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+            } else if (pctNum >= 85) {
+                kpiTag.textContent = 'Atenção Necessária';
+                kpiTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
+            } else {
+                kpiTag.textContent = 'Cobertura Crítica';
+                kpiTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800';
+            }
+        }
+
+        // 3. Aplica filtro de Situação na Grade para a listagem
+        const filtrados = baseDimensional.filter(item => {
+            if (fStatus === 'PENDENTES' && !item.isPendente) return false;
+            if (fStatus === 'SEM_ROTA' && item.status !== 'SEM_ROTA') return false;
+            if (fStatus === 'ROTA_OUTRO_VENDEDOR' && item.status !== 'ROTA_OUTRO_VENDEDOR') return false;
+            if (fStatus === 'ROTEIRIZADO' && item.status !== 'ROTEIRIZADO') return false;
+            return true;
+        });
+
+        // Salva explicitamente no cache antes de renderizar e exportar (Regra de ouro de persistência de estado!)
+        adesaoCache.filtrados = filtrados;
+
+        renderTabelaAdesao();
+    }
+
+    let _tAdesaoBusca = null;
+    function aoBuscarAdesao() {
+        clearTimeout(_tAdesaoBusca);
+        _tAdesaoBusca = setTimeout(() => {
+            aoFiltrarAdesao(true);
+        }, 200);
+    }
+
+    function limparFiltrosAdesao() {
+        const selEq = document.getElementById('filtro-adesao-equipe');
+        const selVend = document.getElementById('filtro-adesao-vendedor');
+        const selCid = document.getElementById('filtro-adesao-cidade');
+        const selStatus = document.getElementById('filtro-adesao-status');
+        const inpBusca = document.getElementById('filtro-adesao-busca');
+
+        if (selEq) selEq.value = '';
+        if (selVend) {
+            popularFiltrosAdesao();
+            selVend.value = '';
+        }
+        if (selCid) selCid.value = '';
+        if (selStatus) selStatus.value = 'PENDENTES';
+        if (inpBusca) inpBusca.value = '';
+
+        adesaoCache.selecionados.clear();
+        atualizarContadorSelecaoAdesao();
+        aoFiltrarAdesao(true);
+    }
+
+    function renderTabelaAdesao() {
+        const tbody = document.getElementById('tabela-adesao-tbody');
+        const lblContagem = document.getElementById('adesao-info-contagem');
+        const lblPagina = document.getElementById('adesao-pagina-info');
+        const btnPrev = document.getElementById('btn-adesao-prev');
+        const btnNext = document.getElementById('btn-adesao-next');
+        const checkTodos = document.getElementById('adesao-check-todos');
+
+        if (!tbody) return;
+
+        const filtrados = adesaoCache.filtrados || [];
+        const total = filtrados.length;
+        const pageSize = adesaoCache.pageSize || 50;
+        const totalPaginas = Math.ceil(total / pageSize) || 1;
+
+        if (adesaoCache.pagina > totalPaginas) adesaoCache.pagina = totalPaginas;
+        if (adesaoCache.pagina < 1) adesaoCache.pagina = 1;
+
+        const start = (adesaoCache.pagina - 1) * pageSize;
+        const end = Math.min(start + pageSize, total);
+        const paginaItens = filtrados.slice(start, end);
+
+        if (lblContagem) {
+            lblContagem.textContent = total === 0 
+                ? 'Nenhum cliente encontrado com os filtros atuais'
+                : `Exibindo ${start + 1} a ${end} de ${total} cliente(s) filtrado(s)`;
+        }
+        if (lblPagina) lblPagina.textContent = `${adesaoCache.pagina} de ${totalPaginas}`;
+        if (btnPrev) btnPrev.disabled = adesaoCache.pagina <= 1;
+        if (btnNext) btnNext.disabled = adesaoCache.pagina >= totalPaginas;
+
+        // Checa se todos da página estão marcados
+        if (checkTodos) {
+            checkTodos.checked = paginaItens.length > 0 && paginaItens.every(i => adesaoCache.selecionados.has(String(i.codCliente).trim()));
+        }
+
+        if (paginaItens.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400 font-medium">Nenhum cliente atende aos critérios de pesquisa selecionados.</td></tr>';
+            return;
+        }
+
+        const htmlRows = paginaItens.map(item => {
+            const cod = String(item.codCliente || '').trim();
+            const isChecked = adesaoCache.selecionados.has(cod);
+
+            let badgeStatus = '';
+            if (item.status === 'ROTEIRIZADO') {
+                badgeStatus = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <i class="ph ph-check-circle"></i> Roteirizado
+                </span>`;
+            } else if (item.status === 'ROTA_OUTRO_VENDEDOR') {
+                badgeStatus = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title="Cliente na carteira de ${escapeHtml(item.vendedor)}, mas inserido na rota de ${escapeHtml(item.rotaVendedor)}">
+                    <i class="ph ph-arrows-left-right"></i> Em Outro RCA
+                </span>`;
+            } else {
+                badgeStatus = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                    <i class="ph ph-warning-circle"></i> Não Preenchido
+                </span>`;
+            }
+
+            let detalheRota = '';
+            if (item.status === 'ROTEIRIZADO') {
+                detalheRota = `<div class="font-bold text-slate-700">${escapeHtml(item.rotaDia || '-')} • ${escapeHtml(item.rotaFreq || 'Semanal')}</div>
+                <div class="text-[10px] text-slate-400">Ordem: ${item.rotaOrdem !== undefined && item.rotaOrdem !== null && item.rotaOrdem !== '' ? item.rotaOrdem : '-'}</div>`;
+            } else if (item.status === 'ROTA_OUTRO_VENDEDOR') {
+                detalheRota = `<div class="font-bold text-amber-800 truncate" title="RCA na Rota: ${escapeHtml(item.rotaVendedor)}">RCA: ${escapeHtml(item.rotaVendedor)}</div>
+                <div class="text-[10px] text-amber-700/80">${escapeHtml(item.rotaDia || '-')} • ${escapeHtml(item.rotaFreq || '-')}</div>`;
+            } else {
+                detalheRota = '<span class="text-rose-400 italic text-[11px]">Sem agendamento</span>';
+            }
+
+            return `<tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                <td class="p-3 text-center">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="alternarSelecaoItemAdesao('${escapeJs(cod)}')" class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer">
+                </td>
+                <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(cod)}</td>
+                <td class="p-3">
+                    <button type="button" onclick="openClientModal('${escapeJs(cod)}')" class="text-left font-bold text-blue-700 hover:underline block truncate max-w-xs" title="${escapeHtml(item.razao)}">
+                        ${escapeHtml(item.razao || 'Sem Razão Social')}
+                    </button>
+                    ${item.fantasia && item.fantasia !== item.razao ? `<span class="text-[11px] text-slate-400 block truncate max-w-xs">${escapeHtml(item.fantasia)}</span>` : ''}
+                </td>
+                <td class="p-3 font-medium text-slate-700">${escapeHtml(item.cidade || '—')}</td>
+                <td class="p-3 text-slate-500 font-medium">${escapeHtml(item.equipe || '—')}</td>
+                <td class="p-3 font-bold text-slate-800">${escapeHtml(item.vendedor || '—')}</td>
+                <td class="p-3">${badgeStatus}</td>
+                <td class="p-3">${detalheRota}</td>
+                <td class="p-3 text-center">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <button type="button" onclick="abrirModalWhatsAppAdesao('${escapeJs(item.vendedor)}')" class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition" title="Cobrar este vendedor no WhatsApp">
+                            <i class="ph ph-whatsapp-logo text-base"></i>
+                        </button>
+                        <button type="button" onclick="openClientModal('${escapeJs(cod)}')" class="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition" title="Ver detalhes do cliente">
+                            <i class="ph ph-eye text-base"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        tbody.innerHTML = htmlRows;
+    }
+
+    function mudarPaginaAdesao(delta) {
+        adesaoCache.pagina += delta;
+        renderTabelaAdesao();
+    }
+
+    function aoMudarPageSizeAdesao(val) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n) && n > 0) {
+            adesaoCache.pageSize = n;
+            adesaoCache.pagina = 1;
+            renderTabelaAdesao();
+        }
+    }
+
+    function alternarSelecaoTodosAdesao(checkEl) {
+        const isChecked = checkEl.checked;
+        const filtrados = adesaoCache.filtrados || [];
+        const pageSize = adesaoCache.pageSize || 50;
+        const start = (adesaoCache.pagina - 1) * pageSize;
+        const end = Math.min(start + pageSize, filtrados.length);
+        const paginaItens = filtrados.slice(start, end);
+
+        paginaItens.forEach(item => {
+            const cod = String(item.codCliente).trim();
+            if (isChecked) {
+                adesaoCache.selecionados.add(cod);
+            } else {
+                adesaoCache.selecionados.delete(cod);
+            }
+        });
+
+        atualizarContadorSelecaoAdesao();
+        renderTabelaAdesao();
+    }
+
+    function alternarSelecaoItemAdesao(cod) {
+        const codNorm = String(cod).trim();
+        if (adesaoCache.selecionados.has(codNorm)) {
+            adesaoCache.selecionados.delete(codNorm);
+        } else {
+            adesaoCache.selecionados.add(codNorm);
+        }
+        atualizarContadorSelecaoAdesao();
+        renderTabelaAdesao();
+    }
+
+    function atualizarContadorSelecaoAdesao() {
+        const count = adesaoCache.selecionados.size;
+        const elContador = document.getElementById('adesao-contador-selecionados');
+        const btnCobrar = document.getElementById('btn-cobrar-selecionados-adesao');
+
+        if (elContador) {
+            elContador.textContent = `${count} selecionado(s)`;
+        }
+        if (btnCobrar) {
+            if (count > 0) {
+                btnCobrar.classList.remove('hidden');
+                btnCobrar.style.display = 'inline-flex';
+            } else {
+                btnCobrar.classList.add('hidden');
+                btnCobrar.style.display = 'none';
+            }
+        }
+    }
+
+    function abrirModalWhatsAppAdesao(vendedorEspecifico) {
+        let itensParaAnalise = [];
+        if (vendedorEspecifico) {
+            const vNorm = normalizarTexto(vendedorEspecifico);
+            itensParaAnalise = (adesaoCache.todos || []).filter(i => (i.vendedor === vendedorEspecifico || normalizarTexto(i.vendedor) === vNorm) && i.isPendente);
+            if (itensParaAnalise.length === 0) {
+                itensParaAnalise = (adesaoCache.todos || []).filter(i => (i.vendedor === vendedorEspecifico || normalizarTexto(i.vendedor) === vNorm));
+            }
+        } else if (adesaoCache.selecionados.size > 0) {
+            const cods = adesaoCache.selecionados;
+            itensParaAnalise = (adesaoCache.filtrados || []).filter(i => cods.has(String(i.codCliente).trim()));
+        } else {
+            itensParaAnalise = (adesaoCache.filtrados || []).filter(i => i.isPendente);
+            if (itensParaAnalise.length === 0) {
+                itensParaAnalise = (adesaoCache.todos || []).filter(i => i.isPendente);
+            }
+        }
+
+        if (itensParaAnalise.length === 0) {
+            alert("Não há clientes pendentes de preenchimento na seleção atual para notificar.");
+            return;
+        }
+
+        // Agrupa por vendedor
+        const porVendedor = new Map();
+        itensParaAnalise.forEach(item => {
+            const v = String(item.vendedor || 'N/A').trim();
+            if (!porVendedor.has(v)) {
+                porVendedor.set(v, {
+                    nome: v,
+                    cod: item.codVendedor || '',
+                    equipe: item.equipe || '',
+                    itens: []
+                });
+            }
+            porVendedor.get(v).itens.push(item);
+        });
+
+        const selVendModal = document.getElementById('whats-adesao-vendedor-select');
+        if (!selVendModal) return;
+
+        const listaVendedores = Array.from(porVendedor.values()).sort((a, b) => b.itens.length - a.itens.length);
+
+        selVendModal.innerHTML = listaVendedores.map(v => {
+            return `<option value="${escapeHtml(v.nome)}">${escapeHtml(v.nome)} (${v.itens.length} cliente${v.itens.length > 1 ? 's' : ''} pendente${v.itens.length > 1 ? 's' : ''})</option>`;
+        }).join('');
+
+        let alvo = vendedorEspecifico;
+        if (!alvo && adesaoCache.filtroVendedor && porVendedor.has(adesaoCache.filtroVendedor)) {
+            alvo = adesaoCache.filtroVendedor;
+        }
+        if (!alvo && listaVendedores.length > 0) {
+            alvo = listaVendedores[0].nome;
+        }
+        if (alvo) {
+            selVendModal.value = alvo;
+        }
+
+        window._dadosWhatsAppAdesao = {
+            mapaVendedores: porVendedor
+        };
+
+        aoMudarVendedorWhatsAppAdesao();
+
+        // Dual-Safety Display
+        const modal = document.getElementById('modalDisparoWhatsAppAdesao');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        }
+    }
+
+    function fecharModalWhatsAppAdesao() {
+        const modal = document.getElementById('modalDisparoWhatsAppAdesao');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    function aoMudarVendedorWhatsAppAdesao() {
+        const selVendModal = document.getElementById('whats-adesao-vendedor-select');
+        if (!selVendModal || !window._dadosWhatsAppAdesao) return;
+
+        const vendNome = selVendModal.value;
+        const dadosVend = window._dadosWhatsAppAdesao.mapaVendedores.get(vendNome);
+        if (!dadosVend) return;
+
+        const elQtd = document.getElementById('whats-adesao-qtd-pendentes');
+        const elCid = document.getElementById('whats-adesao-cidades');
+        const elTel = document.getElementById('whats-adesao-telefone');
+        const elMsg = document.getElementById('whats-adesao-mensagem');
+
+        const totalPend = dadosVend.itens.length;
+        const cidadesSet = new Set(dadosVend.itens.map(i => i.cidade).filter(Boolean));
+        const cidadesArr = Array.from(cidadesSet);
+        const cidadesStr = cidadesArr.slice(0, 3).join(', ') + (cidadesArr.length > 3 ? ` (+${cidadesArr.length - 3})` : '');
+
+        if (elQtd) elQtd.textContent = totalPend;
+        if (elCid) elCid.textContent = cidadesStr || 'Geral';
+
+        let telSalvo = localStorage.getItem('ameripan_vend_tel_' + dadosVend.cod) || 
+                       localStorage.getItem('ameripan_vend_tel_' + normalizarTexto(vendNome)) || '';
+
+        if (elTel) elTel.value = telSalvo;
+
+        const primeiros = dadosVend.itens.slice(0, 4).map(i => `• [${i.codCliente}] ${i.fantasia || i.razao} (${i.cidade})`).join('\n');
+        const restante = totalPend > 4 ? `\n... e mais ${totalPend - 4} cliente(s)` : '';
+
+        const appUrl = "https://edimarpcosta.github.io/ameripan/rotas/vendedores/";
+        const cidadesMsg = cidadesArr.slice(0, 5).join(', ') + (cidadesArr.length > 5 ? ` (+${cidadesArr.length - 5} outras cidades)` : '');
+
+        const msg = `🚨 *Ameripan • Regularização de Carteira de Clientes*
+
+Olá, *${vendNome}*!
+
+Identificamos na auditoria de adesão que você possui *${totalPend} cliente(s)* atribuídos à sua carteira oficial (CLIENTES) que ainda *NÃO FORAM PREENCHIDOS / ROTEIRIZADOS* na sua grade de ROTAS:
+
+📍 *Praças afetadas:* ${cidadesMsg || 'Geral'}
+📋 *Alguns clientes pendentes:*
+${primeiros}${restante}
+
+⚠️ *Atenção:* Clientes sem inclusão na grade semanal ficam sem previsão logística de visita e entrega. É obrigatório incluí-los na sua grade com dia de atendimento fixado ou atendimento não-presencial.
+
+Por favor, acesse seu aplicativo e adicione esses clientes à sua grade de atendimento:
+👉 ${appUrl}
+
+Contamos com sua rápida regularização!`;
+
+        if (elMsg) elMsg.value = msg;
+    }
+
+    function aoDigitarTelefoneWhatsAppAdesao() {
+        const selVendModal = document.getElementById('whats-adesao-vendedor-select');
+        const elTel = document.getElementById('whats-adesao-telefone');
+        if (!selVendModal || !elTel) return;
+        const vendNome = selVendModal.value;
+        const telSanitizado = sanitizarTelefoneBR(elTel.value);
+        const dadosVend = window._dadosWhatsAppAdesao ? window._dadosWhatsAppAdesao.mapaVendedores.get(vendNome) : null;
+        const codVend = dadosVend ? dadosVend.cod : '';
+        if (telSanitizado) {
+            if (codVend) localStorage.setItem('ameripan_vend_tel_' + codVend, telSanitizado);
+            localStorage.setItem('ameripan_vend_tel_' + normalizarTexto(vendNome), telSanitizado);
+        }
+    }
+
+    function copiarMensagemWhatsAppAdesao() {
+        const elMsg = document.getElementById('whats-adesao-mensagem');
+        if (!elMsg || !elMsg.value) return;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(elMsg.value).then(() => {
+                alert("✅ Mensagem copiada com sucesso para a área de transferência!");
+            }).catch(() => {
+                elMsg.select();
+                document.execCommand('copy');
+                alert("✅ Mensagem copiada!");
+            });
+        } else {
+            elMsg.select();
+            document.execCommand('copy');
+            alert("✅ Mensagem copiada!");
+        }
+    }
+
+    function confirmarDisparoWhatsAppAdesao() {
+        const selVendModal = document.getElementById('whats-adesao-vendedor-select');
+        const elTel = document.getElementById('whats-adesao-telefone');
+        const elMsg = document.getElementById('whats-adesao-mensagem');
+
+        if (!selVendModal || !elMsg) return;
+
+        const vendNome = selVendModal.value;
+        const msgTexto = elMsg.value;
+        const telSanitizado = sanitizarTelefoneBR(elTel ? elTel.value : '');
+
+        const dadosVend = window._dadosWhatsAppAdesao ? window._dadosWhatsAppAdesao.mapaVendedores.get(vendNome) : null;
+        const codVend = dadosVend ? dadosVend.cod : '';
+
+        if (telSanitizado) {
+            if (codVend) localStorage.setItem('ameripan_vend_tel_' + codVend, telSanitizado);
+            localStorage.setItem('ameripan_vend_tel_' + normalizarTexto(vendNome), telSanitizado);
+        }
+
+        fecharModalWhatsAppAdesao();
+
+        let waUrl = '';
+        if (telSanitizado && (telSanitizado.length === 12 || telSanitizado.length === 13)) {
+            waUrl = `https://wa.me/${telSanitizado}?text=${encodeURIComponent(msgTexto)}`;
+        } else {
+            waUrl = `https://wa.me/?text=${encodeURIComponent(msgTexto)}`;
+        }
+
+        window.open(waUrl, '_blank');
+    }
+
+    function exportarExcelAdesao() {
+        let dadosFonte = [];
+        if (adesaoCache.selecionados && adesaoCache.selecionados.size > 0) {
+            const cods = adesaoCache.selecionados;
+            dadosFonte = (adesaoCache.filtrados || []).filter(i => cods.has(String(i.codCliente).trim()));
+        } else {
+            dadosFonte = adesaoCache.filtrados || [];
+        }
+
+        if (dadosFonte.length === 0) {
+            alert("Nenhum cliente disponível para exportação em Excel com os filtros atuais.");
+            return;
+        }
+
+        const dataIso = new Date().toISOString().slice(0, 10);
+        const wsData = dadosFonte.map(item => ({
+            "Cód. Cliente": item.codCliente,
+            "Razão Social": item.razao,
+            "Nome Fantasia": item.fantasia || item.razao,
+            "Cidade": item.cidade,
+            "Equipe": item.equipe,
+            "Vendedor da Carteira (CLIENTES)": item.vendedor,
+            "Situação na Grade": item.statusLabel,
+            "Vendedor na Rota (ROTAS)": item.rotaVendedor || 'Nenhum',
+            "Dia Principal": item.rotaDia || '—',
+            "Frequência": item.rotaFreq || '—',
+            "Ordem Visita": item.rotaOrdem !== undefined && item.rotaOrdem !== null && item.rotaOrdem !== '' ? item.rotaOrdem : '—'
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, "Adesao_Rotas");
+        XLSX.writeFile(wb, `Relatorio_Adesao_Rotas_Nao_Preenchidos_${dataIso}.xlsx`);
+    }
+
+    function exportarPdfAdesao() {
+        let dadosFonte = [];
+        if (adesaoCache.selecionados && adesaoCache.selecionados.size > 0) {
+            const cods = adesaoCache.selecionados;
+            dadosFonte = (adesaoCache.filtrados || []).filter(i => cods.has(String(i.codCliente).trim()));
+        } else {
+            dadosFonte = adesaoCache.filtrados || [];
+        }
+
+        if (dadosFonte.length === 0) {
+            alert("Nenhum cliente disponível para exportação em PDF com os filtros atuais.");
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const dataIso = new Date().toLocaleDateString('pt-BR');
+        const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        doc.setFontSize(14);
+        doc.setTextColor(30, 41, 59);
+        doc.text("AMERIPAN DISTRIBUIDORA • RELATÓRIO DE ADESÃO DE ROTAS", 14, 13);
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        const fEq = adesaoCache.filtroEquipe || 'Todas';
+        const fVend = adesaoCache.filtroVendedor || 'Todos';
+        const fCid = adesaoCache.filtroCidade || 'Todas';
+        const fStatus = adesaoCache.filtroStatus || 'Geral';
+        const tagSel = adesaoCache.selecionados.size > 0 ? ` (${dadosFonte.length} Selecionados)` : '';
+        doc.text(`Filtros: Equipe: ${fEq} | Vendedor: ${fVend} | Cidade: ${fCid} | Situação: ${fStatus} | Registros: ${dadosFonte.length}${tagSel} | Gerado em: ${dataIso} às ${hora}`, 14, 18);
+
+        const tableBody = dadosFonte.map(item => [
+            item.codCliente,
+            (item.fantasia ? `${item.razao}\n[${item.fantasia}]` : item.razao),
+            item.cidade || '—',
+            item.equipe || '—',
+            item.vendedor || '—',
+            item.statusLabel || '—',
+            item.rotaVendedor ? `${item.rotaVendedor}\n(${item.rotaDia || '-'} • ${item.rotaFreq || ''})` : (item.rotaDia && item.rotaDia !== '—' ? `${item.rotaDia} • ${item.rotaFreq || ''}` : '—')
+        ]);
+
+        doc.autoTable({
+            head: [['Cód.', 'Razão Social / Nome Fantasia', 'Cidade', 'Equipe', 'Vendedor Carteira', 'Situação Grade', 'Info Rota']],
+            body: tableBody,
+            startY: 22,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            columnStyles: {
+                0: { cellWidth: 18 },
+                1: { cellWidth: 70 },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 35 },
+                4: { cellWidth: 45 },
+                5: { cellWidth: 38 },
+                6: { cellWidth: 35 }
+            },
+            didDrawPage: function(data) {
+                const str = "Página " + doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.setTextColor(148, 163, 184);
+                doc.text(str, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8);
+            }
+        });
+
+        const fileDate = new Date().toISOString().slice(0, 10);
+        doc.save(`Relatorio_Adesao_Rotas_Nao_Preenchidos_${fileDate}.pdf`);
     }
 
 </script>
@@ -7866,7 +9330,7 @@
   </div>
 
   <!-- Modal: Confirmação Dupla de Desligamento de Vendedor -->
-  <div id="modalDesligarVendedor" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4" style="display: none;">
+  <div id="modalDesligarVendedor" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4">
       <div class="flex items-center gap-3 text-red-600">
         <div class="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-2xl flex-shrink-0">
@@ -7901,7 +9365,7 @@
   </div>
 
   <!-- Modal: Cadastro / Edição de Vendedor -->
-  <div id="modalVendedor" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4" style="display: none;">
+  <div id="modalVendedor" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
@@ -7960,7 +9424,7 @@
   </div>
 
   <!-- Modal: Cadastro / Edição de Cidade & Dias de Entrega -->
-  <div id="modalCidadeEntrega" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4" style="display: none;">
+  <div id="modalCidadeEntrega" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[160] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
@@ -8026,7 +9490,7 @@
   </div>
 
   <!-- Modal: Seleção Múltipla de Cidades (Órfãos) -->
-  <div id="modalOrfaosMultiCidades" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-[160] items-center justify-center p-4" style="display: none;">
+  <div id="modalOrfaosMultiCidades" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-[160] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4 animate-fade-in">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
@@ -8065,7 +9529,7 @@
 
 
     <!-- MODAL TOMADA DE DECISÃO: ATENDIMENTOS WHATSAPP (#0 e #99) -->
-    <div id="modalAtendimentosWhats" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4 overflow-y-auto">
+    <div id="modalAtendimentosWhats" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4 overflow-y-auto" style="display: none;">
         <div class="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-6 animate-scaleIn flex flex-col max-h-[90vh]">
             <div class="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between flex-shrink-0">
                 <div class="flex items-center gap-3">
@@ -8140,7 +9604,7 @@
     </div>
 
     <!-- Modal de Informações do Cliente -->
-    <div id="client-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] items-center justify-center p-4" style="display: none;">
+    <div id="client-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] items-center justify-center p-4 hidden" style="display: none;">
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
             <div class="p-4 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
                 <div class="min-w-0 pr-4">
@@ -8170,7 +9634,7 @@
   <!-- ============================================================ -->
 
   <!-- Modal: Alteração de Senha do Gestor -->
-  <div id="modalAlterarSenhaGestor" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4" style="display: none;">
+  <div id="modalAlterarSenhaGestor" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4 animate-scale-up" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-3">
@@ -8231,7 +9695,7 @@
   </div>
 
   <!-- Modal: Seletor de Vendedor para Kit de Férias -->
-  <div id="modalKitFeriasSelector" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4" style="display: none;">
+  <div id="modalKitFeriasSelector" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-100 space-y-4 animate-scale-up" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-3">
@@ -8420,6 +9884,74 @@
         <button type="button" onclick="confirmarGerarTarefaEDispararWhatsApp()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5">
           <i class="ph ph-whatsapp-logo text-base"></i>
           <span>Gerar Tarefa no Banco & Abrir WhatsApp</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Notificação e Disparo WhatsApp: Adesão de Rotas -->
+  <div id="modalDisparoWhatsAppAdesao" onclick="fecharModalWhatsAppAdesao()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[245] items-center justify-center p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col animate-scale-up" onclick="event.stopPropagation()">
+      <div class="p-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white text-2xl font-bold">
+            <i class="ph ph-whatsapp-logo"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-black">Cobrar Vendedor via WhatsApp</h4>
+            <span class="text-[10px] text-emerald-100">Regularização de Clientes Não Preenchidos na Grade</span>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalWhatsAppAdesao()" class="text-white/80 hover:text-white p-1">
+          <i class="ph ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs">
+        <!-- Seleção do Vendedor -->
+        <div>
+          <label for="whats-adesao-vendedor-select" class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Vendedor Destinatário:</label>
+          <select id="whats-adesao-vendedor-select" onchange="aoMudarVendedorWhatsAppAdesao()" class="w-full text-xs font-bold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-emerald-600 text-slate-800">
+            <!-- Populado via JS com os vendedores com pendências -->
+          </select>
+        </div>
+
+        <!-- Métricas Rápidas do Vendedor Selecionado -->
+        <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Clientes Não Preenchidos:</span>
+            <span id="whats-adesao-qtd-pendentes" class="text-lg font-black text-rose-600">0</span>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Praças / Cidades:</span>
+            <span id="whats-adesao-cidades" class="text-xs font-bold text-slate-700 truncate block">--</span>
+          </div>
+        </div>
+
+        <!-- Telefone WhatsApp -->
+        <div>
+          <label for="whats-adesao-telefone" class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Telefone / WhatsApp do Vendedor:</label>
+          <input type="tel" id="whats-adesao-telefone" oninput="aoDigitarTelefoneWhatsAppAdesao()" placeholder="Ex: 19997970041 ou (19) 99797-0041" class="w-full text-xs font-mono font-bold p-2.5 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+          <span class="text-[10px] text-slate-400 mt-1 block">O número digitado fica gravado automaticamente no sistema para futuros envios.</span>
+        </div>
+
+        <!-- Pré-visualização da Mensagem -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="whats-adesao-mensagem" class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Mensagem que será enviada:</label>
+            <button type="button" onclick="copiarMensagemWhatsAppAdesao()" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+              <i class="ph ph-copy"></i> Copiar Mensagem
+            </button>
+          </div>
+          <textarea id="whats-adesao-mensagem" rows="7" class="w-full text-[11px] font-mono p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 leading-relaxed focus:bg-white focus:border-emerald-500"></textarea>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button type="button" onclick="fecharModalWhatsAppAdesao()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">Cancelar</button>
+        <button type="button" onclick="confirmarDisparoWhatsAppAdesao()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5">
+          <i class="ph ph-whatsapp-logo text-base"></i>
+          <span>Abrir no WhatsApp</span>
         </button>
       </div>
     </div>
