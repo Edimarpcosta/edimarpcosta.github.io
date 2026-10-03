@@ -283,6 +283,7 @@
     <div class="p-4 border-t border-slate-100 bg-slate-50 space-y-2">
         <button onclick="carregarDados()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg shadow-sm text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-arrows-clockwise"></i> Atualizar Dados</button>
         <button onclick="executarSaneamentoEquipesNuvem()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg shadow-2xs text-xs font-bold flex items-center justify-center gap-2 transition" title="Auto-atribui equipes vazias e normaliza nomes na planilha Google Sheets"><i class="ph ph-magic-wand"></i> Sanear Equipes Nuvem</button>
+        <button onclick="abrirModalAuditoriaIntegridade()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded-lg shadow-2xs text-xs font-bold flex items-center justify-center gap-2 transition" title="Auditoria completa de integridade de todas as abas essenciais da planilha"><i class="ph ph-shield-check"></i> Auditoria de Integridade</button>
         <button onclick="abrirModalAlterarSenhaGestor()" class="w-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition shadow-2xs"><i class="ph ph-key text-blue-600"></i> Alterar Senha</button>
         <button onclick="efetuarLogoutGestor()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"><i class="ph ph-sign-out"></i> Sair / Bloquear</button>
     </div>
@@ -4229,6 +4230,8 @@
             if (typeof fecharModalOpcoesVCF === 'function') fecharModalOpcoesVCF();
             if (typeof fecharModalDesligar === 'function') fecharModalDesligar();
             if (typeof fecharModalWhatsAppAdesao === 'function') fecharModalWhatsAppAdesao();
+            if (typeof fecharModalAuditoriaIntegridade === 'function') fecharModalAuditoriaIntegridade();
+            if (typeof fecharModalRepescagemInativos === 'function') fecharModalRepescagemInativos();
         }
     });
     function closeClientModal() {
@@ -9776,6 +9779,213 @@ Contamos com sua rápida regularização!`;
         }
     }
 
+    // =============================================================
+    // AUDITORIA COMPLETA DE INTEGRIDADE DA PLANILHA (checar_dados.gs)
+    // =============================================================
+    let cacheAuditoriaIntegridade = null;
+    let filtroAuditoriaIntegridadeSev = 'TODOS';
+
+    function abrirModalAuditoriaIntegridade() {
+        const modal = document.getElementById('modalAuditoriaIntegridade');
+        if (!modal) return;
+
+        // Dual-Safety Display
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+
+        if (!cacheAuditoriaIntegridade) {
+            executarAuditoriaIntegridadeNuvem();
+        } else {
+            renderizarAuditoriaIntegridade();
+        }
+    }
+
+    function fecharModalAuditoriaIntegridade() {
+        const modal = document.getElementById('modalAuditoriaIntegridade');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    async function executarAuditoriaIntegridadeNuvem() {
+        mostrarLoadingGlobal('Executando auditoria holística da planilha...', 'Checando 14 abas essenciais, consistência relacional e qualidade dos dados...', 'ph-shield-check');
+        try {
+            const ctrlGas = new AbortController();
+            const tidGas = setTimeout(() => ctrlGas.abort(), 40000);
+            const resp = await fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ acao: 'CHECAR_INTEGRIDADE' }),
+                signal: ctrlGas.signal
+            });
+            clearTimeout(tidGas);
+            const resJson = await resp.json();
+
+            if (resJson && resJson.sucesso) {
+                cacheAuditoriaIntegridade = resJson;
+                renderizarAuditoriaIntegridade();
+            } else {
+                alert('Aviso do servidor: ' + ((resJson && resJson.erro) || 'Não foi possível concluir a auditoria na nuvem.'));
+            }
+        } catch (err) {
+            console.error('Erro ao executar auditoria na nuvem:', err);
+            alert('Erro ao conectar com a nuvem Google: ' + err.message);
+        } finally {
+            esconderLoadingGlobal();
+        }
+    }
+
+    function filtrarAuditoriaIntegridade(sev) {
+        filtroAuditoriaIntegridadeSev = sev;
+        document.querySelectorAll('.btn-filtro-auditoria').forEach(btn => {
+            if (btn.getAttribute('data-sev') === sev) {
+                btn.className = 'btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-xs';
+            } else {
+                btn.className = 'btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200';
+            }
+        });
+        renderizarAuditoriaIntegridade();
+    }
+
+    function filtrarAuditoriaIntegridadePorTexto() {
+        renderizarAuditoriaIntegridade();
+    }
+
+    function renderizarAuditoriaIntegridade() {
+        if (!cacheAuditoriaIntegridade) return;
+        const res = cacheAuditoriaIntegridade;
+        const resumo = res.resumo || {};
+        const diag = res.diagnosticos || [];
+
+        // Atualizar KPI Cards
+        const elTotal = document.getElementById('auditoria-total-checagens');
+        const elOk = document.getElementById('auditoria-count-ok');
+        const elAvisos = document.getElementById('auditoria-count-avisos');
+        const elErros = document.getElementById('auditoria-count-erros');
+        const elAlertas = document.getElementById('auditoria-count-alertas');
+        const elBadgeGlobal = document.getElementById('auditoria-badge-global');
+        const elDataHora = document.getElementById('auditoria-data-hora-lbl');
+
+        if (elTotal) elTotal.textContent = resumo.totalChecagens || diag.length;
+        if (elOk) elOk.textContent = resumo.ok || 0;
+        if (elAvisos) elAvisos.textContent = resumo.avisos || 0;
+        if (elErros) elErros.textContent = resumo.erros || 0;
+        if (elAlertas) elAlertas.textContent = resumo.alertas || 0;
+        if (elDataHora) elDataHora.textContent = `Última execução: ${res.dataHora || 'Agora'}`;
+
+        if (elBadgeGlobal) {
+            const statusG = resumo.statusGeral || (resumo.erros > 0 ? 'CRÍTICO' : (resumo.avisos > 0 ? 'ATENÇÃO' : 'APROVADO'));
+            elBadgeGlobal.textContent = statusG;
+            if (statusG === 'APROVADO') {
+                elBadgeGlobal.className = 'px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs';
+            } else if (statusG === 'ATENÇÃO') {
+                elBadgeGlobal.className = 'px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs';
+            } else {
+                elBadgeGlobal.className = 'px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-600 text-white shadow-xs';
+            }
+        }
+
+        // Filtragem
+        const busca = (document.getElementById('auditoria-busca-input')?.value || '').toLowerCase().trim();
+        let filtrados = diag.filter(d => {
+            if (filtroAuditoriaIntegridadeSev === 'ERROS_ALERTAS') {
+                if (d.severidade !== 'ERRO' && d.severidade !== 'ALERTA') return false;
+            } else if (filtroAuditoriaIntegridadeSev !== 'TODOS') {
+                if (d.severidade !== filtroAuditoriaIntegridadeSev) return false;
+            }
+
+            if (busca) {
+                const textoCombinado = `${d.aba} ${d.regra} ${d.resultado} ${d.diagnosticoAcao}`.toLowerCase();
+                if (!textoCombinado.includes(busca)) return false;
+            }
+            return true;
+        });
+
+        // Salvar estado persistente para exportação
+        cacheAuditoriaIntegridade.filtrados = filtrados;
+
+        const tbody = document.getElementById('auditoria-tabela-body');
+        if (!tbody) return;
+
+        if (filtrados.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-medium text-xs">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = filtrados.map(d => {
+            let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+            let icon = 'ph-check-circle';
+            if (d.severidade === 'OK') {
+                badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
+                icon = 'ph-check-circle';
+            } else if (d.severidade === 'AVISO') {
+                badgeClass = 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+                icon = 'ph-warning';
+            } else if (d.severidade === 'ERRO') {
+                badgeClass = 'bg-rose-50 text-rose-700 border-rose-200 font-bold';
+                icon = 'ph-x-circle';
+            } else if (d.severidade === 'ALERTA') {
+                badgeClass = 'bg-purple-50 text-purple-700 border-purple-200 font-bold';
+                icon = 'ph-warning-octagon';
+            } else if (d.severidade === 'INFO') {
+                badgeClass = 'bg-blue-50 text-blue-700 border-blue-200 font-semibold';
+                icon = 'ph-info';
+            }
+
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+                    <td class="p-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] border ${badgeClass}">
+                            <i class="ph ${icon}"></i>
+                            ${escapeHtml(d.severidade)}
+                        </span>
+                    </td>
+                    <td class="p-3 font-bold text-slate-800 whitespace-nowrap">
+                        ${escapeHtml(d.aba)}
+                    </td>
+                    <td class="p-3 font-semibold text-slate-700">
+                        ${escapeHtml(d.regra)}
+                    </td>
+                    <td class="p-3 font-mono font-medium text-slate-900 whitespace-nowrap">
+                        ${escapeHtml(d.resultado)}
+                    </td>
+                    <td class="p-3 text-slate-600 leading-relaxed">
+                        ${escapeHtml(d.diagnosticoAcao)}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function exportarAuditoriaIntegridadeExcel() {
+        if (!cacheAuditoriaIntegridade || !cacheAuditoriaIntegridade.diagnosticos) {
+            alert('Execute a auditoria antes de exportar.');
+            return;
+        }
+
+        const lista = cacheAuditoriaIntegridade.filtrados || cacheAuditoriaIntegridade.diagnosticos;
+        if (lista.length === 0) {
+            alert('Nenhum dado para exportar.');
+            return;
+        }
+
+        const wsData = [
+            ['DATA/HORA', 'SEVERIDADE', 'ABA / MÓDULO', 'REGRA / INDICADOR', 'RESULTADO / CONTAGEM', 'DIAGNÓSTICO & AÇÃO RECOMENDADA']
+        ];
+
+        lista.forEach(d => {
+            wsData.push([d.dataHora, d.severidade, d.aba, d.regra, d.resultado, d.diagnosticoAcao]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 22 }, { wch: 30 }, { wch: 25 }, { wch: 45 }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Auditoria_Integridade');
+        XLSX.writeFile(wb, `Auditoria_Integridade_Ameripan_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
 </script>
 
   <!-- Modal: Login do Gerente (Bloqueante Seguro) -->
@@ -10561,6 +10771,109 @@ Contamos com sua rápida regularização!`;
           <button type="button" onclick="confirmarConciliarRepescagemInativos()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5 text-xs">
             <i class="ph ph-arrows-clockwise text-sm"></i>
             <span>Executar Conciliação na Nuvem</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  <!-- Modal: Auditoria Completa de Integridade da Planilha (checar_dados.gs) -->
+  <div id="modalAuditoriaIntegridade" onclick="fecharModalAuditoriaIntegridade()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[248] items-center justify-center p-4 hidden" style="display: none;">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] border border-slate-200 overflow-hidden flex flex-col animate-scale-up" onclick="event.stopPropagation()">
+      <!-- Header do Modal -->
+      <div class="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 text-2xl font-bold shadow-inner">
+            <i class="ph ph-shield-check"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h4 class="text-base font-black tracking-tight">Auditoria de Integridade da Planilha</h4>
+              <span id="auditoria-badge-global" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-700 text-slate-200 border border-white/10">NÃO EXECUTADA</span>
+            </div>
+            <span class="text-[11px] text-slate-300">Auditoria holística das 14 abas essenciais, consistência relacional e qualidade dos dados</span>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalAuditoriaIntegridade()" class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition" title="Fechar (Esc)">
+          <i class="ph ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Resumo Executivo / KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 bg-slate-50/80 border-b border-slate-200">
+        <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+          <div class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Checagens</div>
+          <div class="text-xl font-black text-slate-900 mt-0.5" id="auditoria-total-checagens">0</div>
+        </div>
+        <div class="bg-white p-3 rounded-2xl border border-emerald-200 bg-emerald-50/30 shadow-2xs">
+          <div class="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Aprovados [OK]</div>
+          <div class="text-xl font-black text-emerald-700 mt-0.5" id="auditoria-count-ok">0</div>
+        </div>
+        <div class="bg-white p-3 rounded-2xl border border-amber-200 bg-amber-50/30 shadow-2xs">
+          <div class="text-[10px] font-bold uppercase text-amber-600 tracking-wider">Avisos [AVISO]</div>
+          <div class="text-xl font-black text-amber-700 mt-0.5" id="auditoria-count-avisos">0</div>
+        </div>
+        <div class="bg-white p-3 rounded-2xl border border-rose-200 bg-rose-50/30 shadow-2xs">
+          <div class="text-[10px] font-bold uppercase text-rose-600 tracking-wider">Erros [ERRO]</div>
+          <div class="text-xl font-black text-rose-700 mt-0.5" id="auditoria-count-erros">0</div>
+        </div>
+        <div class="bg-white p-3 rounded-2xl border border-purple-200 bg-purple-50/30 shadow-2xs col-span-2 sm:col-span-1">
+          <div class="text-[10px] font-bold uppercase text-purple-600 tracking-wider">Alertas [ALERTA]</div>
+          <div class="text-xl font-black text-purple-700 mt-0.5" id="auditoria-count-alertas">0</div>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros e Busca -->
+      <div class="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" data-sev="TODOS" onclick="filtrarAuditoriaIntegridade('TODOS')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-xs">Todos</button>
+          <button type="button" data-sev="ERROS_ALERTAS" onclick="filtrarAuditoriaIntegridade('ERROS_ALERTAS')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200">Erros & Alertas</button>
+          <button type="button" data-sev="AVISO" onclick="filtrarAuditoriaIntegridade('AVISO')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200">Avisos</button>
+          <button type="button" data-sev="OK" onclick="filtrarAuditoriaIntegridade('OK')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200">Conformes (OK)</button>
+          <button type="button" data-sev="INFO" onclick="filtrarAuditoriaIntegridade('INFO')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200">Informativos</button>
+        </div>
+        <div class="relative min-w-[240px] flex-1 sm:flex-initial">
+          <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+          <input type="text" id="auditoria-busca-input" oninput="filtrarAuditoriaIntegridadePorTexto()" placeholder="Filtrar por aba, regra ou detalhe..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700">
+        </div>
+      </div>
+
+      <!-- Tabela com Scroll -->
+      <div class="flex-1 overflow-auto bg-white min-h-[300px]">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-slate-100 text-slate-600 text-[10px] uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+            <tr>
+              <th class="p-3">Severidade</th>
+              <th class="p-3">Aba / Módulo</th>
+              <th class="p-3">Regra / Indicador</th>
+              <th class="p-3">Resultado / Contagem</th>
+              <th class="p-3">Diagnóstico & Ação Recomendada</th>
+            </tr>
+          </thead>
+          <tbody id="auditoria-tabela-body" class="divide-y divide-slate-100 text-slate-700">
+            <tr>
+              <td colspan="5" class="p-8 text-center text-slate-400 font-medium text-xs">
+                Clique em "Executar Nova Auditoria" para carregar o diagnóstico completo da planilha.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Rodapé -->
+      <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="text-xs text-slate-500 font-medium" id="auditoria-data-hora-lbl">
+          Planilha Oficial: 1LfMhWqla2YdzN4CLLw2TERG816DHaStbq1jVNiV8uuw
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="exportarAuditoriaIntegridadeExcel()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-2xs transition flex items-center gap-1.5 text-xs" title="Exportar diagnóstico completo para Excel">
+            <i class="ph ph-file-xls text-sm"></i>
+            <span>Exportar Excel</span>
+          </button>
+          <button type="button" onclick="executarAuditoriaIntegridadeNuvem()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5 text-xs" title="Executa novamente a checagem na nuvem Google">
+            <i class="ph ph-arrows-clockwise text-sm"></i>
+            <span>Executar Nova Auditoria</span>
+          </button>
+          <button type="button" onclick="fecharModalAuditoriaIntegridade()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition text-xs">
+            Fechar
           </button>
         </div>
       </div>
