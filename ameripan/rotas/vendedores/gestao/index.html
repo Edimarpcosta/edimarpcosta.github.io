@@ -2245,7 +2245,7 @@
     }
 
     async function executarSaneamentoEquipesNuvem() {
-        const confirmar = confirm("Deseja executar o saneamento automático de Equipes e Vendedores na planilha Google Sheets?\\n\\nIsso irá verificar todas as linhas da aba ROTAS, auto-atribuir a equipe oficial baseada em VENDEDORES e CLIENTES, e normalizar nomes de vendedores abreviados (ex: Dario -> DARIO LUCIANO RAMAZZA).");
+        const confirmar = confirm("Deseja executar o saneamento automático de Equipes e Vendedores na planilha Google Sheets?\n\nIsso irá verificar todas as linhas da aba ROTAS, auto-atribuir a equipe oficial baseada em VENDEDORES e CLIENTES, e normalizar nomes de vendedores abreviados (ex: Dario -> DARIO LUCIANO RAMAZZA).");
         if (!confirmar) return;
 
         mostrarLoadingGlobal('Saneando equipes e vendedores na nuvem...', 'Verificando e corrigindo linhas sem equipe na planilha oficial...', 'ph-circle-notch');
@@ -2261,15 +2261,18 @@
             clearTimeout(tidGas);
             const resJson = await resp.json();
 
+            esconderLoadingGlobal();
+
             if (resJson && resJson.sucesso) {
-                alert(resJson.mensagem || 'Saneamento na nuvem concluído com sucesso!');
+                exibirNotificacao('sucesso', 'Saneamento Concluído', resJson.mensagem || 'Saneamento na nuvem concluído com sucesso!');
                 await carregarDados();
             } else {
-                alert('Aviso do servidor: ' + ((resJson && resJson.erro) || 'Não foi possível concluir o saneamento na nuvem.'));
+                exibirNotificacao('aviso', 'Aviso do Servidor', (resJson && resJson.erro) || 'Não foi possível concluir o saneamento na nuvem.');
             }
         } catch (err) {
             console.error('Erro ao executar saneamento de equipes na nuvem:', err);
-            alert('Erro ao conectar com a nuvem Google: ' + err.message);
+            esconderLoadingGlobal();
+            exibirNotificacao('erro', 'Erro de Conexão', 'Erro ao conectar com a nuvem Google: ' + err.message);
         } finally {
             esconderLoadingGlobal();
         }
@@ -2494,9 +2497,106 @@
     function ocultarLoading() {
         esconderLoadingGlobal();
     }
+
+    // ============================================================
+    // SISTEMA DE NOTIFICAÇÕES VISUAIS NÃO-BLOQUEANTES (TOAST SYSTEM)
+    // ============================================================
+    function exibirNotificacao(tipo = 'info', titulo = 'Notificação', mensagem = '', duracaoMs = 4500) {
+        const container = document.getElementById('toast-container');
+        if (!container) {
+            console.log(`[TOAST ${tipo.toUpperCase()}] ${titulo}: ${mensagem}`);
+            return;
+        }
+
+        const isSucesso = tipo === 'sucesso';
+        const isErro = tipo === 'erro';
+        const isAviso = tipo === 'aviso';
+
+        const corBorda = isSucesso ? 'border-emerald-500 bg-emerald-950/95 text-emerald-100 shadow-emerald-950/50' :
+                         (isErro ? 'border-rose-500 bg-rose-950/95 text-rose-100 shadow-rose-950/50' :
+                         (isAviso ? 'border-amber-500 bg-amber-950/95 text-amber-100 shadow-amber-950/50' :
+                         'border-blue-500 bg-slate-900/95 text-slate-100 shadow-slate-950/50'));
+
+        const corIcone = isSucesso ? 'text-emerald-400 ph-check-circle' :
+                         (isErro ? 'text-rose-400 ph-x-circle' :
+                         (isAviso ? 'text-amber-400 ph-warning-circle' :
+                         'text-blue-400 ph-info'));
+
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 ${corBorda}`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <i class="ph ${corIcone} text-xl shrink-0 mt-0.5"></i>
+            <div class="flex-1 min-w-0">
+                <div class="font-bold text-xs uppercase tracking-wider mb-0.5">${escapeHtml(titulo)}</div>
+                <div class="text-xs leading-relaxed opacity-95 whitespace-pre-line">${escapeHtml(mensagem)}</div>
+            </div>
+            <button type="button" class="btn-fechar-toast shrink-0 p-1 text-slate-400 hover:text-white transition rounded-md text-xs cursor-pointer">
+                <i class="ph ph-x"></i>
+            </button>
+        `;
+
+        const btnFechar = toast.querySelector('.btn-fechar-toast');
+        if (btnFechar) {
+            btnFechar.onclick = () => { toast.remove(); };
+        }
+
+        container.appendChild(toast);
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+        } else {
+            toast.classList.remove('translate-y-2', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+        }
+
+        if (duracaoMs > 0) {
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.add('opacity-0', '-translate-y-2');
+                    setTimeout(() => {
+                        if (typeof toast.remove === 'function') {
+                            toast.remove();
+                        } else if (toast.parentElement && typeof toast.parentElement.removeChild === 'function') {
+                            toast.parentElement.removeChild(toast);
+                        }
+                    }, 300);
+                }
+            }, duracaoMs);
+        }
+    }
+
     if (typeof window !== 'undefined') {
         window.exibirLoading = exibirLoading;
         window.ocultarLoading = ocultarLoading;
+        window.exibirNotificacao = exibirNotificacao;
+
+        // Intercepta alertas nativos bloqueantes para o gestor
+        const _origAlert = window.alert;
+        const _isNativeAlert = _origAlert && typeof _origAlert === 'function' && _origAlert.toString().includes('[native code]');
+
+        window.alert = function(msg) {
+            if (_origAlert && !_isNativeAlert) {
+                try { _origAlert.call(window, msg); } catch (e) {}
+            }
+            const container = document.getElementById('toast-container');
+            const texto = String(msg || '');
+            let tipo = 'info';
+            let titulo = 'Notificação';
+            if (texto.includes('✅') || /sucesso|concluído|homologad|liberad/i.test(texto)) {
+                tipo = 'sucesso';
+                titulo = 'Operação Concluída';
+            } else if (texto.includes('❌') || /erro|falha|bloquead|revogad/i.test(texto)) {
+                tipo = 'erro';
+                titulo = 'Aviso do Sistema';
+            } else if (texto.includes('⚠️') || /aviso|atenção|alerta|obrigatório|selecione/i.test(texto)) {
+                tipo = 'aviso';
+                titulo = 'Atenção';
+            }
+            exibirNotificacao(tipo, titulo, texto.replace(/^[✅❌⚠️ℹ️]\s*/, ''));
+        };
     }
 
     function switchView(v, el) {
@@ -5661,14 +5761,21 @@
         document.getElementById('desligarNomeDisplay').innerText = nome;
         document.getElementById('desligarCodDisplay').innerText = cod;
         document.getElementById('inputConfirmaDesligamento').value = '';
-        document.getElementById('desligarErroMsg').innerText = '';
-        document.getElementById('modalDesligarVendedor').style.display = 'flex';
+        const mDesligar = document.getElementById('modalDesligarVendedor');
+        if (mDesligar) {
+            mDesligar.classList.remove('hidden');
+            mDesligar.style.display = 'flex';
+        }
         document.getElementById('inputConfirmaDesligamento').focus();
     }
 
     function fecharModalDesligar() {
         vendedorParaDesligar = null;
-        document.getElementById('modalDesligarVendedor').style.display = 'none';
+        const mDesligar = document.getElementById('modalDesligarVendedor');
+        if (mDesligar) {
+            mDesligar.classList.add('hidden');
+            mDesligar.style.display = 'none';
+        }
     }
 
     async function executarDesligamentoVendedor() {
@@ -5733,7 +5840,11 @@
             dl.innerHTML = equipes.map(eq => `<option value="${escapeHtml(eq)}"></option>`).join('');
         }
 
-        document.getElementById('modalVendedor').style.display = 'flex';
+        const mVend = document.getElementById('modalVendedor');
+        if (mVend) {
+            mVend.classList.remove('hidden');
+            mVend.style.display = 'flex';
+        }
         codInput.focus();
     }
 
@@ -5763,13 +5874,21 @@
             dl.innerHTML = equipes.map(eq => `<option value="${escapeHtml(eq)}"></option>`).join('');
         }
 
-        document.getElementById('modalVendedor').style.display = 'flex';
+        const mVendEdit = document.getElementById('modalVendedor');
+        if (mVendEdit) {
+            mVendEdit.classList.remove('hidden');
+            mVendEdit.style.display = 'flex';
+        }
         document.getElementById('modalVendNome').focus();
     }
 
     function fecharModalVendedor() {
         vendedorParaEditar = null;
-        document.getElementById('modalVendedor').style.display = 'none';
+        const mVend = document.getElementById('modalVendedor');
+        if (mVend) {
+            mVend.classList.add('hidden');
+            mVend.style.display = 'none';
+        }
     }
 
     async function salvarVendedorForm() {
@@ -5867,7 +5986,11 @@
         }
         document.getElementById('modalCidadeObs').value = '';
         document.getElementById('modalCidadeErroMsg').innerText = '';
-        document.getElementById('modalCidadeEntrega').style.display = 'flex';
+        const mCidNova = document.getElementById('modalCidadeEntrega');
+        if (mCidNova) {
+            mCidNova.classList.remove('hidden');
+            mCidNova.style.display = 'flex';
+        }
         inputNome.focus();
     }
 
@@ -5890,12 +6013,20 @@
 
         document.getElementById('modalCidadeObs').value = obs;
         document.getElementById('modalCidadeErroMsg').innerText = '';
-        document.getElementById('modalCidadeEntrega').style.display = 'flex';
+        const mCidEdit = document.getElementById('modalCidadeEntrega');
+        if (mCidEdit) {
+            mCidEdit.classList.remove('hidden');
+            mCidEdit.style.display = 'flex';
+        }
     }
 
     function fecharModalCidade() {
         cidadeParaEditar = null;
-        document.getElementById('modalCidadeEntrega').style.display = 'none';
+        const mCid = document.getElementById('modalCidadeEntrega');
+        if (mCid) {
+            mCid.classList.add('hidden');
+            mCid.style.display = 'none';
+        }
     }
 
     async function salvarCidadeForm() {
@@ -6182,12 +6313,16 @@
         if (buscaInput) buscaInput.value = '';
 
         atualizarContagemCidadesModalOrfaos();
+        modal.classList.remove('hidden');
         modal.style.display = 'flex';
     }
 
     function fecharModalMultiCidadesOrfaos() {
         const modal = document.getElementById('modalOrfaosMultiCidades');
-        if (modal) modal.style.display = 'none';
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
     }
 
     function filtrarListaCidadesModalOrfaos() {
@@ -7216,13 +7351,14 @@
         if (!modal) return;
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        modal.style.display = 'flex';
 
         const selVend = document.getElementById('modal-whats-filtro-vend');
         const selCid = document.getElementById('modal-whats-filtro-cidade');
 
         const todosWhats = filteredData.filter(r => r.ordem === 0 || r.ordem === 99 || r.isRemoto);
 
-        if (selVend && selVend.options.length <= 1) {
+        if (selVend && selVend.options && selVend.options.length <= 1) {
             const vends = Array.from(new Set(todosWhats.map(r => r.vendedor).filter(Boolean))).sort();
             vends.forEach(v => {
                 const opt = document.createElement('option');
@@ -7232,7 +7368,7 @@
             });
         }
 
-        if (selCid && selCid.options.length <= 1) {
+        if (selCid && selCid.options && selCid.options.length <= 1) {
             const cids = Array.from(new Set(todosWhats.map(r => r.cidade).filter(Boolean))).sort();
             cids.forEach(c => {
                 const opt = document.createElement('option');
@@ -7250,6 +7386,7 @@
         if (!modal) return;
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        modal.style.display = 'none';
     }
 
     function renderModalAtendimentosWhats() {
@@ -9764,16 +9901,19 @@ Contamos com sua rápida regularização!`;
             };
 
             const res = await fetchComRetry(GAS_API_URL, payload);
+            esconderLoadingGlobal();
+
             if (res && res.sucesso) {
-                alert(`✅ ${res.mensagem || 'Conciliação realizada com sucesso!'}`);
+                exibirNotificacao('sucesso', 'Conciliação Concluída', res.mensagem || 'Conciliação realizada com sucesso!');
                 fecharModalRepescagemInativos();
                 await carregarDados();
             } else {
-                alert(`⚠️ Falha na conciliação: ${res?.erro || 'Erro desconhecido retornado pelo servidor.'}`);
+                exibirNotificacao('aviso', 'Falha na Conciliação', res?.erro || 'Erro desconhecido retornado pelo servidor.');
             }
         } catch (err) {
             console.error("Erro ao conciliar repescagem:", err);
-            alert(`❌ Erro de comunicação com a nuvem: ${err.message || err}`);
+            esconderLoadingGlobal();
+            exibirNotificacao('erro', 'Erro de Comunicação', err.message || String(err));
         } finally {
             esconderLoadingGlobal();
         }
@@ -9785,7 +9925,7 @@ Contamos com sua rápida regularização!`;
     let cacheAuditoriaIntegridade = null;
     let filtroAuditoriaIntegridadeSev = 'TODOS';
 
-    function abrirModalAuditoriaIntegridade() {
+    async function abrirModalAuditoriaIntegridade() {
         const modal = document.getElementById('modalAuditoriaIntegridade');
         if (!modal) return;
 
@@ -9794,7 +9934,7 @@ Contamos com sua rápida regularização!`;
         modal.style.display = 'flex';
 
         if (!cacheAuditoriaIntegridade) {
-            executarAuditoriaIntegridadeNuvem();
+            await executarAuditoriaIntegridadeNuvem();
         } else {
             renderizarAuditoriaIntegridade();
         }
@@ -9812,7 +9952,7 @@ Contamos com sua rápida regularização!`;
         mostrarLoadingGlobal('Executando auditoria holística da planilha...', 'Checando 14 abas essenciais, consistência relacional e qualidade dos dados...', 'ph-shield-check');
         try {
             const ctrlGas = new AbortController();
-            const tidGas = setTimeout(() => ctrlGas.abort(), 40000);
+            const tidGas = setTimeout(() => ctrlGas.abort(), 35000);
             const resp = await fetch(GAS_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -9820,20 +9960,392 @@ Contamos com sua rápida regularização!`;
                 signal: ctrlGas.signal
             });
             clearTimeout(tidGas);
-            const resJson = await resp.json();
 
-            if (resJson && resJson.sucesso) {
+            let resJson = null;
+            try {
+                resJson = await resp.json();
+            } catch (eParse) {
+                console.warn('Erro ao decodificar JSON retornado pela nuvem:', eParse);
+            }
+
+            if (resJson && resJson.sucesso && Array.isArray(resJson.diagnosticos) && resJson.diagnosticos.length > 0) {
                 cacheAuditoriaIntegridade = resJson;
+                cacheAuditoriaIntegridade.origem = 'NUVEM';
                 renderizarAuditoriaIntegridade();
             } else {
-                alert('Aviso do servidor: ' + ((resJson && resJson.erro) || 'Não foi possível concluir a auditoria na nuvem.'));
+                const motivo = (resJson && resJson.erro)
+                    ? resJson.erro
+                    : 'A nuvem retornou resposta preliminar ou sem diagnóstico estruturado. Executando diagnóstico local com base nos dados sincronizados da sessão.';
+                console.warn('Auditoria na nuvem não retornou estrutura esperada. Acionando diagnóstico resiliente local:', motivo);
+                if ((!Array.isArray(rawClientes) || rawClientes.length === 0) && typeof carregarDados === 'function') {
+                    try { await carregarDados(); } catch (e) {}
+                }
+                executarAuditoriaIntegridadeLocal(motivo);
             }
         } catch (err) {
-            console.error('Erro ao executar auditoria na nuvem:', err);
-            alert('Erro ao conectar com a nuvem Google: ' + err.message);
+            console.error('Erro de conexão com a nuvem Google ao auditar:', err);
+            const motivo = (err.name === 'AbortError')
+                ? 'Tempo limite de resposta da nuvem excedido (>35s). Executando auditoria local resiliente.'
+                : 'Erro de comunicação com a nuvem: ' + err.message;
+            if ((!Array.isArray(rawClientes) || rawClientes.length === 0) && typeof carregarDados === 'function') {
+                try { await carregarDados(); } catch (e) {}
+            }
+            executarAuditoriaIntegridadeLocal(motivo);
         } finally {
             esconderLoadingGlobal();
         }
+    }
+
+    async function executarAuditoriaIntegridadeLocalManual() {
+        if ((!Array.isArray(rawClientes) || rawClientes.length === 0) && typeof carregarDados === 'function') {
+            mostrarLoadingGlobal('Sincronizando dados da sessão...', 'Carregando dados operacionais antes da auditoria local...', 'ph-arrows-clockwise');
+            try {
+                await carregarDados();
+            } catch (e) {
+                console.warn('Falha ao sincronizar dados antes da auditoria local:', e);
+            } finally {
+                esconderLoadingGlobal();
+            }
+        }
+        executarAuditoriaIntegridadeLocal(null);
+    }
+
+    function executarAuditoriaIntegridadeLocal(motivoFallback) {
+        const agora = new Date().toLocaleString('pt-BR');
+        const diag = [];
+
+        function addDiag(sev, aba, regra, resultado, acao) {
+            diag.push({
+                dataHora: agora,
+                severidade: sev,
+                aba: aba,
+                regra: regra,
+                resultado: String(resultado),
+                diagnosticoAcao: acao
+            });
+        }
+
+        const norm = (txt) => {
+            if (!txt) return '';
+            return String(txt).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+        };
+
+        const vends = Array.isArray(rawVendedores) ? rawVendedores : [];
+        const clis = Array.isArray(rawClientes) ? rawClientes : [];
+        const rts = Array.isArray(rawRotas) ? rawRotas : [];
+        const disps = Array.isArray(rawDispositivos) ? rawDispositivos : [];
+        const sols = Array.isArray(rawSolicitacoesPendentes) ? rawSolicitacoesPendentes : [];
+        const tars = Array.isArray(rawTarefasCadastro) ? rawTarefasCadastro : [];
+        const semAtend = Array.isArray(rawSemAtendimento) ? rawSemAtendimento : [];
+        const entregas = rawEntregas || {};
+        const repescados = Array.isArray(rawRepescadosPrevia) ? rawRepescadosPrevia : [];
+
+        // 1. Diagnóstico de Conexão com Nuvem / Banco de Dados
+        if (motivoFallback) {
+            addDiag('AVISO', 'BANCO_DADOS_PLANILHA', 'Conexão Nuvem Google Sheets', 'Diagnóstico Local Ativo', `Auditoria gerada localmente a partir dos dados já sincronizados na sessão (${clis.length} clientes, ${rts.length} rotas). Motivo: ${motivoFallback}`);
+        } else {
+            addDiag('OK', 'BANCO_DADOS_PLANILHA', 'Modo de Auditoria', 'Sessão Local Validada', `Auditoria instantânea executada com sucesso sobre o cache ativo da sessão (${clis.length} clientes, ${rts.length} rotas). Planilha protegida como banco de dados.`);
+        }
+
+        // 2. AUDITORIA: MÓDULO VENDEDORES
+        const mapaVendedores = new Map();
+        const mapaVendPorNomeNorm = new Map();
+        let codigosVendDuplicados = 0;
+        let vendsSemEquipe = 0;
+        let vendsSemSenha = 0;
+        const codsVistos = new Set();
+
+        vends.forEach(v => {
+            const cod = String(v.cod || '').trim();
+            const nome = String(v.nome || '').trim();
+            const eq = String(v.equipe || '').trim();
+            const senha = String(v.senha || '').trim();
+            const status = norm(v.status || 'ATIVO');
+
+            if (!cod) return;
+            if (codsVistos.has(cod)) {
+                codigosVendDuplicados++;
+            } else {
+                codsVistos.add(cod);
+            }
+
+            const vObj = { cod, nome, equipe: eq, status, senha };
+            mapaVendedores.set(cod, vObj);
+            if (nome) mapaVendPorNomeNorm.set(norm(nome), vObj);
+
+            if (status === 'ATIVO' && (!eq || eq === 'Geral' || eq === 'Sem Equipe')) {
+                vendsSemEquipe++;
+            }
+            if (status === 'ATIVO' && !senha) {
+                vendsSemSenha++;
+            }
+        });
+
+        if (codigosVendDuplicados > 0) {
+            addDiag('ERRO', 'VENDEDORES', 'Unicidade de Código (COD)', `${codigosVendDuplicados} código(s) duplicado(s)`, 'Remover linhas duplicadas na aba VENDEDORES.');
+        } else {
+            addDiag('OK', 'VENDEDORES', 'Unicidade de Código (COD)', `${mapaVendedores.size} vendedores únicos`, 'Chaves primárias íntegras.');
+        }
+
+        if (vendsSemEquipe > 0) {
+            addDiag('ERRO', 'VENDEDORES', 'Equipe Preenchida', `${vendsSemEquipe} vendedor(es) ativo(s) sem equipe`, 'Atribuir a equipe oficial no módulo Vendedores.');
+        } else {
+            addDiag('OK', 'VENDEDORES', 'Equipe Preenchida', '100% preenchida', 'Todos os vendedores ativos possuem equipe atribuída.');
+        }
+
+        if (vendsSemSenha > 0) {
+            addDiag('AVISO', 'VENDEDORES', 'Senha de Acesso', `${vendsSemSenha} vendedor(es) sem senha cadastrada`, 'Cadastrar senhas numéricas para permitir o login no App.');
+        } else {
+            addDiag('OK', 'VENDEDORES', 'Senha de Acesso', '100% com senha', 'Todos os vendedores possuem credencial de acesso.');
+        }
+
+        // 3. AUDITORIA: BASE CLIENTES
+        const mapaClientes = new Map();
+        const cidadesClientes = new Set();
+        let cliSemCodigo = 0;
+        let cliCodigosDuplicados = 0;
+        let cliOrfaosVendedor = 0;
+        let cliOrfaosEquipe = 0;
+        let cliVendInativo = 0;
+        const codsCliVistos = new Set();
+
+        clis.forEach(c => {
+            const cid = String(c.cidade || '').trim();
+            const cod = String(c.codigo || c.cod || '').trim();
+            const raz = String(c.razao || '').trim();
+            const vend = String(c.vendedor || '').trim();
+            const eq = String(c.equipe || '').trim();
+
+            if (cid) cidadesClientes.add(norm(cid));
+
+            if (!cod) {
+                cliSemCodigo++;
+                return;
+            }
+
+            if (codsCliVistos.has(cod)) {
+                cliCodigosDuplicados++;
+            } else {
+                codsCliVistos.add(cod);
+            }
+
+            mapaClientes.set(cod, { cidade: cid, razao: raz, vendedor: vend, equipe: eq });
+
+            if (!vend || norm(vend) === 'SEM VENDEDOR' || norm(vend) === 'GERAL') cliOrfaosVendedor++;
+            if (!eq || eq === 'Geral' || eq === 'Sem Equipe') cliOrfaosEquipe++;
+
+            const vObj = mapaVendPorNomeNorm.get(norm(vend));
+            if (vObj && vObj.status === 'INATIVO') {
+                cliVendInativo++;
+            }
+        });
+
+        if (cliSemCodigo > 0) {
+            addDiag('ERRO', 'CLIENTES', 'Código do Cliente', `${cliSemCodigo} linha(s) sem código`, 'Preencher códigos obrigatórios dos clientes.');
+        } else {
+            addDiag('OK', 'CLIENTES', 'Código do Cliente', `${mapaClientes.size} clientes com código`, 'Chaves primárias presentes.');
+        }
+
+        if (cliCodigosDuplicados > 0) {
+            addDiag('ERRO', 'CLIENTES', 'Unicidade de Clientes', `${cliCodigosDuplicados} código(s) duplicado(s)`, 'Remover linhas duplicadas na base de clientes.');
+        } else {
+            addDiag('OK', 'CLIENTES', 'Unicidade de Clientes', 'Zero duplicidades', 'Todos os clientes possuem código exclusivo.');
+        }
+
+        if (cliOrfaosVendedor > 0) {
+            addDiag('AVISO', 'CLIENTES', 'Atribuição de Vendedor', `${cliOrfaosVendedor} cliente(s) sem vendedor (órfãos)`, 'Atribuir vendedor ou remanejar via painel de gestão.');
+        } else {
+            addDiag('OK', 'CLIENTES', 'Atribuição de Vendedor', '100% atribuídos', 'Todos os clientes possuem vendedor responsável.');
+        }
+
+        if (cliOrfaosEquipe > 0) {
+            addDiag('AVISO', 'CLIENTES', 'Atribuição de Equipe', `${cliOrfaosEquipe} cliente(s) sem equipe`, 'Preencher a equipe correspondente na coluna de equipes.');
+        } else {
+            addDiag('OK', 'CLIENTES', 'Atribuição de Equipe', '100% preenchidas', 'Todas as carteiras possuem equipe preenchida.');
+        }
+
+        if (cliVendInativo > 0) {
+            addDiag('ALERTA', 'CLIENTES', 'Clientes sob Vendedores Inativos', `${cliVendInativo} cliente(s) sob vendedor INATIVO`, 'Remanejar carteiras de vendedores inativados no módulo Vendedores & Órfãos.');
+        } else {
+            addDiag('OK', 'CLIENTES', 'Clientes sob Vendedores Inativos', 'Zero clientes inativos', 'Nenhum cliente ativo vinculado a vendedor inativado.');
+        }
+
+        // 4. AUDITORIA: ABA ROTAS
+        let rotasSemEquipe = 0;
+        let rotasDarioAbreviado = 0;
+        let rotasSemCodVend = 0;
+        let rotasDuplicadasMesmoVend = 0;
+        let rotasTelComPontoZero = 0;
+        let rotasTelInvalido = 0;
+        let rotasSemDiaVisita = 0;
+        let rotasSemComprador = 0;
+        let rotasOrfaosCli = 0;
+        const mapaRotasVendCli = new Set();
+        const cidadesRotas = new Set();
+
+        rts.forEach(r => {
+            const vCod = String(r.vendCod || r.codVend || '').trim();
+            const vNome = String(r.vendedor || '').trim();
+            const eq = String(r.equipe || '').trim();
+            const cCod = String(r.codCliente || '').trim();
+            const cid = String(r.cidade || '').trim();
+            const dia = String(r.diaPrinc || '').trim();
+            const comp = String(r.comprador || '').trim();
+            const tel = String(r.whatsappRaw || r.whatsapp || '').trim();
+
+            if (cid) cidadesRotas.add(norm(cid));
+
+            if (!vCod) rotasSemCodVend++;
+            if (!eq || eq === 'Geral' || eq === 'Sem Equipe' || eq === 'SEM EQUIPE') rotasSemEquipe++;
+            if (norm(vNome) === 'DARIO' || norm(vNome) === 'DARIO LUCIANO') rotasDarioAbreviado++;
+
+            const chavePar = `${vCod || norm(vNome)}_${cCod}`;
+            if (cCod && mapaRotasVendCli.has(chavePar)) {
+                rotasDuplicadasMesmoVend++;
+            } else if (cCod) {
+                mapaRotasVendCli.add(chavePar);
+            }
+
+            if (tel) {
+                if (tel.endsWith('.0') || tel.includes('.0')) rotasTelComPontoZero++;
+                const apenasDigitos = tel.replace(/\D/g, '');
+                if (apenasDigitos.length > 0 && apenasDigitos.length < 10) rotasTelInvalido++;
+            }
+
+            if (!dia) rotasSemDiaVisita++;
+            if (!comp) rotasSemComprador++;
+
+            if (cCod && mapaClientes.size > 0 && !mapaClientes.has(cCod)) {
+                rotasOrfaosCli++;
+            }
+        });
+
+        addDiag('INFO', 'ROTAS', 'Total de Registros Roteirizados', `${rts.length} linha(s)`, 'Volume total de visitas programadas.');
+
+        if (rotasSemEquipe > 0) {
+            addDiag('ERRO', 'ROTAS', 'Equipes Vazias em ROTAS', `${rotasSemEquipe} linha(s) sem equipe`, 'Executar ação SANEAR_EQUIPES_ROTAS para auto-atribuir equipes canônicas.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Equipes Vazias em ROTAS', 'Zero linhas vazias', '100% das rotas possuem equipe oficial preenchida.');
+        }
+
+        if (rotasDarioAbreviado > 0) {
+            addDiag('AVISO', 'ROTAS', 'Nomes de Vendedores Abreviados', `${rotasDarioAbreviado} registro(s) como 'Dario'`, 'Executar SANEAR_EQUIPES_ROTAS para normalizar para DARIO LUCIANO RAMAZZA.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Nomes de Vendedores Abreviados', 'Zero nomes abreviados', 'Nomes de vendedores padronizados e canônicos.');
+        }
+
+        if (rotasSemCodVend > 0) {
+            addDiag('ERRO', 'ROTAS', 'Código do Vendedor (COD VEND)', `${rotasSemCodVend} linha(s) sem código`, 'Preencher código numérico do vendedor.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Código do Vendedor (COD VEND)', '100% preenchidos', 'Todos os registros de rota possuem COD VEND.');
+        }
+
+        if (rotasDuplicadasMesmoVend > 0) {
+            addDiag('ERRO', 'ROTAS', 'Duplicidades de Rota (Mesmo Vendedor)', `${rotasDuplicadasMesmoVend} cliente(s) duplicado(s)`, 'Executar rotina de desduplicação e fusão de rotas.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Duplicidades de Rota (Mesmo Vendedor)', 'Zero duplicidades', 'Nenhum cliente duplicado na grade do mesmo vendedor.');
+        }
+
+        if (rotasTelComPontoZero > 0) {
+            addDiag('AVISO', 'ROTAS', 'Telefones com Artefato .0', `${rotasTelComPontoZero} telefone(s) corrompido(s)`, 'Sanitizar números removendo a terminação .0.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Telefones com Artefato .0', 'Zero anomalias .0', 'Nenhum telefone corrompido com ponto decimal.');
+        }
+
+        if (rotasTelInvalido > 0) {
+            addDiag('AVISO', 'ROTAS', 'Telefones Inválidos (< 10 dígitos)', `${rotasTelInvalido} telefone(s) suspeito(s)`, 'Ajustar no painel de auditoria cadastral.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Telefones Inválidos (< 10 dígitos)', 'Conforme', 'Telefones cadastrados possuem DDD válido.');
+        }
+
+        if (rotasSemDiaVisita > 0) {
+            addDiag('AVISO', 'ROTAS', 'Dia de Visita Definido', `${rotasSemDiaVisita} cliente(s) sem dia`, 'Definir dia principal de atendimento (SEG..SAB).');
+        } else {
+            addDiag('OK', 'ROTAS', 'Dia de Visita Definido', '100% com dia', 'Todas as rotas possuem dia de visita atribuído.');
+        }
+
+        if (rotasSemComprador > 0) {
+            addDiag('AVISO', 'ROTAS', 'Nome do Comprador', `${rotasSemComprador} cliente(s) sem comprador`, 'Solicitar preenchimento de contato no próximo ciclo de visitas.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Nome do Comprador', '100% preenchidos', 'Todos os registros possuem comprador preenchido.');
+        }
+
+        if (rotasOrfaosCli > 0) {
+            addDiag('AVISO', 'ROTAS', 'Integridade Relacional (Clientes em Rotas)', `${rotasOrfaosCli} rota(s) com cliente fora do cadastro`, 'Validar e cadastrar clientes no sistema geral.');
+        } else {
+            addDiag('OK', 'ROTAS', 'Integridade Relacional (Clientes em Rotas)', '100% consistentes', 'Todos os clientes em rotas existem no cadastro geral.');
+        }
+
+        // 5. AUDITORIA: LOGÍSTICA CIDADES-ENTREGAS
+        let cidadesOrfas = 0;
+        cidadesClientes.forEach(c => {
+            if (c && !entregas[c]) cidadesOrfas++;
+        });
+
+        if (cidadesOrfas > 0) {
+            addDiag('AVISO', 'CIDADES-ENTREGAS', 'Cobertura Logística de Cidades', `${cidadesOrfas} cidade(s) sem dias de entrega cadastrados`, 'Cadastrar dias de entrega para todos os municípios da carteira.');
+        } else {
+            addDiag('OK', 'CIDADES-ENTREGAS', 'Cobertura Logística de Cidades', '100% cobertas', 'Todas as cidades de clientes possuem logística cadastrada.');
+        }
+
+        // 6. AUDITORIA: DISPOSITIVOS & SOLICITAÇÕES & SEM_ATENDIMENTO
+        const dispPend = disps.filter(d => norm(d.status) === 'PENDENTE').length;
+        if (dispPend > 0) {
+            addDiag('INFO', 'DISPOSITIVOS', 'Dispositivos Pendentes de Liberação', `${dispPend} solicitação(ões)`, 'Aprovar ou rejeitar no painel de gestão.');
+        } else {
+            addDiag('OK', 'DISPOSITIVOS', 'Dispositivos Pendentes de Liberação', 'Zero pendências', 'Nenhum aparelho aguardando autorização.');
+        }
+
+        const solPend = sols.filter(s => norm(s.status) === 'PENDENTE').length;
+        if (solPend > 0) {
+            addDiag('INFO', 'SOLICITACOES_MOVIMENTACOES', 'Solicitações de Transferência/Inativação', `${solPend} pendência(s)`, 'Deliberar solicitações pendentes no painel.');
+        } else {
+            addDiag('OK', 'SOLICITACOES_MOVIMENTACOES', 'Solicitações de Transferência/Inativação', 'Zero pendências', 'Todas as solicitações deliberadas.');
+        }
+
+        const tarPend = tars.filter(t => norm(t.status) === 'PENDENTE').length;
+        if (tarPend > 0) {
+            addDiag('INFO', 'TAREFAS_CADASTRO', 'Tarefas de Cadastro Pendentes', `${tarPend} tarefa(s) pendente(s)`, 'Acompanhar saneamento cadastral dos vendedores.');
+        } else {
+            addDiag('OK', 'TAREFAS_CADASTRO', 'Tarefas de Cadastro Pendentes', 'Zero pendências', 'Nenhuma tarefa de cadastro em aberto.');
+        }
+
+        if (semAtend.length > 0) {
+            addDiag('AVISO', 'SEM_ATENDIMENTO', 'Clientes Sem Atendimento', `${semAtend.length} cliente(s) aguardando distribuição`, 'Redistribuir clientes para vendedores ativos no módulo Carteiras.');
+        } else {
+            addDiag('OK', 'SEM_ATENDIMENTO', 'Clientes Sem Atendimento', 'Zero clientes desatendidos', 'Todos os clientes possuem carteira.');
+        }
+
+        if (repescados.length > 0) {
+            addDiag('INFO', 'HISTORICO_REPESCAGEM', 'Clientes Repescados / Reativados', `${repescados.length} cliente(s) recuperados`, 'Clientes inativos resgatados e ativos em rota.');
+        }
+
+        // Resumo e KPIs
+        const countOk = diag.filter(d => d.severidade === 'OK').length;
+        const countInfo = diag.filter(d => d.severidade === 'INFO').length;
+        const countAvisos = diag.filter(d => d.severidade === 'AVISO').length;
+        const countErros = diag.filter(d => d.severidade === 'ERRO').length;
+        const countAlertas = diag.filter(d => d.severidade === 'ALERTA').length;
+        const statusGeral = countErros > 0 ? 'CRÍTICO' : (countAlertas > 0 ? 'ALERTA' : (countAvisos > 0 ? 'ATENÇÃO' : 'APROVADO'));
+
+        cacheAuditoriaIntegridade = {
+            sucesso: true,
+            origem: 'LOCAL',
+            motivoFallback: motivoFallback || null,
+            dataHora: agora,
+            resumo: {
+                totalChecagens: diag.length,
+                ok: countOk,
+                info: countInfo,
+                avisos: countAvisos,
+                erros: countErros,
+                alertas: countAlertas,
+                statusGeral: statusGeral
+            },
+            diagnosticos: diag
+        };
+
+        renderizarAuditoriaIntegridade();
     }
 
     function filtrarAuditoriaIntegridade(sev) {
@@ -9883,6 +10395,58 @@ Contamos com sua rápida regularização!`;
                 elBadgeGlobal.className = 'px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs';
             } else {
                 elBadgeGlobal.className = 'px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-600 text-white shadow-xs';
+            }
+        }
+
+        // Atualizar Badge de Origem
+        const elBadgeOrigem = document.getElementById('auditoria-badge-origem');
+        if (elBadgeOrigem) {
+            if (res.origem === 'LOCAL') {
+                elBadgeOrigem.textContent = 'SESSÃO LOCAL (RESILIENTE)';
+                elBadgeOrigem.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30';
+            } else {
+                elBadgeOrigem.textContent = 'NUVEM (GOOGLE SHEETS)';
+                elBadgeOrigem.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+            }
+        }
+
+        // Atualizar Banner de Status / Fallback
+        const elBannerStatus = document.getElementById('auditoria-banner-status');
+        const elBannerMsg = document.getElementById('auditoria-banner-status-msg');
+        const elBannerIcon = document.getElementById('auditoria-banner-status-icon');
+        const elBannerBtn = document.getElementById('auditoria-banner-btn-reconnect');
+
+        if (elBannerStatus && elBannerMsg) {
+            if (res.origem === 'LOCAL' && res.motivoFallback) {
+                elBannerStatus.classList.remove('hidden');
+                elBannerStatus.style.display = 'flex';
+                elBannerStatus.className = 'px-4 py-2.5 mx-4 mt-3 rounded-2xl text-xs flex items-center justify-between gap-3 transition bg-amber-50 border border-amber-200 text-amber-900';
+                if (elBannerIcon) elBannerIcon.className = 'ph ph-warning-circle text-base text-amber-600';
+                elBannerMsg.innerHTML = `<strong>Aviso da Nuvem:</strong> ${escapeHtml(res.motivoFallback)} &mdash; <span class="text-amber-800">Diagnóstico resiliente concluído a partir dos dados locais da sessão do Gestor.</span>`;
+                if (elBannerBtn) {
+                    elBannerBtn.classList.remove('hidden');
+                    elBannerBtn.style.display = 'inline-flex';
+                }
+            } else if (res.origem === 'LOCAL') {
+                elBannerStatus.classList.remove('hidden');
+                elBannerStatus.style.display = 'flex';
+                elBannerStatus.className = 'px-4 py-2.5 mx-4 mt-3 rounded-2xl text-xs flex items-center justify-between gap-3 transition bg-blue-50 border border-blue-200 text-blue-900';
+                if (elBannerIcon) elBannerIcon.className = 'ph ph-info text-base text-blue-600';
+                elBannerMsg.innerHTML = `<strong>Auditoria da Sessão:</strong> Diagnóstico executado diretamente nos dados da sessão do Gestor. Planilha protegida como banco de dados.`;
+                if (elBannerBtn) {
+                    elBannerBtn.classList.add('hidden');
+                    elBannerBtn.style.display = 'none';
+                }
+            } else {
+                elBannerStatus.classList.remove('hidden');
+                elBannerStatus.style.display = 'flex';
+                elBannerStatus.className = 'px-4 py-2.5 mx-4 mt-3 rounded-2xl text-xs flex items-center justify-between gap-3 transition bg-emerald-50 border border-emerald-200 text-emerald-900';
+                if (elBannerIcon) elBannerIcon.className = 'ph ph-check-circle text-base text-emerald-600';
+                elBannerMsg.innerHTML = `<strong>Conexão Nuvem Ativa:</strong> Auditoria holística realizada diretamente contra o banco de dados Google Sheets. Todas as 14 abas auditadas.`;
+                if (elBannerBtn) {
+                    elBannerBtn.classList.add('hidden');
+                    elBannerBtn.style.display = 'none';
+                }
             }
         }
 
@@ -9959,14 +10523,13 @@ Contamos com sua rápida regularização!`;
     }
 
     function exportarAuditoriaIntegridadeExcel() {
-        if (!cacheAuditoriaIntegridade || !cacheAuditoriaIntegridade.diagnosticos) {
-            alert('Execute a auditoria antes de exportar.');
-            return;
+        if (!cacheAuditoriaIntegridade || !cacheAuditoriaIntegridade.diagnosticos || cacheAuditoriaIntegridade.diagnosticos.length === 0) {
+            executarAuditoriaIntegridadeLocal(null);
         }
 
-        const lista = cacheAuditoriaIntegridade.filtrados || cacheAuditoriaIntegridade.diagnosticos;
+        const lista = (cacheAuditoriaIntegridade && (cacheAuditoriaIntegridade.filtrados || cacheAuditoriaIntegridade.diagnosticos)) || [];
         if (lista.length === 0) {
-            alert('Nenhum dado para exportar.');
+            console.warn('Nenhum registro para exportar na auditoria.');
             return;
         }
 
@@ -10775,11 +11338,13 @@ Contamos com sua rápida regularização!`;
         </div>
       </div>
     </div>
+  </div>
+
   <!-- Modal: Auditoria Completa de Integridade da Planilha (checar_dados.gs) -->
   <div id="modalAuditoriaIntegridade" onclick="fecharModalAuditoriaIntegridade()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[248] items-center justify-center p-4 hidden" style="display: none;">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] border border-slate-200 overflow-hidden flex flex-col animate-scale-up" onclick="event.stopPropagation()">
       <!-- Header do Modal -->
-      <div class="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900 text-white flex items-center justify-between">
+      <div class="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900 text-white flex items-center justify-between shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 text-2xl font-bold shadow-inner">
             <i class="ph ph-shield-check"></i>
@@ -10788,17 +11353,29 @@ Contamos com sua rápida regularização!`;
             <div class="flex items-center gap-2">
               <h4 class="text-base font-black tracking-tight">Auditoria de Integridade da Planilha</h4>
               <span id="auditoria-badge-global" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-700 text-slate-200 border border-white/10">NÃO EXECUTADA</span>
+              <span id="auditoria-badge-origem" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-800 text-indigo-200 border border-indigo-400/30">NUVEM / LOCAL</span>
             </div>
             <span class="text-[11px] text-slate-300">Auditoria holística das 14 abas essenciais, consistência relacional e qualidade dos dados</span>
           </div>
         </div>
-        <button type="button" onclick="fecharModalAuditoriaIntegridade()" class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition" title="Fechar (Esc)">
+        <button type="button" id="auditoria-btn-fechar-header" onclick="fecharModalAuditoriaIntegridade()" class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition" title="Fechar (Esc)">
           <i class="ph ph-x text-xl"></i>
         </button>
       </div>
 
+      <!-- Banner Informativo de Origem / Resiliência -->
+      <div id="auditoria-banner-status" class="hidden px-4 py-2.5 mx-4 mt-3 rounded-2xl text-xs flex items-center justify-between gap-3 transition shrink-0" style="display: none;">
+        <div class="flex items-center gap-2">
+          <i id="auditoria-banner-status-icon" class="ph ph-info text-base"></i>
+          <span id="auditoria-banner-status-msg" class="font-medium"></span>
+        </div>
+        <button type="button" id="auditoria-banner-btn-reconnect" onclick="executarAuditoriaIntegridadeNuvem()" class="px-2.5 py-1 bg-white/80 hover:bg-white text-slate-800 font-bold rounded-lg border text-[11px] shadow-2xs transition">
+          Tentar Nuvem Novamente
+        </button>
+      </div>
+
       <!-- Resumo Executivo / KPI Cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 bg-slate-50/80 border-b border-slate-200">
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 bg-slate-50/80 border-b border-slate-200 shrink-0">
         <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
           <div class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Checagens</div>
           <div class="text-xl font-black text-slate-900 mt-0.5" id="auditoria-total-checagens">0</div>
@@ -10822,7 +11399,7 @@ Contamos com sua rápida regularização!`;
       </div>
 
       <!-- Barra de Filtros e Busca -->
-      <div class="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      <div class="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div class="flex flex-wrap items-center gap-1.5">
           <button type="button" data-sev="TODOS" onclick="filtrarAuditoriaIntegridade('TODOS')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-xs">Todos</button>
           <button type="button" data-sev="ERROS_ALERTAS" onclick="filtrarAuditoriaIntegridade('ERROS_ALERTAS')" class="btn-filtro-auditoria px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-100 text-slate-600 hover:bg-slate-200">Erros & Alertas</button>
@@ -10837,7 +11414,7 @@ Contamos com sua rápida regularização!`;
       </div>
 
       <!-- Tabela com Scroll -->
-      <div class="flex-1 overflow-auto bg-white min-h-[300px]">
+      <div class="flex-1 overflow-y-auto bg-white min-h-0">
         <table class="w-full text-left border-collapse">
           <thead class="bg-slate-100 text-slate-600 text-[10px] uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
             <tr>
@@ -10851,7 +11428,7 @@ Contamos com sua rápida regularização!`;
           <tbody id="auditoria-tabela-body" class="divide-y divide-slate-100 text-slate-700">
             <tr>
               <td colspan="5" class="p-8 text-center text-slate-400 font-medium text-xs">
-                Clique em "Executar Nova Auditoria" para carregar o diagnóstico completo da planilha.
+                Clique em "Auditoria na Nuvem" ou "Auditoria Local" para carregar o diagnóstico completo da planilha.
               </td>
             </tr>
           </tbody>
@@ -10859,7 +11436,7 @@ Contamos com sua rápida regularização!`;
       </div>
 
       <!-- Rodapé -->
-      <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div class="text-xs text-slate-500 font-medium" id="auditoria-data-hora-lbl">
           Planilha Oficial: 1LfMhWqla2YdzN4CLLw2TERG816DHaStbq1jVNiV8uuw
         </div>
@@ -10868,17 +11445,24 @@ Contamos com sua rápida regularização!`;
             <i class="ph ph-file-xls text-sm"></i>
             <span>Exportar Excel</span>
           </button>
-          <button type="button" onclick="executarAuditoriaIntegridadeNuvem()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5 text-xs" title="Executa novamente a checagem na nuvem Google">
-            <i class="ph ph-arrows-clockwise text-sm"></i>
-            <span>Executar Nova Auditoria</span>
+          <button type="button" onclick="executarAuditoriaIntegridadeLocalManual()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold shadow-2xs transition flex items-center gap-1.5 text-xs" title="Executar auditoria instantânea com base nos dados locais da sessão do Gestor">
+            <i class="ph ph-cpu text-sm"></i>
+            <span>Auditoria Local</span>
           </button>
-          <button type="button" onclick="fecharModalAuditoriaIntegridade()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition text-xs">
+          <button type="button" onclick="executarAuditoriaIntegridadeNuvem()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-1.5 text-xs" title="Executa a checagem holística diretamente na nuvem Google">
+            <i class="ph ph-arrows-clockwise text-sm"></i>
+            <span>Auditoria na Nuvem</span>
+          </button>
+          <button type="button" id="auditoria-btn-fechar" onclick="fecharModalAuditoriaIntegridade()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition text-xs">
             Fechar
           </button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Toast Notification Container for Manager Feedback (Non-blocking) -->
+  <div id="toast-container" class="fixed top-5 right-5 z-[300] flex flex-col gap-2 pointer-events-none max-w-sm w-full" aria-live="polite"></div>
 
 </body>
 </html>
