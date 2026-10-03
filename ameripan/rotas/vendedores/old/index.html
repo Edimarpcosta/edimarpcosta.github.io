@@ -1733,6 +1733,51 @@
     </div>
   </div>
 
+  <!-- Modal Mandatório de Auditoria e Saneamento Cadastral (Anti-Sabotagem) -->
+  <div id="modalModoAuditoriaSaneamento" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-red-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+      <!-- Cabeçalho de Alerta Máximo -->
+      <div class="bg-gradient-to-r from-red-600 to-rose-700 p-4 text-white flex items-start justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold shadow-inner flex-shrink-0">
+            <i class="ph ph-shield-warning"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-black tracking-tight leading-tight">Auditoria Cadastral Obrigatória</h3>
+              <span id="badgeContadorTarefas" class="bg-white text-red-700 text-[11px] font-black px-2 py-0.5 rounded-full shadow-sm">0 pendências</span>
+            </div>
+            <p class="text-xs text-rose-100 mt-0.5">
+              Sua rota de vendas está temporariamente em <b>Modo Saneamento</b> até a regularização dos contatos reais abaixo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Instruções e Anti-Fraude -->
+      <div class="bg-amber-50 border-b border-amber-200/80 px-4 py-2.5 flex items-center gap-2 text-[11px] text-amber-900 font-medium">
+        <i class="ph ph-info text-amber-600 text-base flex-shrink-0"></i>
+        <span>Preencha o telefone real do comprador. Números repetidos, fictícios ou sequenciais serão <b>recusados pelo validador</b>.</span>
+      </div>
+
+      <!-- Lista de Clientes com Pendências (Scrollável) -->
+      <div id="containerCardsSaneamento" class="p-4 overflow-y-auto space-y-4 flex-1 bg-slate-50/50">
+        <!-- Injetado dinamicamente via JavaScript -->
+      </div>
+
+      <!-- Rodapé com Botão de Conclusão -->
+      <div class="p-4 bg-white border-t border-slate-100 flex items-center justify-between gap-3 shadow-lg">
+        <div class="text-[11px] text-slate-500 hidden sm:block">
+          <span id="infoProgressoSaneamento">0 de 0 regularizados</span>
+        </div>
+        <button type="button" onclick="submeterCorrecoesSaneamento()" id="btnSubmeterSaneamento" class="w-full sm:w-auto px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black shadow-md shadow-red-600/30 transition flex items-center justify-center gap-2 active:scale-98">
+          <i class="ph ph-check-circle text-base"></i>
+          <span>Enviar Correções e Liberar Minha Rota</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra Flutuante de Salvamento de Reordenação Auto-Shift -->
   <div id="barraSalvarReordem" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 hidden">
     <div class="flex items-center gap-2 text-xs font-semibold">
@@ -1766,6 +1811,7 @@
     let dbEntregas = {};
     let listaDeRotas = [];
     let regrasObrigatoriedade = {};
+    let dbTarefasPendentes = [];
 
     function escapeJs(s) {
       return (s || '').toString()
@@ -1815,6 +1861,417 @@
     }
     if (typeof window !== 'undefined') {
       window.sanitizarTelefoneBR = sanitizarTelefoneBR;
+    }
+
+    // ============================================================
+    // GESTÃO DE AUDITORIA CADASTRAL E SANEAMENTO ANTI-SABOTAGEM
+    // ============================================================
+    const DDDS_VALIDOS_BR = new Set([
+      11, 12, 13, 14, 15, 16, 17, 18, 19,
+      21, 22, 24, 27, 28,
+      31, 32, 33, 34, 35, 37, 38,
+      41, 42, 43, 44, 45, 46, 47, 48, 49,
+      51, 53, 54, 55,
+      61, 62, 63, 64, 65, 66, 67, 68, 69,
+      71, 73, 74, 75, 77, 79,
+      81, 82, 83, 84, 85, 86, 87, 88, 89,
+      91, 92, 93, 94, 95, 96, 97, 98, 99
+    ]);
+
+    function formatarTelefoneVisualBR(dig) {
+      if (!dig) return '';
+      if (dig.length === 11) {
+        return `(${dig.substring(0, 2)}) ${dig.charAt(2)} ${dig.substring(3, 7)}-${dig.substring(7)}`;
+      }
+      if (dig.length === 10) {
+        return `(${dig.substring(0, 2)}) ${dig.substring(2, 6)}-${dig.substring(6)}`;
+      }
+      return dig;
+    }
+
+    function validarTelefoneAntiFraude(raw, codClienteAtual, outrosTelefonesNaTarefa) {
+      if (!raw) return { valido: false, motivo: 'Telefone não preenchido' };
+      let dig = String(raw).replace(/\D/g, '');
+      if (dig.startsWith('55') && (dig.length === 12 || dig.length === 13)) {
+        dig = dig.substring(2);
+      }
+      if (dig.startsWith('0')) dig = dig.substring(1);
+
+      if (dig.length < 10) return { valido: false, motivo: `Incompleto (${dig.length} dígitos, mínimo 10 com DDD)` };
+      if (dig.length > 11) return { valido: false, motivo: `Excesso de dígitos (${dig.length} dígitos, máximo 11)` };
+
+      const ddd = parseInt(dig.substring(0, 2), 10);
+      if (!DDDS_VALIDOS_BR.has(ddd)) {
+        return { valido: false, motivo: `DDD (${ddd}) inexistente no Brasil` };
+      }
+
+      const corpo = dig.substring(2);
+      if (/^(\d)\1+$/.test(corpo)) {
+        return { valido: false, motivo: 'Número repetido falso (ex: 99999999)' };
+      }
+
+      if ('01234567890123456789'.includes(corpo) || '98765432109876543210'.includes(corpo)) {
+        return { valido: false, motivo: 'Sequência numérica óbvia (ex: 123456...)' };
+      }
+
+      if (dig.length === 11 && corpo.charAt(0) !== '9') {
+        return { valido: false, motivo: 'Celular de 11 dígitos deve iniciar com 9 após DDD' };
+      }
+
+      // Checa duplicidade com outros cards da tarefa
+      if (outrosTelefonesNaTarefa && outrosTelefonesNaTarefa.has(dig)) {
+        return { valido: false, motivo: 'Telefone duplicado! Já inserido em outro cliente da tarefa' };
+      }
+
+      return { valido: true, digitos: dig, formatado: formatarTelefoneVisualBR(dig) };
+    }
+
+    function verificarModoSaneamentoCadastral() {
+      const modal = document.getElementById('modalModoAuditoriaSaneamento');
+      if (!modal) return;
+
+      if (!dbTarefasPendentes || dbTarefasPendentes.length === 0) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        const nav = document.getElementById('navAbasPrincipais') || document.querySelector('nav');
+        if (nav) nav.classList.remove('pointer-events-none', 'opacity-50');
+        return;
+      }
+
+      // Abre modal bloqueante
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      const nav = document.getElementById('navAbasPrincipais') || document.querySelector('nav');
+      if (nav) nav.classList.add('pointer-events-none', 'opacity-50');
+
+      const badge = document.getElementById('badgeContadorTarefas');
+      if (badge) badge.textContent = `${dbTarefasPendentes.length} pendência(s)`;
+      renderizarCardsSaneamento();
+    }
+
+    function renderizarCardsSaneamento() {
+      const container = document.getElementById('containerCardsSaneamento');
+      if (!container) return;
+
+      if (!dbTarefasPendentes || dbTarefasPendentes.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 text-slate-500">
+            <i class="ph ph-check-circle text-4xl text-emerald-500 mb-2"></i>
+            <p class="font-bold">Nenhuma pendência cadastral em aberto!</p>
+          </div>
+        `;
+        return;
+      }
+
+      const diasSemana = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+
+      container.innerHTML = dbTarefasPendentes.map((t, idx) => {
+        const idT = escapeHtml(t.idTarefa || `tar_${idx}`);
+        const codC = escapeHtml(t.codCliente || '');
+        const razao = escapeHtml(t.razaoSocial || 'CLIENTE');
+        const cidade = escapeHtml(t.cidade || '');
+        const tipoPend = t.tipoPendencia || '';
+        const obsGestor = t.obsGestor ? escapeHtml(t.obsGestor) : '';
+
+        // Tenta achar dados atuais do cliente na rota
+        const rotaExistente = (dbRotasVendedor || []).find(r => String(r.codCliente || '').trim() === codC) || {};
+        const compradorAtual = escapeHtml(rotaExistente.comprador || '');
+        const diaAtual = (rotaExistente.diaPrinc || 'SEG').toUpperCase();
+        const telAtual = rotaExistente.whatsapp || '';
+
+        let badgePend = '';
+        if (tipoPend === 'SEM_TELEFONE') badgePend = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-700">SEM TELEFONE</span>';
+        else if (tipoPend === 'TEL_SUSPEITO') badgePend = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800">TELEFONE SUSPEITO</span>';
+        else if (tipoPend === 'SEM_COMPRADOR') badgePend = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-orange-100 text-orange-800">SEM COMPRADOR</span>';
+        else if (tipoPend === 'SEM_DIA_VISITA') badgePend = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-700">SEM ROTA / DIA</span>';
+        else badgePend = `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-700">${escapeHtml(tipoPend)}</span>`;
+
+        return `
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 card-tarefa-saneamento" data-id-tarefa="${idT}" data-cod-cliente="${codC}">
+            <!-- Header do Card -->
+            <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+              <div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-mono text-xs font-black bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">${codC}</span>
+                  <h4 class="text-xs font-black text-slate-800 leading-snug">${razao}</h4>
+                </div>
+                <div class="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-1">
+                  <i class="ph ph-map-pin text-slate-400"></i>
+                  <span>${cidade}</span>
+                </div>
+              </div>
+              <div class="flex-shrink-0">
+                ${badgePend}
+              </div>
+            </div>
+
+            <!-- Alerta de Rejeição Prévia (se houver) -->
+            ${obsGestor ? `
+              <div class="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-[11px] flex items-start gap-1.5">
+                <i class="ph ph-warning-circle text-rose-600 text-sm flex-shrink-0 mt-0.5"></i>
+                <div>
+                  <b class="text-rose-800">Recusado pela gerência:</b> ${obsGestor}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Inputs de Correção -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <!-- Comprador -->
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Nome do Comprador <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="san_comprador_${codC}" value="${compradorAtual}" placeholder="Ex: Roberto da Padaria" class="w-full text-xs font-semibold px-2.5 py-2 border border-slate-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50/50">
+              </div>
+
+              <!-- Dia de Visita -->
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Dia Principal da Rota <span class="text-red-500">*</span>
+                </label>
+                <select id="san_dia_${codC}" class="w-full text-xs font-semibold px-2.5 py-2 border border-slate-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50/50">
+                  ${diasSemana.map(d => `<option value="${d}" ${d === diaAtual ? 'selected' : ''}>${d}</option>`).join('')}
+                </select>
+              </div>
+
+              <!-- Telefone / WhatsApp com Validação Anti-Fraude -->
+              <div class="sm:col-span-2 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    Telefone WhatsApp Real do Comprador <span class="text-red-500">*</span>
+                  </label>
+                  <span id="badge_status_tel_${codC}" class="text-[10px] font-bold text-slate-400">Aguardando preenchimento</span>
+                </div>
+                <div class="relative">
+                  <input type="tel" id="san_tel_${codC}" value="${telAtual}" placeholder="(19) 9XXXX-XXXX ou Fixo" oninput="aoDigitarTelefoneSaneamento('${codC}')" class="w-full text-xs font-mono font-bold px-3 py-2 border border-slate-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50/50">
+                </div>
+
+                <!-- Checkbox de Exceção Presencial -->
+                <div class="pt-1">
+                  <label class="flex items-center gap-2 cursor-pointer text-[11px] text-slate-600 select-none">
+                    <input type="checkbox" id="san_sem_tel_chk_${codC}" onchange="aoAlternarSemTelefoneSaneamento('${codC}')" class="w-3.5 h-3.5 text-red-600 rounded border-slate-300 focus:ring-red-500">
+                    <span>Cliente atendido <b>exclusivamente de forma presencial</b> (Sem Telefone)</span>
+                  </label>
+                </div>
+
+                <!-- Campo de Justificativa Mandatória (se marcado sem telefone) -->
+                <div id="wrapper_justificativa_${codC}" class="hidden pt-1.5">
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
+                    Justificativa Auditável para a Gerência (Mínimo 15 caracteres) <span class="text-red-500">*</span>
+                  </label>
+                  <textarea id="san_justificativa_${codC}" rows="2" placeholder="Explique por que este cliente não possui telefone de contato..." class="w-full text-xs p-2 border border-rose-200 rounded-lg bg-rose-50/30 focus:border-red-500 focus:ring-1 focus:ring-red-500"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Executa validação inicial de cada card
+      dbTarefasPendentes.forEach(t => {
+        const codC = String(t.codCliente || '').trim();
+        aoDigitarTelefoneSaneamento(codC);
+      });
+      atualizarProgressoSaneamento();
+    }
+
+    function aoDigitarTelefoneSaneamento(codC) {
+      const input = document.getElementById(`san_tel_${codC}`);
+      const badge = document.getElementById(`badge_status_tel_${codC}`);
+      const chk = document.getElementById(`san_sem_tel_chk_${codC}`);
+      if (!input || !badge) return;
+
+      if (chk && chk.checked) {
+        badge.innerHTML = '<span class="text-amber-600 font-bold"><i class="ph ph-check"></i> Exceção Presencial</span>';
+        atualizarProgressoSaneamento();
+        return;
+      }
+
+      // Máscara dinâmica em tempo real
+      let raw = input.value.replace(/\D/g, '');
+      if (raw.startsWith('55') && (raw.length === 12 || raw.length === 13)) {
+        raw = raw.substring(2);
+      }
+      if (raw.startsWith('0')) raw = raw.substring(1);
+
+      // Limita em 11 dígitos
+      if (raw.length > 11) raw = raw.substring(0, 11);
+
+      // Formatação visual
+      if (raw.length > 6) {
+        if (raw.length === 11) {
+          input.value = `(${raw.substring(0, 2)}) ${raw.charAt(2)} ${raw.substring(3, 7)}-${raw.substring(7)}`;
+        } else if (raw.length === 10) {
+          input.value = `(${raw.substring(0, 2)}) ${raw.substring(2, 6)}-${raw.substring(6)}`;
+        }
+      }
+
+      // Validação anti-fraude
+      const check = validarTelefoneAntiFraude(raw, codC);
+      if (check.valido) {
+        badge.innerHTML = `<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="ph ph-check-circle text-xs"></i> Válido (${raw.length === 11 ? 'Celular' : 'Fixo'})</span>`;
+      } else {
+        badge.innerHTML = `<span class="text-rose-600 font-bold flex items-center gap-1"><i class="ph ph-x-circle text-xs"></i> ${check.motivo}</span>`;
+      }
+
+      atualizarProgressoSaneamento();
+    }
+
+    function aoAlternarSemTelefoneSaneamento(codC) {
+      const chk = document.getElementById(`san_sem_tel_chk_${codC}`);
+      const telInput = document.getElementById(`san_tel_${codC}`);
+      const wrapperJust = document.getElementById(`wrapper_justificativa_${codC}`);
+      const badge = document.getElementById(`badge_status_tel_${codC}`);
+      if (!chk || !telInput || !wrapperJust) return;
+
+      if (chk.checked) {
+        telInput.disabled = true;
+        telInput.classList.add('opacity-40', 'bg-slate-100');
+        wrapperJust.classList.remove('hidden');
+        if (badge) badge.innerHTML = '<span class="text-amber-600 font-bold"><i class="ph ph-shield-check"></i> Exceção Presencial</span>';
+      } else {
+        telInput.disabled = false;
+        telInput.classList.remove('opacity-40', 'bg-slate-100');
+        wrapperJust.classList.add('hidden');
+        aoDigitarTelefoneSaneamento(codC);
+      }
+      atualizarProgressoSaneamento();
+    }
+
+    function atualizarProgressoSaneamento() {
+      if (!dbTarefasPendentes || dbTarefasPendentes.length === 0) return;
+      let validos = 0;
+
+      dbTarefasPendentes.forEach(t => {
+        const codC = String(t.codCliente || '').trim();
+        const comp = document.getElementById(`san_comprador_${codC}`)?.value.trim() || '';
+        const dia = document.getElementById(`san_dia_${codC}`)?.value.trim() || '';
+        const chk = document.getElementById(`san_sem_tel_chk_${codC}`);
+        const telVal = document.getElementById(`san_tel_${codC}`)?.value.trim() || '';
+        const just = document.getElementById(`san_justificativa_${codC}`)?.value.trim() || '';
+
+        if (!comp || !dia) return;
+
+        if (chk && chk.checked) {
+          if (just.length >= 15) validos++;
+        } else {
+          const check = validarTelefoneAntiFraude(telVal, codC);
+          if (check.valido) validos++;
+        }
+      });
+
+      const info = document.getElementById('infoProgressoSaneamento');
+      if (info) {
+        info.innerHTML = `<b>${validos}</b> de <b>${dbTarefasPendentes.length}</b> regularizados`;
+      }
+    }
+
+    async function submeterCorrecoesSaneamento() {
+      if (!dbTarefasPendentes || dbTarefasPendentes.length === 0) return;
+
+      const correcoes = [];
+      const telefonesPreenchidos = new Set();
+      let primeiroInvalido = null;
+      let motivoInvalido = '';
+
+      for (const t of dbTarefasPendentes) {
+        const idT = t.idTarefa;
+        const codC = String(t.codCliente || '').trim();
+        const comprador = document.getElementById(`san_comprador_${codC}`)?.value.trim() || '';
+        const dia = document.getElementById(`san_dia_${codC}`)?.value.trim() || '';
+        const chk = document.getElementById(`san_sem_tel_chk_${codC}`)?.checked;
+        const telRaw = document.getElementById(`san_tel_${codC}`)?.value.trim() || '';
+        const just = document.getElementById(`san_justificativa_${codC}`)?.value.trim() || '';
+
+        if (!comprador) {
+          primeiroInvalido = codC;
+          motivoInvalido = `Preencha o Nome do Comprador do cliente ${codC} (${t.razaoSocial}).`;
+          break;
+        }
+
+        if (!dia) {
+          primeiroInvalido = codC;
+          motivoInvalido = `Selecione o Dia da Rota do cliente ${codC}.`;
+          break;
+        }
+
+        if (chk) {
+          if (just.length < 15) {
+            primeiroInvalido = codC;
+            motivoInvalido = `A justificativa para 'Sem Telefone' no cliente ${codC} deve ter no mínimo 15 caracteres.`;
+            break;
+          }
+          correcoes.push({
+            idTarefa: idT,
+            codCliente: codC,
+            novoTelefone: '',
+            novoComprador: comprador,
+            novoDia: dia,
+            justificativa: just
+          });
+        } else {
+          const check = validarTelefoneAntiFraude(telRaw, codC);
+          if (!check.valido) {
+            primeiroInvalido = codC;
+            motivoInvalido = `Telefone inválido no cliente ${codC}: ${check.motivo}`;
+            break;
+          }
+
+          if (telefonesPreenchidos.has(check.digitos)) {
+            primeiroInvalido = codC;
+            motivoInvalido = `Anti-Fraude: O telefone (${check.digitos}) foi repetido em mais de um cliente da tarefa! Cada cliente deve ter seu número real.`;
+            break;
+          }
+          telefonesPreenchidos.add(check.digitos);
+
+          correcoes.push({
+            idTarefa: idT,
+            codCliente: codC,
+            novoTelefone: check.digitos,
+            novoComprador: comprador,
+            novoDia: dia,
+            justificativa: ''
+          });
+        }
+      }
+
+      if (primeiroInvalido) {
+        alert(motivoInvalido);
+        const card = document.querySelector(`.card-tarefa-saneamento[data-cod-cliente="${primeiroInvalido}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('ring-2', 'ring-red-500');
+          setTimeout(() => card.classList.remove('ring-2', 'ring-red-500'), 3000);
+        }
+        return;
+      }
+
+      exibirLoading('Gravando correções cadastrais e liberando sua rota...');
+
+      try {
+        const payload = {
+          acao: 'CONCLUIR_TAREFAS_SANEAMENTO',
+          codVendedor: usuarioLogado ? usuarioLogado.cod : '',
+          correcoes: correcoes
+        };
+
+        const res = await chamarBackendScript(payload);
+
+        if (res && res.sucesso) {
+          alert('✅ Parabéns! Todas as pendências foram regularizadas com sucesso.\n\nSua rota de atendimento está 100% liberada!');
+          dbTarefasPendentes = [];
+          verificarModoSaneamentoCadastral();
+          await recarregarDadosOperacionais();
+        } else {
+          alert('Erro ao concluir tarefas: ' + (res.erro || 'Falha na comunicação com o servidor.'));
+        }
+      } catch (err) {
+        console.error('Erro ao enviar tarefas:', err);
+        alert('Erro ao conectar ao servidor. Tente novamente.');
+      } finally {
+        ocultarLoading();
+      }
     }
 
     // Regra estrita de ordenação: Visitas presenciais (1..N) vêm primeiro em ordem crescente.
@@ -2415,6 +2872,14 @@
           if (res.minhasSolicitacoes) {
             dbMinhasSolicitacoes = res.minhasSolicitacoes;
             renderizarMinhasSolicitacoes();
+          }
+
+          if (res.tarefasPendentes && Array.isArray(res.tarefasPendentes)) {
+            dbTarefasPendentes = res.tarefasPendentes;
+            verificarModoSaneamentoCadastral();
+          } else {
+            dbTarefasPendentes = [];
+            verificarModoSaneamentoCadastral();
           }
 
           atualizarContadoresCarteira();
