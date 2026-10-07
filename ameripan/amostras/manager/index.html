@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestão de Amostras — Ameripan</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --blue:#005A9C;--blue-dark:#004070;--blue-light:#e8f0fb;
@@ -13,6 +15,7 @@
   --text:#1a202c;--text-muted:#718096;--radius:10px;
   --shadow:0 2px 12px rgba(0,0,0,.09);--shadow-lg:0 8px 32px rgba(0,0,0,.15);
 }
+.hidden{display:none!important}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-bg);color:var(--text);font-size:14px;min-height:100vh}
 
@@ -185,6 +188,8 @@ td{padding:10px 12px;font-size:12.5px;vertical-align:middle}
   margin-bottom:5px;display:flex;align-items:center;gap:8px}
 .prod-sku{background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:12px;
   font-size:.8em;font-weight:700;white-space:nowrap}
+.prod-preco-badge{background:#e6f4ea;color:#137333;border:1px solid #a8dab5;padding:2px 8px;border-radius:12px;
+  font-size:.82em;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;margin-left:6px}
 /* Feedback cliente no modal */
 .fb-modal{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #93c5fd;
   border-radius:9px;padding:16px;margin-top:6px}
@@ -389,7 +394,7 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
 </div><!-- /wrap -->
 
 <!-- MODAL VER DETALHES -->
-<div class="modal-overlay" id="mVer">
+<div class="modal-overlay hidden" id="mVer" style="display: none;">
   <div class="modal">
     <button class="close" onclick="closeM('mVer')">✕</button>
     <h2><i class="fas fa-eye"></i> <span id="mVerTitulo">—</span></h2>
@@ -420,6 +425,7 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
     </div>
     <!-- Ações -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn btn-teal btn-sm" id="mVerBtnPdf"><i class="fas fa-file-pdf"></i> Gerar PDF</button>
       <button class="btn btn-wa btn-sm" id="mVerBtnWa"><i class="fab fa-whatsapp"></i> Cobrar Feedback</button>
       <button class="btn btn-orange btn-sm" id="mVerBtnFeedV"><i class="fas fa-comment"></i> Feed. Vendedor</button>
       <button class="btn btn-green btn-sm" id="mVerBtnPedido"><i class="fas fa-check-circle"></i> Marcar Pedido</button>
@@ -428,7 +434,7 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
 </div>
 
 <!-- MODAL FEEDBACK VENDEDOR -->
-<div class="modal-overlay" id="mFeedV">
+<div class="modal-overlay hidden" id="mFeedV" style="display: none;">
   <div class="modal" style="max-width:480px">
     <button class="close" onclick="closeM('mFeedV')">✕</button>
     <h2><i class="fas fa-comment-dots"></i> Feedback do Vendedor</h2>
@@ -444,7 +450,7 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
 </div>
 
 <!-- MODAL PEDIDO -->
-<div class="modal-overlay" id="mPedido">
+<div class="modal-overlay hidden" id="mPedido" style="display: none;">
   <div class="modal" style="max-width:420px">
     <button class="close" onclick="closeM('mPedido')">✕</button>
     <h2><i class="fas fa-check-circle"></i> Marcar Pedido Gerado</h2>
@@ -544,6 +550,8 @@ function aplicarFiltros() {
     }
     return true;
   });
+  window.cache = window.cache || {};
+  window.cache.filtrados = filtradas;
   renderTabela(filtradas);
   renderKPIs(filtradas);
   // atualiza badge pendentes
@@ -628,6 +636,7 @@ function renderTabela(list) {
       <td>
         <div class="actions">
           <button class="btn btn-blue btn-xs tip" data-tip="Ver detalhes completos" onclick='abrirVer(${JSON.stringify(a)})'><i class="fas fa-eye"></i></button>
+          <button class="btn btn-teal btn-xs tip" data-tip="Gerar PDF da amostra" onclick='gerarPDFAmostra(${JSON.stringify(a)})'><i class="fas fa-file-pdf"></i></button>
           <button class="btn btn-wa btn-xs tip" data-tip="Cobrar feedback via WhatsApp" onclick='abrirWa(${JSON.stringify(a)})'><i class="fab fa-whatsapp"></i></button>
           <button class="btn btn-orange btn-xs tip" data-tip="Registrar feedback do vendedor" onclick='abrirFeedV(${JSON.stringify(a)})'><i class="fas fa-comment"></i></button>
           <button class="btn btn-green btn-xs tip" data-tip="Marcar pedido gerado" onclick='abrirPedido(${JSON.stringify(a)})'><i class="fas fa-check-circle"></i></button>
@@ -838,8 +847,10 @@ function abrirVer(a) {
     const prods = JSON.parse(a.PRODUTOS_JSON||'[]');
     if (prods.length) {
       prods.forEach(p => {
+        const precoHtml = p.preco ? `<span class="prod-preco-badge"><i class="fas fa-tag"></i> ${formatarMoedaExibicao(p.preco)}</span>` : '';
         ul.innerHTML += `<li><span class="prod-sku">${p.cod||'—'}</span>
           <strong>${p.desc||'—'}</strong> &mdash; ${p.qtd||'—'} ${p.unid||''}
+          ${precoHtml}
           ${p.obs ? `<em style="color:var(--text-muted);font-size:.85em"> | ${p.obs}</em>` : ''}</li>`;
       });
     } else ul.innerHTML = '<li style="color:var(--text-muted);font-style:italic">Nenhum produto</li>';
@@ -894,11 +905,183 @@ function abrirVer(a) {
   }
 
   // Botões de ação do modal
+  document.getElementById('mVerBtnPdf').onclick    = () => gerarPDFAmostra(a);
   document.getElementById('mVerBtnWa').onclick     = () => { closeM('mVer'); abrirWa(a); };
   document.getElementById('mVerBtnFeedV').onclick  = () => { closeM('mVer'); abrirFeedV(a); };
   document.getElementById('mVerBtnPedido').onclick = () => { closeM('mVer'); abrirPedido(a); };
 
   openM('mVer');
+}
+
+// ══════════════════════════════════════════
+// PDF & FORMATAÇÃO
+// ══════════════════════════════════════════
+function formatarMoedaExibicao(valor){
+  if(!valor && valor !== 0) return '';
+  let v = String(valor).trim();
+  if(!v) return '';
+  if(v.toUpperCase().startsWith('R$')) return v;
+  let limpo = v.replace(/[^\d.,]/g, '').replace(',', '.');
+  let num = parseFloat(limpo);
+  if(!isNaN(num) && isFinite(num)){
+    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\u00A0/g, ' ');
+  }
+  return 'R$ ' + v;
+}
+
+function gerarPDFAmostra(a){
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    alert('Biblioteca de PDF carregando, tente novamente em instantes.');
+    return;
+  }
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF('p','mm','a4');
+  const pw  = doc.internal.pageSize.getWidth();
+  const ph  = doc.internal.pageSize.getHeight();
+  const mg  = 12; const cw = pw-mg*2;
+  let y = mg;
+  const hoje = (a.DATA_SOLICITACAO||'').slice(0,10) || new Date().toLocaleDateString('pt-BR');
+  const linkFeedback = a.LINK_FEEDBACK || `${FB_BASE}${a.ID_AMOSTRA}`;
+
+  // Parse produtos
+  let prods = [];
+  try { prods = JSON.parse(a.PRODUTOS_JSON||'[]'); } catch(e){}
+
+  // Cabeçalho
+  doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+  doc.text('AMERIPAN PRODUTOS PARA PANIFICAÇÃO LTDA.',pw/2,y,{align:'center'}); y+=5;
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text(`SOLICITAÇÃO DE AMOSTRA #${a.ID_AMOSTRA}`,pw/2,y,{align:'center'}); y+=6;
+  doc.setDrawColor(0,90,156); doc.setLineWidth(0.6);
+  doc.line(mg,y,pw-mg,y); y+=5;
+
+  // Tipo/Finalidade/Data
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  const col3=cw/3;
+  [['Tipo:',(a.TIPO||'—')+(a.OUTROS_DESCRICAO?' – '+a.OUTROS_DESCRICAO:'')],
+   ['Finalidade:',a.FINALIDADE||'—'],
+   ['Data:',hoje]
+  ].forEach(([lbl,val],i)=>{
+    doc.setFont('helvetica','bold'); doc.text(lbl,mg+i*col3,y);
+    doc.setFont('helvetica','normal'); doc.text(String(val),mg+i*col3+doc.getTextWidth(lbl)+1,y);
+  }); y+=5;
+  if(a.NOME_RECEITA||a.QTD_MINIMA_ACEITAVEL){
+    [['Receita:',a.NOME_RECEITA||'—'],['Qtde Mín.:',a.QTD_MINIMA_ACEITAVEL?a.QTD_MINIMA_ACEITAVEL+' '+(a.UNIDADE_QTD||''):'—'],['','']].forEach(([lbl,val],i)=>{
+      if(!lbl) return;
+      doc.setFont('helvetica','bold'); doc.text(lbl,mg+i*col3,y);
+      doc.setFont('helvetica','normal'); doc.text(String(val),mg+i*col3+doc.getTextWidth(lbl)+1,y);
+    }); y+=5;
+  }
+  doc.setLineWidth(0.2); doc.setDrawColor(200); doc.line(mg,y,pw-mg,y); y+=4;
+
+  // Cliente / Vendedor
+  const half=cw/2;
+  doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+  doc.text('CLIENTE',mg,y); doc.text('VENDEDOR / SUPERVISOR',mg+half,y); y+=4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  const cliLines=[a.COD_CLIENTE?`Cód: ${a.COD_CLIENTE} – ${a.NOME_CLIENTE||'—'}`:(a.NOME_CLIENTE||'—'),
+                  a.TELEFONE_CLIENTE?`Tel: ${a.TELEFONE_CLIENTE}`:'',
+                  a.CIDADE_CLIENTE||''].filter(Boolean);
+  const venLines=[`Vendedor: ${a.NOME_VENDEDOR||'—'}`,
+                  a.TELEFONE_VENDEDOR?`Tel: ${a.TELEFONE_VENDEDOR}`:'',
+                  a.SUPERVISOR?`Supervisor: ${a.SUPERVISOR}`:''].filter(Boolean);
+  const maxL=Math.max(cliLines.length,venLines.length);
+  for(let i=0;i<maxL;i++){
+    if(cliLines[i]) doc.text(cliLines[i],mg,y);
+    if(venLines[i]) doc.text(venLines[i],mg+half,y);
+    y+=4;
+  }
+  doc.setLineWidth(0.2); doc.line(mg,y,pw-mg,y); y+=4;
+
+  // Produtos
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.text('PRODUTOS DA AMOSTRA',mg,y); y+=3;
+  doc.autoTable({
+    head:[['Cód.','Descrição','Qtde','Unid.','Preço','Observação']],
+    body: prods.map(p=>[
+      p.cod || '—',
+      p.desc || '—',
+      p.qtd || '—',
+      p.unid || '—',
+      p.preco ? formatarMoedaExibicao(p.preco) : '—',
+      p.obs || ''
+    ]),
+    startY:y, theme:'grid',
+    styles:{fontSize:7.5,cellPadding:1.8,lineColor:[0,0,0],lineWidth:0.1},
+    headStyles:{fillColor:[0,90,156],textColor:255,fontStyle:'bold',fontSize:7.5},
+    columnStyles:{
+      0:{cellWidth:18,halign:'center'},
+      2:{cellWidth:13,halign:'center'},
+      3:{cellWidth:13,halign:'center'},
+      4:{cellWidth:22,halign:'right'},
+    },
+    margin:{left:mg,right:mg}
+  });
+  y = doc.lastAutoTable.finalY+5;
+
+  // Observações
+  if(a.OBSERVACOES){
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text('OBSERVAÇÕES',mg,y); y+=4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    const obs=doc.splitTextToSize(a.OBSERVACOES,cw);
+    doc.text(obs,mg,y); y+=obs.length*4+3;
+  }
+
+  // Assinaturas
+  const sigY=y+8; const sigW=65;
+  const x1=mg+cw*0.05, x2=mg+cw*0.55;
+  doc.setLineWidth(0.3); doc.setDrawColor(0);
+  doc.line(x1,sigY,x1+sigW,sigY); doc.line(x2,sigY,x2+sigW,sigY);
+  doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+  doc.text('Supervisor / Gerente',x1+sigW/2,sigY+4,{align:'center'});
+  doc.text(`Vendedor – ${a.NOME_VENDEDOR||'—'}`,x2+sigW/2,sigY+4,{align:'center'});
+
+  // Bloco feedback link
+  const bY=ph-42; const bH=34; const bW=cw;
+  doc.setFillColor(0,60,120); doc.rect(mg,bY,bW,bH,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('📋  AVALIE ESTA AMOSTRA – Feedback do Cliente',mg+5,bY+7);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+  doc.text('Acesse o link abaixo para registrar sua avaliação sobre os produtos recebidos:',mg+5,bY+13);
+
+  // Botão link
+  const fb_bX=mg+5, fb_bY=bY+16, fb_bW=(bW/2)-8, fb_bH=10;
+  doc.setFillColor(255,255,255);
+  doc.roundedRect(fb_bX,fb_bY,fb_bW,fb_bH,2,2,'F');
+  doc.setDrawColor(180,210,240); doc.setLineWidth(0.3);
+  doc.roundedRect(fb_bX,fb_bY,fb_bW,fb_bH,2,2,'S');
+  doc.setTextColor(0,90,156); doc.setFont('helvetica','bold'); doc.setFontSize(7);
+  const fbLabel='🔗  '+linkFeedback;
+  const fbLW=doc.getTextWidth(fbLabel);
+  const fbLX=fb_bX+(fb_bW-fbLW)/2, fbLY=fb_bY+fb_bH/2+2.5;
+  doc.text(fbLabel,fbLX,fbLY);
+  doc.link(fb_bX,fb_bY,fb_bW,fb_bH,{url:linkFeedback});
+
+  // Botão whatsapp
+  const foneRaw=(a.TELEFONE_CLIENTE||'').replace(/\D/g,'');
+  const fone55 = foneRaw.startsWith('55')?foneRaw:'55'+foneRaw;
+  const msgWa = encodeURIComponent(
+    `Olá, ${a.NOME_CLIENTE}! 👋\n\nPassando para saber como foi a experiência com os produtos da amostra que ${a.NOME_VENDEDOR} levou para vocês. 😊\n\nSe puder, clique no link abaixo para nos dar um rápido feedback:\n👉 ${linkFeedback}\n\nObrigado! 🙏`
+  );
+  const waUrl = `https://api.whatsapp.com/send/?phone=${fone55}&text=${msgWa}&type=phone_number&app_absent=0`;
+  const wa_bX=mg+5+(bW/2), wa_bY=bY+16, wa_bW=(bW/2)-8, wa_bH=10;
+  doc.setFillColor(37,211,102);
+  doc.roundedRect(wa_bX,wa_bY,wa_bW,wa_bH,2,2,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+  const waLabel='💬  Solicitar feedback via WhatsApp';
+  const waLW=doc.getTextWidth(waLabel);
+  const waLX=wa_bX+(wa_bW-waLW)/2, waLY=wa_bY+wa_bH/2+2.5;
+  doc.text(waLabel,waLX,waLY);
+  doc.link(wa_bX,wa_bY,wa_bW,wa_bH,{url:waUrl});
+
+  // Rodapé
+  doc.setTextColor(120,120,120); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+  doc.text('AMERIPAN PRODUTOS PARA PANIFICAÇÃO LTDA. – CNPJ 65.029.035/0001-07 – Rua Purus, 652 – Americana/SP',pw/2,ph-4,{align:'center'});
+
+  const fileName = `Amostra${a.ID_AMOSTRA}_${(a.NOME_CLIENTE||'cliente').replace(/\s/g,'_')}.pdf`;
+  doc.save(fileName);
 }
 
 // ══════════════════════════════════════════
@@ -958,11 +1141,21 @@ async function confirmarPedido() {
 // EXPORTAR CSV
 // ══════════════════════════════════════════
 function exportarCSV() {
+  const lista = (window.cache && window.cache.filtrados) || filtradas;
   const cols = ['ID_AMOSTRA','DATA_SOLICITACAO','TIPO','FINALIDADE','NOME_CLIENTE','TELEFONE_CLIENTE',
-    'CIDADE_CLIENTE','NOME_VENDEDOR','STATUS','FEEDBACK_CLIENTE','DATA_FEEDBACK_CLIENTE',
+    'CIDADE_CLIENTE','NOME_VENDEDOR','STATUS','PRODUTOS_RESUMO','FEEDBACK_CLIENTE','DATA_FEEDBACK_CLIENTE',
     'PEDIDO_CLIENTE','NUM_PEDIDO_CLIENTE','FEEDBACK_VENDEDOR','PEDIDO_GERADO_FINAL','NUM_PEDIDO_FINAL'];
   const rows = [cols.join(';')];
-  filtradas.forEach(a => rows.push(cols.map(c => `"${(a[c]||'').toString().replace(/"/g,'""')}"`).join(';')));
+  lista.forEach(a => {
+    let prodsResumo = '';
+    try {
+      const pArr = JSON.parse(a.PRODUTOS_JSON||'[]');
+      prodsResumo = pArr.map(p => `${p.desc||p.cod||''} (${p.qtd||''}${p.unid||''}${p.preco ? ' - ' + formatarMoedaExibicao(p.preco) : ''})`).join(' | ');
+    } catch(e) { prodsResumo = a.PRODUTOS_JSON||''; }
+
+    const obj = Object.assign({}, a, { PRODUTOS_RESUMO: prodsResumo });
+    rows.push(cols.map(c => `"${(obj[c]||'').toString().replace(/"/g,'""')}"`).join(';'));
+  });
   const blob = new Blob(['\uFEFF'+rows.join('\n')], {type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const el   = document.createElement('a');
@@ -983,8 +1176,14 @@ function showMStatus(id, j) {
   el.className   = 'status-msg status-'+(j.status==='ok'?'success':'error');
   el.style.display = 'block';
 }
-function openM(id)  { document.getElementById(id).style.display='flex'; }
-function closeM(id) { document.getElementById(id).style.display='none'; }
+function openM(id)  {
+  const el = document.getElementById(id);
+  if(el){ el.classList.remove('hidden'); el.style.display='flex'; }
+}
+function closeM(id) {
+  const el = document.getElementById(id);
+  if(el){ el.classList.add('hidden'); el.style.display='none'; }
+}
 document.querySelectorAll('.modal-overlay').forEach(m =>
   m.addEventListener('click', e => { if(e.target===m) m.style.display='none'; })
 );
