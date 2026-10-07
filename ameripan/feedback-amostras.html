@@ -17,10 +17,12 @@ body{font-family:Arial,sans-serif;margin:0;padding:16px;background:#f0f4f8;color
 .card h3{margin:0 0 10px;font-size:.92em;color:#005A9C;text-transform:uppercase;letter-spacing:.5px}
 .info-row{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.9em}
 .info-row span{color:#555} .info-row strong{color:#222}
+.hidden{display:none!important}
 .prod-list{list-style:none;padding:0;margin:0}
 .prod-list li{padding:6px 0;border-bottom:1px solid #e9ecef;font-size:.9em}
 .prod-list li:last-child{border:none}
 .prod-list li .cod{background:#e8f0fb;color:#005A9C;font-size:.8em;padding:1px 6px;border-radius:10px;margin-right:6px;font-weight:bold}
+.preco-tag{background:#e6f4ea;color:#137333;font-size:.82em;padding:2px 8px;border-radius:10px;font-weight:bold;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;margin-left:6px}
 label{display:block;margin-bottom:5px;font-weight:bold;color:#444;font-size:.9em}
 textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-height:100px;resize:vertical;font-family:Arial,sans-serif}
 textarea:focus{outline:none;border-color:#005A9C;box-shadow:0 0 0 2px rgba(0,90,156,.15)}
@@ -49,10 +51,10 @@ footer{text-align:center;color:#aaa;font-size:.75em;margin-top:24px}
     <p>AMERIPAN PRODUTOS PARA PANIFICAÇÃO LTDA.</p>
   </div>
 
-  <div class="loader" id="loader"><div class="spinner"></div><p>Carregando dados...</p></div>
-  <div id="errMsg" class="status-msg status-error" style="display:none"></div>
+  <div class="loader hidden" id="loader" style="display:none"><div class="spinner"></div><p>Carregando dados...</p></div>
+  <div id="errMsg" class="status-msg status-error hidden" style="display:none"></div>
 
-  <div id="mainContent" style="display:none">
+  <div id="mainContent" class="hidden" style="display:none">
     <div style="text-align:center;margin-bottom:16px">
       <span class="id-pill" id="idPill">Amostra Nº —</span>
     </div>
@@ -134,7 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function carregarAmostra() {
-  document.getElementById('loader').style.display = 'block';
+  const ldr = document.getElementById('loader');
+  ldr.classList.remove('hidden');
+  ldr.style.display = 'block';
   try {
     const r = await fetch(`${GAS_URL}?action=getDadosAmostra&amostraID=${amostraID}`);
     const j = await r.json();
@@ -143,8 +147,22 @@ async function carregarAmostra() {
   } catch(e) {
     showErr('Erro ao carregar: ' + e.message);
   } finally {
-    document.getElementById('loader').style.display = 'none';
+    ldr.classList.add('hidden');
+    ldr.style.display = 'none';
   }
+}
+
+function formatarMoedaExibicao(valor){
+  if(!valor && valor !== 0) return '';
+  let v = String(valor).trim();
+  if(!v) return '';
+  if(v.toUpperCase().startsWith('R$')) return v;
+  let limpo = v.replace(/[^\d.,]/g, '').replace(',', '.');
+  let num = parseFloat(limpo);
+  if(!isNaN(num) && isFinite(num)){
+    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\u00A0/g, ' ');
+  }
+  return 'R$ ' + v;
 }
 
 function renderAmostra(d) {
@@ -161,12 +179,14 @@ function renderAmostra(d) {
 
   // Produtos
   const ul = document.getElementById('prodListEl');
+  ul.innerHTML = '';
   try {
     const prods = JSON.parse(d.PRODUTOS_JSON || '[]');
     if (prods.length) {
       prods.forEach(p => {
         const li = document.createElement('li');
-        li.innerHTML = `<span class="cod">${p.cod||'—'}</span>${p.desc||'—'} — <strong>${p.qtd||'—'} ${p.unid||''}</strong>${p.obs?' <em style="color:#888">('+p.obs+')</em>':''}`;
+        const precoHtml = p.preco ? `<span class="preco-tag"><i class="fas fa-tag"></i> ${formatarMoedaExibicao(p.preco)}</span>` : '';
+        li.innerHTML = `<span class="cod">${p.cod||'—'}</span>${p.desc||'—'} — <strong>${p.qtd||'—'} ${p.unid||''}</strong> ${precoHtml} ${p.obs?' <em style="color:#888">('+p.obs+')</em>':''}`;
         ul.appendChild(li);
       });
     } else { ul.innerHTML='<li style="color:#888;font-style:italic">Nenhum produto registrado</li>'; }
@@ -179,7 +199,9 @@ function renderAmostra(d) {
     document.getElementById('alreadyDate').textContent    = 'Registrado em: ' + d.DATA_FEEDBACK_CLIENTE;
   }
 
-  document.getElementById('mainContent').style.display = 'block';
+  const mc = document.getElementById('mainContent');
+  mc.classList.remove('hidden');
+  mc.style.display = 'block';
 }
 
 function toggleNumPed() {
