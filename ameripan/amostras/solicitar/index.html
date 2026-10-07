@@ -27,14 +27,16 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#005A9C;box-sh
 .radio-group{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:4px 0}
 .radio-group label{font-weight:normal;display:flex;align-items:center;gap:5px;cursor:pointer;margin:0}
 .radio-group input[type=radio]{width:auto;margin:0}
+.hidden{display:none!important}
 .table-wrap{overflow-x:auto;margin-top:8px;position:relative}
-.tbl{width:100%;min-width:660px;border-collapse:collapse;table-layout:fixed}
+.tbl{width:100%;min-width:720px;border-collapse:collapse;table-layout:fixed}
 .tbl th,.tbl td{border:1px solid #ddd;padding:7px 6px;font-size:12.5px;vertical-align:middle}
 .tbl th{background:#f0f0f0;font-weight:bold;white-space:nowrap}
-.tbl th:nth-child(1){width:11%}.tbl th:nth-child(2){width:37%}.tbl th:nth-child(3){width:10%}
-.tbl th:nth-child(4){width:12%}.tbl th:nth-child(5){width:22%}.tbl th:nth-child(6){width:8%;text-align:center}
+.tbl th:nth-child(1){width:10%}.tbl th:nth-child(2){width:33%}.tbl th:nth-child(3){width:9%}
+.tbl th:nth-child(4){width:10%}.tbl th:nth-child(5){width:13%}.tbl th:nth-child(6){width:18%}.tbl th:nth-child(7){width:7%;text-align:center}
 .tbl td input,.tbl td select{width:100%;padding:5px;font-size:12px;border:1px solid #ddd;border-radius:3px}
 .tbl td input[type=number]{text-align:center}
+.tbl td input.prod-preco{text-align:right;font-weight:600;color:#137333}
 .srch-wrap{position:relative}
 .srch-drop{display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:220px;overflow-y:auto;min-width:300px}
 .srch-drop div{padding:9px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid #f0f0f0}
@@ -67,7 +69,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#005A9C;box-sh
 </style>
 </head>
 <body>
-<div class="loader-overlay" id="loaderOverlay"><div class="spinner"></div><span id="loaderMsg">Aguarde...</span></div>
+<div class="loader-overlay hidden" id="loaderOverlay" style="display: none;"><div class="spinner"></div><span id="loaderMsg">Aguarde...</span></div>
 <div class="container">
   <h1>Solicitação de Amostra <span class="id-badge" id="idBadge">#</span></h1>
   <p class="subtitle">AMERIPAN PRODUTOS PARA PANIFICAÇÃO LTDA.</p>
@@ -147,7 +149,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#005A9C;box-sh
     <div id="prodLoadStatus" class="status-msg status-loading">Carregando lista de produtos...</div>
     <div class="table-wrap">
       <table class="tbl" id="tblProdutos">
-        <thead><tr><th>Cd.</th><th>Descrição</th><th>Qtde</th><th>Unidade</th><th>Obs. do Produto</th><th>Ação</th></tr></thead>
+        <thead><tr><th>Cód.</th><th>Descrição</th><th>Qtde</th><th>Unidade</th><th>Preço</th><th>Obs. do Produto</th><th>Ação</th></tr></thead>
         <tbody id="tbodyProdutos"></tbody>
       </table>
     </div>
@@ -272,13 +274,33 @@ async function loadProducts(){
   }
 }
 
-function addProdRow(cod='',desc='',qtd='',unid='kg',obs=''){
+function formatarMoedaExibicao(valor){
+  if(!valor && valor !== 0) return '';
+  let v = String(valor).trim();
+  if(!v) return '';
+  if(v.toUpperCase().startsWith('R$')) return v;
+  let limpo = v.replace(/[^\d.,]/g, '').replace(',', '.');
+  let num = parseFloat(limpo);
+  if(!isNaN(num) && isFinite(num)){
+    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\u00A0/g, ' ');
+  }
+  return 'R$ ' + v;
+}
+
+function formatarPrecoBlur(inp){
+  let v = inp.value.trim();
+  if(!v) return;
+  inp.value = formatarMoedaExibicao(v);
+}
+
+function addProdRow(cod='',desc='',qtd='',unid='kg',preco='',obs=''){
   const tbody = document.getElementById('tbodyProdutos');
   const tr = document.createElement('tr');
+  const precoFmt = preco ? formatarMoedaExibicao(preco) : '';
   tr.innerHTML = `
-    <td><input type="text"   class="prod-cod"  value="${cod}"  placeholder="Cód." oninput="onCodInput(this)" onblur="onCodBlur(this)"></td>
-    <td><input type="text"   class="prod-desc" value="${desc}" placeholder="Buscar nome do produto..." oninput="onDescInput(this)" onfocus="onDescInput(this)"></td>
-    <td><input type="number" class="prod-qtd"  value="${qtd}"  min="0" step="0.001" style="text-align:center"></td>
+    <td><input type="text"   class="prod-cod"   value="${cod}"   placeholder="Cód." oninput="onCodInput(this)" onblur="onCodBlur(this)"></td>
+    <td><input type="text"   class="prod-desc"  value="${desc}"  placeholder="Buscar nome do produto..." oninput="onDescInput(this)" onfocus="onDescInput(this)"></td>
+    <td><input type="number" class="prod-qtd"   value="${qtd}"   min="0" step="0.001" style="text-align:center" placeholder="0"></td>
     <td><select class="prod-unid">
       <option value="kg"  ${unid==='kg' ?'selected':''}>kg</option>
       <option value="un"  ${unid==='un' ?'selected':''}>un</option>
@@ -286,7 +308,8 @@ function addProdRow(cod='',desc='',qtd='',unid='kg',obs=''){
       <option value="cx"  ${unid==='cx' ?'selected':''}>cx</option>
       <option value="sc"  ${unid==='sc' ?'selected':''}>sc</option>
     </select></td>
-    <td><input type="text" class="prod-obs" value="${obs}" placeholder="Obs. desta linha"></td>
+    <td><input type="text"   class="prod-preco" value="${precoFmt}" placeholder="R$ 0,00" onblur="formatarPrecoBlur(this)"></td>
+    <td><input type="text"   class="prod-obs"   value="${obs}"   placeholder="Obs. desta linha"></td>
     <td style="text-align:center"><button class="btn btn-red" onclick="remRow(this)" title="Remover"><i class="fas fa-trash"></i></button></td>`;
   tbody.appendChild(tr);
 }
@@ -330,6 +353,8 @@ function selectProd(p){
   tr.querySelector('.prod-desc').value=p.name;
   document.getElementById('searchDrop').style.display='none';
   activeInput=null;
+  const qtdInput = tr.querySelector('.prod-qtd');
+  if(qtdInput) qtdInput.focus();
 }
 
 // ── COLETA ──
@@ -339,28 +364,42 @@ function coletarDados(){
   const fin   = finVal==='outro' ? document.getElementById('finalidadeOutro').value.trim() : finVal;
   const prods = [];
   document.querySelectorAll('#tbodyProdutos tr').forEach(tr=>{
-    const cod =tr.querySelector('.prod-cod').value.trim();
-    const desc=tr.querySelector('.prod-desc').value.trim();
-    const qtd =tr.querySelector('.prod-qtd').value.trim();
-    const unid=tr.querySelector('.prod-unid').value;
-    const obs =tr.querySelector('.prod-obs').value.trim();
-    if(cod||desc) prods.push({cod,desc,qtd,unid,obs});
+    const cod  = tr.querySelector('.prod-cod').value.trim();
+    const desc = tr.querySelector('.prod-desc').value.trim();
+    const qtd  = tr.querySelector('.prod-qtd').value.trim();
+    const unid = tr.querySelector('.prod-unid').value;
+    const preco= tr.querySelector('.prod-preco').value.trim();
+    const obs  = tr.querySelector('.prod-obs').value.trim();
+    if(cod||desc) prods.push({cod,desc,qtd,unid,preco,obs});
   });
+  const prodsJson = JSON.stringify(prods);
   return {
-    tipo, outrosdescricao: tipo==='Outros'?document.getElementById('outrosDesc').value.trim():'',
+    tipo,
+    outros_descricao: tipo==='Outros'?document.getElementById('outrosDesc').value.trim():'',
+    outrosdescricao:  tipo==='Outros'?document.getElementById('outrosDesc').value.trim():'',
     finalidade: fin,
-    nomereceita: document.getElementById('nomeReceita').value.trim(),
-    qtdminima:   document.getElementById('qtdMinima').value.trim(),
-    unidadeqtd:  document.getElementById('unidadeQtd').value,
-    codcliente:  document.getElementById('codCliente').value.trim(),
-    nomecliente: document.getElementById('nomeCliente').value.trim(),
+    nome_receita:    document.getElementById('nomeReceita').value.trim(),
+    nomereceita:     document.getElementById('nomeReceita').value.trim(),
+    qtd_minima:      document.getElementById('qtdMinima').value.trim(),
+    qtdminima:       document.getElementById('qtdMinima').value.trim(),
+    unidade_qtd:     document.getElementById('unidadeQtd').value,
+    unidadeqtd:      document.getElementById('unidadeQtd').value,
+    cod_cliente:     document.getElementById('codCliente').value.trim(),
+    codcliente:      document.getElementById('codCliente').value.trim(),
+    nome_cliente:    document.getElementById('nomeCliente').value.trim(),
+    nomecliente:     document.getElementById('nomeCliente').value.trim(),
+    telefone_cliente:document.getElementById('foneCliente').value.trim(),
     telefonecliente: document.getElementById('foneCliente').value.trim(),
+    cidade_cliente:  document.getElementById('cidadeCliente').value.trim(),
     cidadecliente:   document.getElementById('cidadeCliente').value.trim(),
+    nome_vendedor:   document.getElementById('vendedorNome').value.trim(),
     nomevendedor:    document.getElementById('vendedorNome').value.trim(),
-    telefonevendedor:document.getElementById('vendedorTel').value.trim(),
+    telefone_vendedor:document.getElementById('vendedorTel').value.trim(),
+    telefonevendedor: document.getElementById('vendedorTel').value.trim(),
     supervisor:      document.getElementById('supervisorNome').value.trim(),
-    produtosjson: JSON.stringify(prods),
-    observacoes:  document.getElementById('observacoes').value.trim(),
+    produtos_json:   prodsJson,
+    produtosjson:    prodsJson,
+    observacoes:     document.getElementById('observacoes').value.trim(),
     produtos: prods
   };
 }
@@ -386,34 +425,37 @@ async function handleGravar(){
   const d = coletarDados();
   if(!validar(d)) return;
   showLoader('Consultando ID...');
-  let ultimoID=0;
-  try{ const r=await fetch(GASURL+'?action=getUltimoID'); const j=await r.json(); ultimoID=parseInt(j.ultimoID)||0; }catch(e){ console.warn('Erro getUltimoID',e); }
-  const novoID = ultimoID+1;
-  document.getElementById('idBadge').textContent = '#'+novoID;
-  showLoader('Gravando na planilha...');
-  let linkFeedback = `https://edimarpcosta.github.io/ameripan/feedback-amostras.html?amostraID=${novoID}`;
   try{
-    const fd=new FormData();
-    fd.append('action','salvarAmostra');
-    Object.entries(d).forEach(([k,v])=>{ if(k!=='produtos') fd.append(k,v); });
-    const r=await fetch(GASURL,{method:'POST',body:fd});
-    const j=await r.json();
-    if(j.status==='ok'){ linkFeedback=j.linkFeedback||linkFeedback; setStatus('Amostra #'+novoID+' gravada com sucesso!','success'); }
-    else setStatus((j.msg||'Erro')+' – PDF gerado localmente.','error');
-  }catch(e){ setStatus('Sem conexão – PDF gerado localmente.','error'); }
-  showLoader('Gerando PDF...');
-  try{
-    const {doc,fileName} = gerarPDF(d,novoID,linkFeedback);
-    pdfDocGlobal = doc; pdfNomeArq = fileName;
-    _ultimoID    = novoID;
-    _linkFeedback= linkFeedback;
-    _dadosAmostra= d;
-    doc.save(fileName);
-    document.getElementById('btnWa').style.display='inline-block';
-    // Montar bloco WA feedback
-    montarBlocoWaFeedback(d,novoID,linkFeedback);
-  }catch(e){ setStatus('Erro ao gerar PDF: '+e.message,'error'); }
-  hideLoader();
+    let ultimoID=0;
+    try{ const r=await fetch(GASURL+'?action=getUltimoID'); const j=await r.json(); ultimoID=parseInt(j.ultimoID)||0; }catch(e){ console.warn('Erro getUltimoID',e); }
+    const novoID = ultimoID+1;
+    document.getElementById('idBadge').textContent = '#'+novoID;
+    showLoader('Gravando na planilha...');
+    let linkFeedback = `https://edimarpcosta.github.io/ameripan/feedback-amostras.html?amostraID=${novoID}`;
+    try{
+      const fd=new FormData();
+      fd.append('action','salvarAmostra');
+      Object.entries(d).forEach(([k,v])=>{ if(k!=='produtos') fd.append(k,v); });
+      const r=await fetch(GASURL,{method:'POST',body:fd});
+      const j=await r.json();
+      if(j.status==='ok'){ linkFeedback=j.linkFeedback||linkFeedback; setStatus('Amostra #'+novoID+' gravada com sucesso!','success'); }
+      else setStatus((j.msg||'Erro')+' – PDF gerado localmente.','error');
+    }catch(e){ setStatus('Sem conexão – PDF gerado localmente.','error'); }
+    showLoader('Gerando PDF...');
+    try{
+      const {doc,fileName} = gerarPDF(d,novoID,linkFeedback);
+      pdfDocGlobal = doc; pdfNomeArq = fileName;
+      _ultimoID    = novoID;
+      _linkFeedback= linkFeedback;
+      _dadosAmostra= d;
+      doc.save(fileName);
+      document.getElementById('btnWa').style.display='inline-block';
+      // Montar bloco WA feedback
+      montarBlocoWaFeedback(d,novoID,linkFeedback);
+    }catch(e){ setStatus('Erro ao gerar PDF: '+e.message,'error'); }
+  } finally {
+    hideLoader();
+  }
 }
 
 // ── PDF ──
@@ -475,12 +517,24 @@ function gerarPDF(d,id,linkFeedback){
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
   doc.text('PRODUTOS DA AMOSTRA',mg,y); y+=3;
   doc.autoTable({
-    head:[['Cód.','Descrição','Qtde','Unid.','Observação']],
-    body: d.produtos.map(p=>[p.cod,p.desc,p.qtd,p.unid,p.obs]),
+    head:[['Cód.','Descrição','Qtde','Unid.','Preço','Observação']],
+    body: d.produtos.map(p=>[
+      p.cod || '—',
+      p.desc || '—',
+      p.qtd || '—',
+      p.unid || '—',
+      p.preco ? formatarMoedaExibicao(p.preco) : '—',
+      p.obs || ''
+    ]),
     startY:y, theme:'grid',
     styles:{fontSize:7.5,cellPadding:1.8,lineColor:[0,0,0],lineWidth:0.1},
     headStyles:{fillColor:[0,90,156],textColor:255,fontStyle:'bold',fontSize:7.5},
-    columnStyles:{0:{cellWidth:22,halign:'center'},2:{cellWidth:14,halign:'center'},3:{cellWidth:14,halign:'center'}},
+    columnStyles:{
+      0:{cellWidth:18,halign:'center'},
+      2:{cellWidth:13,halign:'center'},
+      3:{cellWidth:13,halign:'center'},
+      4:{cellWidth:22,halign:'right'},
+    },
     margin:{left:mg,right:mg}
   });
   y = doc.lastAutoTable.finalY+5;
@@ -608,8 +662,17 @@ function formatTel(el){
   if(v.length===11) el.value=`(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
   else if(v.length===10) el.value=`(${v.slice(0,2)}) ${v.slice(2,6)}-${v.slice(6)}`;
 }
-function showLoader(msg){ document.getElementById('loaderMsg').textContent=msg; document.getElementById('loaderOverlay').style.display='flex'; }
-function hideLoader(){ document.getElementById('loaderOverlay').style.display='none'; }
+function showLoader(msg){
+  const el = document.getElementById('loaderOverlay');
+  document.getElementById('loaderMsg').textContent = msg;
+  el.classList.remove('hidden');
+  el.style.display = 'flex';
+}
+function hideLoader(){
+  const el = document.getElementById('loaderOverlay');
+  el.classList.add('hidden');
+  el.style.display = 'none';
+}
 function setStatus(msg,type){ const el=document.getElementById('formStatus'); el.textContent=msg; el.className='status-msg status-'+type; el.style.display='block'; }
 </script>
 </body>
