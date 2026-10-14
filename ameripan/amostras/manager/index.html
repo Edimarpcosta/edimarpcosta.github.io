@@ -697,12 +697,13 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
           <table class="tbl-prods-edit" id="editTblProdutos">
             <thead>
               <tr>
-                <th style="width:12%">Cód</th>
-                <th style="width:36%">Descrição do Produto</th>
-                <th style="width:10%">Qtd</th>
-                <th style="width:10%">Unid</th>
-                <th style="width:14%">Preço Unit.</th>
-                <th style="width:14%">Obs</th>
+                <th style="width:10%">Cód</th>
+                <th style="width:30%">Descrição do Produto</th>
+                <th style="width:14%">Nº Pedido</th>
+                <th style="width:9%">Qtd</th>
+                <th style="width:9%">Unid</th>
+                <th style="width:12%">Preço Unit.</th>
+                <th style="width:12%">Obs</th>
                 <th style="width:4%;text-align:center">✕</th>
               </tr>
             </thead>
@@ -864,12 +865,13 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
           <table class="tbl-prods-edit" id="newTblProdutos">
             <thead>
               <tr>
-                <th style="width:12%">Cód</th>
-                <th style="width:36%">Descrição do Produto</th>
-                <th style="width:10%">Qtd</th>
-                <th style="width:10%">Unid</th>
-                <th style="width:14%">Preço Unit.</th>
-                <th style="width:14%">Obs</th>
+                <th style="width:10%">Cód</th>
+                <th style="width:30%">Descrição do Produto</th>
+                <th style="width:14%">Nº Pedido</th>
+                <th style="width:9%">Qtd</th>
+                <th style="width:9%">Unid</th>
+                <th style="width:12%">Preço Unit.</th>
+                <th style="width:12%">Obs</th>
                 <th style="width:4%;text-align:center">✕</th>
               </tr>
             </thead>
@@ -1868,7 +1870,12 @@ function abrirVer(aOrId) {
   ];
 
   document.getElementById('mVerInfo').innerHTML = fields.map(([lbl,k]) => {
-    if(!a[k]) return '';
+    if(!a[k]) {
+      if (k === 'NUM_PEDIDO_SOLICITACAO') {
+        return `<div class="m-field"><div class="m-label">${lbl}</div><div class="m-value" style="color:var(--text-muted);font-style:italic">—</div></div>`;
+      }
+      return '';
+    }
     let val = a[k];
     if(k === 'TELEFONE_CLIENTE' || k === 'TELEFONE_VENDEDOR'){
       val = formatarTelefoneTexto(val);
@@ -1893,8 +1900,10 @@ function abrirVer(aOrId) {
           valorTotalEstimado += (q > 0 ? q * pr : pr);
         }
         const precoHtml = p.preco ? `<span class="prod-preco-badge"><i class="fas fa-tag"></i> ${formatarMoedaExibicao(p.preco)}</span>` : '';
+        const pedItem = p.num_pedido || p.pedido;
+        const pedHtml = pedItem ? `<span class="prod-sku" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd"><i class="fas fa-file-invoice"></i> Ped: ${pedItem}</span> ` : (a.NUM_PEDIDO_SOLICITACAO ? `<span class="prod-sku" style="background:#f1f5f9;color:#475569"><i class="fas fa-file-invoice"></i> Ped: ${a.NUM_PEDIDO_SOLICITACAO}</span> ` : '');
         ul.innerHTML += `<li><span class="prod-sku">${p.cod||'—'}</span>
-          <strong>${p.desc||'—'}</strong> &mdash; ${p.qtd||'—'} ${p.unid||''}
+          <strong>${p.desc||'—'}</strong> ${pedHtml}&mdash; ${p.qtd||'—'} ${p.unid||''}
           ${precoHtml}
           ${p.obs ? `<em style="color:var(--text-muted);font-size:.85em"> | ${p.obs}</em>` : ''}</li>`;
       });
@@ -2026,17 +2035,17 @@ function gerarPDFAmostra(aOrId){
     doc.setFont('helvetica','normal'); doc.text(String(val),mg+i*col3+doc.getTextWidth(lbl)+1.5,y);
   }); y+=5;
 
-  const metaLinha2 = [];
-  if(a.NUM_PEDIDO_SOLICITACAO) metaLinha2.push(['Nº Pedido:', a.NUM_PEDIDO_SOLICITACAO]);
-  if(a.NOME_RECEITA) metaLinha2.push(['Receita:', a.NOME_RECEITA]);
-  if(a.QTD_MINIMA_ACEITAVEL) metaLinha2.push(['Qtde Mín.:', a.QTD_MINIMA_ACEITAVEL+' '+(a.UNIDADE_QTD||'')]);
+  const numPedSol = a.NUM_PEDIDO_SOLICITACAO || '';
+  const metaLinha2 = [
+    ['Nº Pedido:', numPedSol || '—'],
+    ['Receita:', a.NOME_RECEITA || '—'],
+    ['Qtde Mín.:', a.QTD_MINIMA_ACEITAVEL ? (a.QTD_MINIMA_ACEITAVEL + ' ' + (a.UNIDADE_QTD || '')) : '—']
+  ];
 
-  if(metaLinha2.length > 0){
-    metaLinha2.forEach(([lbl,val],i)=>{
-      doc.setFont('helvetica','bold'); doc.text(lbl,mg+i*col3,y);
-      doc.setFont('helvetica','normal'); doc.text(String(val),mg+i*col3+doc.getTextWidth(lbl)+1.5,y);
-    }); y+=5;
-  }
+  metaLinha2.forEach(([lbl,val],i)=>{
+    doc.setFont('helvetica','bold'); doc.text(lbl,mg+i*col3,y);
+    doc.setFont('helvetica','normal'); doc.text(String(val),mg+i*col3+doc.getTextWidth(lbl)+1.5,y);
+  }); y+=5;
 
   doc.setLineWidth(0.2); doc.setDrawColor(200); doc.line(mg,y,pw-mg,y); y+=4;
 
@@ -2079,32 +2088,37 @@ function gerarPDFAmostra(aOrId){
 
   const footPdf = temPrecoNoPdf ? [
     [
-      { content: 'Total Estimado da Amostra:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5 } },
+      { content: 'Total Estimado da Amostra:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5 } },
       { content: formatarMoedaExibicao(totalEstimadoPdf), styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5, textColor: [19, 115, 51] } },
       { content: '' }
     ]
   ] : [];
 
   doc.autoTable({
-    head:[['Cód.','Descrição','Qtde','Unid.','Preço','Observação']],
-    body: prods.map(p=>[
-      p.cod || '—',
-      p.desc || '—',
-      p.qtd || '—',
-      p.unid || '—',
-      p.preco ? formatarMoedaExibicao(p.preco) : '—',
-      p.obs || ''
-    ]),
+    head:[['Cód.','Descrição','Nº Pedido','Qtde','Unid.','Preço','Observação']],
+    body: prods.map(p=>{
+      const pedItem = p.num_pedido || p.pedido || numPedSol || '—';
+      return [
+        p.cod || '—',
+        p.desc || '—',
+        pedItem,
+        p.qtd || '—',
+        p.unid || '—',
+        p.preco ? formatarMoedaExibicao(p.preco) : '—',
+        p.obs || ''
+      ];
+    }),
     foot: footPdf.length ? footPdf : undefined,
     startY:y, theme:'grid',
     styles:{fontSize:7.5,cellPadding:1.8,lineColor:[0,0,0],lineWidth:0.1},
     headStyles:{fillColor:[0,90,156],textColor:255,fontStyle:'bold',fontSize:7.5},
     footStyles:{fillColor:[240,244,248],textColor:0,fontStyle:'bold',fontSize:7.5},
     columnStyles:{
-      0:{cellWidth:18,halign:'center'},
-      2:{cellWidth:13,halign:'center'},
+      0:{cellWidth:16,halign:'center'},
+      2:{cellWidth:20,halign:'center'},
       3:{cellWidth:13,halign:'center'},
-      4:{cellWidth:22,halign:'right'},
+      4:{cellWidth:13,halign:'center'},
+      5:{cellWidth:20,halign:'right'},
     },
     margin:{left:mg,right:mg}
   });
@@ -2299,6 +2313,7 @@ function addEditProdRow(p = {}) {
   tr.innerHTML = `
     <td><input type="text" class="ep-cod" placeholder="Cód" value="${p.cod||''}"></td>
     <td><input type="text" class="ep-desc" placeholder="Descrição do produto" value="${p.desc||''}"></td>
+    <td><input type="text" class="ep-numped" placeholder="Nº Pedido" value="${p.num_pedido||p.pedido||''}"></td>
     <td><input type="number" step="0.1" class="ep-qtd" placeholder="Qtd" value="${p.qtd||''}"></td>
     <td>
       <select class="ep-unid">
@@ -2347,11 +2362,12 @@ async function salvarEdicaoAmostra() {
   document.querySelectorAll('#editTbodyProdutos tr').forEach(tr => {
     const cod   = tr.querySelector('.ep-cod').value.trim();
     const desc  = tr.querySelector('.ep-desc').value.trim();
+    const num_pedido = tr.querySelector('.ep-numped') ? tr.querySelector('.ep-numped').value.trim() : '';
     const qtd   = tr.querySelector('.ep-qtd').value.trim();
     const unid  = tr.querySelector('.ep-unid').value;
     const preco = tr.querySelector('.ep-preco').value.trim();
     const obs   = tr.querySelector('.ep-obs').value.trim();
-    if (cod || desc) prods.push({ cod, desc, qtd, unid, preco, obs });
+    if (cod || desc) prods.push({ cod, desc, num_pedido, qtd, unid, preco, obs });
   });
 
   const fd = new FormData();
@@ -2485,6 +2501,7 @@ function addNewProdRow(p = {}) {
   tr.innerHTML = `
     <td><input type="text" class="np-cod" placeholder="Cód" value="${p.cod||''}"></td>
     <td><input type="text" class="np-desc" placeholder="Descrição do produto" value="${p.desc||''}"></td>
+    <td><input type="text" class="np-numped" placeholder="Nº Pedido" value="${p.num_pedido||p.pedido||''}"></td>
     <td><input type="number" step="0.1" class="np-qtd" placeholder="Qtd" value="${p.qtd||'1'}"></td>
     <td>
       <select class="np-unid">
@@ -2531,11 +2548,12 @@ async function salvarNovaAmostraManager() {
   document.querySelectorAll('#newTbodyProdutos tr').forEach(tr => {
     const cod   = tr.querySelector('.np-cod').value.trim();
     const desc  = tr.querySelector('.np-desc').value.trim();
+    const num_pedido = tr.querySelector('.np-numped') ? tr.querySelector('.np-numped').value.trim() : '';
     const qtd   = tr.querySelector('.np-qtd').value.trim();
     const unid  = tr.querySelector('.np-unid').value;
     const preco = tr.querySelector('.np-preco').value.trim();
     const obs   = tr.querySelector('.np-obs').value.trim();
-    if (cod || desc) prods.push({ cod, desc, qtd, unid, preco, obs });
+    if (cod || desc) prods.push({ cod, desc, num_pedido, qtd, unid, preco, obs });
   });
 
   if (!prods.length) {
@@ -3050,7 +3068,10 @@ function exportarTabelaExcel() {
     let prodsResumo = '';
     try {
       const ps = JSON.parse(a.PRODUTOS_JSON || '[]');
-      prodsResumo = ps.map(p => `${p.cod ? p.cod + ' - ' : ''}${p.desc} (${p.qtd} ${p.unid}${p.preco ? ' - ' + p.preco : ''})`).join('; ');
+      prodsResumo = ps.map(p => {
+        const ped = (p.num_pedido || p.pedido) ? ` [Ped: ${p.num_pedido || p.pedido}]` : '';
+        return `${p.cod ? p.cod + ' - ' : ''}${p.desc} (${p.qtd} ${p.unid}${p.preco ? ' - ' + p.preco : ''})${ped}`;
+      }).join('; ');
     } catch(e) {
       prodsResumo = a.PRODUTOS_JSON || '';
     }
@@ -3096,13 +3117,14 @@ function exportarTabelaPDF() {
     return;
   }
 
-  const headers = ['ID', 'Data', 'Tipo', 'Cliente', 'Cidade', 'Vendedor', 'Status', 'Feedback Cliente', 'Pedido Final'];
+  const headers = ['ID', 'Data', 'Tipo', 'Ped. Sol.', 'Cliente', 'Cidade', 'Vendedor', 'Status', 'Feedback Cliente', 'Pedido Final'];
   const rows = dados.map(a => {
     let fbResumo = a.FEEDBACK_CLIENTE ? `"${a.FEEDBACK_CLIENTE.slice(0, 40)}..."` : '—';
     return [
       '#' + a.ID_AMOSTRA,
       (a.DATA_SOLICITACAO || '').slice(0, 10),
       a.TIPO || '',
+      a.NUM_PEDIDO_SOLICITACAO || '—',
       a.NOME_CLIENTE || '',
       a.CIDADE_CLIENTE || '',
       a.NOME_VENDEDOR || '',
