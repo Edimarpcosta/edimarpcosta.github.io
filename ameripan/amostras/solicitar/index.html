@@ -272,7 +272,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#005A9C;box-sh
       <table class="tbl" id="tblProdutos">
         <thead>
           <tr>
-            <th>Cód.</th><th>Descrição</th><th>Qtde</th><th>Unidade</th><th>Preço</th><th>Obs. do Produto</th><th>Ação</th>
+            <th>Cód.</th><th>Descrição</th><th>Nº Pedido</th><th>Qtde</th><th>Unidade</th><th>Preço</th><th>Obs. do Produto</th><th>Ação</th>
           </tr>
         </thead>
         <tbody id="tbodyProdutos"></tbody>
@@ -1029,13 +1029,14 @@ function atualizarResumoProdutos(){
   atualizarAlertaAntiAbusoUI();
 }
 
-function addProdRow(cod='',desc='',qtd='',unid='kg',preco='',obs=''){
+function addProdRow(cod='',desc='',qtd='',unid='kg',preco='',obs='',num_pedido=''){
   const tbody = document.getElementById('tbodyProdutos');
   const tr = document.createElement('tr');
   const precoFmt = preco ? formatarMoedaExibicao(preco) : '';
   tr.innerHTML = `
     <td><input type="text"   class="prod-cod"   value="${cod}"   placeholder="Cód." oninput="onCodInput(this)" onblur="onCodBlur(this)"></td>
     <td><input type="text"   class="prod-desc"  value="${desc}"  placeholder="Buscar produto..." oninput="onDescInput(this)" onfocus="onDescInput(this)" onkeydown="onDescKeyDown(event, this)"></td>
+    <td><input type="text"   class="prod-num-ped" value="${num_pedido}" placeholder="Nº Pedido" style="text-align:center" oninput="this.value = this.value.replace(/[^a-zA-Z0-9\\-\\/]/g, '')"></td>
     <td><input type="number" class="prod-qtd"   value="${qtd}"   min="0" step="0.001" style="text-align:center" placeholder="0" oninput="atualizarResumoProdutos()"></td>
     <td><select class="prod-unid" onchange="atualizarResumoProdutos()">
       <option value="kg"  ${unid==='kg' ?'selected':''}>kg</option>
@@ -1159,11 +1160,12 @@ function coletarDados(){
   document.querySelectorAll('#tbodyProdutos tr').forEach(tr=>{
     const cod  = tr.querySelector('.prod-cod').value.trim();
     const desc = tr.querySelector('.prod-desc').value.trim();
+    const num_pedido = tr.querySelector('.prod-num-ped')?.value.trim() || '';
     const qtd  = tr.querySelector('.prod-qtd').value.trim();
     const unid = tr.querySelector('.prod-unid').value;
     const preco= tr.querySelector('.prod-preco').value.trim();
     const obs  = tr.querySelector('.prod-obs').value.trim();
-    if(cod||desc) prods.push({cod,desc,qtd,unid,preco,obs});
+    if(cod||desc) prods.push({cod,desc,num_pedido,qtd,unid,preco,obs});
   });
 
   const prodsJson = JSON.stringify(prods);
@@ -1375,18 +1377,16 @@ function gerarPDF(d, id, linkFeedback){
     doc.setFont('helvetica','normal'); doc.text(String(val), mg + i*col3 + doc.getTextWidth(lbl)+1.5, y);
   }); y += 5;
 
-  // Pedido e Receita se informados
-  const metaLinha2 = [];
-  if (numPed) metaLinha2.push(['Nº Pedido:', numPed]);
-  if (nomeRec) metaLinha2.push(['Receita:', nomeRec]);
-  if (qtdMin) metaLinha2.push(['Qtde Mín.:', qtdMin + ' ' + (unidQtd || '')]);
-
-  if (metaLinha2.length > 0) {
-    metaLinha2.forEach(([lbl,val], i) => {
-      doc.setFont('helvetica','bold'); doc.text(lbl, mg + i*col3, y);
-      doc.setFont('helvetica','normal'); doc.text(String(val), mg + i*col3 + doc.getTextWidth(lbl)+1.5, y);
-    }); y += 5;
-  }
+  // Linha 2 de Metadados: Nº Pedido SEMPRE APARECE (mesmo não preenchido), Receita e Qtde Mínima
+  const metaLinha2 = [
+    ['Nº Pedido:', numPed || '—'],
+    ['Receita:', nomeRec || '—'],
+    ['Qtde Mín.:', qtdMin ? (qtdMin + ' ' + (unidQtd || '')) : '—']
+  ];
+  metaLinha2.forEach(([lbl,val], i) => {
+    doc.setFont('helvetica','bold'); doc.text(lbl, mg + i*col3, y);
+    doc.setFont('helvetica','normal'); doc.text(String(val), mg + i*col3 + doc.getTextWidth(lbl)+1.5, y);
+  }); y += 5;
 
   doc.setLineWidth(0.2); doc.setDrawColor(200); doc.line(mg, y, pw-mg, y); y += 4;
 
@@ -1444,32 +1444,37 @@ function gerarPDF(d, id, linkFeedback){
 
   const footPdf = temPrecoNoPdf ? [
     [
-      { content: 'Total Estimado da Amostra:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5 } },
+      { content: 'Total Estimado da Amostra:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5 } },
       { content: formatarMoedaExibicao(totalEstimadoPdf), styles: { halign: 'right', fontStyle: 'bold', fontSize: 7.5, textColor: [19, 115, 51] } },
       { content: '' }
     ]
   ] : [];
 
   doc.autoTable({
-    head: [['Cód.', 'Descrição', 'Qtde', 'Unid.', 'Preço', 'Observação']],
-    body: prods.map(p => [
-      p.cod || '—',
-      p.desc || '—',
-      p.qtd || '—',
-      p.unid || '—',
-      p.preco ? formatarMoedaExibicao(p.preco) : '—',
-      p.obs || ''
-    ]),
+    head: [['Cód.', 'Descrição', 'Nº Pedido', 'Qtde', 'Unid.', 'Preço', 'Observação']],
+    body: prods.map(p => {
+      const pedItem = p.num_pedido || p.pedido || numPed || '—';
+      return [
+        p.cod || '—',
+        p.desc || '—',
+        pedItem,
+        p.qtd || '—',
+        p.unid || '—',
+        p.preco ? formatarMoedaExibicao(p.preco) : '—',
+        p.obs || ''
+      ];
+    }),
     foot: footPdf.length ? footPdf : undefined,
     startY: y, theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 1.8, lineColor: [0,0,0], lineWidth: 0.1 },
     headStyles: { fillColor: [0,90,156], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
     footStyles: { fillColor: [240,244,248], textColor: 0, fontStyle: 'bold', fontSize: 7.5 },
     columnStyles: {
-      0: { cellWidth: 18, halign: 'center' },
-      2: { cellWidth: 13, halign: 'center' },
-      3: { cellWidth: 13, halign: 'center' },
-      4: { cellWidth: 22, halign: 'right' }
+      0: { cellWidth: 16, halign: 'center' },
+      2: { cellWidth: 20, halign: 'center' },
+      3: { cellWidth: 12, halign: 'center' },
+      4: { cellWidth: 12, halign: 'center' },
+      5: { cellWidth: 22, halign: 'right' }
     },
     margin: { left: mg, right: mg }
   });
