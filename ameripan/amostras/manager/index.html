@@ -597,7 +597,10 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
       <button class="btn btn-blue" style="width:100%;margin-top:8px" onclick="salvarVendedorCRUD()"><i class="fas fa-save"></i> Gravar Vendedor</button>
     </div>
     <div id="mVendStatus" class="status-msg" style="display:none"></div>
-  <!-- MODAL EDITAR AMOSTRA (CRUD UPDATE) -->
+  </div>
+</div>
+
+<!-- MODAL EDITAR AMOSTRA (CRUD UPDATE) -->
 <div class="modal-overlay hidden" id="mEditarAmostra" style="display: none;">
   <div class="modal modal-xl">
     <button class="close" onclick="closeM('mEditarAmostra')">✕</button>
@@ -1297,7 +1300,8 @@ function renderKPIs(list) {
 // ══════════════════════════════════════════
 // TABELA PRINCIPAL DE AMOSTRAS
 // ══════════════════════════════════════════
-function renderTabela(list) {
+function renderTabela(list = todas) {
+  list = list || todas || [];
   document.getElementById('countLabel').textContent = `(${list.length} registros)`;
   const tbody = document.getElementById('tbodyMain');
   tbody.innerHTML = '';
@@ -1357,13 +1361,13 @@ function renderTabela(list) {
       <td>${pedCell}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-blue btn-xs tip" data-tip="Ver detalhes" onclick='abrirVer(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-eye"></i></button>
-          <button class="btn btn-purple btn-xs tip" data-tip="Editar solicitação" onclick='abrirModalEditarAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
-          <button class="btn btn-red btn-xs tip" data-tip="Excluir solicitação" onclick='confirmarExcluirAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-trash"></i></button>
-          <button class="btn btn-teal btn-xs tip" data-tip="Gerar PDF" onclick='gerarPDFAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-file-pdf"></i></button>
-          <button class="btn btn-wa btn-xs tip" data-tip="Cobrar via WhatsApp" onclick='abrirWa(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fab fa-whatsapp"></i></button>
-          <button class="btn btn-orange btn-xs tip" data-tip="Feedback vendedor" onclick='abrirFeedV(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-comment"></i></button>
-          <button class="btn btn-green btn-xs tip" data-tip="Marcar pedido" onclick='abrirPedido(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-check-circle"></i></button>
+          <button class="btn btn-blue btn-xs tip" data-tip="Ver detalhes" onclick="abrirVer('${a.ID_AMOSTRA}')"><i class="fas fa-eye"></i></button>
+          <button class="btn btn-purple btn-xs tip" data-tip="Editar solicitação" onclick="abrirModalEditarAmostra('${a.ID_AMOSTRA}')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-red btn-xs tip" data-tip="Excluir solicitação" onclick="confirmarExcluirAmostra('${a.ID_AMOSTRA}')"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-teal btn-xs tip" data-tip="Gerar PDF" onclick="gerarPDFAmostra('${a.ID_AMOSTRA}')"><i class="fas fa-file-pdf"></i></button>
+          <button class="btn btn-wa btn-xs tip" data-tip="Cobrar via WhatsApp" onclick="abrirWa('${a.ID_AMOSTRA}')"><i class="fab fa-whatsapp"></i></button>
+          <button class="btn btn-orange btn-xs tip" data-tip="Feedback vendedor" onclick="abrirFeedV('${a.ID_AMOSTRA}')"><i class="fas fa-comment"></i></button>
+          <button class="btn btn-green btn-xs tip" data-tip="Marcar pedido" onclick="abrirPedido('${a.ID_AMOSTRA}')"><i class="fas fa-check-circle"></i></button>
         </div>
       </td>`;
     tbody.appendChild(tr);
@@ -1407,8 +1411,8 @@ function renderTabelaVendedores() {
       <td><strong style="color:var(--text)">${totalAmostrasVend}</strong> amostras</td>
       <td>
         <div class="actions">
-          <button class="btn btn-blue btn-xs" onclick='abrirModalEditarVendedor(${JSON.stringify(v).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i> Editar</button>
-          <button class="btn btn-red btn-xs" onclick='confirmarExcluirVendedor(${JSON.stringify(v).replace(/'/g, "&#39;")})'><i class="fas fa-trash"></i> Excluir</button>
+          <button class="btn btn-blue btn-xs" onclick="abrirModalEditarVendedor('${v.cod}')"><i class="fas fa-edit"></i> Editar</button>
+          <button class="btn btn-red btn-xs" onclick="confirmarExcluirVendedor('${v.cod}')"><i class="fas fa-trash"></i> Excluir</button>
         </div>
       </td>
     `;
@@ -1431,7 +1435,17 @@ function abrirModalNovoVendedor() {
   openM('mVendedorModal');
 }
 
-function abrirModalEditarVendedor(v) {
+function getVendedorObj(vOrCod) {
+  if (!vOrCod) return null;
+  if (typeof vOrCod === 'object' && vOrCod.cod !== undefined) return vOrCod;
+  const codStr = String(vOrCod).trim();
+  const arr = (typeof listaVendedores !== 'undefined' && listaVendedores && listaVendedores.length) ? listaVendedores : (window.listaVendedores || []);
+  return arr.find(v => String(v.cod).trim() === codStr) || null;
+}
+
+function abrirModalEditarVendedor(vOrCod) {
+  const v = getVendedorObj(vOrCod);
+  if (!v) { alert('Vendedor não encontrado.'); return; }
   document.getElementById('mVendTituloModal').textContent = `Editar Vendedor #${v.cod}`;
   document.getElementById('mVendModo').value = 'editar';
   document.getElementById('mVendCod').value = v.cod;
@@ -1466,7 +1480,9 @@ async function salvarVendedorCRUD() {
   }
 }
 
-async function confirmarExcluirVendedor(v) {
+async function confirmarExcluirVendedor(vOrCod) {
+  const v = getVendedorObj(vOrCod);
+  if (!v) { alert('Vendedor não encontrado.'); return; }
   if (!confirm(`Deseja realmente excluir o vendedor [${v.cod}] ${v.nome}?`)) return;
 
   const fd = new FormData();
@@ -1805,7 +1821,17 @@ function renderFeedbackCards() {
 // ══════════════════════════════════════════
 // MODAL VER DETALHES
 // ══════════════════════════════════════════
-function abrirVer(a) {
+function getAmostraObj(aOrId) {
+  if (!aOrId) return null;
+  if (typeof aOrId === 'object' && aOrId.ID_AMOSTRA !== undefined) return aOrId;
+  const idStr = String(aOrId).trim();
+  const arr = (typeof todas !== 'undefined' && todas && todas.length) ? todas : (window.todas || []);
+  return arr.find(item => String(item.ID_AMOSTRA).trim() === idStr) || null;
+}
+
+function abrirVer(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada.'); return; }
   document.getElementById('mVerTitulo').textContent = `Amostra Nº ${a.ID_AMOSTRA} — ${a.NOME_CLIENTE||'—'}`;
 
   // Alerta de desperdício / cliente com pendências
@@ -1962,7 +1988,9 @@ function formatarMoedaExibicao(valor){
   return 'R$ ' + v;
 }
 
-function gerarPDFAmostra(a){
+function gerarPDFAmostra(aOrId){
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada para gerar PDF.'); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){
     alert('Biblioteca de PDF carregando, tente novamente em instantes.');
     return;
@@ -2145,7 +2173,9 @@ function gerarPDFAmostra(a){
 // ══════════════════════════════════════════
 // AÇÕES AUXILIARES
 // ══════════════════════════════════════════
-function abrirWa(a) {
+function abrirWa(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada.'); return; }
   const tel = (a.TELEFONE_CLIENTE||'').replace(/\D/g,'');
   if (!tel) { alert('Telefone do cliente não cadastrado.'); return; }
   const link = `${FB_BASE}${a.ID_AMOSTRA}`;
@@ -2157,7 +2187,9 @@ function abrirWa(a) {
   window.open(`https://wa.me/55${tel}?text=${msg}`, '_blank');
 }
 
-function abrirFeedV(a) {
+function abrirFeedV(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada.'); return; }
   document.getElementById('mFeedVID').value      = a.ID_AMOSTRA;
   document.getElementById('mFeedVInfo').textContent = `Amostra Nº ${a.ID_AMOSTRA} — ${a.NOME_CLIENTE} | Vendedor: ${a.NOME_VENDEDOR}`;
   document.getElementById('mFeedVTxt').value     = a.FEEDBACK_VENDEDOR || '';
@@ -2165,7 +2197,9 @@ function abrirFeedV(a) {
   openM('mFeedV');
 }
 
-function abrirPedido(a) {
+function abrirPedido(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada.'); return; }
   document.getElementById('mPedID').value        = a.ID_AMOSTRA;
   document.getElementById('mPedInfo').textContent = `Amostra Nº ${a.ID_AMOSTRA} — ${a.NOME_CLIENTE}`;
   document.getElementById('mPedNum').value        = a.NUM_PEDIDO_FINAL || '';
@@ -2202,7 +2236,9 @@ async function confirmarPedido() {
 // ══════════════════════════════════════════
 
 // ── 1. EDITAR AMOSTRA (UPDATE) ──
-function abrirModalEditarAmostra(a) {
+function abrirModalEditarAmostra(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada.'); return; }
   document.getElementById('editAmostraId').value = a.ID_AMOSTRA;
   document.getElementById('editAmostraBadge').textContent = '#' + a.ID_AMOSTRA;
 
@@ -2374,7 +2410,9 @@ async function salvarEdicaoAmostra() {
 }
 
 // ── 2. EXCLUIR AMOSTRA (DELETE) ──
-function confirmarExcluirAmostra(a) {
+function confirmarExcluirAmostra(aOrId) {
+  const a = getAmostraObj(aOrId);
+  if (!a) { alert('Amostra não encontrada para exclusão.'); return; }
   document.getElementById('excluirAmostraId').value = a.ID_AMOSTRA;
   document.getElementById('excluirAmostraInfo').innerHTML = `
     <strong>Solicitação #${a.ID_AMOSTRA}</strong><br>
