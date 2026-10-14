@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --blue:#005A9C;--blue-dark:#004070;--blue-light:#e8f0fb;
@@ -243,6 +244,45 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
 
 /* ── SEÇÃO DE VENDEDORES DEDICADA ── */
 #secaoVendedores{display:none}
+
+/* ── BARRA DE FILTROS RÁPIDOS (CLIENTE, CÓD, DATA, PRODUTO) ── */
+.quick-filter-bar{background:#f8fafc;border-bottom:1px solid var(--border);padding:12px 18px}
+.qf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr)) auto;gap:10px;align-items:flex-end}
+.qf-col label{display:block;font-size:.74em;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;letter-spacing:.3px}
+.qf-col input{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff;transition:all .2s}
+.qf-col input:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px rgba(0,90,156,.12)}
+.qf-data-inputs{display:flex;align-items:center;gap:6px}
+.qf-data-inputs input{min-width:120px}
+.qf-data-inputs span{font-size:.8em;color:var(--text-muted)}
+.qf-btn-col{display:flex;align-items:flex-end}
+@media(max-width:768px){
+  .qf-grid{grid-template-columns:1fr;gap:8px}
+  .qf-btn-col{justify-content:flex-end}
+}
+
+/* Modais expandidos e tabelas de produtos para CRUD */
+.modal-lg{max-width:880px!important}
+.modal-xl{max-width:1080px!important}
+.tbl-prods-edit{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}
+.tbl-prods-edit th,.tbl-prods-edit td{border:1px solid #e2e8f0;padding:6px 8px;vertical-align:middle}
+.tbl-prods-edit th{background:#f1f5f9;font-weight:700;color:var(--text);text-align:left}
+.tbl-prods-edit input,.tbl-prods-edit select{width:100%;padding:6px;font-size:12px;border:1px solid #cbd5e1;border-radius:4px}
+.badge-alerta-recorrente{display:inline-flex;align-items:center;gap:4px;background:#fef2f2;color:#b91c1c;border:1px solid #f87171;border-radius:12px;padding:2px 8px;font-size:.72em;font-weight:700;margin-top:3px}
+
+/* Central de relatórios */
+.rel-tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:16px;flex-wrap:wrap}
+.rel-tab{padding:8px 16px;cursor:pointer;font-weight:700;font-size:.84em;color:var(--text-muted);border-radius:6px 6px 0 0;background:#f8fafc;border:1px solid transparent;border-bottom:none;transition:all .2s}
+.rel-tab.active{background:var(--blue);color:#fff}
+.rel-tab:hover:not(.active){background:#e2e8f0;color:var(--text)}
+.rel-content{display:none}
+.rel-content.active{display:block}
+.rel-preview-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}
+.rel-preview-table th,.rel-preview-table td{border:1px solid #e2e8f0;padding:7px 10px;text-align:left}
+.rel-preview-table th{background:#f1f5f9;font-weight:700;color:var(--blue)}
+.rel-preview-table tr:hover{background:#f8fafc}
+.rel-summary-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;background:#f0fdf4;border:1px solid #86efac;padding:12px 16px;border-radius:8px;margin-bottom:14px}
+.rel-sum-item .lbl{font-size:.72em;color:#166534;font-weight:700;text-transform:uppercase}
+.rel-sum-item .val{font-size:1.3em;color:#14532d;font-weight:800}
 </style>
 </head>
 <body>
@@ -313,8 +353,43 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
     <div class="section">
       <div class="section-header">
         <span class="section-title"><i class="fas fa-list"></i> Solicitações de Amostra <span class="tbl-count" id="countLabel"></span></span>
-        <button class="btn btn-gray btn-xs" onclick="exportarCSV()"><i class="fas fa-download"></i> Exportar CSV</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-green btn-xs" onclick="abrirModalNovaAmostra()"><i class="fas fa-plus"></i> Nova Solicitação</button>
+          <button class="btn btn-purple btn-xs" onclick="abrirModalRelatorios()"><i class="fas fa-chart-pie"></i> Relatórios Executivos</button>
+          <button class="btn btn-teal btn-xs" onclick="exportarTabelaExcel()"><i class="fas fa-file-excel"></i> Exportar Excel (.xlsx)</button>
+          <button class="btn btn-blue btn-xs" onclick="exportarTabelaPDF()"><i class="fas fa-file-pdf"></i> Exportar PDF</button>
+        </div>
       </div>
+
+      <!-- BARRA DE FILTROS ESPECÍFICOS: CLIENTE, CÓD, DATA, PRODUTO -->
+      <div class="quick-filter-bar">
+        <div class="qf-grid">
+          <div class="qf-col">
+            <label for="fCli"><i class="fas fa-store"></i> Cliente</label>
+            <input type="text" id="fCli" placeholder="Nome ou cód. cliente..." oninput="aplicarFiltros()">
+          </div>
+          <div class="qf-col">
+            <label for="fCod"><i class="fas fa-barcode"></i> Cód.</label>
+            <input type="text" id="fCod" placeholder="# Amostra, Cód, Ped..." oninput="aplicarFiltros()">
+          </div>
+          <div class="qf-col qf-data-col">
+            <label><i class="fas fa-calendar-alt"></i> Data (Período)</label>
+            <div class="qf-data-inputs">
+              <input type="date" id="fDataDe" title="Data inicial" onchange="aplicarFiltros()">
+              <span>a</span>
+              <input type="date" id="fDataAte" title="Data final" onchange="aplicarFiltros()">
+            </div>
+          </div>
+          <div class="qf-col">
+            <label for="fProd"><i class="fas fa-box-open"></i> Produto</label>
+            <input type="text" id="fProd" placeholder="Cód ou nome do produto..." oninput="aplicarFiltros()">
+          </div>
+          <div class="qf-btn-col">
+            <button class="btn btn-gray btn-sm" onclick="limparFiltrosRapidos()"><i class="fas fa-eraser"></i> Limpar</button>
+          </div>
+        </div>
+      </div>
+
       <div class="tabs" id="tabBar">
         <div class="tab active" onclick="selectTab('tudo',this)"><i class="fas fa-th-list"></i> Todas</div>
         <div class="tab" onclick="selectTab('pendentes',this)"><i class="fas fa-hourglass-half"></i> Pendentes <span class="tab-badge" id="tabBadgePend">0</span></div>
@@ -522,6 +597,405 @@ footer{text-align:center;color:var(--text-muted);font-size:.75em;padding:20px 0 
       <button class="btn btn-blue" style="width:100%;margin-top:8px" onclick="salvarVendedorCRUD()"><i class="fas fa-save"></i> Gravar Vendedor</button>
     </div>
     <div id="mVendStatus" class="status-msg" style="display:none"></div>
+  <!-- MODAL EDITAR AMOSTRA (CRUD UPDATE) -->
+<div class="modal-overlay hidden" id="mEditarAmostra" style="display: none;">
+  <div class="modal modal-xl">
+    <button class="close" onclick="closeM('mEditarAmostra')">✕</button>
+    <h2><i class="fas fa-edit" style="color:var(--purple)"></i> Editar Solicitação de Amostra <span id="editAmostraBadge" class="badge" style="background:#f3e8ff;color:#7e22ce;margin-left:8px;font-size:.85em">#</span></h2>
+    <input type="hidden" id="editAmostraId">
+    
+    <div class="m-form">
+      <!-- 1. Dados do Cliente -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-store"></i> 1. Dados do Cliente</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div>
+            <label for="editCodCliente">Código do Cliente</label>
+            <input type="text" id="editCodCliente" placeholder="Ex: 5040">
+          </div>
+          <div>
+            <label for="editNomeCliente">Nome / Razão Social *</label>
+            <input type="text" id="editNomeCliente" placeholder="Nome completo do cliente">
+          </div>
+          <div>
+            <label for="editFoneCliente">Telefone do Cliente</label>
+            <input type="tel" id="editFoneCliente" placeholder="(XX) XXXXX-XXXX">
+          </div>
+          <div>
+            <label for="editCidadeCliente">Cidade / UF</label>
+            <input type="text" id="editCidadeCliente" placeholder="Ex: Piracicaba/SP">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Vendedor e Equipe -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-user-tie"></i> 2. Vendedor e Equipe</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div>
+            <label for="editVendedorSelect">Vendedor Responsável *</label>
+            <select id="editVendedorSelect" onchange="aoMudarVendedorEdicao()">
+              <option value="">Selecione o vendedor...</option>
+            </select>
+          </div>
+          <div>
+            <label for="editVendedorTel">Telefone do Vendedor</label>
+            <input type="tel" id="editVendedorTel" placeholder="(XX) XXXXX-XXXX">
+          </div>
+          <div>
+            <label for="editSupervisor">Supervisor / Equipe</label>
+            <input type="text" id="editSupervisor" placeholder="Equipe ou supervisor">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Parâmetros e Pedido -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-sliders-h"></i> 3. Parâmetros e Status</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+          <div>
+            <label for="editTipo">Tipo de Solicitação</label>
+            <select id="editTipo">
+              <option value="Trabalho Técnico">Trabalho Técnico</option>
+              <option value="Degustação">Degustação</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+          <div>
+            <label for="editFinalidade">Finalidade</label>
+            <input type="text" id="editFinalidade" placeholder="Ex: Aumento de Portfólio">
+          </div>
+          <div>
+            <label for="editNomeReceita">Nome da Receita</label>
+            <input type="text" id="editNomeReceita" placeholder="Ex: Pão Francês...">
+          </div>
+          <div>
+            <label for="editNumPedidoSol">Nº Pedido (Solicitação)</label>
+            <input type="text" id="editNumPedidoSol" placeholder="Ex: 98765">
+          </div>
+          <div>
+            <label for="editStatus">Status da Amostra *</label>
+            <select id="editStatus">
+              <option value="Pendente">Pendente</option>
+              <option value="Feedback Recebido">Feedback Recebido</option>
+              <option value="Convertido em Pedido">Convertido em Pedido</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Produtos da Amostra -->
+      <div class="m-section">
+        <div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><i class="fas fa-boxes"></i> 4. Produtos da Amostra</span>
+          <button type="button" class="btn btn-blue btn-xs" onclick="addEditProdRow()"><i class="fas fa-plus"></i> Adicionar Item</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="tbl-prods-edit" id="editTblProdutos">
+            <thead>
+              <tr>
+                <th style="width:12%">Cód</th>
+                <th style="width:36%">Descrição do Produto</th>
+                <th style="width:10%">Qtd</th>
+                <th style="width:10%">Unid</th>
+                <th style="width:14%">Preço Unit.</th>
+                <th style="width:14%">Obs</th>
+                <th style="width:4%;text-align:center">✕</th>
+              </tr>
+            </thead>
+            <tbody id="editTbodyProdutos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Observações e Feedbacks -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-comment-alt"></i> 5. Observações e Resultados</div>
+        <div class="m-grid" style="grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label for="editObservacoes">Observações Gerais</label>
+            <textarea id="editObservacoes" placeholder="Observações técnicas..."></textarea>
+          </div>
+          <div>
+            <label for="editFeedbackCliente">Feedback do Cliente</label>
+            <textarea id="editFeedbackCliente" placeholder="Depoimento ou avaliação do cliente..."></textarea>
+          </div>
+          <div>
+            <label for="editFeedbackVendedor">Feedback do Vendedor</label>
+            <textarea id="editFeedbackVendedor" placeholder="Retorno comercial da visita..."></textarea>
+          </div>
+          <div>
+            <label for="editPedidoFinal">Homologação de Pedido Final</label>
+            <select id="editPedidoFinal">
+              <option value="Não">Não faturado</option>
+              <option value="Sim">Sim, pedido faturado</option>
+            </select>
+            <label for="editNumPedidoFinal" style="margin-top:8px">Nº Pedido Faturado</label>
+            <input type="text" id="editNumPedidoFinal" placeholder="Nº ERP faturado">
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <button type="button" class="btn btn-gray" onclick="closeM('mEditarAmostra')">Cancelar</button>
+        <button type="button" class="btn btn-green" onclick="salvarEdicaoAmostra()"><i class="fas fa-save"></i> Salvar Alterações</button>
+      </div>
+      <div id="mEditStatus" class="status-msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXCLUIR AMOSTRA (CRUD DELETE) -->
+<div class="modal-overlay hidden" id="mExcluirAmostra" style="display: none;">
+  <div class="modal" style="max-width:440px">
+    <button class="close" onclick="closeM('mExcluirAmostra')">✕</button>
+    <h2 style="color:var(--red)"><i class="fas fa-exclamation-triangle"></i> Excluir Solicitação</h2>
+    <input type="hidden" id="excluirAmostraId">
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:14px;color:#991b1b;font-size:.9em;margin-bottom:16px">
+      <p style="margin-bottom:6px"><strong>Tem certeza que deseja excluir esta solicitação?</strong></p>
+      <div id="excluirAmostraInfo" style="font-size:.85em;color:#7f1d1d;line-height:1.4"></div>
+      <p style="margin-top:8px;font-size:.78em;opacity:.85">⚠️ Esta ação removerá a linha da planilha Google Sheets permanentemente.</p>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-gray" onclick="closeM('mExcluirAmostra')">Cancelar</button>
+      <button class="btn btn-red" onclick="executarExcluirAmostra()"><i class="fas fa-trash"></i> Confirmar Exclusão</button>
+    </div>
+    <div id="mExcluirStatus" class="status-msg" style="display:none"></div>
+  </div>
+</div>
+
+<!-- MODAL NOVA SOLICITAÇÃO (CRUD CREATE) -->
+<div class="modal-overlay hidden" id="mNovaAmostra" style="display: none;">
+  <div class="modal modal-xl">
+    <button class="close" onclick="closeM('mNovaAmostra')">✕</button>
+    <h2><i class="fas fa-plus-circle" style="color:var(--green)"></i> Nova Solicitação de Amostra</h2>
+    
+    <div class="m-form">
+      <!-- 1. Dados do Cliente -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-store"></i> 1. Dados do Cliente</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div>
+            <label for="newCodCliente">Código do Cliente</label>
+            <input type="text" id="newCodCliente" placeholder="Ex: 5040">
+          </div>
+          <div>
+            <label for="newNomeCliente">Nome / Razão Social *</label>
+            <input type="text" id="newNomeCliente" placeholder="Nome completo do cliente">
+          </div>
+          <div>
+            <label for="newFoneCliente">Telefone do Cliente</label>
+            <input type="tel" id="newFoneCliente" placeholder="(XX) XXXXX-XXXX">
+          </div>
+          <div>
+            <label for="newCidadeCliente">Cidade / UF</label>
+            <input type="text" id="newCidadeCliente" placeholder="Ex: Piracicaba/SP">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Vendedor e Equipe -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-user-tie"></i> 2. Vendedor e Equipe</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div>
+            <label for="newVendedorSelect">Vendedor Responsável *</label>
+            <select id="newVendedorSelect" onchange="aoMudarVendedorNovo()">
+              <option value="">Selecione o vendedor...</option>
+            </select>
+          </div>
+          <div>
+            <label for="newVendedorTel">Telefone do Vendedor</label>
+            <input type="tel" id="newVendedorTel" placeholder="(XX) XXXXX-XXXX">
+          </div>
+          <div>
+            <label for="newSupervisor">Supervisor / Equipe</label>
+            <input type="text" id="newSupervisor" placeholder="Equipe ou supervisor">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Parâmetros e Pedido -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-sliders-h"></i> 3. Parâmetros da Amostra</div>
+        <div class="m-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+          <div>
+            <label for="newTipo">Tipo de Solicitação</label>
+            <select id="newTipo">
+              <option value="Trabalho Técnico">Trabalho Técnico</option>
+              <option value="Degustação">Degustação</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+          <div>
+            <label for="newFinalidade">Finalidade</label>
+            <select id="newFinalidade">
+              <option value="">Selecione...</option>
+              <option>Introdução da Marca Adimix</option>
+              <option>Introdução da Linha Nana</option>
+              <option>Aumento de Portfólio</option>
+              <option>Retenção de Cliente</option>
+              <option>Prospecção de Novo Cliente</option>
+              <option>Degustação Promocional</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+          <div>
+            <label for="newNomeReceita">Nome da Receita</label>
+            <input type="text" id="newNomeReceita" placeholder="Ex: Pão Francês...">
+          </div>
+          <div>
+            <label for="newNumPedidoSol">Nº Pedido (Opcional)</label>
+            <input type="text" id="newNumPedidoSol" placeholder="Ex: 98765">
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Produtos -->
+      <div class="m-section">
+        <div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><i class="fas fa-boxes"></i> 4. Produtos da Amostra</span>
+          <button type="button" class="btn btn-blue btn-xs" onclick="addNewProdRow()"><i class="fas fa-plus"></i> Adicionar Item</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="tbl-prods-edit" id="newTblProdutos">
+            <thead>
+              <tr>
+                <th style="width:12%">Cód</th>
+                <th style="width:36%">Descrição do Produto</th>
+                <th style="width:10%">Qtd</th>
+                <th style="width:10%">Unid</th>
+                <th style="width:14%">Preço Unit.</th>
+                <th style="width:14%">Obs</th>
+                <th style="width:4%;text-align:center">✕</th>
+              </tr>
+            </thead>
+            <tbody id="newTbodyProdutos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Observações -->
+      <div class="m-section">
+        <div class="m-section-title"><i class="fas fa-comment-alt"></i> 5. Observações Gerais</div>
+        <textarea id="newObservacoes" placeholder="Informações adicionais da solicitação..."></textarea>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <button type="button" class="btn btn-gray" onclick="closeM('mNovaAmostra')">Cancelar</button>
+        <button type="button" class="btn btn-green" onclick="salvarNovaAmostraManager()"><i class="fas fa-save"></i> Gravar e Emitir Amostra</button>
+      </div>
+      <div id="mNewStatus" class="status-msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CENTRAL DE RELATÓRIOS EXECUTIVOS (PDF & XLSX) -->
+<div class="modal-overlay hidden" id="mRelatorios" style="display: none;">
+  <div class="modal modal-xl">
+    <button class="close" onclick="closeM('mRelatorios')">✕</button>
+    <h2><i class="fas fa-chart-pie" style="color:var(--purple)"></i> Central de Relatórios Executivos</h2>
+    <p style="font-size:.84em;color:var(--text-muted);margin-bottom:14px">
+      Gere relatórios gerenciais consolidados em <strong>Excel (.xlsx)</strong> e <strong>PDF Executivo</strong> com base nos filtros aplicados.
+    </p>
+
+    <!-- Abas da Central de Relatórios -->
+    <div class="rel-tabs">
+      <div class="rel-tab active" id="tabRelVend" onclick="trocarTabRelatorio('vendedores')"><i class="fas fa-user-tie"></i> Por Vendedor</div>
+      <div class="rel-tab" id="tabRelProd" onclick="trocarTabRelatorio('produtos')"><i class="fas fa-box-open"></i> Por Produto</div>
+      <div class="rel-tab" id="tabRelCli" onclick="trocarTabRelatorio('clientes')"><i class="fas fa-store"></i> Por Cliente</div>
+      <div class="rel-tab" id="tabRelGeral" onclick="trocarTabRelatorio('geral')"><i class="fas fa-table"></i> Geral Consolidado</div>
+    </div>
+
+    <!-- Conteúdo 1: Relatório por Vendedor -->
+    <div class="rel-content active" id="relContentVend">
+      <div class="rel-summary-box" id="sumBoxVend"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+        <button class="btn btn-teal btn-sm" onclick="exportarRelatorioVendedoresXLSX()"><i class="fas fa-file-excel"></i> Baixar Excel (.xlsx)</button>
+        <button class="btn btn-blue btn-sm" onclick="exportarRelatorioVendedoresPDF()"><i class="fas fa-file-pdf"></i> Baixar PDF Executivo</button>
+      </div>
+      <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table class="rel-preview-table" id="tblRelVend">
+          <thead>
+            <tr>
+              <th>Vendedor</th>
+              <th>Equipe</th>
+              <th style="text-align:center">Amostras</th>
+              <th style="text-align:center">Pendentes</th>
+              <th style="text-align:center">Feedbacks</th>
+              <th style="text-align:center">Convertidos</th>
+              <th style="text-align:center">% Conversão</th>
+              <th style="text-align:right">Total Estimado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRelVend"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Conteúdo 2: Relatório por Produto -->
+    <div class="rel-content" id="relContentProd">
+      <div class="rel-summary-box" id="sumBoxProd"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+        <button class="btn btn-teal btn-sm" onclick="exportarRelatorioProdutosXLSX()"><i class="fas fa-file-excel"></i> Baixar Excel (.xlsx)</button>
+        <button class="btn btn-blue btn-sm" onclick="exportarRelatorioProdutosPDF()"><i class="fas fa-file-pdf"></i> Baixar PDF Executivo</button>
+      </div>
+      <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table class="rel-preview-table" id="tblRelProd">
+          <thead>
+            <tr>
+              <th>Cód</th>
+              <th>Descrição do Produto</th>
+              <th style="text-align:center">Qtd Amostras</th>
+              <th style="text-align:center">Volume Total</th>
+              <th style="text-align:right">Valor Total Estimado</th>
+              <th style="text-align:center">Pedidos Gerados</th>
+              <th style="text-align:center">% Sucesso</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRelProd"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Conteúdo 3: Relatório por Cliente -->
+    <div class="rel-content" id="relContentCli">
+      <div class="rel-summary-box" id="sumBoxCli"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+        <button class="btn btn-teal btn-sm" onclick="exportarRelatorioClientesXLSX()"><i class="fas fa-file-excel"></i> Baixar Excel (.xlsx)</button>
+        <button class="btn btn-blue btn-sm" onclick="exportarRelatorioClientesPDF()"><i class="fas fa-file-pdf"></i> Baixar PDF Executivo</button>
+      </div>
+      <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table class="rel-preview-table" id="tblRelCli">
+          <thead>
+            <tr>
+              <th>Cód</th>
+              <th>Nome / Razão Social</th>
+              <th>Cidade/UF</th>
+              <th style="text-align:center">Amostras</th>
+              <th style="text-align:center">Pendentes</th>
+              <th style="text-align:center">Convertidos</th>
+              <th style="text-align:center">Recorrência</th>
+              <th style="text-align:right">Total Estimado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRelCli"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Conteúdo 4: Relatório Geral Consolidado -->
+    <div class="rel-content" id="relContentGeral">
+      <div class="rel-summary-box" id="sumBoxGeral"></div>
+      <p style="font-size:.85em;color:var(--text);margin-bottom:12px">
+        Exporta a lista integral de todas as solicitações filtradas com todos os 29 campos cadastrais, detalhamento de produtos, avaliações dos clientes e pedidos oficiais.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-teal btn-sm" onclick="exportarRelatorioGeralXLSX()"><i class="fas fa-file-excel"></i> Exportar Base Completa em Excel (.xlsx)</button>
+        <button class="btn btn-blue btn-sm" onclick="exportarRelatorioGeralPDF()"><i class="fas fa-file-pdf"></i> Exportar Relatório Geral em PDF</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -646,12 +1120,19 @@ function populaFiltros() {
 function aplicarFiltros() {
   if (tabAtiva === 'vendedores') return;
 
-  const mes    = document.getElementById('fMes').value;
-  const tipo   = document.getElementById('fTipo').value;
-  const vend   = document.getElementById('fVendedor').value;
-  const status = document.getElementById('fStatus').value;
-  const ped    = document.getElementById('fPedido').value;
-  const busca  = document.getElementById('fBusca').value.trim().toLowerCase();
+  const mes     = document.getElementById('fMes')?.value || '';
+  const tipo    = document.getElementById('fTipo')?.value || '';
+  const vend    = document.getElementById('fVendedor')?.value || '';
+  const status  = document.getElementById('fStatus')?.value || '';
+  const ped     = document.getElementById('fPedido')?.value || '';
+  const busca   = (document.getElementById('fBusca')?.value || '').trim().toLowerCase();
+
+  // 4 Filtros rápidos da seção de solicitações
+  const fCli    = (document.getElementById('fCli')?.value || '').trim().toLowerCase();
+  const fCod    = (document.getElementById('fCod')?.value || '').trim().toLowerCase();
+  const fDataDe = document.getElementById('fDataDe')?.value || '';
+  const fDataAte= document.getElementById('fDataAte')?.value || '';
+  const fProd   = (document.getElementById('fProd')?.value || '').trim().toLowerCase();
 
   let base = todas;
   if (tabAtiva === 'pendentes')   base = todas.filter(a => a.STATUS === 'Pendente');
@@ -659,12 +1140,62 @@ function aplicarFiltros() {
   if (tabAtiva === 'convertidos') base = todas.filter(a => a.STATUS === 'Convertido em Pedido');
 
   filtradas = base.filter(a => {
+    // 1. Filtros gerais
     if (mes    && !(a.DATA_SOLICITACAO||'').includes(mes)) return false;
     if (tipo   && a.TIPO !== tipo) return false;
     if (vend   && a.NOME_VENDEDOR !== vend) return false;
     if (status && a.STATUS !== status) return false;
     if (ped === 'Sim' && a.PEDIDO_GERADO_FINAL !== 'Sim') return false;
     if (ped === 'Não' && a.PEDIDO_GERADO_FINAL === 'Sim') return false;
+
+    // 2. Filtro rápido de Cliente (Nome, Código ou Cidade)
+    if (fCli) {
+      const cliHay = [a.NOME_CLIENTE, a.COD_CLIENTE, a.CIDADE_CLIENTE].join(' ').toLowerCase();
+      if (!cliHay.includes(fCli)) return false;
+    }
+
+    // 3. Filtro rápido de Código (# Amostra, Cód Cliente, Nº Pedido Sol., Nº Pedido Final, Cód de qualquer produto)
+    if (fCod) {
+      let codMatch = false;
+      if (String(a.ID_AMOSTRA).toLowerCase().includes(fCod)) codMatch = true;
+      if (String(a.COD_CLIENTE || '').toLowerCase().includes(fCod)) codMatch = true;
+      if (String(a.NUM_PEDIDO_SOLICITACAO || '').toLowerCase().includes(fCod)) codMatch = true;
+      if (String(a.NUM_PEDIDO_FINAL || '').toLowerCase().includes(fCod)) codMatch = true;
+      if (!codMatch) {
+        try {
+          const prods = JSON.parse(a.PRODUTOS_JSON || '[]');
+          if (prods.some(p => String(p.cod || '').toLowerCase().includes(fCod))) codMatch = true;
+        } catch(e) {}
+      }
+      if (!codMatch) return false;
+    }
+
+    // 4. Filtro rápido de Data (Período De ... Até ...)
+    if (fDataDe || fDataAte) {
+      const dataStr = (a.DATA_SOLICITACAO || '').slice(0, 10); // dd/mm/yyyy
+      if (dataStr.length === 10) {
+        const [d, m, y] = dataStr.split('/');
+        const isoData = `${y}-${m}-${d}`;
+        if (fDataDe && isoData < fDataDe) return false;
+        if (fDataAte && isoData > fDataAte) return false;
+      }
+    }
+
+    // 5. Filtro rápido de Produto (Código ou Nome em PRODUTOS_JSON)
+    if (fProd) {
+      let prodMatch = false;
+      try {
+        const prods = JSON.parse(a.PRODUTOS_JSON || '[]');
+        if (prods.some(p => String(p.cod || '').toLowerCase().includes(fProd) || String(p.desc || '').toLowerCase().includes(fProd))) {
+          prodMatch = true;
+        }
+      } catch(e) {
+        if (String(a.PRODUTOS_JSON || '').toLowerCase().includes(fProd)) prodMatch = true;
+      }
+      if (!prodMatch) return false;
+    }
+
+    // 6. Campo de busca global
     if (busca) {
       const foneCliLimpo = (a.TELEFONE_CLIENTE||'').replace(/\D/g,'');
       const foneVenLimpo = (a.TELEFONE_VENDEDOR||'').replace(/\D/g,'');
@@ -679,7 +1210,8 @@ function aplicarFiltros() {
         a.NUM_PEDIDO_SOLICITACAO,
         a.NUM_PEDIDO_FINAL,
         a.TELEFONE_CLIENTE,
-        a.TELEFONE_VENDEDOR
+        a.TELEFONE_VENDEDOR,
+        a.PRODUTOS_JSON
       ].join(' ').toLowerCase();
 
       const achouTexto = hay.includes(busca);
@@ -697,8 +1229,19 @@ function aplicarFiltros() {
 }
 
 function limparFiltros() {
-  ['fMes','fTipo','fVendedor','fStatus','fPedido'].forEach(id => document.getElementById(id).value = '');
+  ['fMes','fTipo','fVendedor','fStatus','fPedido'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   document.getElementById('fBusca').value = '';
+  limparFiltrosRapidos();
+}
+
+function limparFiltrosRapidos() {
+  ['fCli', 'fCod', 'fDataDe', 'fDataAte', 'fProd'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   aplicarFiltros();
 }
 
@@ -814,11 +1357,13 @@ function renderTabela(list) {
       <td>${pedCell}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-blue btn-xs tip" data-tip="Ver detalhes completos" onclick='abrirVer(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-eye"></i></button>
-          <button class="btn btn-teal btn-xs tip" data-tip="Gerar PDF da amostra" onclick='gerarPDFAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-file-pdf"></i></button>
-          <button class="btn btn-wa btn-xs tip" data-tip="Cobrar feedback via WhatsApp" onclick='abrirWa(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fab fa-whatsapp"></i></button>
-          <button class="btn btn-orange btn-xs tip" data-tip="Registrar feedback do vendedor" onclick='abrirFeedV(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-comment"></i></button>
-          <button class="btn btn-green btn-xs tip" data-tip="Marcar pedido gerado" onclick='abrirPedido(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-check-circle"></i></button>
+          <button class="btn btn-blue btn-xs tip" data-tip="Ver detalhes" onclick='abrirVer(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-eye"></i></button>
+          <button class="btn btn-purple btn-xs tip" data-tip="Editar solicitação" onclick='abrirModalEditarAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+          <button class="btn btn-red btn-xs tip" data-tip="Excluir solicitação" onclick='confirmarExcluirAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-trash"></i></button>
+          <button class="btn btn-teal btn-xs tip" data-tip="Gerar PDF" onclick='gerarPDFAmostra(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-file-pdf"></i></button>
+          <button class="btn btn-wa btn-xs tip" data-tip="Cobrar via WhatsApp" onclick='abrirWa(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fab fa-whatsapp"></i></button>
+          <button class="btn btn-orange btn-xs tip" data-tip="Feedback vendedor" onclick='abrirFeedV(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-comment"></i></button>
+          <button class="btn btn-green btn-xs tip" data-tip="Marcar pedido" onclick='abrirPedido(${JSON.stringify(a).replace(/'/g, "&#39;")})'><i class="fas fa-check-circle"></i></button>
         </div>
       </td>`;
     tbody.appendChild(tr);
@@ -1653,30 +2198,883 @@ async function confirmarPedido() {
 // ══════════════════════════════════════════
 // EXPORTAR CSV
 // ══════════════════════════════════════════
-function exportarCSV() {
-  const lista = (window.cache && window.cache.filtrados) || filtradas;
-  const cols = [
-    'ID_AMOSTRA','DATA_SOLICITACAO','TIPO','FINALIDADE','NUM_PEDIDO_SOLICITACAO',
-    'NOME_CLIENTE','TELEFONE_CLIENTE','CIDADE_CLIENTE','NOME_VENDEDOR','STATUS',
-    'PRODUTOS_RESUMO','FEEDBACK_CLIENTE','DATA_FEEDBACK_CLIENTE',
-    'PEDIDO_CLIENTE','NUM_PEDIDO_CLIENTE','FEEDBACK_VENDEDOR','PEDIDO_GERADO_FINAL','NUM_PEDIDO_FINAL'
-  ];
-  const rows = [cols.join(';')];
+// CRUD DE SOLICITAÇÕES DE AMOSTRA (NOVO, EDITAR, EXCLUIR)
+// ══════════════════════════════════════════
+
+// ── 1. EDITAR AMOSTRA (UPDATE) ──
+function abrirModalEditarAmostra(a) {
+  document.getElementById('editAmostraId').value = a.ID_AMOSTRA;
+  document.getElementById('editAmostraBadge').textContent = '#' + a.ID_AMOSTRA;
+
+  document.getElementById('editCodCliente').value    = a.COD_CLIENTE || '';
+  document.getElementById('editNomeCliente').value   = a.NOME_CLIENTE || '';
+  document.getElementById('editFoneCliente').value   = formatarTelefoneTexto(a.TELEFONE_CLIENTE);
+  document.getElementById('editCidadeCliente').value = a.CIDADE_CLIENTE || '';
+
+  // Popula select de vendedores
+  const sVend = document.getElementById('editVendedorSelect');
+  sVend.innerHTML = '<option value="">Selecione o vendedor...</option>';
+  listaVendedores.forEach(v => {
+    const sel = String(v.nome).trim().toUpperCase() === String(a.NOME_VENDEDOR||'').trim().toUpperCase() ? 'selected' : '';
+    sVend.innerHTML += `<option value="${v.nome}" data-equipe="${v.equipe||''}" ${sel}>[${v.cod}] ${v.nome}</option>`;
+  });
+
+  document.getElementById('editVendedorTel').value  = formatarTelefoneTexto(a.TELEFONE_VENDEDOR);
+  document.getElementById('editSupervisor').value   = a.SUPERVISOR || '';
+
+  document.getElementById('editTipo').value         = a.TIPO || 'Trabalho Técnico';
+  document.getElementById('editFinalidade').value   = a.FINALIDADE || '';
+  document.getElementById('editNomeReceita').value  = a.NOME_RECEITA || '';
+  document.getElementById('editNumPedidoSol').value = a.NUM_PEDIDO_SOLICITACAO || '';
+  document.getElementById('editStatus').value       = a.STATUS || 'Pendente';
+
+  document.getElementById('editObservacoes').value      = a.OBSERVACOES || '';
+  document.getElementById('editFeedbackCliente').value  = a.FEEDBACK_CLIENTE || '';
+  document.getElementById('editFeedbackVendedor').value = a.FEEDBACK_VENDEDOR || '';
+  document.getElementById('editPedidoFinal').value      = a.PEDIDO_GERADO_FINAL || 'Não';
+  document.getElementById('editNumPedidoFinal').value   = a.NUM_PEDIDO_FINAL || '';
+
+  // Produtos
+  const tbodyProds = document.getElementById('editTbodyProdutos');
+  tbodyProds.innerHTML = '';
+  let prods = [];
+  try { prods = JSON.parse(a.PRODUTOS_JSON || '[]'); } catch(e) {}
+  if (!prods.length) {
+    addEditProdRow();
+  } else {
+    prods.forEach(p => addEditProdRow(p));
+  }
+
+  document.getElementById('mEditStatus').style.display = 'none';
+  openM('mEditarAmostra');
+}
+
+function aoMudarVendedorEdicao() {
+  const s = document.getElementById('editVendedorSelect');
+  const opt = s.options[s.selectedIndex];
+  if (opt && opt.dataset.equipe) {
+    document.getElementById('editSupervisor').value = opt.dataset.equipe;
+  }
+}
+
+function addEditProdRow(p = {}) {
+  const tbody = document.getElementById('editTbodyProdutos');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="ep-cod" placeholder="Cód" value="${p.cod||''}"></td>
+    <td><input type="text" class="ep-desc" placeholder="Descrição do produto" value="${p.desc||''}"></td>
+    <td><input type="number" step="0.1" class="ep-qtd" placeholder="Qtd" value="${p.qtd||''}"></td>
+    <td>
+      <select class="ep-unid">
+        <option value="kg" ${(p.unid||'kg')==='kg'?'selected':''}>kg</option>
+        <option value="un" ${(p.unid||'')==='un'?'selected':''}>un</option>
+        <option value="p" ${(p.unid||'')==='p'?'selected':''}>p</option>
+        <option value="cx" ${(p.unid||'')==='cx'?'selected':''}>cx</option>
+        <option value="sc" ${(p.unid||'')==='sc'?'selected':''}>sc</option>
+      </select>
+    </td>
+    <td><input type="text" class="ep-preco" placeholder="R$ 0,00" value="${p.preco||''}"></td>
+    <td><input type="text" class="ep-obs" placeholder="Observações" value="${p.obs||''}"></td>
+    <td style="text-align:center"><button type="button" class="btn btn-red btn-xs" onclick="remEditProdRow(this)">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function remEditProdRow(btn) {
+  const tr = btn.closest('tr');
+  const tbody = tr.parentNode;
+  if (tbody.children.length > 1) {
+    tr.remove();
+  } else {
+    tr.querySelectorAll('input').forEach(i => i.value = '');
+  }
+}
+
+async function salvarEdicaoAmostra() {
+  const id = document.getElementById('editAmostraId').value;
+  const nomeCliente = document.getElementById('editNomeCliente').value.trim();
+  const nomeVend = document.getElementById('editVendedorSelect').value.trim();
+
+  if (!nomeCliente) {
+    alert('O Nome do Cliente é obrigatório.');
+    document.getElementById('editNomeCliente').focus();
+    return;
+  }
+  if (!nomeVend) {
+    alert('O Vendedor Responsável é obrigatório.');
+    document.getElementById('editVendedorSelect').focus();
+    return;
+  }
+
+  // Coleta produtos
+  const prods = [];
+  document.querySelectorAll('#editTbodyProdutos tr').forEach(tr => {
+    const cod   = tr.querySelector('.ep-cod').value.trim();
+    const desc  = tr.querySelector('.ep-desc').value.trim();
+    const qtd   = tr.querySelector('.ep-qtd').value.trim();
+    const unid  = tr.querySelector('.ep-unid').value;
+    const preco = tr.querySelector('.ep-preco').value.trim();
+    const obs   = tr.querySelector('.ep-obs').value.trim();
+    if (cod || desc) prods.push({ cod, desc, qtd, unid, preco, obs });
+  });
+
+  const fd = new FormData();
+  fd.append('action', 'editarAmostra');
+  fd.append('amostraID', id);
+  fd.append('cod_cliente', document.getElementById('editCodCliente').value.trim());
+  fd.append('nome_cliente', nomeCliente);
+  fd.append('telefone_cliente', document.getElementById('editFoneCliente').value.trim());
+  fd.append('cidade_cliente', document.getElementById('editCidadeCliente').value.trim());
+  fd.append('nome_vendedor', nomeVend);
+  fd.append('telefone_vendedor', document.getElementById('editVendedorTel').value.trim());
+  fd.append('supervisor', document.getElementById('editSupervisor').value.trim());
+  fd.append('tipo', document.getElementById('editTipo').value);
+  fd.append('finalidade', document.getElementById('editFinalidade').value.trim());
+  fd.append('nome_receita', document.getElementById('editNomeReceita').value.trim());
+  fd.append('num_pedido_solicitacao', document.getElementById('editNumPedidoSol').value.trim());
+  fd.append('status', document.getElementById('editStatus').value);
+  fd.append('produtos_json', JSON.stringify(prods));
+  fd.append('observacoes', document.getElementById('editObservacoes').value.trim());
+  fd.append('feedback_cliente', document.getElementById('editFeedbackCliente').value.trim());
+  fd.append('feedback_vendedor', document.getElementById('editFeedbackVendedor').value.trim());
+  fd.append('pedido_gerado_final', document.getElementById('editPedidoFinal').value);
+  fd.append('num_pedido_final', document.getElementById('editNumPedidoFinal').value.trim());
+
+  const j = await postGAS(fd);
+  showMStatus('mEditStatus', j);
+  if (j.status === 'ok') {
+    // Atualiza registro local
+    const itemIdx = todas.findIndex(item => String(item.ID_AMOSTRA) === String(id));
+    if (itemIdx >= 0) {
+      todas[itemIdx] = Object.assign(todas[itemIdx], {
+        COD_CLIENTE: document.getElementById('editCodCliente').value.trim(),
+        NOME_CLIENTE: nomeCliente,
+        TELEFONE_CLIENTE: document.getElementById('editFoneCliente').value.trim(),
+        CIDADE_CLIENTE: document.getElementById('editCidadeCliente').value.trim(),
+        NOME_VENDEDOR: nomeVend,
+        TELEFONE_VENDEDOR: document.getElementById('editVendedorTel').value.trim(),
+        SUPERVISOR: document.getElementById('editSupervisor').value.trim(),
+        TIPO: document.getElementById('editTipo').value,
+        FINALIDADE: document.getElementById('editFinalidade').value.trim(),
+        NOME_RECEITA: document.getElementById('editNomeReceita').value.trim(),
+        NUM_PEDIDO_SOLICITACAO: document.getElementById('editNumPedidoSol').value.trim(),
+        STATUS: document.getElementById('editStatus').value,
+        PRODUTOS_JSON: JSON.stringify(prods),
+        OBSERVACOES: document.getElementById('editObservacoes').value.trim(),
+        FEEDBACK_CLIENTE: document.getElementById('editFeedbackCliente').value.trim(),
+        FEEDBACK_VENDEDOR: document.getElementById('editFeedbackVendedor').value.trim(),
+        PEDIDO_GERADO_FINAL: document.getElementById('editPedidoFinal').value,
+        NUM_PEDIDO_FINAL: document.getElementById('editNumPedidoFinal').value.trim()
+      });
+    }
+    calcularPendenciasPorCliente();
+    aplicarFiltros();
+    setTimeout(() => closeM('mEditarAmostra'), 1000);
+  }
+}
+
+// ── 2. EXCLUIR AMOSTRA (DELETE) ──
+function confirmarExcluirAmostra(a) {
+  document.getElementById('excluirAmostraId').value = a.ID_AMOSTRA;
+  document.getElementById('excluirAmostraInfo').innerHTML = `
+    <strong>Solicitação #${a.ID_AMOSTRA}</strong><br>
+    Cliente: <strong>${a.NOME_CLIENTE||'—'}</strong><br>
+    Vendedor: ${a.NOME_VENDEDOR||'—'}<br>
+    Data: ${(a.DATA_SOLICITACAO||'').slice(0,10)}
+  `;
+  document.getElementById('mExcluirStatus').style.display = 'none';
+  openM('mExcluirAmostra');
+}
+
+async function executarExcluirAmostra() {
+  const id = document.getElementById('excluirAmostraId').value;
+  if (!id) return;
+
+  const fd = new FormData();
+  fd.append('action', 'excluirAmostra');
+  fd.append('amostraID', id);
+
+  const j = await postGAS(fd);
+  showMStatus('mExcluirStatus', j);
+  if (j.status === 'ok') {
+    todas = todas.filter(item => String(item.ID_AMOSTRA) !== String(id));
+    calcularPendenciasPorCliente();
+    aplicarFiltros();
+    setTimeout(() => closeM('mExcluirAmostra'), 1000);
+  }
+}
+
+// ── 3. NOVA SOLICITAÇÃO (CREATE) ──
+function abrirModalNovaAmostra() {
+  // Popula vendedores
+  const sVend = document.getElementById('newVendedorSelect');
+  sVend.innerHTML = '<option value="">Selecione o vendedor...</option>';
+  listaVendedores.forEach(v => {
+    sVend.innerHTML += `<option value="${v.nome}" data-equipe="${v.equipe||''}">[${v.cod}] ${v.nome}</option>`;
+  });
+
+  document.getElementById('newCodCliente').value    = '';
+  document.getElementById('newNomeCliente').value   = '';
+  document.getElementById('newFoneCliente').value   = '';
+  document.getElementById('newCidadeCliente').value = '';
+  document.getElementById('newVendedorTel').value   = '';
+  document.getElementById('newSupervisor').value    = '';
+  document.getElementById('newTipo').value          = 'Trabalho Técnico';
+  document.getElementById('newFinalidade').value    = 'Introdução da Marca Adimix';
+  document.getElementById('newNomeReceita').value   = '';
+  document.getElementById('newNumPedidoSol').value  = '';
+  document.getElementById('newObservacoes').value   = '';
+
+  const tbody = document.getElementById('newTbodyProdutos');
+  tbody.innerHTML = '';
+  addNewProdRow();
+
+  document.getElementById('mNewStatus').style.display = 'none';
+  openM('mNovaAmostra');
+}
+
+function aoMudarVendedorNovo() {
+  const s = document.getElementById('newVendedorSelect');
+  const opt = s.options[s.selectedIndex];
+  if (opt && opt.dataset.equipe) {
+    document.getElementById('newSupervisor').value = opt.dataset.equipe;
+  }
+}
+
+function addNewProdRow(p = {}) {
+  const tbody = document.getElementById('newTbodyProdutos');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="np-cod" placeholder="Cód" value="${p.cod||''}"></td>
+    <td><input type="text" class="np-desc" placeholder="Descrição do produto" value="${p.desc||''}"></td>
+    <td><input type="number" step="0.1" class="np-qtd" placeholder="Qtd" value="${p.qtd||'1'}"></td>
+    <td>
+      <select class="np-unid">
+        <option value="kg" ${(p.unid||'kg')==='kg'?'selected':''}>kg</option>
+        <option value="un" ${(p.unid||'')==='un'?'selected':''}>un</option>
+        <option value="p" ${(p.unid||'')==='p'?'selected':''}>p</option>
+        <option value="cx" ${(p.unid||'')==='cx'?'selected':''}>cx</option>
+        <option value="sc" ${(p.unid||'')==='sc'?'selected':''}>sc</option>
+      </select>
+    </td>
+    <td><input type="text" class="np-preco" placeholder="R$ 0,00" value="${p.preco||''}"></td>
+    <td><input type="text" class="np-obs" placeholder="Observações" value="${p.obs||''}"></td>
+    <td style="text-align:center"><button type="button" class="btn btn-red btn-xs" onclick="remNewProdRow(this)">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function remNewProdRow(btn) {
+  const tr = btn.closest('tr');
+  const tbody = tr.parentNode;
+  if (tbody.children.length > 1) {
+    tr.remove();
+  } else {
+    tr.querySelectorAll('input').forEach(i => i.value = '');
+  }
+}
+
+async function salvarNovaAmostraManager() {
+  const nomeCliente = document.getElementById('newNomeCliente').value.trim();
+  const nomeVend = document.getElementById('newVendedorSelect').value.trim();
+
+  if (!nomeCliente) {
+    alert('Preencha o Nome do Cliente.');
+    document.getElementById('newNomeCliente').focus();
+    return;
+  }
+  if (!nomeVend) {
+    alert('Selecione o Vendedor Responsável.');
+    document.getElementById('newVendedorSelect').focus();
+    return;
+  }
+
+  const prods = [];
+  document.querySelectorAll('#newTbodyProdutos tr').forEach(tr => {
+    const cod   = tr.querySelector('.np-cod').value.trim();
+    const desc  = tr.querySelector('.np-desc').value.trim();
+    const qtd   = tr.querySelector('.np-qtd').value.trim();
+    const unid  = tr.querySelector('.np-unid').value;
+    const preco = tr.querySelector('.np-preco').value.trim();
+    const obs   = tr.querySelector('.np-obs').value.trim();
+    if (cod || desc) prods.push({ cod, desc, qtd, unid, preco, obs });
+  });
+
+  if (!prods.length) {
+    alert('Adicione pelo menos um produto na amostra.');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('action', 'salvarAmostra');
+  fd.append('cod_cliente', document.getElementById('newCodCliente').value.trim());
+  fd.append('nome_cliente', nomeCliente);
+  fd.append('telefone_cliente', document.getElementById('newFoneCliente').value.trim());
+  fd.append('cidade_cliente', document.getElementById('newCidadeCliente').value.trim());
+  fd.append('nome_vendedor', nomeVend);
+  fd.append('telefone_vendedor', document.getElementById('newVendedorTel').value.trim());
+  fd.append('supervisor', document.getElementById('newSupervisor').value.trim());
+  fd.append('tipo', document.getElementById('newTipo').value);
+  fd.append('finalidade', document.getElementById('newFinalidade').value);
+  fd.append('nome_receita', document.getElementById('newNomeReceita').value.trim());
+  fd.append('num_pedido_solicitacao', document.getElementById('newNumPedidoSol').value.trim());
+  fd.append('produtos_json', JSON.stringify(prods));
+  fd.append('observacoes', document.getElementById('newObservacoes').value.trim());
+
+  const j = await postGAS(fd);
+  showMStatus('mNewStatus', j);
+  if (j.status === 'ok') {
+    await carregarDados();
+    setTimeout(() => closeM('mNovaAmostra'), 1200);
+  }
+}
+
+// ══════════════════════════════════════════
+// CENTRAL DE RELATÓRIOS (EXCEL .XLSX & PDF)
+// ══════════════════════════════════════════
+let tabRelAtiva = 'vendedores';
+
+function abrirModalRelatorios() {
+  openM('mRelatorios');
+  trocarTabRelatorio('vendedores');
+}
+
+function trocarTabRelatorio(tab) {
+  tabRelAtiva = tab;
+  document.querySelectorAll('.rel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.rel-content').forEach(c => c.classList.remove('active'));
+
+  if (tab === 'vendedores') {
+    document.getElementById('tabRelVend').classList.add('active');
+    document.getElementById('relContentVend').classList.add('active');
+    renderRelatorioVendedores();
+  } else if (tab === 'produtos') {
+    document.getElementById('tabRelProd').classList.add('active');
+    document.getElementById('relContentProd').classList.add('active');
+    renderRelatorioProdutos();
+  } else if (tab === 'clientes') {
+    document.getElementById('tabRelCli').classList.add('active');
+    document.getElementById('relContentCli').classList.add('active');
+    renderRelatorioClientes();
+  } else {
+    document.getElementById('tabRelGeral').classList.add('active');
+    document.getElementById('relContentGeral').classList.add('active');
+    renderRelatorioGeral();
+  }
+}
+
+// ── CÁLCULO E RENDERIZAÇÃO: VENDEDORES ──
+function calcularDadosVendedores() {
+  const lista = (window.cache && window.cache.filtrados) || filtradas || todas;
+  const mapa = {};
+
   lista.forEach(a => {
+    const vend = String(a.NOME_VENDEDOR || 'NÃO INFORMADO').trim().toUpperCase();
+    if (!mapa[vend]) {
+      // Procura equipe correspondente
+      const vObj = listaVendedores.find(v => String(v.nome).trim().toUpperCase() === vend);
+      mapa[vend] = {
+        vendedor: vend,
+        equipe: vObj ? vObj.equipe : (a.SUPERVISOR || '—'),
+        total: 0,
+        pendentes: 0,
+        feedbacks: 0,
+        convertidos: 0,
+        valorTotal: 0
+      };
+    }
+    mapa[vend].total++;
+    if (a.STATUS === 'Pendente') mapa[vend].pendentes++;
+    if (a.FEEDBACK_CLIENTE) mapa[vend].feedbacks++;
+    if (a.STATUS === 'Convertido em Pedido' || a.PEDIDO_GERADO_FINAL === 'Sim') mapa[vend].convertidos++;
+
+    try {
+      const ps = JSON.parse(a.PRODUTOS_JSON || '[]');
+      ps.forEach(p => {
+        const numPreco = parseFloat(String(p.preco||'').replace(/[^\d.,]/g,'').replace(',','.'));
+        const qtd = parseFloat(p.qtd) || 1;
+        if (!isNaN(numPreco)) mapa[vend].valorTotal += (numPreco * qtd);
+      });
+    } catch(e) {}
+  });
+
+  return Object.values(mapa).sort((a,b) => b.total - a.total);
+}
+
+function renderRelatorioVendedores() {
+  const vends = calcularDadosVendedores();
+  const tbody = document.getElementById('tbodyRelVend');
+  tbody.innerHTML = '';
+
+  let totAm = 0, totPend = 0, totFeed = 0, totConv = 0, totVal = 0;
+  vends.forEach(v => {
+    totAm += v.total;
+    totPend += v.pendentes;
+    totFeed += v.feedbacks;
+    totConv += v.convertidos;
+    totVal += v.valorTotal;
+
+    const tx = v.total ? Math.round(v.convertidos / v.total * 100) : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${v.vendedor}</strong></td>
+      <td><span class="badge" style="background:#e8f0fb;color:#005A9C">${v.equipe}</span></td>
+      <td style="text-align:center"><strong>${v.total}</strong></td>
+      <td style="text-align:center;color:#b91c1c">${v.pendentes}</td>
+      <td style="text-align:center;color:#15803d">${v.feedbacks}</td>
+      <td style="text-align:center;color:#1d4ed8"><strong>${v.convertidos}</strong></td>
+      <td style="text-align:center"><span class="badge" style="background:${tx>=40?'#dcfce7':'#fef3c7'};color:${tx>=40?'#15803d':'#b45309'}">${tx}%</span></td>
+      <td style="text-align:right">R$ ${v.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const txGeral = totAm ? Math.round(totConv / totAm * 100) : 0;
+  document.getElementById('sumBoxVend').innerHTML = `
+    <div class="rel-sum-item"><div class="lbl">Vendedores Ativos</div><div class="val">${vends.length}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Total Amostras</div><div class="val">${totAm}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Aguardando Feedback</div><div class="val" style="color:#b91c1c">${totPend}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Convertidas em Pedido</div><div class="val" style="color:#15803d">${totConv} (${txGeral}%)</div></div>
+    <div class="rel-sum-item"><div class="lbl">Valor Total Amostrado</div><div class="val">R$ ${totVal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</div></div>
+  `;
+}
+
+function exportarRelatorioVendedoresXLSX() {
+  const vends = calcularDadosVendedores();
+  if (!vends.length) return alert('Sem dados para exportação.');
+
+  const headers = ['Vendedor', 'Equipe', 'Total Amostras', 'Aguardando Feedback', 'Com Feedback', 'Convertidas em Pedido', '% Conversão', 'Valor Total Estimado'];
+  const rows = vends.map(v => [
+    v.vendedor,
+    v.equipe,
+    v.total,
+    v.pendentes,
+    v.feedbacks,
+    v.convertidos,
+    (v.total ? Math.round(v.convertidos / v.total * 100) : 0) + '%',
+    v.valorTotal
+  ]);
+
+  exportarExcelGenerico(`Relatorio_Vendedores_${new Date().toISOString().slice(0,10)}.xlsx`, 'Vendedores', headers, rows, [32, 24, 16, 20, 16, 22, 16, 20]);
+}
+
+function exportarRelatorioVendedoresPDF() {
+  const vends = calcularDadosVendedores();
+  if (!vends.length) return alert('Sem dados para exportação.');
+
+  const headers = ['Vendedor', 'Equipe', 'Amostras', 'Pendentes', 'Feedbacks', 'Convertidos', '% Conversão', 'Total Estimado'];
+  const rows = vends.map(v => [
+    v.vendedor,
+    v.equipe,
+    String(v.total),
+    String(v.pendentes),
+    String(v.feedbacks),
+    String(v.convertidos),
+    (v.total ? Math.round(v.convertidos / v.total * 100) : 0) + '%',
+    'R$ ' + v.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+  ]);
+
+  exportarPDFGenerico('Relatório de Desempenho por Vendedor', 'Análise Comercial Consolidada de Amostras', headers, rows, 'landscape');
+}
+
+// ── CÁLCULO E RENDERIZAÇÃO: PRODUTOS ──
+function calcularDadosProdutos() {
+  const lista = (window.cache && window.cache.filtrados) || filtradas || todas;
+  const mapa = {};
+
+  lista.forEach(a => {
+    const converteu = (a.STATUS === 'Convertido em Pedido' || a.PEDIDO_GERADO_FINAL === 'Sim');
+    try {
+      const ps = JSON.parse(a.PRODUTOS_JSON || '[]');
+      ps.forEach(p => {
+        const cod = String(p.cod || '').trim();
+        const desc = String(p.desc || 'PRODUTO NÃO IDENTIFICADO').trim().toUpperCase();
+        const chave = cod ? `${cod} - ${desc}` : desc;
+
+        if (!mapa[chave]) {
+          mapa[chave] = {
+            cod: cod || '—',
+            desc: desc,
+            amostras: 0,
+            volume: 0,
+            unid: p.unid || 'kg',
+            valorTotal: 0,
+            convertidos: 0
+          };
+        }
+        mapa[chave].amostras++;
+        const qtd = parseFloat(p.qtd) || 1;
+        mapa[chave].volume += qtd;
+        const precoNum = parseFloat(String(p.preco||'').replace(/[^\d.,]/g,'').replace(',','.'));
+        if (!isNaN(precoNum)) mapa[chave].valorTotal += (precoNum * qtd);
+        if (converteu) mapa[chave].convertidos++;
+      });
+    } catch(e) {}
+  });
+
+  return Object.values(mapa).sort((a,b) => b.amostras - a.amostras);
+}
+
+function renderRelatorioProdutos() {
+  const prods = calcularDadosProdutos();
+  const tbody = document.getElementById('tbodyRelProd');
+  tbody.innerHTML = '';
+
+  let totItens = 0, totVal = 0, totConv = 0;
+  prods.forEach(p => {
+    totItens += p.amostras;
+    totVal += p.valorTotal;
+    totConv += p.convertidos;
+    const tx = p.amostras ? Math.round(p.convertidos / p.amostras * 100) : 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="badge" style="background:#e8f0fb;color:#005A9C">[${p.cod}]</span></td>
+      <td><strong>${p.desc}</strong></td>
+      <td style="text-align:center"><strong>${p.amostras}</strong></td>
+      <td style="text-align:center">${p.volume.toFixed(1)} ${p.unid}</td>
+      <td style="text-align:right">R$ ${p.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td style="text-align:center;color:#15803d"><strong>${p.convertidos}</strong></td>
+      <td style="text-align:center"><span class="badge" style="background:${tx>=40?'#dcfce7':'#fef3c7'};color:${tx>=40?'#15803d':'#b45309'}">${tx}%</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('sumBoxProd').innerHTML = `
+    <div class="rel-sum-item"><div class="lbl">Itens Distintos</div><div class="val">${prods.length}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Total Solicitações</div><div class="val">${totItens}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Convertidos em Pedido</div><div class="val" style="color:#15803d">${totConv}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Investimento Estimado</div><div class="val">R$ ${totVal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</div></div>
+  `;
+}
+
+function exportarRelatorioProdutosXLSX() {
+  const prods = calcularDadosProdutos();
+  if (!prods.length) return alert('Sem dados de produtos para exportação.');
+
+  const headers = ['Código', 'Descrição do Produto', 'Amostras Solicitadas', 'Volume Total', 'Unidade', 'Valor Total Estimado', 'Pedidos Convertidos', '% Sucesso'];
+  const rows = prods.map(p => [
+    p.cod,
+    p.desc,
+    p.amostras,
+    p.volume,
+    p.unid,
+    p.valorTotal,
+    p.convertidos,
+    (p.amostras ? Math.round(p.convertidos / p.amostras * 100) : 0) + '%'
+  ]);
+
+  exportarExcelGenerico(`Relatorio_Produtos_${new Date().toISOString().slice(0,10)}.xlsx`, 'Produtos', headers, rows, [14, 38, 20, 14, 10, 20, 20, 14]);
+}
+
+function exportarRelatorioProdutosPDF() {
+  const prods = calcularDadosProdutos();
+  if (!prods.length) return alert('Sem dados para exportação.');
+
+  const headers = ['Cód', 'Descrição do Produto', 'Qtd Amostras', 'Volume Total', 'Valor Estimado', 'Pedidos', '% Sucesso'];
+  const rows = prods.map(p => [
+    p.cod,
+    p.desc,
+    String(p.amostras),
+    `${p.volume.toFixed(1)} ${p.unid}`,
+    'R$ ' + p.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}),
+    String(p.convertidos),
+    (p.amostras ? Math.round(p.convertidos / p.amostras * 100) : 0) + '%'
+  ]);
+
+  exportarPDFGenerico('Relatório de Amostras por Produto', 'Ranking e Conversão de Produtos Amostrados', headers, rows, 'landscape');
+}
+
+// ── CÁLCULO E RENDERIZAÇÃO: CLIENTES ──
+function calcularDadosClientes() {
+  const lista = (window.cache && window.cache.filtrados) || filtradas || todas;
+  const mapa = {};
+
+  lista.forEach(a => {
+    const chave = String(a.COD_CLIENTE || a.NOME_CLIENTE || 'CLIENTE NÃO IDENTIFICADO').trim().toUpperCase();
+    if (!mapa[chave]) {
+      mapa[chave] = {
+        cod: a.COD_CLIENTE || '—',
+        nome: a.NOME_CLIENTE || '—',
+        cidade: a.CIDADE_CLIENTE || '—',
+        telefone: a.TELEFONE_CLIENTE || '',
+        total: 0,
+        pendentes: 0,
+        pedidos: 0,
+        valorTotal: 0
+      };
+    }
+    mapa[chave].total++;
+    if (a.STATUS === 'Pendente') mapa[chave].pendentes++;
+    if (a.PEDIDO_GERADO_FINAL === 'Sim') mapa[chave].pedidos++;
+
+    try {
+      const ps = JSON.parse(a.PRODUTOS_JSON || '[]');
+      ps.forEach(p => {
+        const precoNum = parseFloat(String(p.preco||'').replace(/[^\d.,]/g,'').replace(',','.'));
+        const qtd = parseFloat(p.qtd) || 1;
+        if (!isNaN(precoNum)) mapa[chave].valorTotal += (precoNum * qtd);
+      });
+    } catch(e) {}
+  });
+
+  return Object.values(mapa).sort((a,b) => b.total - a.total);
+}
+
+function renderRelatorioClientes() {
+  const clis = calcularDadosClientes();
+  const tbody = document.getElementById('tbodyRelCli');
+  tbody.innerHTML = '';
+
+  let totAm = 0, totPend = 0, totPed = 0, totRecorrentes = 0;
+  clis.forEach(c => {
+    totAm += c.total;
+    totPend += c.pendentes;
+    totPed += c.pedidos;
+    const ehRecorrente = c.pendentes >= 2;
+    if (ehRecorrente) totRecorrentes++;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="badge" style="background:#f1f5f9;color:var(--text)">[${c.cod}]</span></td>
+      <td><strong>${c.nome}</strong></td>
+      <td>${c.cidade}</td>
+      <td style="text-align:center"><strong>${c.total}</strong></td>
+      <td style="text-align:center;color:#b91c1c">${c.pendentes}</td>
+      <td style="text-align:center;color:#15803d"><strong>${c.pedidos}</strong></td>
+      <td style="text-align:center">
+        ${ehRecorrente ? '<span class="badge" style="background:#fee2e2;color:#b91c1c"><i class="fas fa-exclamation-triangle"></i> Recorrente</span>' : '<span style="color:#94a3b8">—</span>'}
+      </td>
+      <td style="text-align:right">R$ ${c.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('sumBoxCli').innerHTML = `
+    <div class="rel-sum-item"><div class="lbl">Clientes Atendidos</div><div class="val">${clis.length}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Amostras Enviadas</div><div class="val">${totAm}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Clientes Recorrentes s/ Pedido</div><div class="val" style="color:#b91c1c">${totRecorrentes}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Pedidos Faturados</div><div class="val" style="color:#15803d">${totPed}</div></div>
+  `;
+}
+
+function exportarRelatorioClientesXLSX() {
+  const clis = calcularDadosClientes();
+  if (!clis.length) return alert('Sem dados de clientes para exportação.');
+
+  const headers = ['Cód. Cliente', 'Nome / Razão Social', 'Cidade/UF', 'Telefone', 'Total Amostras', 'Aguardando Feedback', 'Pedidos Faturados', 'Alerta Recorrente', 'Total Estimado Amostras'];
+  const rows = clis.map(c => [
+    c.cod,
+    c.nome,
+    c.cidade,
+    formatarTelefoneTexto(c.telefone),
+    c.total,
+    c.pendentes,
+    c.pedidos,
+    c.pendentes >= 2 ? 'SIM (Amostras Recorrentes)' : 'NÃO',
+    c.valorTotal
+  ]);
+
+  exportarExcelGenerico(`Relatorio_Clientes_${new Date().toISOString().slice(0,10)}.xlsx`, 'Clientes', headers, rows, [14, 35, 22, 18, 16, 20, 18, 26, 22]);
+}
+
+function exportarRelatorioClientesPDF() {
+  const clis = calcularDadosClientes();
+  if (!clis.length) return alert('Sem dados para exportação.');
+
+  const headers = ['Cód', 'Cliente', 'Cidade/UF', 'Amostras', 'Pendentes', 'Pedidos', 'Alerta', 'Total Estimado'];
+  const rows = clis.map(c => [
+    c.cod,
+    c.nome,
+    c.cidade,
+    String(c.total),
+    String(c.pendentes),
+    String(c.pedidos),
+    c.pendentes >= 2 ? 'RECORRENTE' : 'OK',
+    'R$ ' + c.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+  ]);
+
+  exportarPDFGenerico('Relatório de Amostras por Cliente', 'Análise de Histórico e Conversão por Cliente', headers, rows, 'landscape');
+}
+
+// ── CÁLCULO E RENDERIZAÇÃO: GERAL CONSOLIDADO ──
+function renderRelatorioGeral() {
+  const lista = (window.cache && window.cache.filtrados) || filtradas || todas;
+  const total = lista.length;
+  const pend  = lista.filter(a => a.STATUS === 'Pendente').length;
+  const feed  = lista.filter(a => !!a.FEEDBACK_CLIENTE).length;
+  const conv  = lista.filter(a => a.STATUS === 'Convertido em Pedido' || a.PEDIDO_GERADO_FINAL === 'Sim').length;
+  const tx    = total ? Math.round(conv/total*100) : 0;
+
+  document.getElementById('sumBoxGeral').innerHTML = `
+    <div class="rel-sum-item"><div class="lbl">Amostras Filtradas</div><div class="val">${total}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Pendentes</div><div class="val" style="color:#b91c1c">${pend}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Com Feedback</div><div class="val">${feed}</div></div>
+    <div class="rel-sum-item"><div class="lbl">Pedidos Faturados</div><div class="val" style="color:#15803d">${conv} (${tx}%)</div></div>
+  `;
+}
+
+function exportarRelatorioGeralXLSX() {
+  exportarTabelaExcel();
+}
+
+function exportarRelatorioGeralPDF() {
+  exportarTabelaPDF();
+}
+
+// ══════════════════════════════════════════
+// EXPORTAÇÕES DIRETAS (EXCEL .XLSX & PDF NATIVOS)
+// ══════════════════════════════════════════
+function exportarExcelGenerico(nomeArquivo, sheetName, headers, rows, colWidths) {
+  if (!window.XLSX) {
+    alert('Biblioteca Excel ainda carregando. Aguarde 2 segundos e tente novamente.');
+    return;
+  }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  if (colWidths && colWidths.length) {
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+  }
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  XLSX.writeFile(wb, nomeArquivo);
+}
+
+function exportarPDFGenerico(titulo, subtitulo, headers, rows, orientation = 'landscape') {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('Biblioteca PDF ainda carregando. Aguarde 2 segundos e tente novamente.');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF(orientation, 'pt', 'a4');
+
+  // Cabeçalho institucional Ameripan
+  doc.setFillColor(0, 90, 156);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 52, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AMERIPAN — ' + titulo.toUpperCase(), 24, 25);
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  const dataHoje = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  doc.text(subtitulo + ' | Emitido em: ' + dataHoje, 24, 40);
+
+  doc.autoTable({
+    startY: 62,
+    head: [headers],
+    body: rows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [0, 90, 156],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: 4
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      cellPadding: 3.5
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252]
+    },
+    margin: { left: 20, right: 20, bottom: 25 },
+    didDrawPage: function(data) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(130, 130, 130);
+      const str = 'Ameripan Produtos para Panificação Ltda. — Página ' + doc.internal.getNumberOfPages();
+      doc.text(str, 20, doc.internal.pageSize.getHeight() - 10);
+    }
+  });
+
+  doc.save(titulo.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.pdf');
+}
+
+function exportarTabelaExcel() {
+  const dados = (window.cache && window.cache.filtrados) ? window.cache.filtrados : todas;
+  if (!dados.length) {
+    alert('Nenhuma amostra disponível para exportação.');
+    return;
+  }
+
+  const headers = [
+    'ID', 'Data Solicitação', 'Tipo', 'Finalidade', 'Receita', 'Qtd Mínima', 'Unidade',
+    'Cód. Cliente', 'Nome do Cliente', 'Telefone Cliente', 'Cidade/UF',
+    'Vendedor', 'Telefone Vendedor', 'Supervisor', 'Nº Pedido Sol.',
+    'Produtos Enviados', 'Observações', 'Status',
+    'Feedback do Cliente', 'Data Feedback', 'Intenção Pedido', 'Nº Pedido Cliente',
+    'Feedback do Vendedor', 'Pedido Faturado Final', 'Nº Pedido Faturado', 'Data Pedido Faturado'
+  ];
+
+  const rows = dados.map(a => {
     let prodsResumo = '';
     try {
-      const pArr = JSON.parse(a.PRODUTOS_JSON||'[]');
-      prodsResumo = pArr.map(p => `${p.desc||p.cod||''} (${p.qtd||''}${p.unid||''}${p.preco ? ' - ' + formatarMoedaExibicao(p.preco) : ''})`).join(' | ');
-    } catch(e) { prodsResumo = a.PRODUTOS_JSON||''; }
+      const ps = JSON.parse(a.PRODUTOS_JSON || '[]');
+      prodsResumo = ps.map(p => `${p.cod ? p.cod + ' - ' : ''}${p.desc} (${p.qtd} ${p.unid}${p.preco ? ' - ' + p.preco : ''})`).join('; ');
+    } catch(e) {
+      prodsResumo = a.PRODUTOS_JSON || '';
+    }
 
-    const obj = Object.assign({}, a, { PRODUTOS_RESUMO: prodsResumo });
-    rows.push(cols.map(c => `"${(obj[c]||'').toString().replace(/"/g,'""')}"`).join(';'));
+    return [
+      parseInt(a.ID_AMOSTRA) || a.ID_AMOSTRA,
+      a.DATA_SOLICITACAO || '',
+      a.TIPO || '',
+      a.FINALIDADE || '',
+      a.NOME_RECEITA || '',
+      a.QTD_MINIMA_ACEITAVEL || '',
+      a.UNIDADE_QTD || '',
+      a.COD_CLIENTE || '',
+      a.NOME_CLIENTE || '',
+      formatarTelefoneTexto(a.TELEFONE_CLIENTE),
+      a.CIDADE_CLIENTE || '',
+      a.NOME_VENDEDOR || '',
+      formatarTelefoneTexto(a.TELEFONE_VENDEDOR),
+      a.SUPERVISOR || '',
+      a.NUM_PEDIDO_SOLICITACAO || '',
+      prodsResumo,
+      a.OBSERVACOES || '',
+      a.STATUS || '',
+      a.FEEDBACK_CLIENTE || '',
+      a.DATA_FEEDBACK_CLIENTE || '',
+      a.PEDIDO_CLIENTE || a.PEDIDO_GERADO_CLIENTE || '',
+      a.NUM_PEDIDO_CLIENTE || '',
+      a.FEEDBACK_VENDEDOR || '',
+      a.PEDIDO_GERADO_FINAL || '',
+      a.NUM_PEDIDO_FINAL || '',
+      a.DATA_PEDIDO_FINAL || ''
+    ];
   });
-  const blob = new Blob(['\uFEFF'+rows.join('\n')], {type:'text/csv;charset=utf-8'});
-  const url  = URL.createObjectURL(blob);
-  const el   = document.createElement('a');
-  el.href    = url; el.download = `amostras_${new Date().toISOString().slice(0,10)}.csv`;
-  el.click(); URL.revokeObjectURL(url);
+
+  const colWidths = [8, 16, 16, 22, 20, 10, 8, 12, 32, 18, 20, 26, 18, 20, 16, 42, 28, 16, 32, 16, 16, 16, 32, 14, 16, 16];
+  exportarExcelGenerico(`Amostras_Ameripan_${new Date().toISOString().slice(0,10)}.xlsx`, 'Amostras', headers, rows, colWidths);
+}
+
+function exportarTabelaPDF() {
+  const dados = (window.cache && window.cache.filtrados) ? window.cache.filtrados : todas;
+  if (!dados.length) {
+    alert('Nenhuma amostra disponível para exportação.');
+    return;
+  }
+
+  const headers = ['ID', 'Data', 'Tipo', 'Cliente', 'Cidade', 'Vendedor', 'Status', 'Feedback Cliente', 'Pedido Final'];
+  const rows = dados.map(a => {
+    let fbResumo = a.FEEDBACK_CLIENTE ? `"${a.FEEDBACK_CLIENTE.slice(0, 40)}..."` : '—';
+    return [
+      '#' + a.ID_AMOSTRA,
+      (a.DATA_SOLICITACAO || '').slice(0, 10),
+      a.TIPO || '',
+      a.NOME_CLIENTE || '',
+      a.CIDADE_CLIENTE || '',
+      a.NOME_VENDEDOR || '',
+      a.STATUS || '',
+      fbResumo,
+      a.PEDIDO_GERADO_FINAL === 'Sim' ? 'SIM #' + (a.NUM_PEDIDO_FINAL||'') : 'NÃO'
+    ];
+  });
+
+  exportarPDFGenerico('Relatório Geral de Solicitações de Amostra', 'Listagem Consolidada Oficial', headers, rows, 'landscape');
 }
 
 // ══════════════════════════════════════════
