@@ -2353,6 +2353,72 @@
     .chat-product-btn-info:hover {
       background: #e2e8f0;
     }
+    .chat-product-cards-wrap {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .chat-btn-add-all {
+      width: 100%;
+      background: linear-gradient(135deg, var(--or) 0%, var(--ord) 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      box-shadow: 0 3px 10px rgba(244, 121, 32, 0.28);
+      transition: all 0.2s ease;
+      margin: 4px 0;
+    }
+    .chat-btn-add-all:hover {
+      background: linear-gradient(135deg, var(--ord) 0%, #c2410c 100%);
+      box-shadow: 0 4px 14px rgba(244, 121, 32, 0.4);
+      transform: translateY(-1px);
+    }
+    .chat-btn-add-all:active {
+      transform: scale(0.98);
+    }
+    .chat-btn-add-all.added {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
+      pointer-events: none;
+    }
+    .chat-product-btn-media {
+      padding: 4px 6px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-left: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      border: none;
+      transition: all 0.15s ease;
+    }
+    .chat-product-btn-media.video {
+      background: #ede9fe;
+      color: #7c3aed;
+    }
+    .chat-product-btn-media.video:hover {
+      background: #7c3aed;
+      color: #ffffff;
+    }
+    .chat-product-btn-media.ficha {
+      background: #e0f2fe;
+      color: #0284c7;
+    }
+    .chat-product-btn-media.ficha:hover {
+      background: #0284c7;
+      color: #ffffff;
+    }
     .chat-typing-indicator {
       display: flex;
       align-items: center;
@@ -7324,6 +7390,9 @@
     window.removeItem = removeItem;
     window.setFormMode = setFormMode;
     window.openImgEdit = openImgEdit; // necessário para onclick inline nos cards mobile
+    window.adicionarTodosItensChat = adicionarTodosItensChat;
+    window.adicionarItemPorSku = adicionarItemPorSku;
+    window.abrirDossieProduto = abrirDossieProduto;
     /* ══════════════════════════════════════════════════════════════════
        MÓDULO: CATÁLOGO ENRIQUECIDO, DOSSIÊ DE PRODUTO & IA GEMINI
     ══════════════════════════════════════════════════════════════════ */
@@ -7893,21 +7962,21 @@
           model = (customInp && customInp.value.trim()) ? customInp.value.trim() : "gemini-3.5-flash-lite";
         }
 
-        // Cria resumo compacto do catálogo para contexto da IA
-        let resumoCatalogo = [];
-        if (S.catalogoEnriquecido && S.catalogoEnriquecido.size > 0) {
-          S.catalogoEnriquecido.forEach((item, sku) => {
-            resumoCatalogo.push(`${sku}: ${item.desc} [${item.ramo}]`);
-          });
-        } else if (S.cat) {
-          S.cat.slice(0, 300).forEach(i => {
-            resumoCatalogo.push(`${i.code}: ${i.desc} [${i.ramo}]`);
-          });
+        // Carregamento resiliente do catálogo enriquecido caso ainda não concluído
+        if (!S.catalogoEnriquecidoCarregado && S.catalogoEnriquecido.size === 0) {
+          try { await carregarCatalogoEnriquecido(); } catch(e){}
         }
-        const catalogoTxt = resumoCatalogo.slice(0, 250).join(" | ");
 
-        const systemInstruction = `Você é o Copilot Comercial e Consultor Técnico Especialista em Sorveteria da Distribuidora.
-Suas diretrizes de conhecimento de mercado e ciência do sorvete:
+        // 1. Gera / Recupera Índice Global Compacto de 100% dos 1568 SKUs
+        const catalogoGlobalTxt = obterIndiceCatalogoGlobal();
+
+        // 2. Extrai Dossiê Técnico Detalhado para os termos da pergunta
+        const dossieContexto = buscarDossieRelevante(textoPrompt);
+
+        const systemInstruction = `Você é o Copilot Comercial e Consultor Técnico Especialista em Alimentos e Sorveteria da Distribuidora Ameripan.
+Você possui conhecimento profundo de engenharia de caldas, ciência do sorvete e ACESSO TOTAL a 100% do catálogo de produtos da distribuidora (1568 itens).
+
+Suas diretrizes de conhecimento e atendimento:
 
 1. CIÊNCIA DO SORVETE & ENGENHARIA DE CALDAS (CURSO SORVETE ZERO DEFEITOS + EDU SORVETEIRO RAIZ):
 - Parâmetros Ideais por Categoria de Calda:
@@ -7947,16 +8016,22 @@ Suas diretrizes de conhecimento de mercado e ciência do sorvete:
 - Custo por Litro de Sorvete = (Custo_Kg_Calda * Densidade_Calda) / (1 + Overrun% / 100).
 - Elevar o extrato seco com Glucose em Pó Selecta [720] ou Dextrose reduz formação de gelo e permite maior estabilidade de ar (overrun) de forma econômica, barateando o custo por litro.
 
-5. DIRETRIZES POR RAMO COMERCIAL:
+5. DIRETRIZES DE ENXOVAIS E LISTAS FIXAS HOMOLOGADAS (SEMPRE SEGUIR ESTAS LISTAS QUANDO O USUÁRIO PERGUNTAR POR ESTES RAMOS):
+- Top Açaiterias: Baldes de açaí, granola, leite condensado, leite em pó, coberturas Selecta 1,3kg, recheios cremosos de balcão (Chocoavelã [1742], Leitinho), copos descartáveis e tampas bolha.
+- Sorveteria Fábrica: Gordura de palma 20kg [1394], leite em pó 25kg [3370], glucose 25kg [720], cacau 10kg, Emustab [3], Super Liga Neutra [716], Aqua 5, Algemix saborizantes em pó, palitos de picolé e caixas.
 - Sorveteria Loja/Buffet: Casquinhas, copos/tampas bolha, pazinhas, coberturas Selecta 1,3kg/300g, recheios cremosos de balcão (Chocoavelã [1742], Leitinho). NÃO consome gordura 20kg nem estabilizante puro.
-- Sorveteria Fábrica: Gordura de palma 20kg [1394], leite em pó 25kg [3370], glucose 25kg [720], cacau 10kg, Emustab [3], Liga Neutra [716], Aqua 5, Algemix saborizantes em pó, palitos de picolé e caixas.
-- Açaiterias: Baldes de açaí, granola, leite condensado, leite em pó, coberturas Selecta 1,3kg, recheios cremosos (Chocoavelã [1742]), copos e tampas bolha.
 - Padarias e Confeitarias: Pré-misturas para bolos/pães, fermentos, farinhas, recheios forneáveis, chocolates e chantilly UHT.
 - Venda Cruzada Chocoavelã [1742]: Cobertura de chocolate 1,3kg, cobertura de morango, copos tampa bolha e leite em pó.
 
-SEMPRE cite os códigos dos produtos entre colchetes, ex: [1742], [716], [3], para que o usuário possa adicionar com 1 clique.
-Se o usuário pedir explicitamente para adicionar à cotação/lista, execute a tool adicionar_produtos_cotacao com os códigos e quantidades.
-Seja direto, autoritário tecnicamente, comercialmente persuasivo e sempre amigável.`;
+6. DIRETRIZES DE ACESSO TOTAL AO CATÁLOGO COMPLETO (1568 SKUs DISPONÍVEIS):
+- Você tem acesso à relação COMPLETA de 1568 produtos da distribuidora (todos os departamentos: confeitaria, panificação, sorveteria, descartáveis, condimentos, chocolates, etc.).
+- As listas do item 5 são as recomendações prioritárias para aqueles segmentos. Porém, se o usuário perguntar sobre QUALQUER produto fora dessas listas (ex: pasta de pistache, farinha integral, fermento fresco, cacau black, embalagens especiais, etc.), consulte a relação completa de produtos e o dossiê técnico fornecidos no contexto.
+- Se o usuário perguntar se um produto tem VÍDEO DEMONSTRATIVO ou FICHA TÉCNICA OFICIAL (PDF):
+  * Consulte o Dossiê Técnico ou o marcador [VÍDEO] / [FICHA] na lista de produtos.
+  * Se tiver vídeo ou ficha: confirme com entusiasmo e FORNEÇA O LINK DIRETO no texto em formato markdown [Assistir Vídeo](URL) ou [Baixar Ficha Técnica](URL).
+  * Se não tiver: informe com clareza que aquele produto específico ainda não tem vídeo demonstrativo ou ficha técnica cadastrados na distribuidora.
+- Ao sugerir ou citar qualquer produto, SEMPRE inclua o código SKU entre colchetes, ex: [1742], [716], [3], [549], para que a interface gere os mini-cards com botões de adicionar em 1 clique e botões de vídeo/ficha técnica.
+- Se o usuário pedir para adicionar produtos à cotação/lista, execute a ferramenta adicionar_produtos_cotacao com os códigos e quantidades.`;
 
         // Tools declaradas para Function Calling
         const tools = [{
@@ -7990,11 +8065,21 @@ Seja direto, autoritário tecnicamente, comercialmente persuasivo e sempre amig�
 
         const payload = {
           system_instruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: "user", parts: [{ text: `Pergunta do usuário: "${textoPrompt}". Catálogo de referência (amostra de SKUs): ${catalogoTxt}` }] }],
+          contents: [{
+            role: "user",
+            parts: [{
+              text: `Pergunta do cliente/consultor: "${textoPrompt}".
+${dossieContexto}
+
+---
+CATÁLOGO COMPLETO DE PRODUTOS DA DISTRIBUIDORA (${S.catalogoEnriquecido?.size || 1568} SKUs - Marcadores [VÍDEO] e [FICHA]):
+${catalogoGlobalTxt}`
+            }]
+          }],
           tools: tools,
           generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1500
+            temperature: 0.35,
+            maxOutputTokens: 2500
           }
         };
 
@@ -8065,6 +8150,150 @@ Seja direto, autoritário tecnicamente, comercialmente persuasivo e sempre amig�
       }
     }
 
+    // Variável de Cache do Catálogo Global Completo
+    let _cachedCatalogoGlobalTxt = "";
+
+    function obterIndiceCatalogoGlobal() {
+      if (_cachedCatalogoGlobalTxt) return _cachedCatalogoGlobalTxt;
+      const linhas = [];
+      const mapaFonte = (S.catalogoEnriquecido && S.catalogoEnriquecido.size > 0) ? S.catalogoEnriquecido : S.cmap;
+      if (mapaFonte && mapaFonte.size > 0) {
+        mapaFonte.forEach((item, sku) => {
+          const desc = item.desc || "";
+          const ramo = item.ramo || "geral";
+          const flags = [];
+          if (item.video_url || item.videoUrl) flags.push("VÍDEO");
+          if (item.ficha_url || item.fichaUrl) flags.push("FICHA");
+          const flagStr = flags.length > 0 ? ` [${flags.join("|")}]` : "";
+          linhas.push(`[${sku}] ${desc} (${ramo})${flagStr}`);
+        });
+      }
+      _cachedCatalogoGlobalTxt = linhas.join("\n");
+      return _cachedCatalogoGlobalTxt;
+    }
+
+    function normalizarTextoBusca(t) {
+      return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    }
+
+    function buscarDossieRelevante(textoPrompt) {
+      if (!textoPrompt) return "";
+      const promptNorm = normalizarTextoBusca(textoPrompt);
+      const palavrasChave = promptNorm.split(/[\s,.;:?!]+/).filter(w => w.length >= 3);
+      const skusMencionados = promptNorm.match(/\b\d{2,6}\b/g) || [];
+
+      const mapaFonte = (S.catalogoEnriquecido && S.catalogoEnriquecido.size > 0) ? S.catalogoEnriquecido : S.cmap;
+      if (!mapaFonte || mapaFonte.size === 0) return "";
+
+      const scores = new Map();
+
+      mapaFonte.forEach((item, sku) => {
+        let score = 0;
+        const skuStr = String(sku).trim();
+        const descNorm = normalizarTextoBusca(item.desc);
+        const ramoNorm = normalizarTextoBusca(item.ramo);
+        const catNorm = normalizarTextoBusca(item.categoria);
+        const sobreNorm = normalizarTextoBusca(item.sobre);
+        const funcaoNorm = normalizarTextoBusca(item.funcao);
+
+        // Se o SKU exato foi citado na pergunta
+        if (skusMencionados.includes(skuStr)) score += 100;
+
+        palavrasChave.forEach(palavra => {
+          if (descNorm.includes(palavra)) score += 15;
+          if (skuStr.includes(palavra)) score += 20;
+          if (ramoNorm.includes(palavra)) score += 5;
+          if (catNorm.includes(palavra)) score += 5;
+          if (funcaoNorm.includes(palavra)) score += 3;
+          if (sobreNorm.includes(palavra)) score += 2;
+        });
+
+        // Pontuação extra para itens com vídeo ou ficha quando perguntados
+        if (promptNorm.includes("video") && (item.video_url || item.videoUrl)) score += 8;
+        if ((promptNorm.includes("ficha") || promptNorm.includes("pdf")) && (item.ficha_url || item.fichaUrl)) score += 8;
+
+        if (score > 0) scores.set(skuStr, { item, score });
+      });
+
+      // Pega até 20 produtos com maior relevância
+      const topItens = Array.from(scores.entries())
+        .sort((a, b) => b[1].score - a[1].score)
+        .slice(0, 20)
+        .map(e => e[1].item);
+
+      if (topItens.length === 0) return "";
+
+      const dossies = topItens.map(it => {
+        const sku = it.code || it.sku;
+        const video = (it.video_url || it.videoUrl) ? `Sim (${it.video_url || it.videoUrl})` : "Não cadastrado";
+        const ficha = (it.ficha_url || it.fichaUrl) ? `Sim (${it.ficha_url || it.fichaUrl})` : "Não cadastrada";
+        const dosagem = it.dosagem || "Consulte a embalagem ou instruções técnicas";
+        const funcao = it.funcao || "Uso comercial e industrial";
+        const sobre = it.sobre || "Insumo homologado de alto padrão";
+        const emb = `${it.unidade || it.un || 'UN'} (Emb: ${it.embalagem || 1}, Peso: ${it.peso_bruto || '—'}kg)`;
+
+        return `• [${sku}] ${it.desc}:
+   - Segmento/Ramo: ${it.ramo || 'Geral'} | Embalagem: ${emb}
+   - Possui Vídeo Demonstrativo: ${video}
+   - Possui Ficha Técnica PDF: ${ficha}
+   - Dosagem Recomendada: ${dosagem}
+   - Função & Aplicação: ${funcao}
+   - Sobre o Produto: ${sobre}`;
+      });
+
+      return `\n\n### DOSSIÊ TÉCNICO DE PRODUTOS RELEVANTES À PERGUNTA (DISPONÍVEIS NO CATÁLOGO COMPLETO):\n${dossies.join("\n")}`;
+    }
+
+    // Adiciona todos os itens sugeridos pelo Copilot em 1 clique
+    function adicionarTodosItensChat(skus, batchId) {
+      if (!skus || !Array.isArray(skus) || skus.length === 0) return;
+
+      let adicionadosCount = 0;
+      skus.forEach(sku => {
+        const skuStr = String(sku).trim();
+        const itemEnr = S.catalogoEnriquecido?.get(skuStr);
+        const catItem = S.cmap?.get(skuStr);
+
+        const desc = itemEnr?.desc || catItem?.desc || `Produto ${skuStr}`;
+        const un = itemEnr?.unidade || catItem?.un || "UN";
+        const allEans = itemEnr?.all_eans || catItem?.eans || [];
+        const primaryEan = itemEnr?.primary_ean || catItem?.primaryEan || (allEans[0] || "");
+        const price = itemEnr?.preco_oferta || itemEnr?.preco_tabela || 0;
+
+        const existing = S.q.items.find(i => String(i.code).trim() === skuStr);
+        if (existing) {
+          existing.qty += 1;
+        } else {
+          S.q.items.push({
+            code: skuStr,
+            desc: desc,
+            bar: primaryEan,
+            allEans: allEans,
+            un: un,
+            qty: 1,
+            price: price
+          });
+        }
+        adicionadosCount++;
+      });
+
+      if (typeof persist === "function") persist();
+      if (typeof render === "function") render();
+      if (typeof updateExportBtnUI === "function") updateExportBtnUI();
+      if (typeof updateCatalogExportBtnUI === "function") updateCatalogExportBtnUI();
+
+      // Sincroniza visualmente ambos os botões (topo e fim)
+      if (batchId) {
+        const btns = document.querySelectorAll(`button[data-batch-id="${batchId}"]`);
+        btns.forEach(b => {
+          b.classList.add("added");
+          b.innerHTML = `<i class="fa fa-check-circle"></i> Todos os ${adicionadosCount} Itens Adicionados!`;
+        });
+      }
+
+      toast(`🎉 ${adicionadosCount} produto(s) adicionados à sua cotação com sucesso! ✓`);
+    }
+
     function renderizarMensagemChat(remetente, texto, skusCards = []) {
       const chatArea = document.getElementById("geminiChatMessages");
       if (!chatArea) return;
@@ -8072,41 +8301,74 @@ Seja direto, autoritário tecnicamente, comercialmente persuasivo e sempre amig�
       const msgDiv = document.createElement("div");
       msgDiv.className = `chat-msg ${remetente}`;
 
-      // Formatação básica de markdown para HTML
+      // Formatação básica de markdown para HTML com suporte a links
       let html = texto
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--bl);font-weight:700;text-decoration:underline;">$1</a>')
         .replace(/\n/g, '<br>');
 
       msgDiv.innerHTML = html;
 
-      // Se houver produtos identificados no texto, renderiza mini-cards clicáveis
+      // Se houver produtos identificados no texto, renderiza bloco com botão Adicionar Todos no TOPO e no FIM
       if (skusCards && skusCards.length > 0) {
         const cardsWrap = document.createElement("div");
-        cardsWrap.style.marginTop = "8px";
-        cardsWrap.style.display = "flex";
-        cardsWrap.style.flexDirection = "column";
-        cardsWrap.style.gap = "4px";
+        cardsWrap.className = "chat-product-cards-wrap";
 
+        const batchId = "batch_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+        const totalItens = skusCards.length;
+        const textoQtd = totalItens === 1 ? "1 item" : `${totalItens} itens`;
+
+        // Função geradora de botão 'Adicionar Todos'
+        const criarBtnAddAll = (posicao) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = `chat-btn-add-all ${posicao}`;
+          btn.setAttribute("data-batch-id", batchId);
+          btn.innerHTML = `<i class="fa fa-cart-plus"></i> Adicionar Todos (${textoQtd}) à Cotação`;
+          btn.onclick = () => adicionarTodosItensChat(skusCards, batchId);
+          return btn;
+        };
+
+        // 1. Botão Adicionar Todos no TOPO
+        cardsWrap.appendChild(criarBtnAddAll("top"));
+
+        // 2. Mini-cards individuais dos produtos recomendados
         skusCards.forEach(sku => {
           const item = S.catalogoEnriquecido?.get(sku) || S.cmap?.get(sku);
           if (item) {
             const card = document.createElement("div");
             card.className = "chat-product-card";
             const imgUrl = item.img_url || item.imgUrl || "https://placehold.co/40x40/e8f0fa/004890?text=" + sku;
+            const videoUrl = item.video_url || item.videoUrl;
+            const fichaUrl = item.ficha_url || item.fichaUrl;
+
+            let mediaBtnsHtml = "";
+            if (videoUrl) {
+              mediaBtnsHtml += `<a href="${videoUrl}" target="_blank" class="chat-product-btn-media video" title="Assistir Vídeo Demonstrativo"><i class="fa fa-play-circle"></i></a>`;
+            }
+            if (fichaUrl) {
+              mediaBtnsHtml += `<a href="${fichaUrl}" target="_blank" class="chat-product-btn-media ficha" title="Ficha Técnica Oficial (PDF)"><i class="fa fa-file-pdf"></i></a>`;
+            }
+
             card.innerHTML = `
               <img src="${imgUrl}" onerror="this.src='https://placehold.co/40x40/e8f0fa/004890?text=${sku}';" />
               <div class="chat-product-info">
                 <span class="chat-product-sku">#${sku}</span> - <span class="chat-product-desc">${item.desc}</span>
               </div>
               <div style="display:flex;align-items:center;">
+                ${mediaBtnsHtml}
                 <button class="chat-product-btn-add" type="button" onclick="adicionarItemPorSku('${sku}', 1)" title="Adicionar à cotação">+ Add</button>
-                <button class="chat-product-btn-info" type="button" onclick="abrirDossieProduto('${sku}')" title="Ver Dossiê e Vídeo"><i class="fa fa-eye"></i></button>
+                <button class="chat-product-btn-info" type="button" onclick="abrirDossieProduto('${sku}')" title="Ver Dossiê Completo"><i class="fa fa-eye"></i></button>
               </div>
             `;
             cardsWrap.appendChild(card);
           }
         });
+
+        // 3. Botão Adicionar Todos no FIM
+        cardsWrap.appendChild(criarBtnAddAll("bottom"));
+
         msgDiv.appendChild(cardsWrap);
       }
 
