@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analítica Política 2026 — Inteligência Eleitoral & Parlamentar em Tempo Real</title>
+  <meta name="description" content="Resultados oficiais das Eleições Presidenciais 2026 e análise de eficiência de parlamentares federais em tempo real." />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./assets/css/styles.css" />
+</head>
+<body>
+
+  <!-- Overlay de Loading com Padrão Dual-Safety -->
+  <div id="loading-overlay" class="loading-overlay hidden" style="display: none;">
+    <div class="spinner"></div>
+    <div id="loading-msg" style="color: #f8fafc; font-weight: 700; font-size: 0.95rem;">Carregando dados oficiais...</div>
+  </div>
+
+  <!-- Faixa Permanente de Simulação -->
+  <div id="simulation-banner" class="banner-simulation hidden" style="display: none;">
+    ⚠️ SIMULAÇÃO, DADOS NÃO OFICIAIS — REPLAY DEMONSTRATIVO DE TOTALIZAÇÃO
+  </div>
+
+  <!-- Header Superior da Aplicação -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="logo-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">ANALÍTICA POLÍTICA 2026</h1>
+          <div class="brand-sub">
+            <span class="live-indicator"><span class="live-dot"></span>OFICIAL TSE</span>
+            <span>Inteligência Eleitoral & Cívica</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <select id="select-election" class="election-select" aria-label="Selecione o turno da eleição">
+          <option value="6258">2º Turno Presidencial (Ao Vivo)</option>
+          <option value="6260">2º Turno Governadores (6 Estados)</option>
+          <option value="6257">1º Turno Federal (Consolidado 100%)</option>
+        </select>
+
+        <select id="select-gov-state" class="election-select hidden" style="display: none;" aria-label="Selecione o estado para governador">
+          <option value="DF">DF — Distrito Federal</option>
+          <option value="AC">AC — Acre</option>
+          <option value="AM">AM — Amazonas</option>
+          <option value="ES">ES — Espírito Santo</option>
+          <option value="RN">RN — Rio Grande do Norte</option>
+          <option value="TO">TO — Tocantins</option>
+        </select>
+
+        <button id="btn-theme-toggle" class="btn-ctrl" title="Alternar tema claro/escuro">
+          <span id="theme-icon">🌙</span>
+          <span id="theme-label">Escuro</span>
+        </button>
+
+        <button id="btn-simulation-toggle" class="btn-ctrl" title="Alternar modo simulação">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Simulação
+        </button>
+
+        <button id="btn-refresh-now" class="btn-ctrl" title="Atualizar agora">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Sincronizar
+        </button>
+
+        <button id="btn-share-view" class="btn-ctrl" title="Compartilhar visão atual">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          Compartilhar
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Barra de Status e Horário da Emissão -->
+  <div id="banner-status" class="banner-status-msg">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span class="status-badge status-waiting">CONECTANDO</span>
+      <span>Estabelecendo conexão direta com a CDN oficial do Tribunal Superior Eleitoral...</span>
+    </div>
+    <div id="telemetry-status">Conectando...</div>
+  </div>
+
+  <!-- Conteúdo Principal -->
+  <main class="main-content">
+    
+    <!-- Navegação por Abas -->
+    <nav class="nav-tabs" aria-label="Abas de visualização">
+      <button class="nav-tab-btn active" data-tab="apuracao">
+        🗳️ Apuração Presidencial
+      </button>
+      <button class="nav-tab-btn" data-tab="mapa">
+        🗺️ Mapa das 27 UFs & Cidades
+      </button>
+      <button class="nav-tab-btn" data-tab="comparador">
+        📊 Comparador & Tabela Completa
+      </button>
+      <button class="nav-tab-btn" data-tab="parlamentares">
+        🏛️ Módulo Parlamentar (594 Eleitos)
+      </button>
+    </nav>
+
+    <!-- ABA 1: APURAÇÃO PRESIDENCIAL -->
+    <section id="section-apuracao" style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <!-- Placar Central -->
+      <div id="scoreboard-container" class="scoreboard-section">
+        <!-- Renderizado dinamicamente por PlacarUI -->
+      </div>
+
+      <!-- Faixa de Métricas Complementares -->
+      <div id="metrics-strip" class="metrics-strip">
+        <!-- Renderizado dinamicamente por PlacarUI -->
+      </div>
+
+      <!-- PAINEL ANALÍTICO BENTO GRID (Componentes SVG Nativos do 21st.dev) -->
+      <div id="bento-grid-container" class="bento-grid">
+        <!-- Card 1: Sparkline Bento -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div>
+              <div class="bento-card-title">Progressão Temporal da Apuração</div>
+              <div class="bento-card-sub">Curva suave da apuração acumulada no Brasil</div>
+            </div>
+            <span class="live-indicator" style="font-size: 0.65rem;">AO VIVO</span>
+          </div>
+          <div id="bento-sparkline-svg" style="height: 100px; width: 100%; margin-top: 0.5rem;"></div>
+        </div>
+
+        <!-- Card 2: Treemap Bento -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div>
+              <div class="bento-card-title">Treemap de Colégios Eleitorais</div>
+              <div class="bento-card-sub">Peso proporcional dos maiores colégios no eleitorado</div>
+            </div>
+            <span class="status-badge status-partial" style="font-size: 0.65rem;">ELEITORADO</span>
+          </div>
+          <div id="bento-treemap-svg" style="height: 100px; width: 100%; margin-top: 0.5rem;"></div>
+        </div>
+
+        <!-- Card 3: Radar Polar Cívico -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div>
+              <div class="bento-card-title">Radar de Integridade e Eficiência</div>
+              <div class="bento-card-sub">Indicadores consolidados de participação e transparência</div>
+            </div>
+            <span class="status-badge status-concluded" style="font-size: 0.65rem;">CÍVICO</span>
+          </div>
+          <div id="bento-radar-svg" style="height: 140px; width: 100%; margin: 0 auto;"></div>
+        </div>
+
+        <!-- Card 4: Detalhe de Margem Bento -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div>
+              <div class="bento-card-title">Termômetro de Margem</div>
+              <div class="bento-card-sub">Diferença matemática entre os líderes</div>
+            </div>
+            <span class="status-badge status-partial" style="font-size: 0.65rem;">MARGEM</span>
+          </div>
+          <div id="bento-margin-text" style="display: flex; flex-direction: column; justify-content: center; height: 100px;"></div>
+        </div>
+      </div>
+
+      <!-- Gráfico de Evolução Acumulada (Canvas) -->
+      <div style="background-color: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <div style="font-size: 1.15rem; font-weight: 800;">Curva de Evolução Temporal da Totalização</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Acompanhamento da margem entre os candidatos líderes em tempo real</div>
+          </div>
+          <div style="display: flex; gap: 1rem; font-size: 0.8rem; font-weight: 700;">
+            <span style="color: var(--c-bolsonaro-light);">● Flávio Bolsonaro (22)</span>
+            <span style="color: var(--c-lula-light);">● Lula (13)</span>
+          </div>
+        </div>
+        <div style="position: relative; width: 100%; height: 240px;">
+          <canvas id="timeline-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: MAPA INTERATIVO -->
+    <section id="section-mapa" class="hidden" style="display: none; flex-direction: column; gap: 1rem;">
+      <div class="map-view-container">
+        
+        <!-- Cartão do Mapa SVG -->
+        <div class="map-card">
+          <div class="map-controls-bar">
+            <div style="font-size: 1.05rem; font-weight: 800;">Mapa Político Eleitoral das 27 UFs</div>
+            
+            <div class="layer-select-group">
+              <button class="layer-btn active" data-layer="winner_margin">Líder & Margem</button>
+              <button class="layer-btn" data-layer="leader_pct">% Votos Líder</button>
+              <button class="layer-btn" data-layer="sections_pct">% Seções Apuradas</button>
+              <button class="layer-btn" data-layer="turnout">Comparecimento</button>
+              <button class="layer-btn" data-layer="blank_null">Brancos / Nulos</button>
+            </div>
+          </div>
+
+          <div id="svg-map-container" class="svg-map-wrapper">
+            <!-- Renderizado dinamicamente por BrazilMap -->
+          </div>
+        </div>
+
+        <!-- Painel Lateral da UF / Município -->
+        <div id="detail-panel-container" class="detail-panel-card">
+          <!-- Renderizado dinamicamente por BrazilMap -->
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ABA 3: COMPARADOR & TABELA COMPLETA -->
+    <section id="section-comparador" class="hidden" style="display: none; flex-direction: column; gap: 1rem;">
+      <div id="side-by-side-container">
+        <!-- Renderizado dinamicamente por ComparadorUI -->
+      </div>
+
+      <div id="analytical-table-container">
+        <!-- Renderizado dinamicamente por ComparadorUI -->
+      </div>
+    </section>
+
+    <!-- ABA 4: MÓDULO PARLAMENTAR -->
+    <section id="section-parlamentar" class="parlamentar-section hidden" style="display: none;">
+      <!-- Card da Fórmula Interativa -->
+      <div id="efficiency-formula-card" class="efficiency-formula-card">
+        <!-- Sliders gerados por ParlamentaresUI -->
+      </div>
+
+      <!-- Grid e Filtros de Parlamentares -->
+      <div id="parlamentares-container">
+        <!-- Renderizado dinamicamente por ParlamentaresUI -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Tooltip Flutuante do Mapa -->
+  <div id="map-tooltip" class="map-tooltip hidden" style="display: none;"></div>
+
+  <!-- Modal Detalhes do Parlamentar (Dual-Safety) -->
+  <div id="parlamentar-modal" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-content">
+      <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
+      <h2 id="parlamentar-modal-title" style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Ficha Parlamentar</h2>
+      <div id="parlamentar-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal Detalhes do Município (Dual-Safety) -->
+  <div id="municipio-modal" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-content">
+      <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
+      <h2 id="municipio-modal-title" style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Resultado no Município</h2>
+      <div id="municipio-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal Compartilhar Visão (Dual-Safety) -->
+  <div id="share-modal" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-content" style="max-width: 480px;">
+      <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
+      <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Compartilhar Esta Visão</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        O link abaixo preserva exatamente a eleição, a aba e os filtros ativos:
+      </p>
+      <input type="text" id="share-url-input" class="search-input" readonly style="margin-top: 0.5rem;" />
+      <button id="btn-copy-share" class="btn-ctrl" style="background-color: var(--c-bolsonaro); color: #fff; justify-content: center; padding: 0.6rem; margin-top: 0.75rem;">
+        Copiar Link
+      </button>
+    </div>
+  </div>
+
+  <!-- Rodapé Institucional -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <div>
+        <strong>Analítica Política 2026</strong> — Versão 100% Estática (GitHub Pages Ready).
+        Fontes: <em>TSE Dados Abertos, Câmara dos Deputados, Senado Federal e IBGE</em>.
+      </div>
+      <div>
+        Eleição 1º Turno (ID 6257) • 2º Turno (ID 6258) • Sem fins lucrativos ou partidários.
+      </div>
+    </div>
+  </footer>
+
+  <!-- Carregamento do Script Principal como Módulo ES6 -->
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+</html>
