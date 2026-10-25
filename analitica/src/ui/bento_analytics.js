@@ -132,7 +132,7 @@ export class BentoAnalytics {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    let pts = historyPoints;
+    let pts = (historyPoints || []).map(p => typeof p === 'number' ? p : (p.apurado || 0));
     if (!pts || pts.length < 2) {
       // Pontos ilustrativos de progressão contínua caso a apuração esteja iniciando
       pts = [0, 8, 19, 32, 45, 58, 72, 85, 94, 100];
@@ -235,5 +235,19 @@ export class BentoAnalytics {
         <g class="radar-labels" style="color: var(--text-main);">${labelTexts}</g>
       </svg>
     `;
+  }
+
+  /**
+   * Helper que adapta estatísticas oficiais do TSE para o Radar Polar Cívico
+   */
+  static renderCivicRadar(containerId, stats = null) {
+    let metrics = [85, 90, 80, 95, 88];
+    if (stats && stats.percentApuradoNum > 0) {
+      const ap = Math.min(100, Math.round(stats.percentApuradoNum));
+      const turn = Math.min(100, Math.round(parseFloat(stats.percentComparecimento?.replace(',', '.') || '80')));
+      const val = Math.min(100, Math.round(parseFloat(stats.percentValidos?.replace(',', '.') || '90')));
+      metrics = [ap, turn, val, 95, 88];
+    }
+    return this.renderRadarPolar(containerId, metrics);
   }
 }

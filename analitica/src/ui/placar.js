@@ -1,6 +1,7 @@
 /**
  * Controlador do Placar Presidencial & Bento Analytics ao Vivo
- * Renderiza dados oficiais, barras proporcionais, métricas de apuração e componentes Bento em SVG puro.
+ * Renderiza dados oficiais, fotos oficiais de alta resolução, barras proporcionais,
+ * métricas de apuração e componentes Bento em SVG puro.
  */
 
 import { TseClient } from '../tse_client.js';
@@ -46,20 +47,42 @@ export class PlacarUI {
     }
 
     if (this.scoreboardEl) {
+      const isGov = State.electionId === '6260';
+      const title = isGov ? `Governador ${State.govUf} 2026 — 2º Turno Oficial` : 'Eleição Presidencial 2026 — 2º Turno Oficial';
+      const sub = isGov ? `Disputa estadual de 2º turno (ID Oficial: 6260)` : 'Aguardando primeiras urnas totalizadas pelo TSE (ID Oficial: 6258)';
+
+      let name1 = 'FLÁVIO BOLSONARO', num1 = 'PL (22)', foto1 = './public/fotos/flavio_bolsonaro.jpg', av1 = 'FB';
+      let name2 = 'LULA', num2 = 'PT (13)', foto2 = './public/fotos/lula.jpg', av2 = 'L';
+
+      if (isGov) {
+        const uf = State.govUf.toLowerCase();
+        foto1 = `./public/fotos/${uf}_10.jpg`;
+        foto2 = `./public/fotos/${uf}_11.jpg`;
+        name1 = 'CANDIDATO 1';
+        num1 = '2º Turno';
+        name2 = 'CANDIDATO 2';
+        num2 = '2º Turno';
+        av1 = 'C1';
+        av2 = 'C2';
+      }
+
       this.scoreboardEl.innerHTML = `
-        <div style="text-align: center; padding: 2.5rem 1rem;">
+        <div style="text-align: center; padding: 2rem 1rem;">
           <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">
-            Eleição Presidencial 2026 — 2º Turno Oficial
+            ${title}
           </div>
           <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.5rem;">
-            Aguardando primeiras urnas totalizadas pelo TSE (ID Oficial: 6258)
+            ${sub}
           </div>
           <div class="scoreboard-grid" style="margin-top: 1.5rem; max-width: 900px; margin-left: auto; margin-right: auto;">
             <div class="candidate-card bolsonaro">
-              <div class="candidate-avatar avatar-bolsonaro">FB</div>
+              <div class="candidate-avatar avatar-bolsonaro">
+                <img src="${foto1}" alt="${name1}" onerror="this.remove();" />
+                <span>${av1}</span>
+              </div>
               <div class="candidate-info">
-                <div class="candidate-name">FLÁVIO BOLSONARO</div>
-                <div class="candidate-meta">PL (22)</div>
+                <div class="candidate-name">${name1}</div>
+                <div class="candidate-meta">${num1}</div>
                 <div class="candidate-percent bolsonaro">--,--%</div>
                 <div class="candidate-votes">Aguardando totalização</div>
               </div>
@@ -70,10 +93,13 @@ export class PlacarUI {
               <div class="totalizacao-sub">Aguardando primeiras urnas</div>
             </div>
             <div class="candidate-card lula">
-              <div class="candidate-avatar avatar-lula">L</div>
+              <div class="candidate-avatar avatar-lula">
+                <img src="${foto2}" alt="${name2}" onerror="this.remove();" />
+                <span>${av2}</span>
+              </div>
               <div class="candidate-info">
-                <div class="candidate-name">LULA</div>
-                <div class="candidate-meta">PT (13)</div>
+                <div class="candidate-name">${name2}</div>
+                <div class="candidate-meta">${num2}</div>
                 <div class="candidate-percent lula">--,--%</div>
                 <div class="candidate-votes">Aguardando totalização</div>
               </div>
@@ -146,7 +172,23 @@ export class PlacarUI {
     const leader = pct1 > pct2 ? cand1.nomeUrna : pct2 > pct1 ? cand2.nomeUrna : 'Empate';
     const marginText = sumValid > 0 ? `${leader} +${diff}%` : 'Aguardando';
 
-    // Lista de outros candidatos se houver mais de 2 (ex: 1º Turno)
+    // Determinar Fotos Oficiais
+    let fotoSrc1 = null;
+    let fotoSrc2 = null;
+
+    if (isGov) {
+      const ufLower = State.govUf.toLowerCase();
+      fotoSrc1 = `./public/fotos/${ufLower}_${cand1.numero}.jpg`;
+      fotoSrc2 = `./public/fotos/${ufLower}_${cand2.numero}.jpg`;
+    } else {
+      if (cand1.numero === '22') fotoSrc1 = './public/fotos/flavio_bolsonaro.jpg';
+      else if (cand1.numero === '13') fotoSrc1 = './public/fotos/lula.jpg';
+
+      if (cand2.numero === '22') fotoSrc2 = './public/fotos/flavio_bolsonaro.jpg';
+      else if (cand2.numero === '13') fotoSrc2 = './public/fotos/lula.jpg';
+    }
+
+    // Demais candidatos se houver mais de 2 (ex: 1º Turno)
     let othersHtml = '';
     if (candidates.length > 2) {
       const remaining = candidates.filter(c => c.numero !== cand1.numero && c.numero !== cand2.numero);
@@ -185,6 +227,7 @@ export class PlacarUI {
         <!-- Candidato 1 -->
         <div class="candidate-card ${classCard1}">
           <div class="candidate-avatar ${avatarClass1}">
+            ${fotoSrc1 ? `<img src="${fotoSrc1}" alt="${cand1.nomeUrna}" onerror="this.remove();" />` : ''}
             <span>${avatar1}</span>
           </div>
           <div class="candidate-info">
@@ -208,6 +251,7 @@ export class PlacarUI {
         <!-- Candidato 2 -->
         <div class="candidate-card ${classCard2}">
           <div class="candidate-avatar ${avatarClass2}">
+            ${fotoSrc2 ? `<img src="${fotoSrc2}" alt="${cand2.nomeUrna}" onerror="this.remove();" />` : ''}
             <span>${avatar2}</span>
           </div>
           <div class="candidate-info">
@@ -246,107 +290,80 @@ export class PlacarUI {
   renderMetrics(stats) {
     if (!this.metricsStripEl || !stats) return;
 
+    const eleitorado = (stats.eleitoradoTotal || stats.totalEleitores || 0).toLocaleString('pt-BR');
+    const comp = (stats.comparecimento || 0).toLocaleString('pt-BR');
+    const abst = (stats.abstencao || 0).toLocaleString('pt-BR');
+    const valid = (stats.votosValidos || 0).toLocaleString('pt-BR');
+    const bn = ((stats.votosBrancos || 0) + (stats.votosNulos || 0)).toLocaleString('pt-BR');
+
     this.metricsStripEl.innerHTML = `
       <div class="metric-item">
-        <div class="metric-title">Votos Válidos</div>
-        <div class="metric-value">${stats.votosValidos.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">${stats.percentValidos}% do total</div>
+        <div class="metric-title">Total de Eleitores</div>
+        <div class="metric-value">${eleitorado}</div>
+        <div class="metric-sub">Eleitorado Apto</div>
       </div>
       <div class="metric-item">
         <div class="metric-title">Comparecimento</div>
-        <div class="metric-value">${stats.comparecimento.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">${stats.percentComparecimento}% do eleitorado</div>
+        <div class="metric-value">${stats.percentComparecimento || '0,00'}%</div>
+        <div class="metric-sub">${comp} presentes</div>
       </div>
       <div class="metric-item">
         <div class="metric-title">Abstenção</div>
-        <div class="metric-value">${stats.abstencao.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">${stats.percentAbstencao}% do eleitorado</div>
+        <div class="metric-value">${stats.percentAbstencao || '0,00'}%</div>
+        <div class="metric-sub">${abst} ausentes</div>
       </div>
       <div class="metric-item">
-        <div class="metric-title">Votos Brancos</div>
-        <div class="metric-value">${stats.votosBrancos.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">${stats.percentBrancos}% do total</div>
+        <div class="metric-title">Votos Válidos</div>
+        <div class="metric-value">${stats.percentValidos || '0,00'}%</div>
+        <div class="metric-sub">${valid} votos</div>
       </div>
       <div class="metric-item">
-        <div class="metric-title">Votos Nulos</div>
-        <div class="metric-value">${stats.votosNulos.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">${stats.percentNulos}% do total</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-title">Eleitorado Total</div>
-        <div class="metric-value">${stats.eleitoradoTotal.toLocaleString('pt-BR')}</div>
-        <div class="metric-sub">Eleitores aptos</div>
+        <div class="metric-title">Brancos / Nulos</div>
+        <div class="metric-value">${stats.percentBrancos || '0,00'}% / ${stats.percentNulos || '0,00'}%</div>
+        <div class="metric-sub">${bn} totais</div>
       </div>
     `;
   }
 
   renderBentoCards(candidates, stats) {
-    // 1. Sparkline de apuração
-    const sparkPoints = State.historyPoints.map(p => p.apurado);
-    BentoAnalytics.renderSparkline('bento-sparkline-svg', sparkPoints.length > 1 ? sparkPoints : [0, 15, 30, 48, 65, 82, 95, 100], '#2563EB');
+    // 1. Sparkline Progressão Temporal
+    BentoAnalytics.renderSparkline('bento-sparkline-svg', State.historyPoints);
 
-    // 2. Treemap Eleitoral
-    const treemapUfs = [];
-    for (const [sigla, data] of State.ufData.entries()) {
-      const c = TseClient.parseCandidates(data);
-      const s = TseClient.parseStats(data);
-      if (c && c.length) {
-        treemapUfs.push({
-          uf: sigla,
-          totalVotos: s?.totalVotos || 1,
-          lider: c[0].numero,
-          pct: `${c[0].percentual}%`
-        });
-      }
-    }
-    BentoAnalytics.renderTreemap('bento-treemap-svg', treemapUfs);
+    // 2. Treemap Colégios Eleitorais
+    BentoAnalytics.renderTreemap('bento-treemap-svg');
 
-    // 3. Radar Polar Cívico
-    BentoAnalytics.renderRadarPolar('bento-radar-svg', [88, 92, 80, 95, 90], ['Presença', 'Economia', 'Atividade', 'Transparência', 'Eficiência']);
+    // 3. Radar Cívico Polar
+    BentoAnalytics.renderCivicRadar('bento-radar-svg', stats);
 
-    // 4. Detalhe de Margem Bento
-    const marginContainer = document.getElementById('bento-margin-text');
-    if (marginContainer) {
-      if (candidates && candidates.length >= 2) {
+    // 4. Termômetro de Margem
+    const container = document.getElementById('bento-margin-text');
+    if (container) {
+      if (candidates && candidates.length >= 2 && stats && stats.percentApuradoNum > 0) {
         const c1 = candidates[0];
         const c2 = candidates[1];
-        const diffVotes = Math.abs(c1.votos - c2.votos);
-        const diffPct = Math.abs(c1.percentualNum - c2.percentualNum).toFixed(2);
-        const isTie = diffVotes === 0 && c1.votos > 0;
-        const isWaiting = c1.votos === 0 && c2.votos === 0;
-        const leaderColor = c1.numero === '22' ? 'var(--c-bolsonaro-light)' : (c1.numero === '13' ? 'var(--c-lula-light)' : 'var(--c-accent)');
+        const diff = Math.abs(c1.percentualNum - c2.percentualNum).toFixed(2);
+        const diffVotos = Math.abs(c1.votos - c2.votos).toLocaleString('pt-BR');
+        const isB = c1.numero === '22';
+        const color = isB ? 'var(--c-bolsonaro-light)' : 'var(--c-lula-light)';
 
-        if (isWaiting) {
-          marginContainer.innerHTML = `
-            <div style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">
-              Aguardando totalização oficial para cálculo de margem.
-            </div>
-          `;
-        } else if (isTie) {
-          marginContainer.innerHTML = `
-            <div style="font-size: 0.85rem; color: var(--text-muted);">Situação da Disputa:</div>
-            <div style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.15rem;">
-              Empate Técnico Exato (0,00%)
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">
-              Total de votos idêntico entre os candidatos
-            </div>
-          `;
-        } else {
-          marginContainer.innerHTML = `
-            <div style="font-size: 0.85rem; color: var(--text-muted);">Candidato em Vantagem:</div>
-            <div style="font-size: 1.25rem; font-weight: 800; color: ${leaderColor}; margin-top: 0.15rem;">
-              ${c1.nomeUrna} (+${diffPct}%)
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">
-              Diferença: <strong>${diffVotes.toLocaleString('pt-BR')}</strong> votos válidos
-            </div>
-          `;
-        }
+        container.innerHTML = `
+          <div style="font-size: 1.6rem; font-weight: 900; color: ${color};">
+            +${diff}%
+          </div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">
+            ${c1.nomeUrna} lidera por ${diffVotos} votos
+          </div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 0.2rem;">
+            Base de cálculo: ${stats.votosValidos.toLocaleString('pt-BR')} votos válidos apurados
+          </div>
+        `;
       } else {
-        marginContainer.innerHTML = `
-          <div style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">
-            Aguardando totalização oficial para cálculo de margem.
+        container.innerHTML = `
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-dim);">
+            Aguardando primeiras urnas
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+            O termômetro calculará a margem matemática a partir do início da apuração.
           </div>
         `;
       }
@@ -356,15 +373,31 @@ export class PlacarUI {
   updateTelemetry() {
     if (!this.telemetryEl) return;
 
-    const t = State.telemetry;
-    const diffSec = t.lastFetchTime ? Math.round((Date.now() - t.lastFetchTime) / 1000) : 0;
-    
+    const { lastFetchTime, latencyMs, status } = State.telemetry;
+    if (!lastFetchTime) {
+      this.telemetryEl.innerHTML = `<span style="color: var(--text-dim);">Conectando ao TSE...</span>`;
+      return;
+    }
+
+    const secondsAgo = Math.floor((Date.now() - lastFetchTime) / 1000);
+    const freshnessText = secondsAgo < 5 ? 'agora mesmo' : `há ${secondsAgo}s`;
+
+    let statusDot = '🟢';
+    let statusLabel = 'Ao Vivo';
+    if (secondsAgo > 30) {
+      statusDot = '🟠';
+      statusLabel = 'Lento';
+    } else if (status === 'offline') {
+      statusDot = '🔴';
+      statusLabel = 'Desconectado';
+    }
+
     this.telemetryEl.innerHTML = `
-      <span>Atualizado há <strong>${diffSec}s</strong></span>
+      <span>${statusDot} <strong>${statusLabel}</strong></span>
       <span>•</span>
-      <span>Latência: <strong>${t.latencyMs}ms</strong></span>
+      <span>Atualizado ${freshnessText}</span>
       <span>•</span>
-      <span>Fonte: <strong>TSE CDN Oficial</strong></span>
+      <span>Latência: <strong>${latencyMs}ms</strong></span>
     `;
   }
 }

@@ -10,6 +10,9 @@ import { PlacarUI } from './ui/placar.js';
 import { TimelineChart } from './ui/grafico.js';
 import { ComparadorUI } from './ui/comparador.js';
 import { ParlamentaresUI } from './ui/parlamentares.js';
+import { RegionAnalyticsUI } from './ui/region_analytics.js';
+import { FeedUI } from './ui/feed.js';
+import { HemicycleUI } from './ui/hemicycle.js';
 
 class App {
   constructor() {
@@ -90,9 +93,15 @@ class App {
     this.chart = new TimelineChart('timeline-canvas');
     this.comparador = new ComparadorUI('side-by-side-container', 'analytical-table-container');
     this.parlamentares = new ParlamentaresUI('parlamentares-container', 'efficiency-formula-card');
+    this.regionAnalytics = new RegionAnalyticsUI('region-analytics-container');
+    this.feed = new FeedUI('live-feed-container');
+    this.hemicycle = new HemicycleUI('hemicycle-container');
 
     this.map.init();
     this.comparador.init();
+    this.regionAnalytics.render();
+    this.feed.init();
+    this.hemicycle.init();
 
     // Inscrever componentes nas mudanças de State
     State.subscribe((event, payload) => {
@@ -101,11 +110,36 @@ class App {
           this.placar.update(payload);
           this.chart.render();
           this.comparador.render();
+          this.regionAnalytics.render();
+          if (payload) {
+            const stats = TseClient.parseStats(payload);
+            const candidates = TseClient.parseCandidates(payload);
+            const lead = candidates[0];
+            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            this.feed.addEvent({
+              hora: timeStr,
+              tipo: 'nacional',
+              titulo: `Totalização Nacional: ${stats.percentApurado}%`,
+              desc: `${lead ? lead.nomeUrna + ' lidera com ' + lead.percentual + '%.' : 'Totalização em andamento no Brasil.'}`,
+              badge: 'BRASIL'
+            });
+          }
           break;
 
         case 'uf_data_updated':
           this.map.updateColors();
           this.comparador.render();
+          this.regionAnalytics.render();
+          if (payload && payload.uf) {
+            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            this.feed.addEvent({
+              hora: timeStr,
+              tipo: 'uf',
+              titulo: `Novos dados apurados em ${payload.uf}`,
+              desc: `Atualização de seções totalizadas sincronizada com a CDN oficial.`,
+              badge: payload.uf
+            });
+          }
           break;
 
         case 'layer_changed':
