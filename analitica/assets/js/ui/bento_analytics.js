@@ -12,11 +12,33 @@ export class BentoAnalytics {
     if (!element) return;
     const isReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isReduced) {
+      if (element._countUpRaf) {
+        cancelAnimationFrame(element._countUpRaf);
+        element._countUpRaf = null;
+      }
       element.textContent = `${prefix}${Math.round(targetValue).toLocaleString('pt-BR')}${suffix}`;
       return;
     }
 
-    const start = parseFloat(element.textContent.replace(/[^0-9.-]/g, '')) || 0;
+    // Limpar pontuação pt-BR antes de converter para float
+    const rawClean = (element.textContent || '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+    const start = parseFloat(rawClean) || 0;
+
+    // Se o valor já for igual ao alvo, não precisa animar
+    if (Math.round(start) === Math.round(targetValue)) {
+      if (element._countUpRaf) {
+        cancelAnimationFrame(element._countUpRaf);
+        element._countUpRaf = null;
+      }
+      element.textContent = `${prefix}${Math.round(targetValue).toLocaleString('pt-BR')}${suffix}`;
+      return;
+    }
+
+    if (element._countUpRaf) {
+      cancelAnimationFrame(element._countUpRaf);
+      element._countUpRaf = null;
+    }
+
     const startTime = performance.now();
 
     function step(now) {
@@ -27,10 +49,13 @@ export class BentoAnalytics {
       const current = start + (targetValue - start) * ease;
       element.textContent = `${prefix}${Math.round(current).toLocaleString('pt-BR')}${suffix}`;
       if (progress < 1) {
-        requestAnimationFrame(step);
+        element._countUpRaf = requestAnimationFrame(step);
+      } else {
+        element._countUpRaf = null;
+        element.textContent = `${prefix}${Math.round(targetValue).toLocaleString('pt-BR')}${suffix}`;
       }
     }
-    requestAnimationFrame(step);
+    element._countUpRaf = requestAnimationFrame(step);
   }
 
   /**

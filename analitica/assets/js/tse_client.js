@@ -241,7 +241,7 @@ export class TseClient {
           const proxyUrl = `${this.primaryProxy}/${targetPath}`;
           return await this.fetchWithTimeout(proxyUrl, 3000);
         } catch (proxyErr) {
-          // Ativa contingência
+          this.useFallback = true;
         }
       }
     }

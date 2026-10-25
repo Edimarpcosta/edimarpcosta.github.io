@@ -1,7 +1,7 @@
 /**
- * Módulo de Análise Macrorregional do Brasil - Analítica Política 2026
- * Consolida estatísticas eleitorais oficiais pelas 5 grandes regiões do IBGE:
- * Norte, Nordeste, Centro-Oeste, Sudeste e Sul.
+ * Módulo de Análise Macrorregional do Brasil - Analítica Política 2026 (v9.1 - Seção 5.5)
+ * Totalização agregada das 5 Macrorregiões do IBGE (Norte, Nordeste, Centro-Oeste, Sudeste, Sul)
+ * com eleitorado, seções apuradas, proporções numéricas e fechamento da soma nacional com o Exterior (ZZ).
  */
 
 import { State } from '../state.js';
@@ -12,30 +12,35 @@ export const REGIONS_DEF = {
     nome: 'Sudeste',
     ufs: ['SP', 'MG', 'RJ', 'ES'],
     eleitoradoEstimado: 67100000,
+    maiorUf: 'SP (34,6M eleitores)',
     descricao: 'Maior colégio eleitoral do país (42,6% dos eleitores)'
   },
   nordeste: {
     nome: 'Nordeste',
     ufs: ['BA', 'PE', 'CE', 'MA', 'PB', 'RN', 'AL', 'PI', 'SE'],
     eleitoradoEstimado: 43000000,
+    maiorUf: 'BA (11,2M eleitores)',
     descricao: 'Segundo maior colégio eleitoral (27,3% dos eleitores)'
   },
   sul: {
     nome: 'Sul',
     ufs: ['PR', 'RS', 'SC'],
     eleitoradoEstimado: 22500000,
+    maiorUf: 'PR (8,6M eleitores)',
     descricao: 'Terceiro maior colégio eleitoral (14,3% dos eleitores)'
   },
   norte: {
     nome: 'Norte',
     ufs: ['PA', 'AM', 'RO', 'TO', 'AC', 'AP', 'RR'],
     eleitoradoEstimado: 13100000,
+    maiorUf: 'PA (6,1M eleitores)',
     descricao: 'Maior extensão territorial e 7 estados (8,3% dos eleitores)'
   },
   centro_oeste: {
     nome: 'Centro-Oeste',
     ufs: ['GO', 'MT', 'MS', 'DF'],
     eleitoradoEstimado: 11900000,
+    maiorUf: 'GO (4,9M eleitores)',
     descricao: 'Centro geopolítico e agronegócio (7,5% dos eleitores)'
   }
 };
@@ -53,6 +58,8 @@ export class RegionAnalyticsUI {
       let vL = 0;
       let secoesTot = 0;
       let secoesApuradas = 0;
+      let comparecimentoTot = 0;
+      let eleitoradoTot = reg.eleitoradoEstimado;
 
       for (const uf of reg.ufs) {
         const ufData = State.ufData.get(uf);
@@ -68,6 +75,7 @@ export class RegionAnalyticsUI {
 
           secoesTot += stats.totalSecoes;
           secoesApuradas += stats.secoesTotalizadas;
+          comparecimentoTot += stats.comparecimento;
         }
       }
 
@@ -93,43 +101,38 @@ export class RegionAnalyticsUI {
             </span>
           </div>
 
+          <!-- Barra de Proporção com Valores e % Escritos (Dois Canais Visuais) -->
           <div style="margin: 0.75rem 0;">
             <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 800; margin-bottom: 0.35rem;">
-              <span style="color: var(--c-bolsonaro-light);">Flávio ${pctB}%</span>
-              <span style="color: var(--c-lula-light);">Lula ${pctL}%</span>
+              <span style="color: var(--c-bolsonaro-light);">Flávio ${pctB}% (${vB > 0 ? vB.toLocaleString('pt-BR') : '--'})</span>
+              <span style="color: var(--c-lula-light);">Lula ${pctL}% (${vL > 0 ? vL.toLocaleString('pt-BR') : '--'})</span>
             </div>
-            <div class="dual-progress-bar" style="height: 10px;">
-              <div class="progress-segment-bolsonaro" style="width: ${pctB}%;"></div>
-              <div class="progress-divider"></div>
-              <div class="progress-segment-lula" style="width: ${pctL}%;"></div>
+            <div style="height: 10px; width: 100%; border-radius: var(--radius-full); background: var(--bg-body); overflow: hidden; display: flex; border: 1px solid var(--border-subtle);">
+              <div style="width: ${pctB}%; background: var(--c-bolsonaro-light); transition: width 0.3s ease;"></div>
+              <div style="width: ${pctL}%; background: var(--c-lula-light); transition: width 0.3s ease;"></div>
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-top: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 0.5rem;">
-            <div>
-              Liderança: <strong style="color: ${leaderColor};">${leaderName}</strong> (+${diff}%)
-            </div>
-            <div style="color: var(--text-dim);">
-              ${reg.ufs.join(', ')}
-            </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 0.5rem;">
+            <div>Margem: <strong style="color: ${leaderColor};">${leaderName} +${diff} p.p.</strong></div>
+            <div>Maior UF: <strong>${reg.maiorUf}</strong></div>
           </div>
         </div>
       `;
     }).join('');
 
     this.container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
+      <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
         <div>
-          <div style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">
-            🌎 Consolidação por Macrorregiões do Brasil
-          </div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">
-            Desempenho regional consolidado nos 5 grandes blocos federativos
-          </div>
+          <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-main);">Panorama Macrorregional do Brasil</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Consolidação de votos válidos e seções apuradas por região do IBGE</div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
-          ${cardsHtml}
+        <div style="font-size: 0.7rem; color: var(--text-dim); background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          Nota: A cor da região só identifica a divisão geográfica do IBGE
         </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+        ${cardsHtml}
       </div>
     `;
   }
