@@ -13,6 +13,10 @@ import { ParlamentaresUI } from './ui/parlamentares.js';
 import { RegionAnalyticsUI } from './ui/region_analytics.js';
 import { FeedUI } from './ui/feed.js';
 import { HemicycleUI } from './ui/hemicycle.js';
+import { LiveStateMachine } from './data/live_state.js';
+import { FreshnessBarUI } from './ui/freshness_bar.js';
+import { CreditsUI } from './ui/credits.js';
+import { AppRouter } from './router.js';
 
 class App {
   constructor() {
@@ -29,7 +33,6 @@ class App {
       this.initBroadcastAndLocks();
       this.initUiComponents();
       this.updateThemeButton();
-      this.parseUrlHash();
       this.setupGlobalEvents();
       await this.loadStaticData();
       await this.initialFetch();
@@ -88,6 +91,13 @@ class App {
   }
 
   initUiComponents() {
+    this.liveState = new LiveStateMachine();
+    this.freshnessBar = new FreshnessBarUI('freshness-bar-container', this.liveState);
+    this.freshnessBar.init();
+
+    this.credits = new CreditsUI('sobre-modal');
+    this.credits.init();
+
     this.placar = new PlacarUI('scoreboard-container', 'banner-status', 'metrics-strip', 'telemetry-status');
     this.map = new BrazilMap('svg-map-container', 'detail-panel-container', 'map-tooltip', this.tseClient);
     this.chart = new TimelineChart('timeline-canvas');
@@ -103,6 +113,9 @@ class App {
     this.feed.init();
     this.hemicycle.init();
 
+    this.router = new AppRouter(this);
+    this.router.init();
+
     // Inscrever componentes nas mudanças de State
     State.subscribe((event, payload) => {
       switch (event) {
@@ -112,17 +125,8 @@ class App {
           this.comparador.render();
           this.regionAnalytics.render();
           if (payload) {
-            const stats = TseClient.parseStats(payload);
-            const candidates = TseClient.parseCandidates(payload);
-            const lead = candidates[0];
-            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            this.feed.addEvent({
-              hora: timeStr,
-              tipo: 'nacional',
-              titulo: `Totalização Nacional: ${stats.percentApurado}%`,
-              desc: `${lead ? lead.nomeUrna + ' lidera com ' + lead.percentual + '%.' : 'Totalização em andamento no Brasil.'}`,
-              badge: 'BRASIL'
-            });
+            this.liveState.registerSuccess(payload);
+            this.feed.processSnapshot(payload);
           }
           break;
 
@@ -130,15 +134,8 @@ class App {
           this.map.updateColors();
           this.comparador.render();
           this.regionAnalytics.render();
-          if (payload && payload.uf) {
-            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            this.feed.addEvent({
-              hora: timeStr,
-              tipo: 'uf',
-              titulo: `Novos dados apurados em ${payload.uf}`,
-              desc: `Atualização de seções totalizadas sincronizada com a CDN oficial.`,
-              badge: payload.uf
-            });
+          if (payload && payload.uf && payload.data) {
+            this.feed.processUfUpdate(payload.uf, payload.data);
           }
           break;
 
@@ -148,11 +145,13 @@ class App {
 
         case 'election_changed':
           if (this.map) this.map.deselectUf();
+          if (this.placar) this.placar.renderWaitingState();
           this.handleElectionChanged();
           break;
 
         case 'gov_uf_changed':
           if (this.map) this.map.deselectUf();
+          if (this.placar) this.placar.renderWaitingState();
           this.handleElectionChanged();
           break;
 
@@ -214,20 +213,22 @@ class App {
     try {
       const res = await this.tseClient.fetchNational(State.electionId, State.isSimulation, State.govUf);
       if (res && res.data) {
+        if (this.liveState) this.liveState.registerSuccess(res.data);
         State.setNationalData(res.data, res.latency, res.etag);
       }
     } catch (err) {
       console.warn('[App] Falha no fetch nacional inicial, o worker continuará tentando:', err);
+      if (this.liveState) this.liveState.registerFailure(err);
       State.telemetry.status = 'offline';
       this.placar.renderWaitingState();
     }
 
-    // Pré-carregar dados das principais UFs para o mapa
+    // Pré-carregar dados das principais UFs para o mapa em paralelo
     const initialUfs = State.electionId === '6260'
       ? ['AC', 'AM', 'DF', 'ES', 'RN', 'TO']
       : ['SP', 'RJ', 'MG', 'BA', 'RS', 'PR', 'PE', 'CE', 'DF', 'SC', 'GO'];
 
-    for (const uf of initialUfs) {
+    await Promise.allSettled(initialUfs.map(async (uf) => {
       try {
         const uRes = await this.tseClient.fetchUf(uf, State.electionId, State.isSimulation);
         if (uRes && uRes.data) {
@@ -236,7 +237,7 @@ class App {
       } catch (err) {
         // silencioso
       }
-    }
+    }));
     this.map.updateColors();
   }
 
@@ -249,6 +250,9 @@ class App {
         this.worker.onmessage = (e) => {
           const { type, data, latency, etag } = e.data || {};
           if (type === 'DATA_UPDATE' && data) {
+            if (data.ele && String(data.ele) !== String(State.electionId)) {
+              return;
+            }
             State.setNationalData(data, latency, etag);
             if (this.broadcastChannel && this.isLeader) {
               this.broadcastChannel.postMessage({
@@ -539,15 +543,14 @@ class App {
   }
 
   updateUrlHash() {
-    const parts = [
-      `eleicao/${State.electionId}`,
-      `tab/${State.activeTab}`,
-      `camada/${State.activeLayer}`
-    ];
-    if (State.selectedUf) {
-      parts.push(`uf/${State.selectedUf}`);
+    const full = AppRouter.buildShareUrl();
+    const hashIdx = full.indexOf('#');
+    if (hashIdx !== -1) {
+      const canonicalHash = full.substring(hashIdx);
+      if (window.location.hash !== canonicalHash) {
+        history.replaceState(null, '', canonicalHash);
+      }
     }
-    window.location.hash = `#/${parts.join('/')}`;
   }
 
   openShareModal() {
@@ -555,7 +558,7 @@ class App {
     const input = document.getElementById('share-url-input');
     if (!modal || !input) return;
 
-    input.value = window.location.href;
+    input.value = AppRouter.buildShareUrl();
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
   }

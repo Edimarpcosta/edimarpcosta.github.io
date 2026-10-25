@@ -1,19 +1,63 @@
 /**
- * TopoJSON Vector Engine - Analítica Política 2026
- * Decodifica instantaneamente arquivos TopoJSON particionados por UF em caminhos SVG limpos (<path d="...">),
- * calculando coordenadas geográficas, polígonos múltiplos e caixa delimitadora (viewBox).
+ * Motor TopoJSON Vetorial no Cliente - Analítica Política 2026 (v9.1 - Seção 5.2)
+ * Decodifica deltas e transforma arcos sem divisão por 1000 e sem inversão de Y no cliente.
+ * As malhas municipais do build já entregam coordenadas reprojetadas com Y crescente para baixo.
  */
+
+// Decodificação delta + transform (padrão TopoJSON)
+export function decodeArcs(topology) {
+  const [sx, sy] = topology.transform?.scale ?? [1, 1];
+  const [tx, ty] = topology.transform?.translate ?? [0, 0];
+  return (topology.arcs || []).map(arc => {
+    let x = 0, y = 0;
+    return arc.map(([dx, dy]) => {
+      x += dx;
+      y += dy;
+      return [x * sx + tx, y * sy + ty];
+    });
+  });
+}
+
+// Polygon e MultiPolygon -> atributo "d" do SVG. Índices negativos (~i) invertem o arco.
+export function geometryToPath(geom, arcs) {
+  const polygons = geom.type === 'MultiPolygon' ? geom.arcs
+                 : geom.type === 'Polygon' ? [geom.arcs] : [];
+  const parts = [];
+  for (const polygon of polygons) {
+    for (const ringArcs of polygon) {
+      const ring = [];
+      ringArcs.forEach((idx, k) => {
+        const pts = idx < 0 ? arcs[~idx].slice().reverse() : arcs[idx];
+        if (!pts) return;
+        for (let i = k === 0 ? 0 : 1; i < pts.length; i++) {
+          ring.push(pts[i]); // une arcos sem repetir o ponto de junção
+        }
+      });
+      if (ring.length > 2) {
+        parts.push('M' + ring.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L') + 'Z');
+      }
+    }
+  }
+  return parts.join(' ');
+}
+
+// Caixa delimitadora a partir dos pontos decodificados dos arcos usados pela UF
+export function bbox(points) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of points) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
 
 export class TopoJsonEngine {
   constructor() {
-    this.cache = new Map(); // ufSigla -> { paths, bounds, rawTopology }
+    this.cache = new Map();
   }
 
-  /**
-   * Carrega e decodifica os municípios de uma UF sob demanda.
-   * @param {string} uf - Sigla da UF em maiúsculas (ex: 'SP', 'DF', 'AC')
-   * @returns {Promise<{ paths: Array<{ id: string, nome: string, uf: string, pop: number, d: string }>, bounds: { minX: number, minY: number, width: number, height: number, viewBox: string } }>}
-   */
   async loadUf(uf) {
     const key = String(uf).trim().toUpperCase();
     if (this.cache.has(key)) {
@@ -37,7 +81,7 @@ export class TopoJsonEngine {
           break;
         }
       } catch (e) {
-        // tenta o próximo path
+        // tenta proximo path
       }
     }
 
@@ -50,28 +94,13 @@ export class TopoJsonEngine {
     return decoded;
   }
 
-  /**
-   * Decodifica a topologia e seus arcos delta em SVG paths.
-   */
   decodeTopology(topo, ufKey) {
-    const scale = topo.transform ? topo.transform.scale : [1, 1];
-    const trans = topo.transform ? topo.transform.translate : [0, 0];
-
-    // 1. Decodificar todos os arcos delta
-    const decodedArcs = (topo.arcs || []).map(arc => {
-      let x = 0, y = 0;
-      return arc.map(([dx, dy]) => {
-        x += dx;
-        y += dy;
-        return [(x * scale[0] + trans[0]) / 1000.0, -(y * scale[1] + trans[1]) / 1000.0];
-      });
-    });
-
+    const arcs = decodeArcs(topo);
     const geometries = topo.objects?.municipios?.geometries || [];
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const paths = [];
 
-    // 2. Reconstruir anéis poligonais para cada município
+    let allPoints = [];
+
     for (const geom of geometries) {
       const props = geom.properties || {};
       const id = String(props.id || '').trim();
@@ -79,52 +108,35 @@ export class TopoJsonEngine {
       const uf = props.uf || ufKey;
       const pop = props.p || 0;
 
-      const rings = geom.type === 'MultiPolygon' ? geom.arcs : [geom.arcs];
-      const dParts = [];
+      const d = geometryToPath(geom, arcs);
+      if (d) {
+        paths.push({ id, nome, uf, pop, d });
+      }
 
+      // Coletar pontos para bbox
+      const rings = geom.type === 'MultiPolygon' ? geom.arcs : [geom.arcs];
       for (const ringGroup of rings) {
         if (!Array.isArray(ringGroup)) continue;
         for (const arcIndices of ringGroup) {
           if (!Array.isArray(arcIndices)) continue;
-          const ring = [];
           for (const arcIdx of arcIndices) {
-            const isReversed = arcIdx < 0;
-            const idx = isReversed ? ~arcIdx : arcIdx;
-            const arcCoords = decodedArcs[idx];
-            if (!arcCoords) continue;
-
-            const coords = isReversed ? arcCoords.slice().reverse() : arcCoords;
-            const start = ring.length ? 1 : 0;
-            for (let i = start; i < coords.length; i++) {
-              ring.push(coords[i]);
+            const idx = arcIdx < 0 ? ~arcIdx : arcIdx;
+            const pts = arcs[idx];
+            if (pts) {
+              for (const pt of pts) allPoints.push(pt);
             }
-          }
-
-          if (ring.length > 2) {
-            for (const pt of ring) {
-              if (pt[0] < minX) minX = pt[0];
-              if (pt[1] < minY) minY = pt[1];
-              if (pt[0] > maxX) maxX = pt[0];
-              if (pt[1] > maxY) maxY = pt[1];
-            }
-            dParts.push('M ' + ring.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L ') + ' Z');
           }
         }
       }
-
-      const d = dParts.join(' ');
-      if (d) {
-        paths.push({ id, nome, uf, pop, d });
-      }
     }
 
-    // Margem de respiro para o viewBox da UF
-    const padX = (maxX - minX) * 0.05 || 20;
-    const padY = (maxY - minY) * 0.05 || 20;
-    const vbMinX = minX - padX;
-    const vbMinY = minY - padY;
-    const vbWidth = (maxX - minX) + 2 * padX;
-    const vbHeight = (maxY - minY) + 2 * padY;
+    const box = bbox(allPoints);
+    const padX = (box.width * 0.05) || 20;
+    const padY = (box.height * 0.05) || 20;
+    const vbMinX = box.minX - padX;
+    const vbMinY = box.minY - padY;
+    const vbWidth = box.width + 2 * padX;
+    const vbHeight = box.height + 2 * padY;
 
     return {
       paths,

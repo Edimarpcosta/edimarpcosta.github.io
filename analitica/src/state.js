@@ -14,8 +14,10 @@ export const State = {
   theme: localStorage.getItem('analitica-theme') || 'light', // Light mode por padrão
   isSimulation: false,
   activeLayer: 'winner_margin', // winner_margin, leader_pct, total_votes, sections_pct, turnout, blank_null
+  selectedRegion: null, // norte, nordeste, centro-oeste, sudeste, sul
   selectedUf: null,
   selectedMun: null,
+  selectedCityId: null,
   activeTab: 'apuracao', // apuracao, mapa, comparador, parlamentares
   
   // Dados recebidos
@@ -123,9 +125,18 @@ export const State = {
     this.notify('layer_changed', layerName);
   },
 
+  setSelectedRegion(regionName) {
+    this.selectedRegion = regionName ? this.normalizeId(regionName).toLowerCase() : null;
+    this.selectedUf = null;
+    this.selectedMun = null;
+    this.selectedCityId = null;
+    this.notify('region_selected', this.selectedRegion);
+  },
+
   setSelectedUf(ufSigla) {
     this.selectedUf = ufSigla ? this.normalizeId(ufSigla).toUpperCase() : null;
     this.selectedMun = null;
+    this.selectedCityId = null;
     this.notify('uf_selected', this.selectedUf);
   },
 
